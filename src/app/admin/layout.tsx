@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { Sidebar } from '@/components/layout/Sidebar'
+import { AppShell } from '@/components/layout/AppShell'
 
 const NAV = [
   { href: '/admin', label: 'Dashboard', icon: '◈' },
@@ -29,11 +29,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar items={NAV} subtitle={orgName} />
-      <div className="flex-1 ml-60 flex flex-col overflow-auto">
-        {children}
-      </div>
-    </div>
+    <AppShell items={NAV} subtitle={orgName}>
+      {children}
+    </AppShell>
   )
 }

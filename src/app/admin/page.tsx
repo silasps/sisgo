@@ -32,8 +32,8 @@ export default async function AdminDashboard() {
   return (
     <>
       <Header title="Dashboard" />
-      <main className="p-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <main className="p-4 md:p-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
           <StatCard label="Pessoas" value={peopleCount ?? 0} />
           <StatCard label="Obreiros" value={staffCount ?? 0} />
           <StatCard label="Alunos" value={studentCount ?? 0} />

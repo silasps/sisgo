@@ -5,16 +5,27 @@ import { usePathname } from 'next/navigation'
 import Image from 'next/image'
 
 type NavItem = { href: string; label: string; icon: string }
-type SidebarProps = { items: NavItem[]; subtitle?: string }
+type SidebarProps = {
+  items: NavItem[]
+  subtitle?: string
+  isOpen?: boolean
+  onClose?: () => void
+}
 
-export function Sidebar({ items, subtitle }: SidebarProps) {
+export function Sidebar({ items, subtitle, isOpen = false, onClose }: SidebarProps) {
   const pathname = usePathname()
 
   return (
-    <aside className="fixed inset-y-0 left-0 w-60 bg-dark-950 flex flex-col border-r border-dark-800">
-      {/* Logo */}
-      <div className="px-5 py-5 border-b border-dark-800">
-        <div className="flex items-center gap-3">
+    <aside
+      className={[
+        'fixed inset-y-0 left-0 z-30 w-64 bg-dark-950 flex flex-col border-r border-dark-800',
+        'transition-transform duration-200 ease-in-out',
+        'md:w-60 md:translate-x-0',
+        isOpen ? 'translate-x-0' : '-translate-x-full',
+      ].join(' ')}
+    >
+      <div className="px-5 py-5 border-b border-dark-800 flex items-start justify-between gap-2">
+        <div>
           <Image
             src="/images/logo-white.png"
             alt="JOCUM A.T."
@@ -22,15 +33,21 @@ export function Sidebar({ items, subtitle }: SidebarProps) {
             height={38}
             className="object-contain"
             priority
-            onError={(e) => {
-              // fallback caso a logo não esteja no public ainda
-              e.currentTarget.style.display = 'none'
-            }}
+            onError={(e) => { e.currentTarget.style.display = 'none' }}
           />
+          {subtitle && (
+            <p className="text-xs text-brand-400 mt-1.5 font-medium">{subtitle}</p>
+          )}
         </div>
-        {subtitle && (
-          <p className="text-xs text-brand-400 mt-1.5 font-medium">{subtitle}</p>
-        )}
+        <button
+          onClick={onClose}
+          className="md:hidden p-1 text-gray-500 hover:text-white transition-colors"
+          aria-label="Fechar menu"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M2 2l12 12M14 2L2 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        </button>
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
@@ -40,7 +57,8 @@ export function Sidebar({ items, subtitle }: SidebarProps) {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+              onClick={onClose}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
                 active
                   ? 'bg-brand-500 text-white font-medium'
                   : 'text-gray-400 hover:bg-dark-800 hover:text-white'
@@ -70,7 +88,7 @@ function LogoutButton() {
     <div className="px-3 py-4 border-t border-dark-800">
       <button
         onClick={logout}
-        className="flex items-center gap-3 px-3 py-2 w-full rounded-lg text-sm text-gray-500 hover:bg-dark-800 hover:text-white transition-colors"
+        className="flex items-center gap-3 px-3 py-2.5 w-full rounded-lg text-sm text-gray-500 hover:bg-dark-800 hover:text-white transition-colors"
       >
         <span className="text-base leading-none">↩</span>
         Sair
