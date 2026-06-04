@@ -8,6 +8,7 @@ const NAV = [
   { href: '/admin/alunos', label: 'Alunos', icon: '🎓' },
   { href: '/admin/escolas', label: 'Escolas', icon: '📚' },
   { href: '/admin/ministerios', label: 'Ministérios', icon: '🎵' },
+  { href: '/admin/financeiro', label: 'Financeiro', icon: '💰' },
   { href: '/admin/configuracoes', label: 'Configurações', icon: '⚙' },
 ]
 

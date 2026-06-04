@@ -1,12 +1,24 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-// Caminhos que não são slugs de bases
+// Slugs reservados — nenhuma org pode usar estes valores
 const RESERVED = new Set(['login', 'cadastro', 'auth', 'superadmin', 'api', '_next', 'images', 'favicon.ico'])
+
+// Sub-paths públicos dentro de /{slug}/ (sem auth)
+const PUBLIC_SUBPATHS = ['escola', 'inscricao', 'candidato']
 
 function isSlugRoute(pathname: string) {
   const first = pathname.split('/')[1]
   return !!first && !RESERVED.has(first)
+}
+
+function isPublicSlugRoute(pathname: string): boolean {
+  const parts = pathname.split('/').filter(Boolean)
+  if (parts.length === 0 || RESERVED.has(parts[0])) return false
+  // /{slug} exato → público
+  if (parts.length === 1) return true
+  // /{slug}/escola/*, /{slug}/inscricao/*, /{slug}/candidato/*
+  return PUBLIC_SUBPATHS.includes(parts[1])
 }
 
 export async function updateSession(request: NextRequest) {
@@ -33,8 +45,8 @@ export async function updateSession(request: NextRequest) {
   const user = session?.user ?? null
   const pathname = request.nextUrl.pathname
 
-  // Landing page — sempre pública
-  if (pathname === '/') return supabaseResponse
+  // Landing page e rotas públicas de base — sempre públicas
+  if (pathname === '/' || isPublicSlugRoute(pathname)) return supabaseResponse
 
   // Rotas públicas de auth
   if (pathname.startsWith('/login') || pathname.startsWith('/cadastro') || pathname.startsWith('/auth')) {
@@ -69,12 +81,11 @@ async function getUserRole(supabase: any, userId: string): Promise<string | null
 async function getRedirectDest(supabase: any, userId: string): Promise<string> {
   const { data } = await supabase
     .from('organization_users')
-    .select('roles(name), organizations(slug)')
+    .select('roles(name)')
     .eq('user_id', userId).eq('active', true).single()
 
   const role = data?.roles?.name
-  const slug = data?.organizations?.slug
   if (role === 'superadmin') return '/superadmin'
-  if (slug) return `/${slug}`
+  if (role === 'admin_base') return '/admin'
   return '/login'
 }

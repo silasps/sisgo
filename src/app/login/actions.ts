@@ -12,20 +12,24 @@ export async function login(formData: FormData) {
 
   if (error || !data.session) return { error: 'E-mail ou senha inválidos.' }
 
-  const { data: orgUser } = await supabase
+  const { data: orgUser, error: orgError } = await supabase
     .from('organization_users')
-    .select('roles(name), organizations(slug)')
+    .select('roles(name)')
     .eq('user_id', data.user.id)
     .eq('active', true)
     .single()
 
-  const role = (orgUser?.roles as unknown as { name: string } | null)?.name
-  const slug = (orgUser?.organizations as unknown as { slug: string } | null)?.slug
+  if (orgError || !orgUser) {
+    //return { error: 'Usuário sem acesso configurado. Contate o administrador.' }
+    return { error: orgError?.message ?? 'Usuário sem acesso configurado.' }
+  }
+
+  const role = (orgUser.roles as unknown as { name: string } | null)?.name
 
   if (role === 'superadmin') return { redirectTo: '/superadmin' }
-  if (slug) return { redirectTo: `/${slug}` }
+  if (role === 'admin_base') return { redirectTo: '/admin' }
 
-  return { redirectTo: '/login?error=sem-acesso' }
+  return { error: 'Perfil de acesso não reconhecido. Contate o administrador.' }
 }
 
 export async function register(formData: FormData) {
@@ -37,7 +41,7 @@ export async function register(formData: FormData) {
 
   if (password.length < 6) return { error: 'A senha precisa ter pelo menos 6 caracteres.' }
 
-  const { error } = await supabase.auth.signUp({
+  const { data: signUpData, error } = await supabase.auth.signUp({
     email,
     password,
     options: { data: { full_name: name } },
@@ -48,5 +52,7 @@ export async function register(formData: FormData) {
     return { error: error.message }
   }
 
-  return { success: true }
+  // Se session != null, o Supabase está com confirmação de e-mail desabilitada (auto-confirm)
+  const needsEmailConfirm = !signUpData?.session
+  return { success: true, needsEmailConfirm }
 }

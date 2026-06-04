@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import { login, register } from './actions'
 
-export default function LoginPage() {
+function LoginPageInner() {
   const params = useSearchParams()
   const [tab, setTab] = useState<'login' | 'cadastro'>(
     params.get('tab') === 'cadastro' ? 'cadastro' : 'login'
@@ -40,7 +40,10 @@ export default function LoginPage() {
     }
     const result = await register(fd)
     if (result.error) { setError(result.error); setLoading(false); return }
-    setSuccess('Conta criada! Verifique seu e-mail para confirmar o acesso.')
+    const msg = result.needsEmailConfirm
+      ? 'Conta criada! Verifique seu e-mail para confirmar o acesso.'
+      : 'Conta criada! Aguarde um administrador vincular sua conta a uma base.'
+    setSuccess(msg)
     setLoading(false)
   }
 
@@ -131,6 +134,14 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginPageInner />
+    </Suspense>
   )
 }
 
