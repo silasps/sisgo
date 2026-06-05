@@ -1,13 +1,14 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { notFound } from 'next/navigation'
+import Link from 'next/link'
 import type { Database } from '@/types/database'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 type ClassRow = Database['public']['Tables']['school_classes']['Row']
 
 export default async function TurmasPage({ params }: Props) {
-  const { id } = await params
+  const { slug, id } = await params
   const supabase = await createClient()
 
   const { data: escola } = await supabase.from('schools').select('name').eq('id', id).single()
@@ -43,6 +44,12 @@ export default async function TurmasPage({ params }: Props) {
                       <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${t.active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                         {t.active ? 'Ativa' : 'Encerrada'}
                       </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <Link href={`/${slug}/escolas/${id}/turmas/${t.id}`}
+                        className="text-xs font-medium text-brand-500 hover:text-brand-600 px-3 py-1.5 rounded-lg hover:bg-brand-50 transition-colors">
+                        Editar
+                      </Link>
                     </td>
                   </tr>
                 ))}

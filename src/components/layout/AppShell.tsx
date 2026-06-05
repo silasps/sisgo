@@ -11,17 +11,19 @@ export const useMobileNav = () => useContext(NavCtx)
 export function AppShell({
   items,
   subtitle,
+  className,
   children,
 }: {
   items: NavItem[]
   subtitle?: string
+  className?: string
   children: React.ReactNode
 }) {
   const [open, setOpen] = useState(false)
 
   return (
     <NavCtx.Provider value={{ openNav: () => setOpen(true) }}>
-      <div className="flex h-dvh overflow-hidden">
+      <div className={className ?? 'flex h-dvh overflow-hidden'}>
         {open && (
           <div
             className="fixed inset-0 z-20 bg-black/50 md:hidden"

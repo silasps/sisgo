@@ -3,8 +3,15 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
   body {
     @apply bg-gray-50 text-gray-900 antialiased;
+  }
+  /* Offset para nav fixa nas âncoras */
+  [id] {
+    scroll-margin-top: 5rem;
   }
 }
 

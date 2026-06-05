@@ -69,7 +69,7 @@ export default async function SuperAdminDashboard() {
                   )}
                   <div className="flex gap-2 pt-2 border-t border-gray-100">
                     <Link
-                      href={`/${base.slug}`}
+                      href={`/${base.slug}/pessoas`}
                       className="flex-1 text-center text-xs font-medium text-brand-500 hover:text-brand-600 py-1.5 rounded-lg hover:bg-brand-50 transition-colors"
                     >
                       Acessar base →

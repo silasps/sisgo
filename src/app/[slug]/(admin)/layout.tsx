@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { AppShell } from '@/components/layout/AppShell'
+import { SuperAdminContextBar } from '@/components/layout/SuperAdminContextBar'
 import { notFound, redirect } from 'next/navigation'
 
 const NAV = (slug: string) => [
@@ -8,6 +9,7 @@ const NAV = (slug: string) => [
   { href: `/${slug}/obreiros`, label: 'Obreiros', icon: '⛪' },
   { href: `/${slug}/alunos`, label: 'Alunos', icon: '🎓' },
   { href: `/${slug}/escolas`, label: 'Escolas', icon: '📚' },
+  { href: `/${slug}/inscricoes`, label: 'Inscrições', icon: '📋' },
   { href: `/${slug}/ministerios`, label: 'Ministérios', icon: '🎵' },
   { href: `/${slug}/financeiro`, label: 'Financeiro', icon: '💰' },
   { href: `/${slug}/configuracoes`, label: 'Configurações', icon: '⚙' },
@@ -53,9 +55,20 @@ export default async function SlugLayout({ children, params }: Props) {
     if (!access) redirect('/login')
   }
 
+  const isSuperAdmin = role === 'superadmin'
+
   return (
-    <AppShell items={NAV(slug)} subtitle={org.name}>
-      {children}
-    </AppShell>
+    <div className="flex flex-col h-dvh">
+      {isSuperAdmin && (
+        <SuperAdminContextBar mode="admin" slug={slug} baseName={org.name} />
+      )}
+      <AppShell
+        items={NAV(slug)}
+        subtitle={org.name}
+        className="flex flex-1 min-h-0 overflow-hidden"
+      >
+        {children}
+      </AppShell>
+    </div>
   )
 }

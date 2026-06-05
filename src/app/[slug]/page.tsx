@@ -1,11 +1,28 @@
 import { createClient } from '@/lib/supabase/server'
+import { SuperAdminContextBar } from '@/components/layout/SuperAdminContextBar'
 import { notFound } from 'next/navigation'
 
-type Props = { params: Promise<{ slug: string }> }
+type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ preview?: string }> }
 
-export default async function PublicBasePage({ params }: Props) {
+export default async function PublicBasePage({ params, searchParams }: Props) {
   const { slug } = await params
+  const { preview } = await searchParams
   const supabase = await createClient()
+
+  let isSuperAdmin = false
+  if (preview === 'true') {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: orgUser } = await supabase
+        .from('organization_users')
+        .select('roles(name)')
+        .eq('user_id', user.id)
+        .eq('active', true)
+        .single()
+      const role = (orgUser?.roles as unknown as { name: string } | null)?.name
+      isSuperAdmin = role === 'superadmin'
+    }
+  }
 
   const { data: org } = await supabase
     .from('organizations')
@@ -25,6 +42,8 @@ export default async function PublicBasePage({ params }: Props) {
     .order('name')
 
   return (
+    <>
+    {isSuperAdmin && <SuperAdminContextBar mode="public" slug={slug} baseName={org.name} />}
     <main className="min-h-screen bg-white">
       {/* Header público — em construção */}
       <header className="bg-dark-950 text-white px-6 py-4 flex items-center justify-between">
@@ -140,5 +159,6 @@ export default async function PublicBasePage({ params }: Props) {
         </div>
       </footer>
     </main>
+    </>
   )
 }
