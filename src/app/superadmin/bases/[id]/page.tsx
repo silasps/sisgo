@@ -7,6 +7,7 @@ type Props = { params: Promise<{ id: string }> }
 
 export default async function BaseDetailPage({ params }: Props) {
   const { id } = await params
+  const orgId = id
   const supabase = await createClient()
 
   const { data: base } = await supabase
@@ -36,12 +37,20 @@ export default async function BaseDetailPage({ params }: Props) {
       <Header
         title={base.name}
         actions={
-          <Link
-            href="/superadmin/bases"
-            className="text-sm text-gray-500 hover:text-gray-700"
-          >
-            ← Voltar
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link
+              href={`/superadmin/bases/${orgId}/usuarios`}
+              className="px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 transition-colors"
+            >
+              Gerenciar usuários
+            </Link>
+            <Link
+              href="/superadmin/bases"
+              className="text-sm text-gray-500 hover:text-gray-700"
+            >
+              ← Voltar
+            </Link>
+          </div>
         }
       />
       <main className="p-6 space-y-6 max-w-4xl">
@@ -77,7 +86,9 @@ export default async function BaseDetailPage({ params }: Props) {
         <div>
           <h2 className="font-semibold text-gray-900 mb-3">Resumo</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            <MiniStat label="Usuários" value={userCount ?? 0} icon="👤" />
+            <Link href={`/superadmin/bases/${orgId}/usuarios`} className="block">
+              <MiniStat label="Usuários" value={userCount ?? 0} icon="👤" clickable />
+            </Link>
             <MiniStat label="Obreiros" value={staffCount ?? 0} icon="⛪" />
             <MiniStat label="Alunos" value={studentCount ?? 0} icon="🎓" />
             <MiniStat label="Escolas" value={schoolCount ?? 0} icon="📚" />
@@ -98,9 +109,11 @@ function Info({ label, value }: { label: string; value: string | null | undefine
   )
 }
 
-function MiniStat({ label, value, icon }: { label: string; value: number; icon: string }) {
+function MiniStat({ label, value, icon, clickable }: { label: string; value: number; icon: string; clickable?: boolean }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
+    <div className={`bg-white rounded-xl border p-4 text-center transition-colors ${
+      clickable ? 'border-brand-200 hover:bg-brand-50 cursor-pointer' : 'border-gray-200'
+    }`}>
       <p className="text-lg mb-1">{icon}</p>
       <p className="text-xl font-bold text-gray-900">{value}</p>
       <p className="text-xs text-gray-500 mt-0.5">{label}</p>

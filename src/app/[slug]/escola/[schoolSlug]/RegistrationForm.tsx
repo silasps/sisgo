@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { submitPreRegistration } from './actions'
+import { PHONE_COUNTRIES, LANGUAGES } from '@/lib/i18n/phoneCountries'
 
 type ClassOption = { id: string; name: string; year: number | null; semester: number | null }
 
@@ -16,6 +17,7 @@ export function RegistrationForm({
 }) {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
+  const [phoneCountry, setPhoneCountry] = useState('+55')
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -25,19 +27,26 @@ export function RegistrationForm({
     const form = e.currentTarget
     const data = new FormData(form)
 
+    // Monta o telefone completo: código do país + número limpo
+    const rawPhone = (data.get('phone_number') as string)?.trim()
+    const phone = rawPhone ? `${phoneCountry}${rawPhone.replace(/\D/g, '')}` : null
+
     const result = await submitPreRegistration({
       orgId,
       schoolId,
       classId: data.get('classId') as string || null,
       fullName: data.get('fullName') as string,
       email: data.get('email') as string,
-      phone: data.get('phone') as string || null,
+      phone,
+      phoneCountry: rawPhone ? phoneCountry : null,
+      language: data.get('language') as string || null,
       message: data.get('message') as string || null,
     })
 
     if (result.success) {
       setStatus('success')
       form.reset()
+      setPhoneCountry('+55')
     } else {
       setStatus('error')
       setErrorMsg(result.error ?? 'Ocorreu um erro. Tente novamente.')
@@ -56,60 +65,113 @@ export function RegistrationForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      <div className="grid sm:grid-cols-2 gap-5">
-        <div className="sm:col-span-2">
-          <label className="block text-sm font-semibold text-gray-700 mb-2">Nome completo *</label>
-          <input
-            name="fullName"
-            required
-            placeholder="Seu nome completo"
-            className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent text-gray-900 placeholder-gray-400"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">E-mail *</label>
-          <input
-            name="email"
-            type="email"
-            required
-            placeholder="seu@email.com"
-            className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent text-gray-900 placeholder-gray-400"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">Telefone / WhatsApp</label>
-          <input
-            name="phone"
-            type="tel"
-            placeholder="(00) 00000-0000"
-            className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent text-gray-900 placeholder-gray-400"
-          />
-        </div>
-        {classes.length > 0 && (
-          <div className="sm:col-span-2">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Turma de interesse</label>
+
+      {/* Nome */}
+      <div>
+        <label className="block text-sm font-semibold text-gray-700 mb-2">Nome completo *</label>
+        <input
+          name="fullName"
+          required
+          placeholder="Seu nome completo"
+          className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent text-gray-900 placeholder-gray-400"
+        />
+      </div>
+
+      {/* E-mail */}
+      <div>
+        <label className="block text-sm font-semibold text-gray-700 mb-2">E-mail *</label>
+        <input
+          name="email"
+          type="email"
+          required
+          placeholder="seu@email.com"
+          className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent text-gray-900 placeholder-gray-400"
+        />
+      </div>
+
+      {/* Idioma */}
+      <div>
+        <label className="block text-sm font-semibold text-gray-700 mb-2">
+          Idioma que você fala *
+        </label>
+        <select
+          name="language"
+          required
+          defaultValue=""
+          className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent text-gray-900"
+        >
+          <option value="" disabled>Selecione seu idioma principal</option>
+          {LANGUAGES.map(l => (
+            <option key={l.code} value={l.code}>
+              {l.label}{l.nativeLabel !== l.label ? ` — ${l.nativeLabel}` : ''}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Telefone / WhatsApp */}
+      <div>
+        <label className="block text-sm font-semibold text-gray-700 mb-2">
+          Telefone / WhatsApp
+          <span className="ml-1 text-xs font-normal text-gray-400">(opcional)</span>
+        </label>
+        <div className="flex gap-2">
+          {/* Código do país */}
+          <div className="flex-shrink-0">
             <select
-              name="classId"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent text-gray-900"
+              value={phoneCountry}
+              onChange={e => setPhoneCountry(e.target.value)}
+              className="h-full px-2 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent text-gray-900 text-sm min-w-[110px]"
+              aria-label="Código do país"
             >
-              <option value="">Não tenho preferência</option>
-              {classes.map(c => (
-                <option key={c.id} value={c.id}>
-                  {c.name}{c.year ? ` — ${c.year}` : ''}{c.semester ? ` / ${c.semester}º semestre` : ''}
+              {PHONE_COUNTRIES.map(c => (
+                <option key={`${c.iso}-${c.code}`} value={c.code}>
+                  {c.flag} {c.code}
                 </option>
               ))}
             </select>
           </div>
-        )}
-        <div className="sm:col-span-2">
-          <label className="block text-sm font-semibold text-gray-700 mb-2">Mensagem (opcional)</label>
-          <textarea
-            name="message"
-            rows={3}
-            placeholder="Conte um pouco sobre você ou tire uma dúvida..."
-            className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent text-gray-900 placeholder-gray-400 resize-none"
+          {/* Número */}
+          <input
+            name="phone_number"
+            type="tel"
+            placeholder="(00) 00000-0000"
+            className="flex-1 px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent text-gray-900 placeholder-gray-400"
           />
         </div>
+        <p className="text-xs text-gray-400 mt-1.5">
+          {PHONE_COUNTRIES.find(c => c.code === phoneCountry)?.flag}{' '}
+          {PHONE_COUNTRIES.find(c => c.code === phoneCountry)?.name} — código {phoneCountry}
+        </p>
+      </div>
+
+      {/* Turma de interesse */}
+      {classes.length > 0 && (
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Turma de interesse</label>
+          <select
+            name="classId"
+            className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent text-gray-900"
+          >
+            <option value="">Não tenho preferência</option>
+            {classes.map(c => (
+              <option key={c.id} value={c.id}>
+                {c.name}{c.year ? ` — ${c.year}` : ''}{c.semester ? ` / ${c.semester}º semestre` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Mensagem */}
+      <div>
+        <label className="block text-sm font-semibold text-gray-700 mb-2">Mensagem <span className="text-xs font-normal text-gray-400">(opcional)</span></label>
+        <textarea
+          name="message"
+          rows={3}
+          placeholder="Conte um pouco sobre você ou tire uma dúvida..."
+          className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent text-gray-900 placeholder-gray-400 resize-none"
+        />
       </div>
 
       {status === 'error' && (

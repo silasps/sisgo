@@ -45,7 +45,7 @@ export default async function EditarEscolaPage({ params }: Props) {
     const prerequisites = (formData.get('prerequisites') as string ?? '')
       .split('\n').map(s => s.trim()).filter(Boolean)
 
-    await sb.from('schools').update({
+    const updatePayload: Record<string, unknown> = {
       name: formData.get('name') as string,
       acronym: (formData.get('acronym') as string) || null,
       slug: (formData.get('slug') as string) || null,
@@ -60,7 +60,13 @@ export default async function EditarEscolaPage({ params }: Props) {
       prerequisites: prerequisites.length ? prerequisites : null,
       is_public: formData.get('is_public') === 'on',
       active: formData.get('active') === 'on',
-    }).eq('id', id)
+      contact_email: (formData.get('contact_email') as string) || null,
+    }
+    // Só atualiza senha se o líder digitou algo novo (campo em branco = manter a anterior)
+    const newPassword = (formData.get('smtp_password') as string)?.trim()
+    if (newPassword) updatePayload.smtp_password = newPassword
+
+    await sb.from('schools').update(updatePayload).eq('id', id)
 
     redirect(`/${slug}/escolas/${id}`)
   }
@@ -69,7 +75,7 @@ export default async function EditarEscolaPage({ params }: Props) {
     'use server'
     const { createAdminClient } = await import('@/lib/supabase/admin')
     const sb = createAdminClient()
-    const { data: newClass } = await sb.from('school_classes').insert({
+    const { data: newClass, error } = await sb.from('school_classes').insert({
       school_id: id,
       name: formData.get('name') as string,
       year: formData.get('year') ? Number(formData.get('year')) : null,
@@ -77,7 +83,12 @@ export default async function EditarEscolaPage({ params }: Props) {
       active: true,
     }).select('id').single()
 
-    redirect(`/${slug}/escolas/${id}/turmas/${newClass?.id}`)
+    if (error || !newClass) {
+      console.error('[createTurma] falha ao inserir turma:', error)
+      redirect(`/${slug}/escolas/${id}`)
+    }
+
+    redirect(`/${slug}/escolas/${id}/turmas/${newClass.id}`)
   }
 
   const publicUrl = escola.slug
@@ -142,6 +153,43 @@ export default async function EditarEscolaPage({ params }: Props) {
                 defaultValue={((escola as unknown as { prerequisites: string[] | null }).prerequisites ?? []).join('\n')}
                 placeholder={'Cristão com 2+ anos de fé\nEnvolvido em uma igreja\nAprovação do pastor'} rows={4} />
             </div>
+          </div>
+
+          <div className="p-5" id="email-eted">
+            <h2 className="font-semibold text-gray-900 mb-1">E-mail da ETED</h2>
+            <p className="text-xs text-gray-400 mb-4">
+              Usado para enviar o formulário de inscrição automaticamente aos candidatos.
+              Configure o e-mail da ETED e uma{' '}
+              <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer"
+                className="text-brand-500 hover:underline">senha de app do Gmail</a>{' '}
+              (não use sua senha principal).
+            </p>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Field
+                label="E-mail da ETED"
+                name="contact_email"
+                defaultValue={(escola as unknown as { contact_email: string | null }).contact_email ?? ''}
+                placeholder="eted.suabase@gmail.com"
+              />
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">
+                  Senha de app{' '}
+                  <span className="font-normal text-gray-400">(deixe em branco para manter a atual)</span>
+                </label>
+                <input
+                  name="smtp_password"
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder="xxxx xxxx xxxx xxxx"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                />
+              </div>
+            </div>
+            {(escola as unknown as { contact_email: string | null }).contact_email && (
+              <p className="mt-2 text-xs text-green-600 flex items-center gap-1">
+                <span>●</span> E-mail configurado: {(escola as unknown as { contact_email: string }).contact_email}
+              </p>
+            )}
           </div>
 
           <div className="p-5">

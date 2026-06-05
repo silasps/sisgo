@@ -14,22 +14,32 @@ export async function login(formData: FormData) {
 
   const { data: orgUser, error: orgError } = await supabase
     .from('organization_users')
-    .select('roles(name)')
+    .select('roles(name), organization_id')
     .eq('user_id', data.user.id)
     .eq('active', true)
     .single()
 
   if (orgError || !orgUser) {
-    //return { error: 'Usuário sem acesso configurado. Contate o administrador.' }
-    return { error: orgError?.message ?? 'Usuário sem acesso configurado.' }
+    return { error: orgError?.message ?? 'Usuário sem acesso configurado. Contate o administrador.' }
   }
 
   const role = (orgUser.roles as unknown as { name: string } | null)?.name
 
   if (role === 'superadmin') return { redirectTo: '/superadmin' }
-  if (role === 'admin_base') return { redirectTo: '/admin' }
 
-  return { error: 'Perfil de acesso não reconhecido. Contate o administrador.' }
+  // Para todos os outros roles: redirecionar para a org do usuário
+  const orgId = (orgUser as unknown as { organization_id: string | null }).organization_id
+  if (!orgId) return { error: 'Organização não configurada. Contate o administrador.' }
+
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('slug')
+    .eq('id', orgId)
+    .single()
+
+  if (!org?.slug) return { error: 'Organização não encontrada. Contate o administrador.' }
+
+  return { redirectTo: `/${org.slug}/pessoas` }
 }
 
 export async function register(formData: FormData) {
@@ -52,7 +62,6 @@ export async function register(formData: FormData) {
     return { error: error.message }
   }
 
-  // Se session != null, o Supabase está com confirmação de e-mail desabilitada (auto-confirm)
   const needsEmailConfirm = !signUpData?.session
   return { success: true, needsEmailConfirm }
 }

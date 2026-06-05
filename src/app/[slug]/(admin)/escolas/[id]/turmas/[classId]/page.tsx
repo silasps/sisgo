@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
+import { CadastrarAtividadeModal } from './CadastrarAtividadeModal'
 
 type Props = { params: Promise<{ slug: string; id: string; classId: string }> }
 
@@ -87,12 +88,20 @@ export default async function EditarTurmaPage({ params }: Props) {
       <Header
         title={turma.name}
         actions={
-          schoolSlug ? (
-            <Link href={`/${slug}/escola/${schoolSlug}`} target="_blank"
-              className="px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-              Ver página pública ↗
-            </Link>
-          ) : undefined
+          <div className="flex items-center gap-2">
+            <a
+              href="#atividades-extras"
+              className="px-4 py-2 text-sm font-semibold text-brand-600 hover:text-brand-800 border border-brand-200 rounded-lg hover:bg-brand-50 transition-colors"
+            >
+              Atividades extras ↓
+            </a>
+            {schoolSlug && (
+              <Link href={`/${slug}/escola/${schoolSlug}`} target="_blank"
+                className="px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                Ver página pública ↗
+              </Link>
+            )}
+          </div>
         }
       />
       <main className="p-4 md:p-6 space-y-6">
@@ -196,21 +205,44 @@ export default async function EditarTurmaPage({ params }: Props) {
                   description="Turma aparece no sistema de gestão"
                   defaultChecked={turma.active ?? true} />
               </div>
+
+              <div className="mt-4 pt-4 border-t border-gray-50">
+                {(turma as unknown as { online_applications: boolean }).online_applications ? (
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-2.5 w-2.5 flex-shrink-0">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-60" />
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
+                    </span>
+                    <span className="text-xs font-semibold text-green-700">Formulário online</span>
+                    <span className="text-xs text-gray-400">— visível no formulário público</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-2.5 w-2.5 flex-shrink-0">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-60" />
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+                    </span>
+                    <span className="text-xs font-semibold text-red-700">Oculto no formulário público</span>
+                    <span className="text-xs text-gray-400">— turma não aparece nas opções</span>
+                  </div>
+                )}
+              </div>
             </div>
           </section>
 
           {/* Atividades extras */}
-          <section className="bg-white rounded-xl border border-gray-200 p-5">
-            <h2 className="font-semibold text-gray-900 mb-1">Atividades extras</h2>
+          <section id="atividades-extras" className="bg-white rounded-xl border border-gray-200 p-5 scroll-mt-20">
+            <div className="flex items-start justify-between gap-4 mb-1">
+              <h2 className="font-semibold text-gray-900">Atividades extras</h2>
+              <CadastrarAtividadeModal orgId={org.id} slug={slug} />
+            </div>
             <p className="text-xs text-gray-400 mb-4">
               Selecione quais atividades fazem parte desta turma. Elas aparecerão na página pública.
-              <Link href={`/${slug}/escolas/programas`} className="ml-2 text-brand-500 hover:underline">Gerenciar atividades →</Link>
             </p>
 
             {!allPrograms?.length ? (
               <p className="text-sm text-gray-400">
-                Nenhuma atividade cadastrada.{' '}
-                <Link href={`/${slug}/escolas/programas`} className="text-brand-500 hover:underline">Cadastrar atividades</Link>
+                Nenhuma atividade cadastrada ainda. Use o botão acima para adicionar a primeira.
               </p>
             ) : (
               <div className="grid sm:grid-cols-2 gap-3">

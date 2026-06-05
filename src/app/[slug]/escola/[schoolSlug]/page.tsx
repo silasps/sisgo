@@ -327,7 +327,9 @@ export default async function SchoolPublicPage({ params }: Props) {
           <RegistrationForm
             orgId={org.id}
             schoolId={school.id}
-            classes={(classes ?? []).map(c => ({ id: c.id, name: c.name, year: c.year, semester: c.semester }))}
+            classes={(classes ?? [])
+              .filter(c => c.online_applications)
+              .map(c => ({ id: c.id, name: c.name, year: c.year, semester: c.semester }))}
           />
         </div>
       </section>

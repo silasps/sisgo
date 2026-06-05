@@ -3,17 +3,27 @@ import { AppShell } from '@/components/layout/AppShell'
 import { SuperAdminContextBar } from '@/components/layout/SuperAdminContextBar'
 import { notFound, redirect } from 'next/navigation'
 
-const NAV = (slug: string) => [
-  { href: `/${slug}`, label: 'Dashboard', icon: '◈' },
-  { href: `/${slug}/pessoas`, label: 'Pessoas', icon: '👥' },
-  { href: `/${slug}/obreiros`, label: 'Obreiros', icon: '⛪' },
-  { href: `/${slug}/alunos`, label: 'Alunos', icon: '🎓' },
-  { href: `/${slug}/escolas`, label: 'Escolas', icon: '📚' },
-  { href: `/${slug}/inscricoes`, label: 'Inscrições', icon: '📋' },
-  { href: `/${slug}/ministerios`, label: 'Ministérios', icon: '🎵' },
-  { href: `/${slug}/financeiro`, label: 'Financeiro', icon: '💰' },
-  { href: `/${slug}/configuracoes`, label: 'Configurações', icon: '⚙' },
-]
+type NavItem = { href: string; label: string; icon: string }
+
+const MANAGEMENT_ROLES = ['superadmin', 'admin_base', 'lider_base', 'dh']
+
+function buildNav(slug: string, role: string): NavItem[] {
+  const is = (r: string) => role === r
+  const isManagement = MANAGEMENT_ROLES.includes(role)
+
+  const all: Array<NavItem & { show: boolean }> = [
+    { href: `/${slug}`,              label: 'Dashboard',    icon: '◈',  show: true },
+    { href: `/${slug}/pendentes`,    label: 'Pendentes',    icon: '⚠',  show: true },
+    { href: `/${slug}/pessoas`,      label: 'Pessoas',      icon: '👥', show: true },
+    { href: `/${slug}/escolas`,      label: 'Escolas',      icon: '📚', show: isManagement || is('lider_eted') },
+    { href: `/${slug}/inscricoes`,   label: 'Inscrições',   icon: '📋', show: isManagement || is('lider_eted') },
+    { href: `/${slug}/ministerios`,  label: 'Ministérios',  icon: '🎵', show: isManagement },
+    { href: `/${slug}/financeiro`,   label: 'Financeiro',   icon: '💰', show: isManagement || is('secretaria') },
+    { href: `/${slug}/configuracoes`,label: 'Configurações',icon: '⚙',  show: isManagement },
+  ]
+
+  return all.filter(i => i.show).map(({ show: _, ...i }) => i)
+}
 
 type Props = { children: React.ReactNode; params: Promise<{ slug: string }> }
 
@@ -32,7 +42,6 @@ export default async function SlugLayout({ children, params }: Props) {
 
   if (!org || !org.active) notFound()
 
-  // Verifica acesso: superadmin ou usuário da org
   const { data: orgUser } = await supabase
     .from('organization_users')
     .select('roles(name)')
@@ -40,10 +49,9 @@ export default async function SlugLayout({ children, params }: Props) {
     .eq('active', true)
     .single()
 
-  const role = (orgUser?.roles as unknown as { name: string } | null)?.name
+  const role = (orgUser?.roles as unknown as { name: string } | null)?.name ?? ''
 
   if (role !== 'superadmin') {
-    // Verifica se pertence a esta org
     const { data: access } = await supabase
       .from('organization_users')
       .select('id')
@@ -63,7 +71,7 @@ export default async function SlugLayout({ children, params }: Props) {
         <SuperAdminContextBar mode="admin" slug={slug} baseName={org.name} />
       )}
       <AppShell
-        items={NAV(slug)}
+        items={buildNav(slug, role)}
         subtitle={org.name}
         className="flex flex-1 min-h-0 overflow-hidden"
       >

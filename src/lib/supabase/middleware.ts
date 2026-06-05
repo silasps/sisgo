@@ -81,11 +81,20 @@ async function getUserRole(supabase: any, userId: string): Promise<string | null
 async function getRedirectDest(supabase: any, userId: string): Promise<string> {
   const { data } = await supabase
     .from('organization_users')
-    .select('roles(name)')
+    .select('roles(name), organization_id')
     .eq('user_id', userId).eq('active', true).single()
 
   const role = data?.roles?.name
   if (role === 'superadmin') return '/superadmin'
-  if (role === 'admin_base') return '/admin'
-  return '/login'
+
+  const orgId = data?.organization_id
+  if (!orgId) return '/login'
+
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('slug')
+    .eq('id', orgId)
+    .single()
+
+  return org?.slug ? `/${org.slug}/pessoas` : '/login'
 }
