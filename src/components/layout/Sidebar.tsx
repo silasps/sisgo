@@ -4,15 +4,16 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import Image from 'next/image'
 
-type NavItem = { href: string; label: string; icon: string }
+type NavItem = { href: string; label: string; icon: string; alert?: boolean }
 type SidebarProps = {
   items: NavItem[]
   subtitle?: string
+  logoUrl?: string
   isOpen?: boolean
   onClose?: () => void
 }
 
-export function Sidebar({ items, subtitle, isOpen = false, onClose }: SidebarProps) {
+export function Sidebar({ items, subtitle, logoUrl, isOpen = false, onClose }: SidebarProps) {
   const pathname = usePathname()
 
   return (
@@ -27,12 +28,13 @@ export function Sidebar({ items, subtitle, isOpen = false, onClose }: SidebarPro
       <div className="px-5 py-5 border-b border-dark-800 flex items-start justify-between gap-2">
         <div>
           <Image
-            src="/images/logo-white.png"
-            alt="JOCUM A.T."
+            src={logoUrl ?? '/images/logo-white.png'}
+            alt={subtitle ?? 'Logo'}
             width={110}
             height={38}
             className="object-contain"
             priority
+            unoptimized={!!logoUrl}
             onError={(e) => { e.currentTarget.style.display = 'none' }}
           />
           {subtitle && (
@@ -58,14 +60,20 @@ export function Sidebar({ items, subtitle, isOpen = false, onClose }: SidebarPro
               key={item.href}
               href={item.href}
               onClick={onClose}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+              className={`relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
                 active
                   ? 'bg-brand-500 text-white font-medium'
-                  : 'text-gray-400 hover:bg-dark-800 hover:text-white'
+                  : 'text-gray-400 hover:bg-brand-500/10 hover:text-white'
               }`}
             >
-              <span className="text-base leading-none">{item.icon}</span>
-              {item.label}
+              {item.alert && !active && (
+                <span className="absolute inset-0 rounded-lg bg-red-500/30 animate-pulse" />
+              )}
+              <span className="relative text-base leading-none">{item.icon}</span>
+              <span className="relative">{item.label}</span>
+              {item.alert && !active && (
+                <span className="relative ml-auto w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              )}
             </Link>
           )
         })}

@@ -1,39 +1,72 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
+import { notFound, redirect } from 'next/navigation'
+import { BrandingForm } from './BrandingForm'
 
 type Props = { params: Promise<{ slug: string }> }
+
+const BRANDING_ROLES = ['superadmin', 'lider_base']
 
 export default async function ConfiguracoesPage({ params }: Props) {
   const { slug } = await params
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: org } = await supabase.from('organizations').select('name, slug, email, city, state').eq('slug', slug).single()
+  if (!user) redirect('/login')
+
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('id, name, slug, email, city, state, logo_url, accent_color')
+    .eq('slug', slug)
+    .single()
+
+  if (!org) notFound()
+
   const { data: orgUser } = await supabase
     .from('organization_users')
     .select('roles(name, label)')
-    .eq('user_id', user?.id ?? '')
+    .eq('user_id', user.id)
     .eq('active', true)
     .single()
 
-  const role = (orgUser?.roles as unknown as { label: string } | null)?.label
+  const roles     = orgUser?.roles as unknown as { name: string; label: string } | null
+  const roleName  = roles?.name  ?? ''
+  const roleLabel = roles?.label ?? ''
+
+  const canBrand = BRANDING_ROLES.includes(roleName)
 
   return (
     <>
       <Header title="Configurações" />
-      <main className="p-4 md:p-6 max-w-lg space-y-4">
+      <main className="p-4 md:p-6 space-y-8 max-w-2xl">
+
         <Section title="Minha conta">
-          <Row label="E-mail" value={user?.email} />
-          <Row label="Papel" value={role} />
+          <Row label="E-mail" value={user.email} />
+          <Row label="Papel"  value={roleLabel} />
         </Section>
-        {org && (
-          <Section title="Base">
-            <Row label="Nome" value={org.name} />
-            <Row label="Slug" value={org.slug} />
-            <Row label="E-mail" value={org.email} />
-            <Row label="Localização" value={[org.city, org.state].filter(Boolean).join(', ')} />
-          </Section>
+
+        <Section title="Base">
+          <Row label="Nome"        value={org.name} />
+          <Row label="Slug"        value={org.slug} />
+          <Row label="E-mail"      value={org.email} />
+          <Row label="Localização" value={[org.city, org.state].filter(Boolean).join(', ')} />
+        </Section>
+
+        {canBrand ? (
+          <BrandingForm
+            orgId={org.id}
+            orgSlug={slug}
+            orgName={org.name}
+            currentLogoUrl={(org as { logo_url?: string | null }).logo_url ?? null}
+            currentAccentColor={(org as { accent_color?: string }).accent_color ?? 'laranja'}
+          />
+        ) : (
+          <div className="rounded-xl border border-dark-800 bg-dark-900 p-6 opacity-60">
+            <p className="text-sm font-semibold text-white uppercase tracking-widest mb-1">Identidade Visual</p>
+            <p className="text-xs text-gray-500">Apenas o líder da base pode personalizar a logo e a cor de destaque.</p>
+          </div>
         )}
+
       </main>
     </>
   )
@@ -47,6 +80,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     </div>
   )
 }
+
 function Row({ label, value }: { label: string; value?: string | null }) {
   return (
     <div className="flex justify-between text-sm">

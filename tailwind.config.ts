@@ -15,9 +15,10 @@ const config: Config = {
           100: '#ffeedd',
           200: '#fdd9b5',
           300: '#fbb97f',
-          400: '#f89547',
-          500: '#f47920', // laranja JOCUM
-          600: '#e05e0a',
+          // 400/500/600 são CSS variables para suportar personalização por base
+          400: 'rgb(var(--brand-400) / <alpha-value>)',
+          500: 'rgb(var(--brand-500) / <alpha-value>)',
+          600: 'rgb(var(--brand-600) / <alpha-value>)',
           700: '#ba480b',
           800: '#963a10',
           900: '#7a3111',

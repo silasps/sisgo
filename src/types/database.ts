@@ -16,8 +16,10 @@ export type Database = {
           id: string; name: string; slug: string; city: string | null; state: string | null
           country: string; phone: string | null; email: string | null; website: string | null
           logo_url: string | null; active: boolean; created_at: string; updated_at: string
+          accent_color: string | null
+          department_assignments: Record<string, string> | null
         }
-        Insert: { name: string; slug: string; country?: string; city?: string | null; state?: string | null; phone?: string | null; email?: string | null; website?: string | null; logo_url?: string | null; active?: boolean }
+        Insert: { name: string; slug: string; country?: string; city?: string | null; state?: string | null; phone?: string | null; email?: string | null; website?: string | null; logo_url?: string | null; active?: boolean; accent_color?: string | null; department_assignments?: Record<string, string> | null }
         Update: Partial<Database['public']['Tables']['organizations']['Insert']>
         Relationships: []
       }
@@ -66,8 +68,8 @@ export type Database = {
         Relationships: [Rel<'person_status_history_person_id_fkey', ['person_id'], false, 'people', ['id']>]
       }
       staff_applications: {
-        Row: { id: string; organization_id: string; person_id: string; status: string; applied_at: string; reviewed_at: string | null; reviewed_by: string | null; notes: string | null }
-        Insert: { organization_id: string; person_id: string; status?: string; notes?: string | null }
+        Row: { id: string; organization_id: string; person_id: string; ministry_id: string | null; status: string; applied_at: string; reviewed_at: string | null; reviewed_by: string | null; notes: string | null }
+        Insert: { organization_id: string; person_id: string; ministry_id?: string | null; status?: string; notes?: string | null }
         Update: Partial<Database['public']['Tables']['staff_applications']['Insert']>
         Relationships: []
       }
@@ -129,6 +131,46 @@ export type Database = {
         Row: { id: string; ministry_id: string; person_id: string; ministry_role_id: string | null; joined_at: string | null; left_at: string | null; active: boolean }
         Insert: { ministry_id: string; person_id: string; ministry_role_id?: string | null; joined_at?: string | null; left_at?: string | null; active?: boolean }
         Update: Partial<Database['public']['Tables']['ministry_members']['Insert']>
+        Relationships: []
+      }
+      ministry_leaders: {
+        Row: { id: string; organization_id: string; ministry_id: string; user_id: string; created_at: string }
+        Insert: { organization_id: string; ministry_id: string; user_id: string }
+        Update: Partial<Database['public']['Tables']['ministry_leaders']['Insert']>
+        Relationships: []
+      }
+      ministry_pending_requests: {
+        Row: {
+          id: string; organization_id: string; ministry_id: string; requested_by: string
+          request_type: 'add_member' | 'remove_member' | 'change_role'
+          person_id: string | null; ministry_role_id: string | null; notes: string | null
+          status: 'pendente' | 'aprovado' | 'rejeitado' | 'cancelado'
+          reviewed_by: string | null; reviewed_at: string | null; created_at: string
+        }
+        Insert: {
+          organization_id: string; ministry_id: string; requested_by: string
+          request_type: 'add_member' | 'remove_member' | 'change_role'
+          person_id?: string | null; ministry_role_id?: string | null; notes?: string | null
+          status?: 'pendente' | 'aprovado' | 'rejeitado' | 'cancelado'
+        }
+        Update: Partial<Database['public']['Tables']['ministry_pending_requests']['Insert']>
+        Relationships: []
+      }
+      service_requests: {
+        Row: {
+          id: string; organization_id: string; requester_id: string; requester_role: string
+          target_department: 'hospitalidade' | 'dh' | 'secretaria' | 'outro'
+          request_type: string; subject: string; description: string | null
+          status: 'pendente' | 'em_analise' | 'resolvido' | 'rejeitado'
+          reviewed_by: string | null; reviewed_at: string | null; created_at: string
+        }
+        Insert: {
+          organization_id: string; requester_id: string; requester_role: string
+          target_department: 'hospitalidade' | 'dh' | 'secretaria' | 'outro'
+          request_type: string; subject: string; description?: string | null
+          status?: 'pendente' | 'em_analise' | 'resolvido' | 'rejeitado'
+        }
+        Update: Partial<Database['public']['Tables']['service_requests']['Insert']>
         Relationships: []
       }
       notification_events: {

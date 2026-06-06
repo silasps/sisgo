@@ -3,6 +3,13 @@
 @tailwind utilities;
 
 @layer base {
+  /* Valores padrão — sobrescritos pelo layout admin via <style> inline */
+  :root {
+    --brand-400: 248 149 71;
+    --brand-500: 244 121 32;
+    --brand-600: 224 94 10;
+  }
+
   html {
     scroll-behavior: smooth;
   }

@@ -3,7 +3,7 @@
 import { createContext, useContext, useState } from 'react'
 import { Sidebar } from './Sidebar'
 
-type NavItem = { href: string; label: string; icon: string }
+type NavItem = { href: string; label: string; icon: string; alert?: boolean }
 
 const NavCtx = createContext<{ openNav: () => void }>({ openNav: () => {} })
 export const useMobileNav = () => useContext(NavCtx)
@@ -11,11 +11,13 @@ export const useMobileNav = () => useContext(NavCtx)
 export function AppShell({
   items,
   subtitle,
+  logoUrl,
   className,
   children,
 }: {
   items: NavItem[]
   subtitle?: string
+  logoUrl?: string
   className?: string
   children: React.ReactNode
 }) {
@@ -34,6 +36,7 @@ export function AppShell({
         <Sidebar
           items={items}
           subtitle={subtitle}
+          logoUrl={logoUrl}
           isOpen={open}
           onClose={() => setOpen(false)}
         />
