@@ -1,0 +1,92 @@
+/**
+ * Lógica centralizada de papéis e permissões do SISGO.
+ *
+ * Todas as verificações de papel devem importar daqui — nunca repita
+ * os arrays de strings inline nos componentes.
+ *
+ * Para adicionar um novo papel: (1) acrescente em `Role`, (2) ajuste os
+ * grupos necessários abaixo, (3) adicione ao banco via migration.
+ */
+
+// ── Tipo union de todos os papéis do sistema ──────────────────────────────────
+
+export type Role =
+  | 'superadmin'
+  | 'supervisor_bases'
+  | 'admin_base'
+  | 'lider_base'
+  | 'dh'
+  | 'secretaria'
+  | 'hospitalidade'
+  | 'cozinha'
+  | 'lider_eted'
+  | 'obreiro_eted'
+  | 'lider_ministerio'
+  | 'obreiro_ministerio'
+  | 'aluno'
+  | 'associado'
+
+// ── Grupos de papéis ──────────────────────────────────────────────────────────
+
+/** Papéis com acesso gerencial completo à base */
+export const MANAGEMENT_ROLES: readonly Role[] = [
+  'superadmin',
+  'admin_base',
+  'lider_base',
+  'dh',
+]
+
+/** Papéis com acesso ao financeiro geral */
+export const GENERAL_FINANCE_ROLES: readonly Role[] = [
+  'superadmin',
+  'admin_base',
+  'lider_base',
+  'secretaria',
+]
+
+/** Papéis com acesso ao módulo de cozinha e estoque */
+export const KITCHEN_ROLES: readonly Role[] = [
+  'superadmin',
+  'admin_base',
+  'lider_base',
+  'dh',
+  'secretaria',
+  'cozinha',
+]
+
+/** Papéis que podem ver o módulo de reservas */
+export const RESERVATION_ROLES: readonly Role[] = [
+  'superadmin',
+  'admin_base',
+  'lider_base',
+  'dh',
+  'hospitalidade',
+  'lider_eted',
+  'obreiro_eted',
+  'aluno',
+  'associado',
+  'lider_ministerio',
+  'obreiro_ministerio',
+]
+
+// ── Funções auxiliares ────────────────────────────────────────────────────────
+
+/** Verifica se o papel tem acesso gerencial à base */
+export function isManagementRole(role: string): boolean {
+  return (MANAGEMENT_ROLES as readonly string[]).includes(role)
+}
+
+/** Verifica se o papel tem acesso ao financeiro geral */
+export function isGeneralFinanceRole(role: string): boolean {
+  return (GENERAL_FINANCE_ROLES as readonly string[]).includes(role)
+}
+
+/** Verifica se o papel tem acesso à cozinha */
+export function isKitchenRole(role: string): boolean {
+  return (KITCHEN_ROLES as readonly string[]).includes(role)
+}
+
+/** Verifica se o papel pode ver o módulo de reservas */
+export function canSeeReservations(role: string): boolean {
+  return (RESERVATION_ROLES as readonly string[]).includes(role)
+}

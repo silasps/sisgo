@@ -22,10 +22,10 @@ export function DonutChart({ segments, title }: { segments: Segment[]; title?: s
   })
 
   return (
-    <div className="flex flex-col sm:flex-row items-center gap-6 w-full">
+    <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 w-full">
       {/* SVG donut */}
       <div className="shrink-0">
-        <svg viewBox="0 0 136 136" className="w-36 h-36">
+        <svg viewBox="0 0 136 136" className="w-28 h-28 sm:w-36 sm:h-36">
           {total === 0 ? (
             <circle cx={cx} cy={cy} r={r} fill="none" stroke="#E5E7EB" strokeWidth={strokeWidth} />
           ) : (
@@ -73,7 +73,7 @@ export function DonutChart({ segments, title }: { segments: Segment[]; title?: s
       </div>
 
       {/* Legend */}
-      <div className="grid grid-cols-2 gap-x-6 gap-y-2.5 flex-1">
+      <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 gap-x-4 sm:gap-x-6 gap-y-2 sm:gap-y-2.5 flex-1 w-full">
         {segments.map(seg => (
           <div key={seg.label} className="flex items-center gap-2 min-w-0">
             <div

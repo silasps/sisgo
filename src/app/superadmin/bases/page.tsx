@@ -43,11 +43,11 @@ export default async function BasesPage() {
                 <Link
                   key={base.id}
                   href={`/superadmin/bases/${base.id}`}
-                  className="block bg-white rounded-xl border border-gray-200 p-4 hover:border-brand-300 transition-colors"
+                  className="group block bg-white rounded-xl border border-gray-200 p-4 transition-all duration-200 hover:border-brand-300 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="font-medium text-gray-900 truncate">{base.name}</p>
+                      <p className="font-medium text-gray-900 truncate group-hover:text-brand-600 transition-colors">{base.name}</p>
                       <p className="text-xs text-gray-400 mt-0.5">{base.slug}</p>
                     </div>
                     <span className={`flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -89,30 +89,42 @@ export default async function BasesPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {bases.map((base) => (
-                    <tr key={base.id} className="hover:bg-gray-50 group">
-                      <td className="px-4 py-3">
-                        <p className="font-medium text-gray-900">{base.name}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">{base.slug}</p>
+                    <tr key={base.id} className="group hover:bg-gray-50">
+                      <td className="p-0">
+                        <Link href={`/superadmin/bases/${base.id}`} className="block px-4 py-3">
+                          <p className="font-medium text-gray-900">{base.name}</p>
+                          <p className="mt-0.5 text-xs text-gray-400">{base.slug}</p>
+                        </Link>
                       </td>
-                      <td className="px-4 py-3 text-gray-500">
-                        {[base.city, base.state].filter(Boolean).join(' · ') || '—'}
+                      <td className="p-0 text-gray-500">
+                        <Link href={`/superadmin/bases/${base.id}`} className="block px-4 py-3">
+                          {[base.city, base.state].filter(Boolean).join(' · ') || '—'}
+                        </Link>
                       </td>
-                      <td className="px-4 py-3 text-gray-500">{base.email ?? base.phone ?? '—'}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-                          base.active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'
-                        }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${base.active ? 'bg-green-500' : 'bg-gray-400'}`} />
-                          {base.active ? 'Ativa' : 'Inativa'}
-                        </span>
+                      <td className="p-0 text-gray-500">
+                        <Link href={`/superadmin/bases/${base.id}`} className="block px-4 py-3">
+                          {base.email ?? base.phone ?? '—'}
+                        </Link>
                       </td>
-                      <td className="px-4 py-3 text-gray-500">
-                        {new Date(base.created_at).toLocaleDateString('pt-BR')}
+                      <td className="p-0">
+                        <Link href={`/superadmin/bases/${base.id}`} className="block px-4 py-3">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                            base.active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'
+                          }`}>
+                            <span className={`h-1.5 w-1.5 rounded-full ${base.active ? 'bg-green-500' : 'bg-gray-400'}`} />
+                            {base.active ? 'Ativa' : 'Inativa'}
+                          </span>
+                        </Link>
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="p-0 text-gray-500">
+                        <Link href={`/superadmin/bases/${base.id}`} className="block px-4 py-3">
+                          {new Date(base.created_at).toLocaleDateString('pt-BR')}
+                        </Link>
+                      </td>
+                      <td className="p-0 text-right">
                         <Link
                           href={`/superadmin/bases/${base.id}`}
-                          className="text-brand-500 hover:text-brand-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="block px-4 py-3 font-medium text-brand-500 opacity-0 transition-opacity hover:text-brand-600 group-hover:opacity-100"
                         >
                           Ver →
                         </Link>

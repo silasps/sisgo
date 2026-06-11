@@ -3,6 +3,13 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import Image from 'next/image'
+import {
+  LayoutDashboard, AlertTriangle, Users, Church, GraduationCap,
+  ClipboardList, Music2, BedDouble, UtensilsCrossed, Landmark,
+  ChefHat, Package, DollarSign, Receipt, Settings, LogOut,
+  UserCheck, CalendarDays,
+  type LucideIcon,
+} from 'lucide-react'
 
 type NavItem = { href: string; label: string; icon: string; alert?: boolean }
 type SidebarProps = {
@@ -11,6 +18,32 @@ type SidebarProps = {
   logoUrl?: string
   isOpen?: boolean
   onClose?: () => void
+}
+
+const ICON_MAP: Record<string, LucideIcon> = {
+  dashboard:      LayoutDashboard,
+  calendario:     CalendarDays,
+  pendentes:      AlertTriangle,
+  pessoas:        Users,
+  presenca:       UserCheck,
+  obreiros:       Church,
+  escolas:        GraduationCap,
+  inscricoes:     ClipboardList,
+  ministerios:    Music2,
+  reservas:       BedDouble,
+  refeicoes:      UtensilsCrossed,
+  caixa:          Landmark,
+  cozinha:        ChefHat,
+  estoque:        Package,
+  financeiro:     DollarSign,
+  contas:         Receipt,
+  configuracoes:  Settings,
+}
+
+function NavIcon({ name, className }: { name: string; className?: string }) {
+  const Icon = ICON_MAP[name]
+  if (!Icon) return null
+  return <Icon size={16} className={className} aria-hidden />
 }
 
 export function Sidebar({ items, subtitle, logoUrl, isOpen = false, onClose }: SidebarProps) {
@@ -69,7 +102,7 @@ export function Sidebar({ items, subtitle, logoUrl, isOpen = false, onClose }: S
               {item.alert && !active && (
                 <span className="absolute inset-0 rounded-lg bg-red-500/30 animate-pulse" />
               )}
-              <span className="relative text-base leading-none">{item.icon}</span>
+              <NavIcon name={item.icon} className="relative shrink-0" />
               <span className="relative">{item.label}</span>
               {item.alert && !active && (
                 <span className="relative ml-auto w-2 h-2 rounded-full bg-red-500 animate-pulse" />
@@ -98,7 +131,7 @@ function LogoutButton() {
         onClick={logout}
         className="flex items-center gap-3 px-3 py-2.5 w-full rounded-lg text-sm text-gray-500 hover:bg-dark-800 hover:text-white transition-colors"
       >
-        <span className="text-base leading-none">↩</span>
+        <LogOut size={16} aria-hidden />
         Sair
       </button>
     </div>

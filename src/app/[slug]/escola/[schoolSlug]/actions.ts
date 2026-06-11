@@ -3,8 +3,8 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 
 type PreRegistrationInput = {
-  orgId: string
-  schoolId: string
+  slug: string
+  schoolSlug: string
   classId: string | null
   fullName: string
   email: string
@@ -27,13 +27,51 @@ export async function submitPreRegistration(input: PreRegistrationInput): Promis
   const sb = createAdminClient()
   const email = input.email.trim().toLowerCase()
 
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.schoolSlug)
+
+  const { data: org } = await sb
+    .from('organizations')
+    .select('id')
+    .eq('slug', input.slug)
+    .eq('active', true)
+    .single()
+
+  if (!org) return { success: false, error: 'Base não encontrada.' }
+
+  const schoolQuery = sb
+    .from('schools')
+    .select('id')
+    .eq('organization_id', org.id)
+    .eq('active', true)
+    .eq('is_public', true)
+
+  const { data: school } = await (isUUID
+    ? schoolQuery.eq('id', input.schoolSlug).single()
+    : schoolQuery.eq('slug', input.schoolSlug).single())
+
+  if (!school) return { success: false, error: 'Escola não encontrada.' }
+
+  const classId = input.classId || null
+  if (classId) {
+    const { data: selectedClass } = await sb
+      .from('school_classes')
+      .select('id')
+      .eq('id', classId)
+      .eq('school_id', school.id)
+      .eq('active', true)
+      .eq('online_applications', true)
+      .single()
+
+    if (!selectedClass) return { success: false, error: 'Turma inválida para esta escola.' }
+  }
+
   // ── Garante que existe um registro em people ──────────────────────────────
   let personId: string | null = null
 
   const { data: existingPerson } = await sb
     .from('people')
     .select('id, person_contacts!inner(type, value)')
-    .eq('organization_id', input.orgId)
+    .eq('organization_id', org.id)
     .eq('person_contacts.type', 'email')
     .eq('person_contacts.value', email)
     .maybeSingle()
@@ -44,14 +82,14 @@ export async function submitPreRegistration(input: PreRegistrationInput): Promis
     // Tenta criar com source; fallback sem source se a coluna não existir ainda
     const { data: newPerson, error: personError } = await sb
       .from('people')
-      .insert({ organization_id: input.orgId, full_name: input.fullName.trim(), source: 'pre_inscricao_publica' })
+      .insert({ organization_id: org.id, full_name: input.fullName.trim(), source: 'pre_inscricao_publica' })
       .select('id')
       .single()
 
     if (personError?.code === 'PGRST204') {
       const { data: fallback, error: fbErr } = await sb
         .from('people')
-        .insert({ organization_id: input.orgId, full_name: input.fullName.trim() })
+        .insert({ organization_id: org.id, full_name: input.fullName.trim() })
         .select('id')
         .single()
       if (fbErr || !fallback) {
@@ -79,9 +117,9 @@ export async function submitPreRegistration(input: PreRegistrationInput): Promis
   // ── Cria o interest form ───────────────────────────────────────────────────
   // Campos base (sempre existem no schema)
   const base: Record<string, unknown> = {
-    organization_id: input.orgId,
-    school_id: input.schoolId,
-    class_id: input.classId || null,
+    organization_id: org.id,
+    school_id: school.id,
+    class_id: classId,
     full_name: input.fullName.trim(),
     email,
     phone: input.phone?.trim() || null,
@@ -98,7 +136,10 @@ export async function submitPreRegistration(input: PreRegistrationInput): Promis
 
   // Fallback: remove campos de migrations pendentes um a um até inserir com sucesso
   if (formError?.code === 'PGRST204') {
-    const { phone_country: _pc, language: _lang, person_id: _pid, ...coreOnly } = base
+    const coreOnly = { ...base }
+    delete coreOnly.phone_country
+    delete coreOnly.language
+    delete coreOnly.person_id
     const result = await sb.from('school_interest_forms').insert(coreOnly)
     formError = result.error
   }

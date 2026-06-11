@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
-import { CadastrarAtividadeModal } from './CadastrarAtividadeModal'
+import { AtividadesExtrasSection } from './AtividadesExtrasSection'
 
 type Props = { params: Promise<{ slug: string; id: string; classId: string }> }
 
@@ -44,7 +44,6 @@ export default async function EditarTurmaPage({ params }: Props) {
     .eq('class_id', classId)
 
   const selectedProgramIds = new Set((classPrograms ?? []).map(cp => cp.program_id))
-  const activePrograms = (allPrograms ?? []).filter(p => selectedProgramIds.has(p.id))
 
   async function updateTurma(formData: FormData) {
     'use server'
@@ -68,15 +67,49 @@ export default async function EditarTurmaPage({ params }: Props) {
       active: formData.get('active') === 'on',
     }).eq('id', classId)
 
-    // Atualizar programas extras: delete todos e reinserir os selecionados
-    const selectedIds = formData.getAll('programs') as string[]
-    await sb.from('school_class_programs').delete().eq('class_id', classId)
-    if (selectedIds.length > 0) {
-      await sb.from('school_class_programs').insert(
-        selectedIds.map(pid => ({ class_id: classId, program_id: pid }))
-      )
-    }
+    redirect(`/${slug}/escolas/${id}/turmas/${classId}`)
+  }
 
+  async function handleToggleProgram(formData: FormData) {
+    'use server'
+    const { createAdminClient } = await import('@/lib/supabase/admin')
+    const { revalidatePath } = await import('next/cache')
+    const sb = createAdminClient()
+    const programId = formData.get('program_id') as string
+    const cId = formData.get('class_id') as string
+    const actionType = formData.get('action_type') as string
+
+    if (actionType === 'add') {
+      await sb.from('school_class_programs').upsert({ class_id: cId, program_id: programId })
+    } else {
+      await sb.from('school_class_programs').delete().eq('class_id', cId).eq('program_id', programId)
+    }
+    revalidatePath(`/${slug}/escolas/${id}/turmas/${classId}`)
+  }
+
+  async function handleEditProgram(formData: FormData) {
+    'use server'
+    const { createAdminClient } = await import('@/lib/supabase/admin')
+    const sb = createAdminClient()
+    const programId = formData.get('program_id') as string
+
+    await sb.from('school_programs').update({
+      name: (formData.get('name') as string).trim(),
+      description: (formData.get('description') as string).trim() || null,
+      icon: (formData.get('icon') as string).trim() || null,
+      additional_cost: formData.get('additional_cost') ? Number(formData.get('additional_cost')) : null,
+    }).eq('id', programId)
+
+    redirect(`/${slug}/escolas/${id}/turmas/${classId}`)
+  }
+
+  async function handleDeleteProgram(formData: FormData) {
+    'use server'
+    const { createAdminClient } = await import('@/lib/supabase/admin')
+    const sb = createAdminClient()
+    const programId = formData.get('program_id') as string
+
+    await sb.from('school_programs').delete().eq('id', programId)
     redirect(`/${slug}/escolas/${id}/turmas/${classId}`)
   }
 
@@ -91,14 +124,14 @@ export default async function EditarTurmaPage({ params }: Props) {
           <div className="flex items-center gap-2">
             <a
               href="#atividades-extras"
-              className="px-4 py-2 text-sm font-semibold text-brand-600 hover:text-brand-800 border border-brand-200 rounded-lg hover:bg-brand-50 transition-colors"
+              className="hidden sm:inline-flex px-4 py-2 text-sm font-semibold text-brand-600 hover:text-brand-800 border border-brand-200 rounded-lg hover:bg-brand-50 transition-colors"
             >
-              Atividades extras ↓
+              Atividades ↓
             </a>
             {schoolSlug && (
               <Link href={`/${slug}/escola/${schoolSlug}`} target="_blank"
-                className="px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-                Ver página pública ↗
+                className="px-3 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                <span className="hidden sm:inline">Ver página pública </span>↗
               </Link>
             )}
           </div>
@@ -114,37 +147,20 @@ export default async function EditarTurmaPage({ params }: Props) {
           <span className="text-gray-600">{turma.name}</span>
         </nav>
 
-        {/* Preview: atividades extras ativas desta turma */}
-        {activePrograms.length > 0 && (
-          <section className="bg-gradient-to-br from-brand-50 to-indigo-50 rounded-xl border border-brand-200 p-5">
-            <div className="mb-4">
-              <h2 className="font-semibold text-gray-900">Atividades extras desta turma</h2>
-              <p className="text-xs text-gray-500 mt-0.5">
-                {activePrograms.length} atividade{activePrograms.length > 1 ? 's' : ''} complementar{activePrograms.length > 1 ? 'es' : ''} ativa{activePrograms.length > 1 ? 's' : ''}
-              </p>
-            </div>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {activePrograms.map(prog => (
-                <div key={prog.id} className="bg-white rounded-xl border border-white/80 p-4 shadow-sm flex gap-3 items-start">
-                  <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-brand-50 flex items-center justify-center">
-                    {(prog as unknown as { image_url: string | null }).image_url
-                      ? <img src={(prog as unknown as { image_url: string }).image_url} alt={prog.name} className="w-full h-full object-cover" />
-                      : <span className="text-2xl">{prog.icon ?? '⭐'}</span>}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-semibold text-gray-900 text-sm">{prog.name}</p>
-                    {prog.description && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{prog.description}</p>}
-                    {prog.additional_cost && (
-                      <p className="text-xs font-semibold text-brand-600 mt-1">
-                        + R$ {Number(prog.additional_cost).toFixed(2).replace('.', ',')}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
+        <div className="flex gap-2 flex-wrap">
+          <Link
+            href={`/${slug}/escolas/${id}/turmas/${classId}/alunos`}
+            className="px-3 py-1.5 text-xs font-medium text-brand-600 border border-brand-200 rounded-lg hover:bg-brand-50 transition-colors"
+          >
+            Alunos →
+          </Link>
+          <Link
+            href={`/${slug}/escolas/${id}/turmas/${classId}/presencas`}
+            className="px-3 py-1.5 text-xs font-medium text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Presenças →
+          </Link>
+        </div>
 
         <form action={updateTurma} className="space-y-6">
 
@@ -230,56 +246,6 @@ export default async function EditarTurmaPage({ params }: Props) {
             </div>
           </section>
 
-          {/* Atividades extras */}
-          <section id="atividades-extras" className="bg-white rounded-xl border border-gray-200 p-5 scroll-mt-20">
-            <div className="flex items-start justify-between gap-4 mb-1">
-              <h2 className="font-semibold text-gray-900">Atividades extras</h2>
-              <CadastrarAtividadeModal orgId={org.id} slug={slug} />
-            </div>
-            <p className="text-xs text-gray-400 mb-4">
-              Selecione quais atividades fazem parte desta turma. Elas aparecerão na página pública.
-            </p>
-
-            {!allPrograms?.length ? (
-              <p className="text-sm text-gray-400">
-                Nenhuma atividade cadastrada ainda. Use o botão acima para adicionar a primeira.
-              </p>
-            ) : (
-              <div className="grid sm:grid-cols-2 gap-3">
-                {allPrograms.map(prog => {
-                  const imageUrl = (prog as unknown as { image_url: string | null }).image_url
-                  return (
-                    <label key={prog.id} className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 hover:border-brand-200 cursor-pointer has-[:checked]:border-brand-400 has-[:checked]:bg-brand-50 transition-all">
-                      <input
-                        type="checkbox"
-                        name="programs"
-                        value={prog.id}
-                        defaultChecked={selectedProgramIds.has(prog.id)}
-                        className="mt-0.5 accent-brand-500"
-                      />
-                      <div className="flex items-start gap-2 min-w-0">
-                        <div className="w-9 h-9 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 flex items-center justify-center">
-                          {imageUrl
-                            ? <img src={imageUrl} alt={prog.name} className="w-full h-full object-cover" />
-                            : <span className="text-lg">{prog.icon ?? '⭐'}</span>}
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-900 text-sm">{prog.name}</p>
-                          {prog.description && <p className="text-xs text-gray-500 line-clamp-2">{prog.description}</p>}
-                          {prog.additional_cost && (
-                            <p className="text-xs text-brand-500 font-medium mt-0.5">
-                              + R$ {Number(prog.additional_cost).toFixed(2).replace('.', ',')}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </label>
-                  )
-                })}
-              </div>
-            )}
-          </section>
-
           <div className="flex justify-end gap-3 pb-6">
             <Link href={`/${slug}/escolas/${id}`}
               className="px-5 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
@@ -291,6 +257,25 @@ export default async function EditarTurmaPage({ params }: Props) {
             </button>
           </div>
         </form>
+
+        <AtividadesExtrasSection
+          programs={(allPrograms ?? []).map(p => ({
+            id: p.id,
+            name: p.name,
+            description: p.description ?? null,
+            icon: (p as unknown as { icon: string | null }).icon ?? null,
+            image_url: (p as unknown as { image_url: string | null }).image_url ?? null,
+            additional_cost: (p as unknown as { additional_cost: number | null }).additional_cost ?? null,
+            isSelected: selectedProgramIds.has(p.id),
+          }))}
+          classId={classId}
+          orgId={org.id}
+          slug={slug}
+          toggleAction={handleToggleProgram}
+          editAction={handleEditProgram}
+          deleteAction={handleDeleteProgram}
+        />
+
       </main>
     </>
   )

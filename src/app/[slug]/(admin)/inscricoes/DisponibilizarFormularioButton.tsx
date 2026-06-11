@@ -6,7 +6,7 @@ import Link from 'next/link'
 type ActionResult = {
   url?: string
   error?: string
-  emailWarning?: 'sem_email_eted' | 'email_falhou' | string
+  emailWarning?: 'sem_email_eted' | 'email_falhou' | 'quota_atingida' | string
   schoolId?: string
 }
 
@@ -15,6 +15,8 @@ type Props = {
   slug: string
   action: (formData: FormData) => Promise<ActionResult>
   schoolId: string
+  emailDisabled?: boolean
+  emailDisabledReason?: string
 }
 
 function CopiedToast({ visible }: { visible: boolean }) {
@@ -49,7 +51,7 @@ function CopiedToast({ visible }: { visible: boolean }) {
   )
 }
 
-export function DisponibilizarFormularioButton({ interestFormId, slug, action, schoolId }: Props) {
+export function DisponibilizarFormularioButton({ interestFormId, slug, action, schoolId, emailDisabled, emailDisabledReason }: Props) {
   const [isPending, startTransition] = useTransition()
   const [showCopied, setShowCopied] = useState(false)
   const [emailNotice, setEmailNotice] = useState<{
@@ -88,6 +90,10 @@ export function DisponibilizarFormularioButton({ interestFormId, slug, action, s
           msg: 'E-mail não enviado automaticamente — a ETED ainda não tem e-mail cadastrado. Envie o link manualmente.',
           schoolId: result.schoolId ?? schoolId,
         })
+      } else if (result.emailWarning === 'quota_atingida') {
+        setEmailNotice({
+          msg: 'Limite de e-mails do sistema atingido. O link foi gerado e copiado — envie manualmente ao candidato.',
+        })
       } else if (result.emailWarning === 'email_falhou') {
         setEmailNotice({
           msg: 'E-mail não pôde ser enviado. Envie o link manualmente ao candidato.',
@@ -98,14 +104,21 @@ export function DisponibilizarFormularioButton({ interestFormId, slug, action, s
 
   return (
     <>
-      <button
-        type="button"
-        onClick={handleClick}
-        disabled={isPending}
-        className="inline-flex items-center gap-1 text-xs px-3 py-1.5 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors disabled:opacity-60"
-      >
-        {isPending ? '⏳ Gerando…' : '📋 Disponibilizar formulário'}
-      </button>
+      <div className="flex flex-col gap-1">
+        <button
+          type="button"
+          onClick={handleClick}
+          disabled={isPending}
+          className="inline-flex items-center gap-1 text-xs px-3 py-1.5 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors disabled:opacity-60"
+        >
+          {isPending ? '⏳ Gerando…' : '📋 Disponibilizar formulário'}
+        </button>
+        {emailDisabled && (
+          <p className="text-xs text-orange-500 leading-tight max-w-[200px]" title={emailDisabledReason}>
+            ⚠ Sem envio automático
+          </p>
+        )}
+      </div>
 
       {/* Toast central "Link copiado!" */}
       <CopiedToast visible={showCopied} />

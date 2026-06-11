@@ -37,23 +37,23 @@ export default async function BaseDetailPage({ params }: Props) {
       <Header
         title={base.name}
         actions={
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link
               href={`/superadmin/bases/${orgId}/usuarios`}
-              className="px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 transition-colors"
+              className="px-3 sm:px-4 py-2 bg-brand-500 text-white text-xs sm:text-sm font-medium rounded-lg hover:bg-brand-600 transition-colors whitespace-nowrap"
             >
-              Gerenciar usuários
+              <span className="hidden sm:inline">Gerenciar </span>usuários
             </Link>
             <Link
               href="/superadmin/bases"
-              className="text-sm text-gray-500 hover:text-gray-700"
+              className="text-sm text-gray-500 hover:text-gray-700 whitespace-nowrap"
             >
               ← Voltar
             </Link>
           </div>
         }
       />
-      <main className="p-6 space-y-6 max-w-4xl">
+      <main className="p-4 md:p-6 space-y-6 max-w-4xl">
 
         {/* Status banner */}
         <div className={`rounded-xl px-5 py-3 flex items-center gap-3 ${
@@ -71,7 +71,7 @@ export default async function BaseDetailPage({ params }: Props) {
         {/* Dados */}
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <h2 className="font-semibold text-gray-900 mb-4">Informações</h2>
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 text-sm">
             <Info label="Slug" value={base.slug} />
             <Info label="País" value={base.country} />
             <Info label="Cidade" value={base.city} />

@@ -3,10 +3,11 @@ import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { redirect, notFound } from 'next/navigation'
 import { createMinistry } from '../[id]/actions'
+import { MinistryNameField } from './MinistryNameField'
+import { isManagementRole } from '@/lib/auth/permissions'
+import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 
 type Props = { params: Promise<{ slug: string }> }
-
-const MANAGEMENT_ROLES = ['superadmin', 'admin_base', 'lider_base', 'dh']
 
 export default async function NovoMinisterioPage({ params }: Props) {
   const { slug } = await params
@@ -17,15 +18,10 @@ export default async function NovoMinisterioPage({ params }: Props) {
   const orgId = org.id
 
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: orgUser } = await supabase
-    .from('organization_users')
-    .select('roles(name)')
-    .eq('user_id', user?.id ?? '')
-    .eq('active', true)
-    .single()
-
-  const role = (orgUser?.roles as unknown as { name: string } | null)?.name ?? ''
-  if (!MANAGEMENT_ROLES.includes(role)) notFound()
+  const { role } = user
+    ? await getCurrentOrganizationRole(supabase, user.id, orgId)
+    : { role: '' }
+  if (!isManagementRole(role)) notFound()
 
   const handleCreate = async (formData: FormData) => {
     'use server'
@@ -53,15 +49,10 @@ export default async function NovoMinisterioPage({ params }: Props) {
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <form action={handleCreate} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Nome <span className="text-red-500">*</span>
-              </label>
-              <input
-                name="name"
-                required
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-                placeholder="Ex: Música, Intercessão, Dança..."
-              />
+              <MinistryNameField />
+              <p className="mt-2 text-xs text-gray-500">
+                ETED e escolas de segundo ou terceiro nível devem ser cadastradas em Escolas, não em Ministérios.
+              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">

@@ -1,11 +1,16 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { RegistrationForm } from './RegistrationForm'
+import { schoolTypeShortLabel } from '@/lib/schools'
 
-type Props = { params: Promise<{ slug: string; schoolSlug: string }> }
+type Props = {
+  params: Promise<{ slug: string; schoolSlug: string }>
+  searchParams: Promise<{ lang?: string }>
+}
 
-export default async function SchoolPublicPage({ params }: Props) {
+export default async function SchoolPublicPage({ params, searchParams }: Props) {
   const { slug, schoolSlug } = await params
+  const { lang: langParam } = await searchParams
   const supabase = await createClient()
 
   // Busca org
@@ -57,15 +62,6 @@ export default async function SchoolPublicPage({ params }: Props) {
       .filter((p): p is typeof programs[0] => p !== null)
   }
 
-  const typeLabel: Record<string, string> = {
-    eted: 'ETED',
-    udn: 'Universidade das Nações',
-    seminario: 'Seminário',
-    curso_online: 'Curso Online',
-    voluntariado: 'Voluntariado',
-    outro: 'Escola',
-  }
-
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return null
     return new Date(dateStr).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
@@ -81,21 +77,24 @@ export default async function SchoolPublicPage({ params }: Props) {
 
       {/* NAV */}
       <nav className="fixed top-0 left-0 right-0 z-40 bg-black/60 backdrop-blur-md border-b border-white/10">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <a href={`/${slug}`} className="text-white font-bold text-lg tracking-tight hover:text-brand-400 transition-colors">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-3">
+          <a href={`/${slug}`} className="text-white font-bold text-base sm:text-lg tracking-tight hover:text-brand-400 transition-colors truncate">
             {org.name}
           </a>
-          <div className="hidden md:flex items-center gap-8 text-sm text-white/70">
+          <div className="hidden md:flex items-center gap-6 lg:gap-8 text-sm text-white/70 flex-shrink-0">
             <a href="#sobre" className="hover:text-white transition-colors">Sobre</a>
-            <a href="#programas" className="hover:text-white transition-colors">Programas</a>
-            <a href="#turma" className="hover:text-white transition-colors">Próxima turma</a>
+            {programs.length > 0 && <a href="#programas" className="hover:text-white transition-colors">Programas</a>}
+            {activeClass && <a href="#turma" className="hover:text-white transition-colors">Próxima turma</a>}
             <a href="#inscricao" className="bg-brand-500 hover:bg-brand-600 text-white px-5 py-2 rounded-full font-semibold transition-colors">
               Inscreva-se
             </a>
           </div>
-          <a href="#inscricao" className="md:hidden bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-full text-sm font-semibold transition-colors">
-            Inscreva-se
-          </a>
+          <div className="md:hidden flex items-center gap-2 flex-shrink-0">
+            <a href="#sobre" className="text-white/70 hover:text-white text-xs px-2 py-1.5 transition-colors">Sobre</a>
+            <a href="#inscricao" className="bg-brand-500 hover:bg-brand-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold transition-colors whitespace-nowrap">
+              Inscreva-se
+            </a>
+          </div>
         </div>
       </nav>
 
@@ -112,28 +111,28 @@ export default async function SchoolPublicPage({ params }: Props) {
         )}
         <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/80" />
 
-        <div className="relative z-10 text-center px-6 max-w-4xl mx-auto">
-          <span className="inline-block mb-6 text-xs font-bold uppercase tracking-[0.2em] text-brand-400 bg-brand-500/10 border border-brand-500/30 px-4 py-1.5 rounded-full">
-            {typeLabel[school.school_type] ?? school.school_type}
+        <div className="relative z-10 text-center px-5 sm:px-6 max-w-4xl mx-auto">
+          <span className="inline-block mb-4 sm:mb-6 text-xs font-bold uppercase tracking-[0.2em] text-brand-400 bg-brand-500/10 border border-brand-500/30 px-4 py-1.5 rounded-full">
+            {schoolTypeShortLabel(school.school_type)}
           </span>
-          <h1 className="text-5xl md:text-7xl font-black text-white leading-tight mb-4">
+          <h1 className="text-4xl sm:text-5xl md:text-7xl font-black text-white leading-tight mb-3 sm:mb-4">
             {school.name}
           </h1>
           {school.subtitle && (
-            <p className="text-xl md:text-2xl text-white/70 mb-10 max-w-2xl mx-auto">
+            <p className="text-lg sm:text-xl md:text-2xl text-white/70 mb-8 sm:mb-10 max-w-2xl mx-auto">
               {school.subtitle}
             </p>
           )}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
             <a
               href="#inscricao"
-              className="bg-brand-500 hover:bg-brand-400 text-white font-bold px-8 py-4 rounded-2xl text-lg transition-all hover:scale-105 shadow-lg shadow-brand-500/30"
+              className="bg-brand-500 hover:bg-brand-400 text-white font-bold px-7 sm:px-8 py-3.5 sm:py-4 rounded-2xl text-base sm:text-lg transition-all hover:scale-105 shadow-lg shadow-brand-500/30"
             >
               Quero me inscrever
             </a>
             <a
               href="#sobre"
-              className="bg-white/10 hover:bg-white/20 text-white font-semibold px-8 py-4 rounded-2xl text-lg transition-all border border-white/20 backdrop-blur-sm"
+              className="bg-white/10 hover:bg-white/20 text-white font-semibold px-7 sm:px-8 py-3.5 sm:py-4 rounded-2xl text-base sm:text-lg transition-all border border-white/20 backdrop-blur-sm"
             >
               Saiba mais
             </a>
@@ -149,9 +148,9 @@ export default async function SchoolPublicPage({ params }: Props) {
       </section>
 
       {/* O QUE É */}
-      <section id="sobre" className="py-24 px-6 bg-white">
+      <section id="sobre" className="py-16 sm:py-24 px-5 sm:px-6 bg-white">
         <div className="max-w-6xl mx-auto">
-          <div className="grid md:grid-cols-2 gap-16 items-center">
+          <div className="grid md:grid-cols-2 gap-10 sm:gap-16 items-center">
             <div>
               <span className="text-brand-500 font-bold text-sm uppercase tracking-widest">O que é</span>
               <h2 className="text-4xl md:text-5xl font-black text-gray-950 mt-2 mb-6 leading-tight">
@@ -171,20 +170,20 @@ export default async function SchoolPublicPage({ params }: Props) {
               <StatHighlight value={school.duration_description ?? '20 semanas'} label="Duração total" />
               <StatHighlight value="12 sem." label="Fase teórica" />
               <StatHighlight value="8 sem." label="Campo missionário" />
-              <StatHighlight value={typeLabel[school.school_type] ?? 'ETED'} label="Tipo de escola" />
+              <StatHighlight value={schoolTypeShortLabel(school.school_type)} label="Tipo de escola" />
             </div>
           </div>
         </div>
       </section>
 
       {/* ESTRUTURA */}
-      <section className="py-24 px-6 bg-gray-950 text-white">
+      <section className="py-16 sm:py-24 px-5 sm:px-6 bg-gray-950 text-white">
         <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
+          <div className="text-center mb-10 sm:mb-16">
             <span className="text-brand-400 font-bold text-sm uppercase tracking-widest">Estrutura</span>
-            <h2 className="text-4xl font-black mt-2">Como funciona o programa</h2>
+            <h2 className="text-3xl sm:text-4xl font-black mt-2">Como funciona o programa</h2>
           </div>
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid md:grid-cols-2 gap-4 sm:gap-6">
             <PhaseCard
               number="01"
               title="Fase Teórica"
@@ -205,12 +204,12 @@ export default async function SchoolPublicPage({ params }: Props) {
 
       {/* PROGRAMAS EXTRAS */}
       {programs.length > 0 && (
-        <section id="programas" className="py-24 px-6 bg-white">
+        <section id="programas" className="py-16 sm:py-24 px-5 sm:px-6 bg-white">
           <div className="max-w-6xl mx-auto">
-            <div className="text-center mb-16">
+            <div className="text-center mb-10 sm:mb-16">
               <span className="text-brand-500 font-bold text-sm uppercase tracking-widest">Incluído nesta turma</span>
-              <h2 className="text-4xl font-black text-gray-950 mt-2">Programas extras</h2>
-              <p className="text-gray-500 mt-3 max-w-xl mx-auto">Além das aulas, esta turma conta com experiências complementares que enriquecem ainda mais a formação.</p>
+              <h2 className="text-3xl sm:text-4xl font-black text-gray-950 mt-2">Programas extras</h2>
+              <p className="text-gray-500 mt-3 max-w-xl mx-auto text-sm sm:text-base">Além das aulas, esta turma conta com experiências complementares que enriquecem ainda mais a formação.</p>
             </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {programs.map(program => (
@@ -248,11 +247,11 @@ export default async function SchoolPublicPage({ params }: Props) {
 
       {/* PRÉ-REQUISITOS */}
       {school.prerequisites && school.prerequisites.length > 0 && (
-        <section className="py-20 px-6 bg-gray-50">
+        <section className="py-14 sm:py-20 px-5 sm:px-6 bg-gray-50">
           <div className="max-w-3xl mx-auto">
-            <div className="text-center mb-10">
+            <div className="text-center mb-8 sm:mb-10">
               <span className="text-brand-500 font-bold text-sm uppercase tracking-widest">Pré-requisitos</span>
-              <h2 className="text-3xl font-black text-gray-950 mt-2">Quem pode participar</h2>
+              <h2 className="text-2xl sm:text-3xl font-black text-gray-950 mt-2">Quem pode participar</h2>
             </div>
             <ul className="space-y-3">
               {school.prerequisites.map((req: string, i: number) => (
@@ -268,14 +267,14 @@ export default async function SchoolPublicPage({ params }: Props) {
 
       {/* PRÓXIMA TURMA */}
       {activeClass && (
-        <section id="turma" className="py-24 px-6 bg-gray-950 text-white">
+        <section id="turma" className="py-16 sm:py-24 px-5 sm:px-6 bg-gray-950 text-white">
           <div className="max-w-4xl mx-auto">
-            <div className="text-center mb-12">
+            <div className="text-center mb-8 sm:mb-12">
               <span className="text-brand-400 font-bold text-sm uppercase tracking-widest">Próxima turma</span>
-              <h2 className="text-4xl font-black mt-2">{activeClass.name}</h2>
+              <h2 className="text-3xl sm:text-4xl font-black mt-2">{activeClass.name}</h2>
             </div>
 
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-10">
               {activeClass.starts_at && (
                 <InfoTile label="Início" value={formatDate(activeClass.starts_at) ?? '—'} />
               )}
@@ -317,37 +316,38 @@ export default async function SchoolPublicPage({ params }: Props) {
       )}
 
       {/* FORMULÁRIO DE PRÉ-INSCRIÇÃO */}
-      <section id="inscricao" className="py-24 px-6 bg-white">
+      <section id="inscricao" className="py-16 sm:py-24 px-5 sm:px-6 bg-white">
         <div className="max-w-2xl mx-auto">
-          <div className="text-center mb-12">
+          <div className="text-center mb-8 sm:mb-12">
             <span className="text-brand-500 font-bold text-sm uppercase tracking-widest">Pré-inscrição</span>
-            <h2 className="text-4xl font-black text-gray-950 mt-2">Dê o primeiro passo</h2>
-            <p className="text-gray-500 mt-3">Preencha abaixo e nossa equipe entrará em contato com mais detalhes.</p>
+            <h2 className="text-3xl sm:text-4xl font-black text-gray-950 mt-2">Dê o primeiro passo</h2>
+            <p className="text-gray-500 mt-3 text-sm sm:text-base">Preencha abaixo e nossa equipe entrará em contato com mais detalhes.</p>
           </div>
           <RegistrationForm
-            orgId={org.id}
-            schoolId={school.id}
+            slug={slug}
+            schoolSlug={schoolSlug}
             classes={(classes ?? [])
               .filter(c => c.online_applications)
               .map(c => ({ id: c.id, name: c.name, year: c.year, semester: c.semester }))}
+            initialLang={langParam}
           />
         </div>
       </section>
 
       {/* FOOTER */}
-      <footer className="bg-gray-950 text-white px-6 py-12">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+      <footer className="bg-gray-950 text-white px-5 sm:px-6 py-10 sm:py-12">
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 sm:gap-6 text-center md:text-left">
           <div>
             <p className="font-bold text-lg">{org.name}</p>
             <p className="text-gray-500 text-sm">Jovens Com Uma Missão</p>
           </div>
-          <div className="flex gap-6 text-sm text-gray-400">
+          <div className="flex flex-wrap justify-center gap-4 sm:gap-6 text-sm text-gray-400">
             <a href={`/${slug}`} className="hover:text-white transition-colors">Início</a>
             <a href={`/${slug}#escolas`} className="hover:text-white transition-colors">Outras escolas</a>
-            {org.email && <a href={`mailto:${org.email}`} className="hover:text-white transition-colors">{org.email}</a>}
+            {org.email && <a href={`mailto:${org.email}`} className="hover:text-white transition-colors break-all">{org.email}</a>}
           </div>
         </div>
-        <div className="max-w-6xl mx-auto mt-8 pt-6 border-t border-white/5 text-center text-xs text-gray-600">
+        <div className="max-w-6xl mx-auto mt-6 sm:mt-8 pt-6 border-t border-white/5 text-center text-xs text-gray-600">
           © {new Date().getFullYear()} {org.name} · JOCUM · Todos os direitos reservados
         </div>
       </footer>
@@ -358,8 +358,8 @@ export default async function SchoolPublicPage({ params }: Props) {
 
 function StatHighlight({ value, label }: { value: string; label: string }) {
   return (
-    <div className="bg-gray-50 rounded-3xl p-6 flex flex-col justify-between aspect-square">
-      <p className="text-2xl md:text-3xl font-black text-gray-950 leading-tight">{value}</p>
+    <div className="bg-gray-50 rounded-2xl sm:rounded-3xl p-4 sm:p-6 flex flex-col justify-between gap-3 sm:aspect-square">
+      <p className="text-xl sm:text-2xl md:text-3xl font-black text-gray-950 leading-tight">{value}</p>
       <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">{label}</p>
     </div>
   )
@@ -369,19 +369,19 @@ function PhaseCard({ number, title, weeks, description, color }: {
   number: string; title: string; weeks: string; description: string; color: 'brand' | 'gray'
 }) {
   return (
-    <div className={`p-8 rounded-3xl border ${color === 'brand' ? 'border-brand-500/30 bg-brand-500/5' : 'border-white/10 bg-white/5'}`}>
+    <div className={`p-6 sm:p-8 rounded-2xl sm:rounded-3xl border ${color === 'brand' ? 'border-brand-500/30 bg-brand-500/5' : 'border-white/10 bg-white/5'}`}>
       <span className={`text-sm font-bold ${color === 'brand' ? 'text-brand-400' : 'text-gray-400'}`}>{number}</span>
-      <h3 className="text-2xl font-black text-white mt-2 mb-1">{title}</h3>
+      <h3 className="text-xl sm:text-2xl font-black text-white mt-2 mb-1">{title}</h3>
       <span className={`text-sm font-semibold ${color === 'brand' ? 'text-brand-400' : 'text-gray-400'}`}>{weeks}</span>
-      <p className="text-gray-400 text-sm mt-4 leading-relaxed">{description}</p>
+      <p className="text-gray-400 text-sm mt-3 sm:mt-4 leading-relaxed">{description}</p>
     </div>
   )
 }
 
 function InfoTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-white/5 rounded-2xl p-5 border border-white/10 text-center">
-      <p className="text-xs text-gray-500 uppercase tracking-widest mb-2">{label}</p>
+    <div className="bg-white/5 rounded-xl sm:rounded-2xl p-4 sm:p-5 border border-white/10 text-center">
+      <p className="text-xs text-gray-500 uppercase tracking-widest mb-1 sm:mb-2">{label}</p>
       <p className="font-bold text-white text-sm">{value}</p>
     </div>
   )

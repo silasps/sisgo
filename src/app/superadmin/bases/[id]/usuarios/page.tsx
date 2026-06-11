@@ -68,7 +68,7 @@ export default async function UsuariosPage({ params }: Props) {
           </Link>
         }
       />
-      <main className="p-6 space-y-8 max-w-4xl">
+      <main className="p-4 md:p-6 space-y-8 max-w-4xl">
 
         {/* Lista de usuários */}
         <section>
@@ -87,7 +87,7 @@ export default async function UsuariosPage({ params }: Props) {
                   <tr>
                     <th className="text-left px-4 py-3 font-medium text-gray-600">Usuário</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600">Função</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
+                    <th className="hidden sm:table-cell text-left px-4 py-3 font-medium text-gray-600">Status</th>
                     <th className="text-right px-4 py-3 font-medium text-gray-600">Ações</th>
                   </tr>
                 </thead>
@@ -106,7 +106,7 @@ export default async function UsuariosPage({ params }: Props) {
                           orgId={orgId}
                         />
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="hidden sm:table-cell px-4 py-3">
                         <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
                           u.active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'
                         }`}>
@@ -127,7 +127,7 @@ export default async function UsuariosPage({ params }: Props) {
         {/* Formulário: novo usuário */}
         <section>
           <h2 className="font-semibold text-gray-900 mb-3">Adicionar usuário</h2>
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
             <CreateUserForm roles={sortedRoles} orgId={orgId} />
           </div>
         </section>

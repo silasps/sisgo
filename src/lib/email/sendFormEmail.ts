@@ -1,28 +1,15 @@
-import nodemailer from 'nodemailer'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { getEmailQuota } from './getEmailQuota'
 
 type SendFormEmailParams = {
-  to: string               // candidato email
+  to: string
   candidateName: string
   schoolName: string
   formUrl: string
-  expiresAt: string        // ISO date string
-  fromEmail: string        // ETED email
-  smtpPassword: string     // Gmail App Password
-}
-
-function getSmtpConfig(email: string) {
-  const domain = email.split('@')[1]?.toLowerCase() ?? ''
-  if (domain === 'gmail.com' || domain === 'googlemail.com') {
-    return { host: 'smtp.gmail.com', port: 587, secure: false }
-  }
-  if (['outlook.com', 'hotmail.com', 'live.com', 'msn.com'].includes(domain)) {
-    return { host: 'smtp-mail.outlook.com', port: 587, secure: false }
-  }
-  if (domain === 'yahoo.com' || domain === 'yahoo.com.br') {
-    return { host: 'smtp.mail.yahoo.com', port: 587, secure: false }
-  }
-  // Fallback genérico (tentativa)
-  return { host: `smtp.${domain}`, port: 587, secure: false }
+  expiresAt: string
+  replyTo: string        // e-mail da ETED (usado como reply-to)
+  organizationId?: string
+  schoolId?: string
 }
 
 function formatDate(iso: string) {
@@ -112,7 +99,7 @@ function buildHtml(p: SendFormEmailParams): string {
           <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:24px 40px;text-align:center;">
             <p style="margin:0 0 4px;font-size:13px;color:#6b7280;">
               Dúvidas? Entre em contato:
-              <a href="mailto:${p.fromEmail}" style="color:#4f46e5;">${p.fromEmail}</a>
+              <a href="mailto:${p.replyTo}" style="color:#4f46e5;">${p.replyTo}</a>
             </p>
             <p style="margin:0;font-size:12px;color:#9ca3af;">
               Este e-mail foi enviado automaticamente. O preenchimento do formulário não garante aceitação.
@@ -128,30 +115,62 @@ function buildHtml(p: SendFormEmailParams): string {
 }
 
 export async function sendFormEmail(params: SendFormEmailParams): Promise<{ success: boolean; error?: string }> {
-  try {
-    const smtpConfig = getSmtpConfig(params.fromEmail)
-
-    const transporter = nodemailer.createTransport({
-      ...smtpConfig,
-      auth: {
-        user: params.fromEmail,
-        pass: params.smtpPassword,
-      },
-    })
-
-    await transporter.sendMail({
-      from: `"${params.schoolName}" <${params.fromEmail}>`,
-      to: params.to,
-      subject: `Seu formulário de inscrição — ${params.schoolName}`,
-      html: buildHtml(params),
-    })
-
-    return { success: true }
-  } catch (err) {
-    console.error('[sendFormEmail] erro:', err)
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : 'Erro ao enviar e-mail.',
-    }
+  const quota = await getEmailQuota()
+  if (quota.exceeded) {
+    return { success: false, error: 'quota_atingida' }
   }
+
+  const apiKey = process.env.BREVO_API_KEY
+  const fromEmail = process.env.BREVO_FROM_EMAIL ?? 'noreply@example.com'
+
+  let status: 'sent' | 'failed' = 'sent'
+  let errorMsg: string | undefined
+
+  try {
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': apiKey ?? '',
+        'content-type': 'application/json',
+        accept: 'application/json',
+      },
+      body: JSON.stringify({
+        sender: { name: params.schoolName, email: fromEmail },
+        to: [{ email: params.to, name: params.candidateName }],
+        replyTo: { email: params.replyTo },
+        subject: `Seu formulário de inscrição — ${params.schoolName}`,
+        htmlContent: buildHtml(params),
+      }),
+    })
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      status = 'failed'
+      errorMsg = (body as { message?: string }).message ?? `HTTP ${res.status}`
+    }
+  } catch (err) {
+    status = 'failed'
+    errorMsg = err instanceof Error ? err.message : 'Erro ao enviar e-mail.'
+  }
+
+  // Registra o envio (sucesso ou falha) para controle de quota
+  try {
+    const db = createAdminClient()
+    await db.from('email_logs').insert({
+      organization_id: params.organizationId ?? null,
+      school_id: params.schoolId ?? null,
+      to_email: params.to,
+      status,
+      error: errorMsg ?? null,
+    })
+  } catch (logErr) {
+    console.error('[sendFormEmail] falha ao registrar log:', logErr)
+  }
+
+  if (status === 'failed') {
+    console.error('[sendFormEmail] erro:', errorMsg)
+    return { success: false, error: errorMsg }
+  }
+
+  return { success: true }
 }

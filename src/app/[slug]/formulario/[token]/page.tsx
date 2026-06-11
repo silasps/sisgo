@@ -12,6 +12,7 @@ export default async function FormularioPage({ params }: Props) {
     .from('school_applications')
     .select(`
       id, status, current_section, form_data, token_expires_at,
+      organization_id,
       schools(id, name, organization_id),
       school_classes(name),
       school_interest_forms(full_name, email, phone, language)
@@ -20,6 +21,14 @@ export default async function FormularioPage({ params }: Props) {
     .single()
 
   if (!app) notFound()
+
+  const { data: org } = await sb
+    .from('organizations')
+    .select('slug, active')
+    .eq('id', app.organization_id)
+    .single()
+
+  if (!org?.active || org.slug !== slug) notFound()
 
   // Valida expiração
   if (new Date(app.token_expires_at) < new Date()) {
@@ -52,6 +61,18 @@ export default async function FormularioPage({ params }: Props) {
 
   const escola = app.schools as unknown as { id: string; name: string; organization_id: string } | null
   const turma  = app.school_classes as unknown as { name: string } | null
+
+  // Busca config de campos da escola
+  const hiddenFields: string[] = []
+  if (escola?.id) {
+    const { data: schoolConfig } = await sb
+      .from('schools')
+      .select('form_config')
+      .eq('id', escola.id)
+      .single()
+    const cfg = (schoolConfig?.form_config as { hidden_fields?: string[] }) ?? {}
+    hiddenFields.push(...(cfg.hidden_fields ?? []))
+  }
   const preform = app.school_interest_forms as unknown as {
     full_name?: string; email?: string; phone?: string; language?: string
   } | null
@@ -70,7 +91,7 @@ export default async function FormularioPage({ params }: Props) {
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
 
       {/* Header */}
-      <header className="bg-white border-b border-gray-100 px-6 py-4">
+      <header className="bg-white border-b border-gray-100 px-4 sm:px-6 py-4">
         <div className="max-w-2xl mx-auto">
           <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest">
             Jovens Com Uma Missão
@@ -83,7 +104,7 @@ export default async function FormularioPage({ params }: Props) {
       </header>
 
       {/* Orientação */}
-      <div className="max-w-2xl mx-auto px-6 pt-6">
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 pt-5 sm:pt-6">
         <div className="bg-indigo-600 text-white rounded-2xl p-5 mb-6">
           <h2 className="font-bold text-base mb-1">Bem-vindo(a) ao formulário de inscrição!</h2>
           <p className="text-sm text-indigo-100 leading-relaxed">
@@ -94,15 +115,19 @@ export default async function FormularioPage({ params }: Props) {
       </div>
 
       {/* Form */}
-      <main className="max-w-2xl mx-auto px-6 pb-20">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
+      <main className="max-w-2xl mx-auto px-4 sm:px-6 pb-16 sm:pb-20">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6 md:p-8">
           <FormularioInscricao
+            slug={slug}
             token={token}
+            applicationId={app.id}
             schoolName={escola?.name ?? ''}
             className={turma?.name}
             prefill={prefill}
             initialSection={app.current_section ?? 1}
             initialData={formData}
+            hiddenFields={hiddenFields}
+            initialLang={prefill.idioma}
           />
         </div>
 

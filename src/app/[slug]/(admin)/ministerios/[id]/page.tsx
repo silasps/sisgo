@@ -8,13 +8,13 @@ import {
   addMember, removeMember, approveRequest, rejectRequest,
   submitMemberRequest, cancelRequest, createServiceRequest,
 } from './actions'
+import { isManagementRole } from '@/lib/auth/permissions'
+import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 
 type Props = {
   params: Promise<{ slug: string; id: string }>
   searchParams: Promise<{ msg?: string }>
 }
-
-const MANAGEMENT_ROLES = ['superadmin', 'admin_base', 'lider_base', 'dh']
 
 const REQUEST_LABELS: Record<string, string> = {
   add_member:    'Adicionar membro',
@@ -40,17 +40,12 @@ export default async function MinisterioDetailPage({ params, searchParams }: Pro
   if (!user || !org) notFound()
   const orgId = org.id
 
-  const { data: orgUser } = await supabase
-    .from('organization_users')
-    .select('roles(name)')
-    .eq('user_id', user.id)
-    .eq('active', true)
-    .single()
-  const role = (orgUser?.roles as unknown as { name: string } | null)?.name ?? ''
-  const isManagement       = MANAGEMENT_ROLES.includes(role)
+  const { role, preview } = await getCurrentOrganizationRole(supabase, user.id, orgId)
+  const isManagement       = isManagementRole(role)
   const isLiderMinisterio  = role === 'lider_ministerio'
+  const isObreiroMinisterio = role === 'obreiro_ministerio'
 
-  if (!isManagement && !isLiderMinisterio) notFound()
+  if (!isManagement && !isLiderMinisterio && !isObreiroMinisterio) notFound()
 
   const { data: ministry } = await supabase
     .from('ministries')
@@ -60,15 +55,44 @@ export default async function MinisterioDetailPage({ params, searchParams }: Pro
     .single()
   if (!ministry) notFound()
 
-  // Líder só pode acessar o SEU ministério
+  // Usuário vinculado só pode acessar o SEU ministério
   if (isLiderMinisterio) {
-    const { data: lc } = await supabase
-      .from('ministry_leaders')
-      .select('id')
-      .eq('ministry_id', id)
+    if (preview?.ministryId) {
+      if (preview.ministryId !== id) redirect(`/${slug}/ministerios`)
+    } else {
+      const { data: lc } = await supabase
+        .from('ministry_leaders')
+        .select('id')
+        .eq('ministry_id', id)
+        .eq('user_id', user.id)
+        .single()
+      if (!lc) redirect(`/${slug}/ministerios`)
+    }
+  }
+
+  if (isObreiroMinisterio) {
+    if (preview?.ministryId) {
+      if (preview.ministryId !== id) redirect(`/${slug}/ministerios`)
+    } else {
+    const { data: staffProfile } = await supabase
+      .from('staff_profiles')
+      .select('person_id')
+      .eq('organization_id', orgId)
       .eq('user_id', user.id)
       .single()
-    if (!lc) redirect(`/${slug}/ministerios`)
+
+    const { data: memberLink } = staffProfile?.person_id
+      ? await supabase
+        .from('ministry_members')
+        .select('id')
+        .eq('ministry_id', id)
+        .eq('person_id', staffProfile.person_id)
+        .eq('active', true)
+        .single()
+      : { data: null }
+
+    if (!memberLink) redirect(`/${slug}/ministerios`)
+    }
   }
 
   // ── Membros ──────────────────────────────────────────────────────────────────
@@ -193,7 +217,7 @@ export default async function MinisterioDetailPage({ params, searchParams }: Pro
     redirect(`/${slug}/ministerios/${id}?msg=lider_atribuido`)
   }
 
-  const handleRemoveLeader = async (_fd: FormData) => {
+  const handleRemoveLeader = async () => {
     'use server'
     await removeLeader(id)
     redirect(`/${slug}/ministerios/${id}`)
@@ -480,7 +504,7 @@ export default async function MinisterioDetailPage({ params, searchParams }: Pro
                                 </p>
                               )}
                               {req.notes && (
-                                <p className="text-xs text-gray-400 italic mt-0.5">"{req.notes}"</p>
+                                <p className="text-xs text-gray-400 italic mt-0.5">&ldquo;{req.notes}&rdquo;</p>
                               )}
                             </div>
                             <span className="text-xs text-gray-400 whitespace-nowrap flex-shrink-0">
@@ -617,7 +641,7 @@ export default async function MinisterioDetailPage({ params, searchParams }: Pro
                           <span className="font-medium">{REQUEST_LABELS[req.request_type] ?? req.request_type}</span>
                           {pName && ` — ${pName}`}
                           {rName && ` → ${rName}`}
-                          {req.notes && <span className="text-gray-400 italic text-xs ml-1">"{req.notes}"</span>}
+                          {req.notes && <span className="text-gray-400 italic text-xs ml-1">&ldquo;{req.notes}&rdquo;</span>}
                         </p>
                         <form action={handleCancelRequest} className="flex-shrink-0">
                           <input type="hidden" name="request_id" value={req.id} />
@@ -632,6 +656,18 @@ export default async function MinisterioDetailPage({ params, searchParams }: Pro
               </div>
             )}
 
+            {/* Reservas */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <h2 className="text-sm font-semibold text-gray-700 mb-1">Reservas</h2>
+              <p className="text-xs text-gray-400 mb-3">
+                Solicite espaços para atividades do ministério ou quartos para convidados.
+              </p>
+              <Link href={`/${slug}/reservas`}
+                className="block text-center w-full px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
+                Solicitar / Ver Reservas →
+              </Link>
+            </div>
+
             {/* Solicitar Serviço */}
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <h2 className="text-sm font-semibold text-gray-700 mb-1">Nova Solicitação de Serviço</h2>
@@ -639,7 +675,7 @@ export default async function MinisterioDetailPage({ params, searchParams }: Pro
                 Para outros departamentos da base (hospitalidade, DH, secretaria, etc.)
               </p>
               <form action={handleServiceRequest} className="space-y-3">
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Destino</label>
                     <select name="target_department" required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
@@ -669,6 +705,45 @@ export default async function MinisterioDetailPage({ params, searchParams }: Pro
                 </div>
                 <Btn label="Enviar Solicitação" cls="w-full bg-brand-500 hover:bg-brand-600 text-white" />
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* ════════ VISÃO OBREIRO DE MINISTÉRIO ════════════════════════════════ */}
+        {isObreiroMinisterio && (
+          <div className="space-y-4 max-w-2xl">
+            <div className="bg-white rounded-xl border border-gray-200 p-5 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="font-semibold text-gray-900">{ministry.name}</h2>
+                {ministry.description && (
+                  <p className="text-sm text-gray-500 mt-1">{ministry.description}</p>
+                )}
+              </div>
+              <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${ministry.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                {ministry.active ? 'Ativo' : 'Inativo'}
+              </span>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <h2 className="text-sm font-semibold text-gray-700 mb-3">Membros ({members.length})</h2>
+              {members.length > 0 ? (
+                <ul className="divide-y divide-gray-100">
+                  {members.map(m => (
+                    <li key={m.id} className="py-2.5 flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <span className="text-sm font-medium text-gray-900">{m.people?.full_name ?? '—'}</span>
+                        {m.ministry_roles && (
+                          <span className="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                            {m.ministry_roles.name}
+                          </span>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-gray-400">Nenhum membro ainda.</p>
+              )}
             </div>
           </div>
         )}

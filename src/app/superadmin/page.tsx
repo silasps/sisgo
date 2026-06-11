@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
+import { getEmailQuota, EMAIL_LIMITS } from '@/lib/email/getEmailQuota'
 
 export default async function SuperAdminDashboard() {
   const supabase = await createClient()
@@ -10,11 +11,13 @@ export default async function SuperAdminDashboard() {
     { count: activeOrgs },
     { count: totalUsers },
     { data: bases },
+    quota,
   ] = await Promise.all([
     supabase.from('organizations').select('*', { count: 'exact', head: true }),
     supabase.from('organizations').select('*', { count: 'exact', head: true }).eq('active', true),
     supabase.from('organization_users').select('*', { count: 'exact', head: true }),
     supabase.from('organizations').select('id, name, slug, city, state, active, created_at').order('name'),
+    getEmailQuota(),
   ])
 
   return (
@@ -22,19 +25,48 @@ export default async function SuperAdminDashboard() {
       <Header
         title="Visão Geral"
         actions={
-          <Link href="/superadmin/bases/nova" className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg transition-colors">
-            + Nova base
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/superadmin/supervisao" className="px-4 py-2 bg-white hover:bg-gray-50 text-gray-700 text-sm font-semibold rounded-lg border border-gray-200 transition-colors">
+              Grupos de bases
+            </Link>
+            <Link href="/superadmin/bases/nova" className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg transition-colors">
+              + Nova base
+            </Link>
+          </div>
         }
       />
       <main className="p-4 md:p-6 space-y-8">
 
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-3 gap-2 sm:gap-4">
           <StatCard label="Total de bases" value={totalOrgs ?? 0} icon="🏛" />
           <StatCard label="Bases ativas" value={activeOrgs ?? 0} icon="✅" />
           <StatCard label="Usuários" value={totalUsers ?? 0} icon="👤" />
         </div>
+
+        {/* E-mails */}
+        <section>
+          <h2 className="font-semibold text-gray-900 mb-3">E-mails (Resend free tier)</h2>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <EmailQuotaCard
+              label="Hoje"
+              used={quota.today}
+              limit={EMAIL_LIMITS.daily}
+              exceeded={quota.dailyExceeded}
+            />
+            <EmailQuotaCard
+              label="Este mês"
+              used={quota.month}
+              limit={EMAIL_LIMITS.monthly}
+              exceeded={quota.monthlyExceeded}
+            />
+          </div>
+          {quota.exceeded && (
+            <p className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2">
+              ⚠ Limite atingido — o envio automático está pausado para todas as bases. O limite reinicia diariamente às 00h / mensalmente no dia 1.
+            </p>
+          )}
+        </section>
 
         {/* Mapa de bases */}
         <section>
@@ -49,8 +81,13 @@ export default async function SuperAdminDashboard() {
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {bases.map(base => (
-                <div key={base.id} className="bg-white rounded-xl border border-gray-200 p-4 hover:border-brand-300 transition-colors">
-                  <div className="flex items-start justify-between gap-2 mb-3">
+                <div key={base.id} className="group relative rounded-xl border border-gray-200 bg-white p-4 transition-colors hover:border-brand-300">
+                  <Link
+                    href={`/superadmin/bases/${base.id}`}
+                    className="absolute inset-0 z-0 rounded-xl"
+                    aria-label={`Ver detalhes de ${base.name}`}
+                  />
+                  <div className="relative z-10 mb-3 flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="font-semibold text-gray-900 truncate">{base.name}</p>
                       <p className="text-xs text-gray-400 font-mono mt-0.5">/{base.slug}</p>
@@ -63,13 +100,13 @@ export default async function SuperAdminDashboard() {
                     </span>
                   </div>
                   {(base.city || base.state) && (
-                    <p className="text-xs text-gray-500 mb-3">
+                    <p className="relative z-10 mb-3 text-xs text-gray-500">
                       📍 {[base.city, base.state].filter(Boolean).join(', ')}
                     </p>
                   )}
-                  <div className="flex gap-2 pt-2 border-t border-gray-100">
+                  <div className="relative z-10 flex gap-2 border-t border-gray-100 pt-2">
                     <Link
-                      href={`/${base.slug}/pessoas`}
+                      href={`/${base.slug}/dashboard`}
                       className="flex-1 text-center text-xs font-medium text-brand-500 hover:text-brand-600 py-1.5 rounded-lg hover:bg-brand-50 transition-colors"
                     >
                       Acessar base →
@@ -93,12 +130,46 @@ export default async function SuperAdminDashboard() {
 
 function StatCard({ label, value, icon }: { label: string; value: number; icon: string }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-3">
-      <span className="text-xl">{icon}</span>
+    <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 flex flex-col sm:flex-row items-center sm:items-center gap-1 sm:gap-3 text-center sm:text-left">
+      <span className="text-xl sm:text-xl">{icon}</span>
       <div>
-        <p className="text-2xl font-bold text-gray-900">{value}</p>
-        <p className="text-xs text-gray-500">{label}</p>
+        <p className="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">{value}</p>
+        <p className="text-xs text-gray-500 leading-tight">{label}</p>
       </div>
+    </div>
+  )
+}
+
+function EmailQuotaCard({ label, used, limit, exceeded }: {
+  label: string
+  used: number
+  limit: number
+  exceeded: boolean
+}) {
+  const pct = Math.min((used / limit) * 100, 100)
+  const barColor = exceeded
+    ? 'bg-red-500'
+    : pct >= 90 ? 'bg-orange-400'
+    : pct >= 70 ? 'bg-yellow-400'
+    : 'bg-green-500'
+
+  return (
+    <div className={`bg-white rounded-xl border p-4 ${exceeded ? 'border-red-200' : 'border-gray-200'}`}>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-sm font-medium text-gray-700">✉ {label}</p>
+        <p className={`text-sm font-bold tabular-nums ${exceeded ? 'text-red-600' : 'text-gray-900'}`}>
+          {used.toLocaleString('pt-BR')} / {limit.toLocaleString('pt-BR')}
+        </p>
+      </div>
+      <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div
+          className={`h-2 rounded-full transition-all ${barColor}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <p className="text-xs text-gray-400 mt-1.5">
+        {exceeded ? 'Limite atingido' : `${(limit - used).toLocaleString('pt-BR')} restantes`}
+      </p>
     </div>
   )
 }

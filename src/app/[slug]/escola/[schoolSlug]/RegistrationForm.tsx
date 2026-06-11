@@ -3,21 +3,42 @@
 import { useState } from 'react'
 import { submitPreRegistration } from './actions'
 import { PHONE_COUNTRIES, LANGUAGES } from '@/lib/i18n/phoneCountries'
+import { LangSwitcher } from '@/components/ui/LangSwitcher'
+import { getFormDict, normalizeLang } from '@/lib/i18n/forms'
+import type { Lang } from '@/lib/i18n/forms'
 
 type ClassOption = { id: string; name: string; year: number | null; semester: number | null }
 
 export function RegistrationForm({
-  orgId,
-  schoolId,
+  slug,
+  schoolSlug,
   classes,
+  initialLang,
 }: {
-  orgId: string
-  schoolId: string
+  slug: string
+  schoolSlug: string
   classes: ClassOption[]
+  initialLang?: string
 }) {
+  const [lang, setLang] = useState<Lang>(normalizeLang(initialLang))
+  const d = getFormDict(lang)
+
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
   const [phoneCountry, setPhoneCountry] = useState('+55')
+  const [phoneDisplay, setPhoneDisplay] = useState('')
+
+  function applyPhoneMask(raw: string, dialCode: string): string {
+    const d = raw.replace(/\D/g, '')
+    if (dialCode === '+55') {
+      const local = d.slice(0, 11)
+      if (local.length <= 2) return local ? `(${local}` : ''
+      if (local.length <= 6) return `(${local.slice(0, 2)}) ${local.slice(2)}`
+      if (local.length <= 10) return `(${local.slice(0, 2)}) ${local.slice(2, 6)}-${local.slice(6)}`
+      return `(${local.slice(0, 2)}) ${local.slice(2, 7)}-${local.slice(7)}`
+    }
+    return d.slice(0, 15)
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -32,8 +53,8 @@ export function RegistrationForm({
     const phone = rawPhone ? `${phoneCountry}${rawPhone.replace(/\D/g, '')}` : null
 
     const result = await submitPreRegistration({
-      orgId,
-      schoolId,
+      slug,
+      schoolSlug,
       classId: data.get('classId') as string || null,
       fullName: data.get('fullName') as string,
       email: data.get('email') as string,
@@ -47,9 +68,10 @@ export function RegistrationForm({
       setStatus('success')
       form.reset()
       setPhoneCountry('+55')
+      setPhoneDisplay('')
     } else {
       setStatus('error')
-      setErrorMsg(result.error ?? 'Ocorreu um erro. Tente novamente.')
+      setErrorMsg(result.error ?? d.registration.error_fallback)
     }
   }
 
@@ -57,8 +79,8 @@ export function RegistrationForm({
     return (
       <div className="text-center py-16 px-8 bg-brand-50 rounded-3xl border border-brand-100">
         <div className="text-5xl mb-4">🎉</div>
-        <h3 className="text-2xl font-black text-gray-950 mb-2">Pré-inscrição recebida!</h3>
-        <p className="text-gray-600">Nossa equipe entrará em contato em breve com os próximos passos.</p>
+        <h3 className="text-2xl font-black text-gray-950 mb-2">{d.registration.success_title}</h3>
+        <p className="text-gray-600">{d.registration.success_body}</p>
       </div>
     )
   }
@@ -66,25 +88,30 @@ export function RegistrationForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
 
+      {/* Lang switcher */}
+      <div className="flex justify-end">
+        <LangSwitcher lang={lang} onChange={setLang} uiLabel={d.langSwitcher.label} />
+      </div>
+
       {/* Nome */}
       <div>
-        <label className="block text-sm font-semibold text-gray-700 mb-2">Nome completo *</label>
+        <label className="block text-sm font-semibold text-gray-700 mb-2">{d.registration.full_name} *</label>
         <input
           name="fullName"
           required
-          placeholder="Seu nome completo"
+          placeholder={d.registration.full_name_ph}
           className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent text-gray-900 placeholder-gray-400"
         />
       </div>
 
       {/* E-mail */}
       <div>
-        <label className="block text-sm font-semibold text-gray-700 mb-2">E-mail *</label>
+        <label className="block text-sm font-semibold text-gray-700 mb-2">{d.registration.email} *</label>
         <input
           name="email"
           type="email"
           required
-          placeholder="seu@email.com"
+          placeholder={d.registration.email_ph}
           className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent text-gray-900 placeholder-gray-400"
         />
       </div>
@@ -92,7 +119,7 @@ export function RegistrationForm({
       {/* Idioma */}
       <div>
         <label className="block text-sm font-semibold text-gray-700 mb-2">
-          Idioma que você fala *
+          {d.registration.language} *
         </label>
         <select
           name="language"
@@ -100,7 +127,7 @@ export function RegistrationForm({
           defaultValue=""
           className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent text-gray-900"
         >
-          <option value="" disabled>Selecione seu idioma principal</option>
+          <option value="" disabled>{d.registration.language_ph}</option>
           {LANGUAGES.map(l => (
             <option key={l.code} value={l.code}>
               {l.label}{l.nativeLabel !== l.label ? ` — ${l.nativeLabel}` : ''}
@@ -112,15 +139,18 @@ export function RegistrationForm({
       {/* Telefone / WhatsApp */}
       <div>
         <label className="block text-sm font-semibold text-gray-700 mb-2">
-          Telefone / WhatsApp
-          <span className="ml-1 text-xs font-normal text-gray-400">(opcional)</span>
+          {d.registration.phone}
+          <span className="ml-1 text-xs font-normal text-gray-400">{d.registration.phone_optional}</span>
         </label>
         <div className="flex gap-2">
           {/* Código do país */}
           <div className="flex-shrink-0">
             <select
               value={phoneCountry}
-              onChange={e => setPhoneCountry(e.target.value)}
+              onChange={e => {
+                setPhoneCountry(e.target.value)
+                setPhoneDisplay(applyPhoneMask(phoneDisplay, e.target.value))
+              }}
               className="h-full px-2 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent text-gray-900 text-sm min-w-[110px]"
               aria-label="Código do país"
             >
@@ -135,7 +165,10 @@ export function RegistrationForm({
           <input
             name="phone_number"
             type="tel"
-            placeholder="(00) 00000-0000"
+            inputMode="numeric"
+            value={phoneDisplay}
+            onChange={e => setPhoneDisplay(applyPhoneMask(e.target.value, phoneCountry))}
+            placeholder={phoneCountry === '+55' ? '(41) 99999-9999' : 'somente números'}
             className="flex-1 px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent text-gray-900 placeholder-gray-400"
           />
         </div>
@@ -148,12 +181,12 @@ export function RegistrationForm({
       {/* Turma de interesse */}
       {classes.length > 0 && (
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">Turma de interesse</label>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">{d.registration.class_interest}</label>
           <select
             name="classId"
             className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent text-gray-900"
           >
-            <option value="">Não tenho preferência</option>
+            <option value="">{d.registration.class_no_pref}</option>
             {classes.map(c => (
               <option key={c.id} value={c.id}>
                 {c.name}{c.year ? ` — ${c.year}` : ''}{c.semester ? ` / ${c.semester}º semestre` : ''}
@@ -165,11 +198,14 @@ export function RegistrationForm({
 
       {/* Mensagem */}
       <div>
-        <label className="block text-sm font-semibold text-gray-700 mb-2">Mensagem <span className="text-xs font-normal text-gray-400">(opcional)</span></label>
+        <label className="block text-sm font-semibold text-gray-700 mb-2">
+          {d.registration.message}{' '}
+          <span className="text-xs font-normal text-gray-400">{d.registration.message_optional}</span>
+        </label>
         <textarea
           name="message"
           rows={3}
-          placeholder="Conte um pouco sobre você ou tire uma dúvida..."
+          placeholder={d.registration.message_ph}
           className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent text-gray-900 placeholder-gray-400 resize-none"
         />
       </div>
@@ -183,11 +219,11 @@ export function RegistrationForm({
         disabled={status === 'loading'}
         className="w-full bg-brand-500 hover:bg-brand-600 disabled:opacity-60 text-white font-bold py-4 rounded-2xl text-lg transition-all hover:scale-[1.02] shadow-lg shadow-brand-500/20"
       >
-        {status === 'loading' ? 'Enviando...' : 'Enviar pré-inscrição'}
+        {status === 'loading' ? d.registration.submitting : d.registration.submit}
       </button>
 
       <p className="text-center text-xs text-gray-400">
-        Ao enviar, você concorda em ser contatado pela equipe da base.
+        {d.registration.contact_consent}
       </p>
     </form>
   )

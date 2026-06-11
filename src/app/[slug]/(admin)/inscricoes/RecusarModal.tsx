@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 
 type Props = {
   id: string
@@ -27,6 +28,7 @@ export function RecusarModal({ id, tipo, action }: Props) {
     startTransition(async () => {
       await action(formData)
       setOpen(false)
+      toast.success('Recusa registrada')
       router.refresh()
     })
   }

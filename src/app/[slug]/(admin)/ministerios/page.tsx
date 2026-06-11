@@ -2,10 +2,10 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import { isManagementRole } from '@/lib/auth/permissions'
+import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 
 type Props = { params: Promise<{ slug: string }> }
-
-const MANAGEMENT_ROLES = ['superadmin', 'admin_base', 'lider_base', 'dh']
 
 export default async function MinistriosPage({ params }: Props) {
   const { slug } = await params
@@ -19,24 +19,21 @@ export default async function MinistriosPage({ params }: Props) {
   const orgId = org?.id ?? ''
 
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: orgUser } = await supabase
-    .from('organization_users')
-    .select('roles(name)')
-    .eq('user_id', user?.id ?? '')
-    .eq('active', true)
-    .single()
+  const { role, preview } = user
+    ? await getCurrentOrganizationRole(supabase, user.id, orgId)
+    : { role: '', preview: null }
+  const isManagement = isManagementRole(role)
 
-  const role = (orgUser?.roles as unknown as { name: string } | null)?.name ?? ''
-  const isManagement = MANAGEMENT_ROLES.includes(role)
-
-  // Líder de ministério → redireciona diretamente para o seu ministério
+  // Usuário vinculado a ministério → redireciona diretamente para o seu ministério
   if (role === 'lider_ministerio' && user) {
-    const { data: leaderRow } = await supabase
-      .from('ministry_leaders')
-      .select('ministry_id')
-      .eq('user_id', user.id)
-      .limit(1)
-      .single()
+    const leaderRow = preview?.ministryId
+      ? { ministry_id: preview.ministryId }
+      : (await supabase
+        .from('ministry_leaders')
+        .select('ministry_id')
+        .eq('user_id', user.id)
+        .limit(1)
+        .single()).data
 
     if (leaderRow?.ministry_id) {
       redirect(`/${slug}/ministerios/${leaderRow.ministry_id}`)
@@ -48,6 +45,43 @@ export default async function MinistriosPage({ params }: Props) {
         <main className="p-4 md:p-6">
           <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
             <p className="text-3xl mb-3">🎵</p>
+            <p className="text-gray-500 text-sm">Nenhum ministério atribuído a você ainda.</p>
+            <p className="text-gray-400 text-xs mt-1">Entre em contato com o DH da sua base.</p>
+          </div>
+        </main>
+      </>
+    )
+  }
+
+  if (role === 'obreiro_ministerio' && user) {
+    if (preview?.ministryId) redirect(`/${slug}/ministerios/${preview.ministryId}`)
+
+    const { data: staffProfile } = await supabase
+      .from('staff_profiles')
+      .select('person_id')
+      .eq('organization_id', orgId)
+      .eq('user_id', user.id)
+      .single()
+
+    if (staffProfile?.person_id) {
+      const { data: memberRow } = await supabase
+        .from('ministry_members')
+        .select('ministry_id')
+        .eq('person_id', staffProfile.person_id)
+        .eq('active', true)
+        .limit(1)
+        .single()
+
+      if (memberRow?.ministry_id) {
+        redirect(`/${slug}/ministerios/${memberRow.ministry_id}`)
+      }
+    }
+
+    return (
+      <>
+        <Header title="Ministérios" />
+        <main className="p-4 md:p-6">
+          <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
             <p className="text-gray-500 text-sm">Nenhum ministério atribuído a você ainda.</p>
             <p className="text-gray-400 text-xs mt-1">Entre em contato com o DH da sua base.</p>
           </div>
@@ -108,9 +142,13 @@ export default async function MinistriosPage({ params }: Props) {
               const memberCount = m.ministry_members.filter(mm => mm.active).length
               const hasLeader = m.ministry_leaders.length > 0
               return (
-                <div key={m.id} className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col gap-3">
+                <Link
+                  key={m.id}
+                  href={`/${slug}/ministerios/${m.id}`}
+                  className="group flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-5 cursor-pointer transition-all duration-200 hover:border-brand-300 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm"
+                >
                   <div className="flex items-start justify-between gap-2">
-                    <p className="font-semibold text-gray-900 leading-snug">{m.name}</p>
+                    <p className="font-semibold text-gray-900 leading-snug group-hover:text-brand-600 transition-colors">{m.name}</p>
                     <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${m.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                       {m.active ? 'Ativo' : 'Inativo'}
                     </span>
@@ -118,19 +156,18 @@ export default async function MinistriosPage({ params }: Props) {
                   {m.description && (
                     <p className="text-sm text-gray-500 line-clamp-2">{m.description}</p>
                   )}
-                  <div className="flex items-center gap-3 text-xs text-gray-400">
-                    <span>{memberCount} membro{memberCount !== 1 ? 's' : ''}</span>
-                    {!hasLeader && isManagement && (
-                      <span className="text-orange-500 font-medium">Sem líder</span>
-                    )}
+                  <div className="flex items-center justify-between text-xs text-gray-400 mt-auto">
+                    <div className="flex items-center gap-3">
+                      <span>{memberCount} membro{memberCount !== 1 ? 's' : ''}</span>
+                      {!hasLeader && isManagement && (
+                        <span className="text-orange-500 font-medium">Sem líder</span>
+                      )}
+                    </div>
+                    <span className="text-brand-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                      Abrir →
+                    </span>
                   </div>
-                  <Link
-                    href={`/${slug}/ministerios/${m.id}`}
-                    className="mt-auto text-center py-2 px-4 border border-brand-500 text-brand-600 rounded-lg text-sm font-medium hover:bg-brand-50 transition-colors"
-                  >
-                    Gerenciar
-                  </Link>
-                </div>
+                </Link>
               )
             })}
           </div>

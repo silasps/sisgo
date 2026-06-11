@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Header } from '@/components/layout/Header'
+import { InternationalPhoneField } from '@/components/ui/InternationalPhoneField'
 import Link from 'next/link'
 
 function slugify(str: string) {
@@ -55,10 +56,10 @@ export default function NovaBasePage() {
           </Link>
         }
       />
-      <main className="p-6 max-w-xl">
+      <main className="p-4 md:p-6 max-w-xl">
         <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
 
-          <div className="p-6 space-y-4">
+          <div className="p-4 sm:p-6 space-y-4">
             <h2 className="font-semibold text-gray-900">Dados da base</h2>
 
             <div>
@@ -76,16 +77,16 @@ export default function NovaBasePage() {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Cidade" name="city" placeholder="Curitiba" />
               <Field label="Estado" name="state" placeholder="PR" maxLength={2} />
             </div>
           </div>
 
-          <div className="p-6 space-y-4">
+          <div className="p-4 sm:p-6 space-y-4">
             <h2 className="font-semibold text-gray-900">Contato</h2>
             <Field label="E-mail" name="email" type="email" placeholder="base@exemplo.com" />
-            <Field label="Telefone" name="phone" type="tel" placeholder="(41) 99999-9999" />
+            <InternationalPhoneField phoneName="phone" label="Telefone" defaultCountryIso="BR" />
             <Field label="Website" name="website" placeholder="https://..." />
           </div>
 
@@ -95,7 +96,7 @@ export default function NovaBasePage() {
             </div>
           )}
 
-          <div className="px-6 py-4 flex justify-end gap-3">
+          <div className="px-4 sm:px-6 py-4 flex justify-end gap-3">
             <Link
               href="/superadmin/bases"
               className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"

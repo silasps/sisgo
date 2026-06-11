@@ -2,15 +2,10 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 // Slugs reservados — nenhuma org pode usar estes valores
-const RESERVED = new Set(['login', 'cadastro', 'auth', 'superadmin', 'api', '_next', 'images', 'favicon.ico'])
+const RESERVED = new Set(['login', 'cadastro', 'auth', 'superadmin', 'supervisor', 'api', '_next', 'images', 'favicon.ico'])
 
 // Sub-paths públicos dentro de /{slug}/ (sem auth)
 const PUBLIC_SUBPATHS = ['escola', 'inscricao', 'candidato']
-
-function isSlugRoute(pathname: string) {
-  const first = pathname.split('/')[1]
-  return !!first && !RESERVED.has(first)
-}
 
 function isPublicSlugRoute(pathname: string): boolean {
   const parts = pathname.split('/').filter(Boolean)
@@ -62,19 +57,26 @@ export async function updateSession(request: NextRequest) {
 
   // Superadmin
   if (pathname.startsWith('/superadmin')) {
-    const role = await getUserRole(supabase, user.id)
-    if (role !== 'superadmin') return NextResponse.redirect(new URL('/login', request.url))
+    const roles = await getUserRoles(supabase, user.id)
+    if (!roles.includes('superadmin')) return NextResponse.redirect(new URL('/login', request.url))
+  }
+
+  if (pathname.startsWith('/supervisor')) {
+    const roles = await getUserRoles(supabase, user.id)
+    if (!roles.includes('supervisor_bases') && !roles.includes('superadmin')) {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
   }
 
   return supabaseResponse
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function getUserRole(supabase: any, userId: string): Promise<string | null> {
+async function getUserRoles(supabase: any, userId: string): Promise<string[]> {
   const { data } = await supabase
     .from('organization_users').select('roles(name)')
-    .eq('user_id', userId).eq('active', true).single()
-  return data?.roles?.name ?? null
+    .eq('user_id', userId).eq('active', true)
+  return (data ?? []).map((row: { roles?: { name?: string } }) => row.roles?.name).filter(Boolean)
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -82,12 +84,14 @@ async function getRedirectDest(supabase: any, userId: string): Promise<string> {
   const { data } = await supabase
     .from('organization_users')
     .select('roles(name), organization_id')
-    .eq('user_id', userId).eq('active', true).single()
+    .eq('user_id', userId).eq('active', true)
 
-  const role = data?.roles?.name
-  if (role === 'superadmin') return '/superadmin'
+  const rows = (data ?? []) as Array<{ organization_id: string | null; roles?: { name?: string } }>
+  const roleNames = rows.map(row => row.roles?.name).filter(Boolean)
+  if (roleNames.includes('superadmin')) return '/superadmin'
+  if (roleNames.includes('supervisor_bases')) return '/supervisor'
 
-  const orgId = data?.organization_id
+  const orgId = rows.find(row => row.organization_id)?.organization_id
   if (!orgId) return '/login'
 
   const { data: org } = await supabase

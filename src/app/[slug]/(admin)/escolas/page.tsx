@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import type { Database } from '@/types/database'
+import { schoolTypeGroup, schoolTypeShortLabel } from '@/lib/schools'
 
 type Props = { params: Promise<{ slug: string }> }
 type School = Database['public']['Tables']['schools']['Row']
@@ -13,6 +14,9 @@ export default async function EscolasPage({ params }: Props) {
   const { data: org } = await supabase.from('organizations').select('id').eq('slug', slug).single()
   const { data } = await supabase.from('schools').select('*').eq('organization_id', org?.id ?? '').order('name')
   const escolas = (data ?? []) as School[]
+  const eteds = escolas.filter(e => schoolTypeGroup((e as unknown as { school_type: string | null }).school_type) === 'eted')
+  const secondLevelSchools = escolas.filter(e => schoolTypeGroup((e as unknown as { school_type: string | null }).school_type) === 'second_level')
+  const otherSchools = escolas.filter(e => schoolTypeGroup((e as unknown as { school_type: string | null }).school_type) === 'other')
 
   return (
     <>
@@ -34,34 +38,58 @@ export default async function EscolasPage({ params }: Props) {
             </Link>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {escolas.map(e => (
-              <div key={e.id} className="bg-white rounded-xl border border-gray-200 p-5 hover:border-brand-200 hover:shadow-sm transition-all">
-                <div className="flex items-start justify-between mb-2">
-                  <div className="min-w-0">
-                    <p className="font-semibold text-gray-900 truncate">{e.name}</p>
-                    {e.acronym && <p className="text-xs text-gray-500 mt-0.5">{e.acronym}</p>}
-                  </div>
-                  <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${e.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
-                    {e.active ? 'Ativa' : 'Inativa'}
-                  </span>
-                </div>
-                {e.description && <p className="text-sm text-gray-500 line-clamp-2 mb-3">{e.description}</p>}
-                <div className="flex gap-2 pt-2 border-t border-gray-100">
-                  <Link href={`/${slug}/escolas/${e.id}`}
-                    className="flex-1 text-center text-xs font-medium text-brand-500 hover:text-brand-600 py-1.5 rounded-lg hover:bg-brand-50 transition-colors">
-                    Editar escola
-                  </Link>
-                  <Link href={`/${slug}/escolas/${e.id}/turmas`}
-                    className="flex-1 text-center text-xs font-medium text-gray-500 hover:text-gray-700 py-1.5 rounded-lg hover:bg-gray-50 transition-colors">
-                    Ver turmas
-                  </Link>
-                </div>
-              </div>
-            ))}
+          <div className="space-y-8">
+            <SchoolSection title="ETED" schools={eteds} slug={slug} />
+            <SchoolSection title="Escolas de 2º Nível" schools={secondLevelSchools} slug={slug} />
+            {otherSchools.length > 0 && <SchoolSection title="Outras escolas" schools={otherSchools} slug={slug} />}
           </div>
         )}
       </main>
     </>
+  )
+}
+
+function SchoolSection({ title, schools, slug }: { title: string; schools: School[]; slug: string }) {
+  return (
+    <section>
+      <div className="mb-3 flex items-end justify-between gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-500">{title}</h2>
+        <span className="text-xs text-gray-400">{schools.length} escola{schools.length === 1 ? '' : 's'}</span>
+      </div>
+      {schools.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-gray-300 bg-white p-6 text-sm text-gray-400">
+          Nenhuma escola cadastrada nesta area.
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {schools.map(e => <SchoolCard key={e.id} school={e} slug={slug} />)}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function SchoolCard({ school: e, slug }: { school: School; slug: string }) {
+  const type = (e as unknown as { school_type: string | null }).school_type
+  return (
+    <div className="group relative rounded-xl border border-gray-200 bg-white p-5 cursor-pointer transition-all duration-200 hover:border-brand-300 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm">
+      <Link href={`/${slug}/escolas/${e.id}`} className="absolute inset-0 rounded-xl" aria-label={`Abrir escola ${e.name}`} />
+      <div className="pointer-events-none mb-2 flex items-start justify-between">
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold text-gray-900 truncate group-hover:text-brand-600 transition-colors">{e.name}</p>
+          <p className="text-xs text-gray-500 mt-0.5">{[e.acronym, schoolTypeShortLabel(type)].filter(Boolean).join(' · ')}</p>
+        </div>
+        <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ml-2 ${e.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+          {e.active ? 'Ativa' : 'Inativa'}
+        </span>
+      </div>
+      {e.description && <p className="pointer-events-none mb-3 line-clamp-2 text-sm text-gray-500">{e.description}</p>}
+      <div className="pointer-events-none flex items-center justify-between border-t border-gray-100 pt-2">
+        <Link href={`/${slug}/escolas/${e.id}/turmas`} className="pointer-events-auto relative text-xs font-medium text-gray-500 hover:text-brand-600 py-1.5 px-2 rounded-lg hover:bg-brand-50 transition-colors">
+          Ver turmas →
+        </Link>
+        <span className="text-xs text-brand-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity">Abrir →</span>
+      </div>
+    </div>
   )
 }

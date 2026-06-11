@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { ACCENT_COLORS } from '@/lib/accent-colors'
 import { revalidatePath } from 'next/cache'
+import { asLooseClient } from '@/lib/supabase/loose-client'
 
 async function verifyAccess(orgId: string) {
   const supabase = await createClient()
@@ -41,4 +42,80 @@ export async function updateLogoUrl(orgId: string, slug: string, logoUrl: string
   if (!admin) return
   await admin.from('organizations').update({ logo_url: logoUrl }).eq('id', orgId)
   revalidatePath(`/${slug}/configuracoes`)
+}
+
+export async function updateAreaCashScopes(orgId: string, slug: string, formData: FormData) {
+  const verifiedAdmin = await verifyAccess(orgId)
+  if (!verifiedAdmin) return
+  const admin = asLooseClient(verifiedAdmin)
+
+  const { data: { user } } = await (await createClient()).auth.getUser()
+  const enabled = new Set(formData.getAll('cash_scopes').map(String))
+
+  const [{ data: schools }, { data: ministries }] = await Promise.all([
+    admin.from('schools').select('id, name').eq('organization_id', orgId).eq('active', true),
+    admin.from('ministries').select('id, name').eq('organization_id', orgId).eq('active', true),
+  ])
+
+  for (const school of (schools ?? []) as Array<{ id: string; name: string }>) {
+    const isEnabled = enabled.has(`school:${school.id}`)
+    const payload = {
+      organization_id: orgId,
+      entity_type: 'school',
+      school_id: school.id,
+      ministry_id: null,
+      enabled: isEnabled,
+      name_snapshot: school.name,
+      configured_by: user?.id ?? null,
+      configured_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }
+    const { data: existingData } = await admin
+      .from('finance_cash_scopes')
+      .select('id')
+      .eq('organization_id', orgId)
+      .eq('entity_type', 'school')
+      .eq('school_id', school.id)
+      .maybeSingle()
+    const existing = existingData as { id: string } | null | undefined
+
+    if (existing?.id) {
+      await admin.from('finance_cash_scopes').update(payload).eq('id', existing.id)
+    } else {
+      await admin.from('finance_cash_scopes').insert(payload)
+    }
+  }
+
+  for (const ministry of (ministries ?? []) as Array<{ id: string; name: string }>) {
+    const isEnabled = enabled.has(`ministry:${ministry.id}`)
+    const payload = {
+      organization_id: orgId,
+      entity_type: 'ministry',
+      school_id: null,
+      ministry_id: ministry.id,
+      enabled: isEnabled,
+      name_snapshot: ministry.name,
+      configured_by: user?.id ?? null,
+      configured_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }
+    const { data: existingData } = await admin
+      .from('finance_cash_scopes')
+      .select('id')
+      .eq('organization_id', orgId)
+      .eq('entity_type', 'ministry')
+      .eq('ministry_id', ministry.id)
+      .maybeSingle()
+    const existing = existingData as { id: string } | null | undefined
+
+    if (existing?.id) {
+      await admin.from('finance_cash_scopes').update(payload).eq('id', existing.id)
+    } else {
+      await admin.from('finance_cash_scopes').insert(payload)
+    }
+  }
+
+  revalidatePath(`/${slug}/configuracoes`)
+  revalidatePath(`/${slug}/financeiro`)
+  revalidatePath(`/${slug}/caixa`)
 }

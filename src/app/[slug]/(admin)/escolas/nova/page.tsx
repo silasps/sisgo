@@ -1,18 +1,9 @@
-import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
-import { notFound, redirect } from 'next/navigation'
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { SCHOOL_TYPES } from '@/lib/schools'
 
 type Props = { params: Promise<{ slug: string }> }
-
-const SCHOOL_TYPES = [
-  { value: 'eted', label: 'ETED — Escola de Treinamento e Discipulado' },
-  { value: 'udn', label: 'UDN — Universidade das Nações' },
-  { value: 'seminario', label: 'Seminário' },
-  { value: 'curso_online', label: 'Curso Online' },
-  { value: 'voluntariado', label: 'Voluntariado' },
-  { value: 'outro', label: 'Outro' },
-]
 
 export default async function NovaEscolaPage({ params }: Props) {
   const { slug } = await params

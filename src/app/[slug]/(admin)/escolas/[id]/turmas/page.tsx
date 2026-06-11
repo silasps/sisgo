@@ -35,10 +35,13 @@ export default async function TurmasPage({ params }: Props) {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {turmas.map(t => (
-                  <tr key={t.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium text-gray-900">{t.name}</td>
+                  <tr key={t.id} className="group relative hover:bg-brand-50 transition-colors cursor-pointer">
+                    <td className="p-0">
+                      <Link href={`/${slug}/escolas/${id}/turmas/${t.id}`} className="absolute inset-0" aria-label={`Abrir turma ${t.name}`} />
+                      <span className="block px-4 py-3 font-medium text-gray-900 group-hover:text-brand-700 transition-colors">{t.name}</span>
+                    </td>
                     <td className="hidden md:table-cell px-4 py-3 text-gray-500">
-                      {[t.year, t.semester].filter(Boolean).join('/')}
+                      {[t.year, t.semester].filter(Boolean).join('/') || '—'}
                     </td>
                     <td className="hidden md:table-cell px-4 py-3">
                       <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${t.active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
@@ -46,10 +49,9 @@ export default async function TurmasPage({ params }: Props) {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <Link href={`/${slug}/escolas/${id}/turmas/${t.id}`}
-                        className="text-xs font-medium text-brand-500 hover:text-brand-600 px-3 py-1.5 rounded-lg hover:bg-brand-50 transition-colors">
-                        Editar
-                      </Link>
+                      <span className="text-xs font-medium text-brand-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                        Abrir →
+                      </span>
                     </td>
                   </tr>
                 ))}

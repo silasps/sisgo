@@ -16,6 +16,9 @@
   body {
     @apply bg-gray-50 text-gray-900 antialiased;
   }
+  .page-transition {
+    animation: page-enter 220ms ease-out both;
+  }
   /* Offset para nav fixa nas âncoras */
   [id] {
     scroll-margin-top: 5rem;
@@ -33,9 +36,36 @@
     animation: shimmer 1.5s infinite;
     border-radius: 4px;
   }
+  /* hide scrollbar mas mantém funcionalidade de scroll */
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @keyframes shimmer {
   0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
+}
+
+@keyframes page-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+    filter: blur(2px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-transition {
+    animation: none;
+  }
 }
