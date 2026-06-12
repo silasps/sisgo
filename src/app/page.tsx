@@ -23,7 +23,6 @@ export default async function LandingPage() {
           height={38}
           className="object-contain"
           priority
-          onError={(e) => { e.currentTarget.style.display = 'none' }}
         />
         <div className="flex items-center gap-2 sm:gap-3">
           <Link href="/login" className="px-4 py-2 text-sm text-gray-300 hover:text-white transition-colors font-medium">

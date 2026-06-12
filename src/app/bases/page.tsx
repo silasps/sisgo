@@ -24,7 +24,6 @@ export default async function BasesPage() {
             height={38}
             className="object-contain"
             priority
-            onError={(e) => { e.currentTarget.style.display = 'none' }}
           />
         </Link>
         <div className="flex items-center gap-2">
