@@ -73,7 +73,7 @@ export async function login(formData: FormData) {
     .eq('active', true)
 
   if (orgError || !orgUsers?.length) {
-    return { error: orgError?.message ?? 'Usuário sem acesso configurado. Contate o administrador.' }
+    return { redirectTo: '/bases' }
   }
 
   const rows = orgUsers as unknown as Array<{ organization_id: string | null; roles: { name: string } | null }>
@@ -84,7 +84,7 @@ export async function login(formData: FormData) {
 
   // Para todos os outros roles: redirecionar para a org do usuário
   const orgId = rows.find(row => row.organization_id)?.organization_id
-  if (!orgId) return { error: 'Organização não configurada. Contate o administrador.' }
+  if (!orgId) return { redirectTo: '/bases' }
 
   const { data: org } = await supabase
     .from('organizations')
@@ -92,9 +92,24 @@ export async function login(formData: FormData) {
     .eq('id', orgId)
     .single()
 
-  if (!org?.slug) return { error: 'Organização não encontrada. Contate o administrador.' }
+  if (!org?.slug) return { redirectTo: '/bases' }
 
   return { redirectTo: `/${org.slug}/pessoas` }
+}
+
+export async function loginWithGoogle() {
+  const supabase = await createClient()
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL
+    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: `${siteUrl}/auth/callback`,
+      skipBrowserRedirect: true,
+    },
+  })
+  if (error || !data.url) return { error: 'Não foi possível iniciar o login com Google.' }
+  return { redirectTo: data.url }
 }
 
 export async function register(formData: FormData) {

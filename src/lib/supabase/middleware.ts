@@ -5,7 +5,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 const RESERVED = new Set(['login', 'cadastro', 'auth', 'superadmin', 'supervisor', 'api', '_next', 'images', 'favicon.ico'])
 
 // Sub-paths públicos dentro de /{slug}/ (sem auth)
-const PUBLIC_SUBPATHS = ['escola', 'inscricao', 'candidato']
+const PUBLIC_SUBPATHS = ['escola', 'inscricao', 'candidato', 'formulario', 'referencia', 'verificar-email']
 
 function isPublicSlugRoute(pathname: string): boolean {
   const parts = pathname.split('/').filter(Boolean)
@@ -40,8 +40,8 @@ export async function updateSession(request: NextRequest) {
   const user = session?.user ?? null
   const pathname = request.nextUrl.pathname
 
-  // Landing page e rotas públicas de base — sempre públicas
-  if (pathname === '/' || isPublicSlugRoute(pathname)) return supabaseResponse
+  // Landing page, bases e rotas públicas de base — sempre públicas
+  if (pathname === '/' || pathname.startsWith('/bases') || isPublicSlugRoute(pathname)) return supabaseResponse
 
   // Rotas públicas de auth
   if (pathname.startsWith('/login') || pathname.startsWith('/cadastro') || pathname.startsWith('/auth')) {
@@ -92,7 +92,7 @@ async function getRedirectDest(supabase: any, userId: string): Promise<string> {
   if (roleNames.includes('supervisor_bases')) return '/supervisor'
 
   const orgId = rows.find(row => row.organization_id)?.organization_id
-  if (!orgId) return '/login'
+  if (!orgId) return '/bases'
 
   const { data: org } = await supabase
     .from('organizations')
@@ -100,5 +100,5 @@ async function getRedirectDest(supabase: any, userId: string): Promise<string> {
     .eq('id', orgId)
     .single()
 
-  return org?.slug ? `/${org.slug}/pessoas` : '/login'
+  return org?.slug ? `/${org.slug}/pessoas` : '/bases'
 }
