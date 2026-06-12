@@ -24,9 +24,31 @@ function LoginPageInner() {
   async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setLoading(true); setError(null)
-    const result = await login(new FormData(e.currentTarget))
+
+    let result: Awaited<ReturnType<typeof login>>
+    try {
+      result = await login(new FormData(e.currentTarget))
+    } catch {
+      setError('Erro inesperado ao conectar. Tente novamente.')
+      setLoading(false)
+      return
+    }
+
     if (result.error) { setError(result.error); setLoading(false); return }
-    window.location.href = result.redirectTo!
+
+    // Timeout: se o redirect não ocorrer em 10s, informa o usuário
+    const timeout = setTimeout(() => {
+      setLoading(false)
+      setError('A navegação está demorando mais que o esperado. Tente atualizar a página.')
+    }, 10000)
+
+    try {
+      window.location.href = result.redirectTo!
+    } catch {
+      clearTimeout(timeout)
+      setLoading(false)
+      setError('Não foi possível redirecionar. Tente novamente.')
+    }
   }
 
   async function handleRegister(e: React.FormEvent<HTMLFormElement>) {
