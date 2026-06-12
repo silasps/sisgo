@@ -1,20 +1,41 @@
-import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { NextResponse, type NextRequest } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
 
   if (code) {
-    const supabase = await createClient()
+    // Captura os cookies que o Supabase quer definir para aplicar no redirect
+    const cookiesToSet: Array<{ name: string; value: string; options?: Record<string, unknown> }> = []
+
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll()
+          },
+          setAll(cookies) {
+            cookiesToSet.push(...cookies)
+          },
+        },
+      }
+    )
+
     const { error } = await supabase.auth.exchangeCodeForSession(code)
+
     if (!error) {
       const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const dest = await getPostLoginDest(supabase, user.id)
-        return NextResponse.redirect(`${origin}${dest}`)
+      const dest = user ? await getPostLoginDest(supabase, user.id) : '/bases'
+
+      const response = NextResponse.redirect(`${origin}${dest}`)
+      // Copia os cookies de sessão para o redirect — sem isso o browser fica deslogado
+      for (const { name, value, options } of cookiesToSet) {
+        response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2])
       }
-      return NextResponse.redirect(`${origin}/bases`)
+      return response
     }
   }
 
