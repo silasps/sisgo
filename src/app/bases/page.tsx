@@ -1,8 +1,13 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 
-export default async function BasesPage() {
+type Props = { searchParams: Promise<{ code?: string }> }
+
+export default async function BasesPage({ searchParams }: Props) {
+  const { code } = await searchParams
+  if (code) redirect(`/auth/callback?code=${code}`)
   const supabase = await createClient()
   const { data: orgs } = await supabase
     .from('organizations')
