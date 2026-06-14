@@ -7,15 +7,16 @@ import { accentCssVars } from '@/lib/accent-colors'
 import { getRolePreview } from '@/lib/role-preview'
 import { asLooseClient } from '@/lib/supabase/loose-client'
 import { FeedbackButton } from '@/components/layout/FeedbackButton'
-import { isManagementRole, isGeneralFinanceRole } from '@/lib/auth/permissions'
+import { isManagementRole, isGeneralFinanceRole, MANUTENCAO_ROLES, userHasAnyRole } from '@/lib/auth/permissions'
 import { Toaster } from 'sonner'
 import { Suspense } from 'react'
 import { FlashToast } from '@/components/ui/FlashToast'
 
 type NavItem = { href: string; label: string; icon: string; alert?: boolean }
 
-function buildNav(slug: string, role: string, hasPending: boolean, hasReservationsPending: boolean, hasOwnCashScope: boolean): NavItem[] {
-  const is = (r: string) => role === r
+function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPending: boolean, hasReservationsPending: boolean, hasOwnCashScope: boolean): NavItem[] {
+  const allRoles = [role, ...accumulatedRoles]
+  const is = (r: string) => allRoles.includes(r)
   const isManagement        = isManagementRole(role)
   const isLiderMinisterio   = is('lider_ministerio')
   const isObreiroMinisterio = is('obreiro_ministerio')
@@ -24,7 +25,9 @@ function buildNav(slug: string, role: string, hasPending: boolean, hasReservatio
   const isAssociado         = is('associado')
   const isHospitalidade     = is('hospitalidade')
   const isCozinha           = is('cozinha')
-  const canSeeGeneralFinance = isGeneralFinanceRole(role)
+  const isManutencao        = is('manutencao')
+  const canSeeGeneralFinance = isGeneralFinanceRole(role) || accumulatedRoles.some(r => isGeneralFinanceRole(r))
+  const canSeeManutencao    = userHasAnyRole(allRoles, MANUTENCAO_ROLES)
   const canBuyMeals         = true
   const canSeeReservas      = isManagement || isHospitalidade || is('lider_eted') || isObreiroEted || isAluno || isAssociado || isLiderMinisterio || isObreiroMinisterio
   const toNavItem = (item: NavItem & { show: boolean }): NavItem => ({
@@ -49,6 +52,8 @@ function buildNav(slug: string, role: string, hasPending: boolean, hasReservatio
     { href: `/${slug}/caixa`,        label: 'Caixa da área',    icon: 'caixa',         show: hasOwnCashScope },
     { href: `/${slug}/cozinha`,      label: 'Cozinha',          icon: 'cozinha',       show: isManagement || is('secretaria') || isCozinha },
     { href: `/${slug}/cozinha/estoque`, label: 'Estoque',       icon: 'estoque',       show: isManagement || is('secretaria') || isCozinha },
+    { href: `/${slug}/manutencao`,   label: 'Manutenção',       icon: 'manutencao',    show: true },
+    { href: `/${slug}/manutencao/estoque`, label: 'Est. Manutenção', icon: 'estoque',  show: canSeeManutencao },
     { href: `/${slug}/financeiro`,   label: 'Financeiro',       icon: 'financeiro',    show: canSeeGeneralFinance },
     { href: `/${slug}/minhas-contas`, label: 'Minhas Contas',   icon: 'contas',        show: true },
     { href: `/${slug}/configuracoes`, label: 'Configurações',   icon: 'configuracoes', show: isManagement },
@@ -62,7 +67,13 @@ function buildNav(slug: string, role: string, hasPending: boolean, hasReservatio
 
   if (isCozinha) {
     return all.filter(i =>
-      i.href.endsWith('/dashboard') || i.href.endsWith('/calendario') || i.href.endsWith('/cozinha') || i.href.endsWith('/cozinha/estoque') || i.href.endsWith('/pendentes') || i.href.endsWith('/refeicoes')
+      i.href.endsWith('/dashboard') || i.href.endsWith('/calendario') || i.href.endsWith('/cozinha') || i.href.endsWith('/cozinha/estoque') || i.href.endsWith('/pendentes') || i.href.endsWith('/refeicoes') || i.href.endsWith('/manutencao')
+    ).map(toNavItem)
+  }
+
+  if (isManutencao) {
+    return all.filter(i =>
+      i.href.endsWith('/dashboard') || i.href.endsWith('/calendario') || i.href.endsWith('/pendentes') || i.href.endsWith('/manutencao') || i.href.endsWith('/manutencao/estoque') || i.href.endsWith('/refeicoes') || i.href.endsWith('/minhas-contas')
     ).map(toNavItem)
   }
 
@@ -98,7 +109,7 @@ export default async function SlugLayout({ children, params }: Props) {
 
   const { data: org } = await supabase
     .from('organizations')
-    .select('id, name, active, logo_url, accent_color, department_assignments')
+    .select('id, name, active, logo_url, accent_color, department_assignments, role_accumulations')
     .eq('slug', slug)
     .single()
 
@@ -106,13 +117,14 @@ export default async function SlugLayout({ children, params }: Props) {
 
   const { data: orgUsers } = await supabase
     .from('organization_users')
-    .select('organization_id, roles(name)')
+    .select('organization_id, roles(name), extra_roles')
     .eq('user_id', user.id)
     .eq('active', true)
 
   const userOrgRows = (orgUsers ?? []) as unknown as Array<{
     organization_id: string | null
     roles: { name: string } | null
+    extra_roles?: string[] | null
   }>
 
   const sbAdmin = createAdminClient()
@@ -136,6 +148,11 @@ export default async function SlugLayout({ children, params }: Props) {
     .filter(([, assignedRole]) => assignedRole === role)
     .map(([department]) => department)
 
+  const roleAccumulations = (org.role_accumulations as Record<string, string[]> | null) ?? {}
+  const accumulatedRoles: string[] = roleAccumulations[role] ?? []
+  const extraRoles: string[] = (currentOrgRow?.extra_roles as string[] | null) ?? []
+  const allRoles = [role, ...accumulatedRoles, ...extraRoles]
+
   if (realRole !== 'superadmin' && !currentOrgRow && !canSuperviseCurrentOrg) redirect('/login')
 
   // ── Contagem de pendências para o alerta no nav ─────────────
@@ -145,9 +162,10 @@ export default async function SlugLayout({ children, params }: Props) {
   const isObreiroEted = role === 'obreiro_eted'
   const isAluno = role === 'aluno'
   const isAssociado = role === 'associado'
-  const isHospitalidade    = role === 'hospitalidade'
+  const isHospitalidade    = allRoles.includes('hospitalidade')
   const isLiderEted        = role === 'lider_eted'
-  const isSecretaria       = role === 'secretaria'
+  const isSecretaria       = allRoles.includes('secretaria')
+  const isManutencaoUser   = allRoles.includes('manutencao')
   const canBuyMeals        = true
 
   let pendingTotal = 0
@@ -197,6 +215,15 @@ export default async function SlugLayout({ children, params }: Props) {
         .in('status', ['pendente', 'em_analise']),
     ])
     pendingTotal += (ac ?? 0) + (mc ?? 0) + (src ?? 0)
+  }
+
+  if (!isManagementUser && isManutencaoUser) {
+    const { count } = await supabase.from('service_requests')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', org.id)
+      .eq('target_department', 'manutencao')
+      .in('status', ['pendente', 'em_analise'])
+    pendingTotal += (count ?? 0)
   }
 
   if (isManagementUser || isSecretaria) {
@@ -335,7 +362,7 @@ export default async function SlugLayout({ children, params }: Props) {
         />
       )}
       <AppShell
-        items={buildNav(slug, role, hasPending, reservationsPending > 0, hasOwnCashScope)}
+        items={buildNav(slug, role, [...accumulatedRoles, ...extraRoles], hasPending, reservationsPending > 0, hasOwnCashScope)}
         subtitle={org.name}
         logoUrl={(org as { logo_url?: string | null }).logo_url ?? undefined}
         className="flex flex-1 min-h-0 overflow-hidden"

@@ -19,6 +19,7 @@ export type Role =
   | 'secretaria'
   | 'hospitalidade'
   | 'cozinha'
+  | 'manutencao'
   | 'lider_eted'
   | 'obreiro_eted'
   | 'lider_ministerio'
@@ -52,6 +53,15 @@ export const KITCHEN_ROLES: readonly Role[] = [
   'dh',
   'secretaria',
   'cozinha',
+]
+
+/** Papéis com acesso ao módulo de manutenção */
+export const MANUTENCAO_ROLES: readonly Role[] = [
+  'superadmin',
+  'admin_base',
+  'lider_base',
+  'dh',
+  'manutencao',
 ]
 
 /** Papéis que podem ver o módulo de reservas */
@@ -89,4 +99,13 @@ export function isKitchenRole(role: string): boolean {
 /** Verifica se o papel pode ver o módulo de reservas */
 export function canSeeReservations(role: string): boolean {
   return (RESERVATION_ROLES as readonly string[]).includes(role)
+}
+
+/**
+ * Verifica se ALGUMA das roles do usuário (primária + acumuladas) pertence
+ * ao grupo de candidatos. Use no lugar das funções acima quando o usuário
+ * pode ter funções acumuladas configuradas pelo líder da base.
+ */
+export function userHasAnyRole(userRoles: string[], candidates: readonly string[]): boolean {
+  return userRoles.some(r => (candidates as string[]).includes(r))
 }

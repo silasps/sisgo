@@ -7,7 +7,7 @@ import {
   LayoutDashboard, AlertTriangle, Users, Church, GraduationCap,
   ClipboardList, Music2, BedDouble, UtensilsCrossed, Landmark,
   ChefHat, Package, DollarSign, Receipt, Settings, LogOut,
-  UserCheck, CalendarDays,
+  UserCheck, CalendarDays, Wrench,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -35,6 +35,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   caixa:          Landmark,
   cozinha:        ChefHat,
   estoque:        Package,
+  manutencao:     Wrench,
   financeiro:     DollarSign,
   contas:         Receipt,
   configuracoes:  Settings,
