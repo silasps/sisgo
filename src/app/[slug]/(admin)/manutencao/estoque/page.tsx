@@ -46,23 +46,30 @@ export default async function EstoqueManutencaoPage({ params, searchParams }: Pr
 
   const [{ data: { user } }, { data: org }] = await Promise.all([
     supabase.auth.getUser(),
-    supabase.from('organizations').select('id').eq('slug', slug).single(),
+    supabase.from('organizations').select('id, role_accumulations').eq('slug', slug).single(),
   ])
   if (!user || !org) notFound()
 
-  const { data: orgUserRow } = await supabase
+  const { data: orgUsers } = await supabase
     .from('organization_users')
-    .select('roles(name), extra_roles')
+    .select('organization_id, roles(name), extra_roles')
     .eq('user_id', user.id)
-    .eq('organization_id', org.id)
     .eq('active', true)
-    .maybeSingle() as { data: { roles: { name: string } | null; extra_roles?: string[] | null } | null }
 
-  if (!orgUserRow) redirect('/login')
+  const rows = (orgUsers ?? []) as unknown as Array<{
+    organization_id: string | null
+    roles: { name: string } | null
+    extra_roles?: string[] | null
+  }>
+  const superadminRow  = rows.find(r => r.roles?.name === 'superadmin')
+  const currentOrgRow  = rows.find(r => r.organization_id === org.id)
+  const realRole       = superadminRow?.roles?.name ?? currentOrgRow?.roles?.name ?? ''
+  if (!realRole) redirect('/login')
 
-  const preview  = await getRolePreview(orgUserRow.roles?.name ?? '')
-  const role     = preview?.role ?? orgUserRow.roles?.name ?? ''
-  const accRoles = (orgUserRow.extra_roles as string[] | null) ?? []
+  const preview  = await getRolePreview(realRole)
+  const role     = preview?.role ?? realRole
+  const orgAccumulations = (org.role_accumulations as Record<string, string[]> | null) ?? {}
+  const accRoles = [...(orgAccumulations[role] ?? []), ...((currentOrgRow?.extra_roles as string[] | null) ?? [])]
   if (!userHasAnyRole([role, ...accRoles], MANUTENCAO_ROLES)) redirect(`/${slug}/manutencao`)
 
   // ── Server Actions ──────────────────────────────────────────────────────────
