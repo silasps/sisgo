@@ -11,6 +11,7 @@ import {
   toggleTurmaActive, deleteTurma,
 } from './actions'
 import { DeleteTurmaButton } from './DeleteTurmaButton'
+import { EmbedCodeBox } from '@/components/ui/EmbedCodeBox'
 
 import { isManagementRole } from '@/lib/auth/permissions'
 import { SCHOOL_TYPES } from '@/lib/schools'
@@ -502,7 +503,7 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                 })()}
               </form>
 
-              {/* Config formulário */}
+              {/* Config formulário + Incorporar */}
               <section>
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="font-semibold text-gray-900">Formulário de inscrição</h2>
@@ -512,6 +513,13 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                   </Link>
                 </div>
                 <p className="text-xs text-gray-400 mb-4">Ative ou desative campos do formulário que os candidatos preenchem.</p>
+
+                {publicUrl && (escola as unknown as { is_public: boolean }).is_public && (
+                  <div className="mt-2">
+                    <p className="text-xs font-semibold text-gray-700 mb-2">Incorporar no site</p>
+                    <EmbedCodeBox embedPath={`${publicUrl}/embed`} />
+                  </div>
+                )}
               </section>
 
               {/* Turmas */}

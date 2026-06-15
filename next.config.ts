@@ -4,6 +4,18 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  async headers() {
+    return [
+      {
+        // Permite que a página /embed seja incorporada em iframes de qualquer origem
+        source: '/:slug/escola/:schoolSlug/embed',
+        headers: [
+          { key: 'X-Frame-Options', value: 'ALLOWALL' },
+          { key: 'Content-Security-Policy', value: "frame-ancestors *" },
+        ],
+      },
+    ]
+  },
   typescript: {
     ignoreBuildErrors: true,
   },
