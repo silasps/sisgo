@@ -14,7 +14,7 @@ import { Suspense } from 'react'
 
 type Props = {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ msg?: string; q?: string }>
+  searchParams: Promise<{ q?: string }>
 }
 
 type PendenteItem = {
@@ -94,7 +94,7 @@ function WhatsAppButton({ phone, label = 'WhatsApp' }: { phone?: string | null; 
 
 export default async function PendentesPage({ params, searchParams }: Props) {
   const { slug } = await params
-  const { msg, q } = await searchParams
+  const { q } = await searchParams
   const supabase = await createClient()
 
   const { data: org } = await supabase
@@ -727,24 +727,6 @@ export default async function PendentesPage({ params, searchParams }: Props) {
     redirect(`/${slug}/pendentes`)
   }
 
-  // Solicitação de serviço pelo lider_eted (formulário simples)
-  const handleServiceRequestFromEted = async (formData: FormData) => {
-    'use server'
-    const subject = (formData.get('subject') as string).trim()
-    if (!subject || !user) return
-    const sbAdmin = createAdminClient()
-    await sbAdmin.from('service_requests').insert({
-      organization_id: orgId,
-      requester_id: user.id,
-      requester_role: role,
-      target_department: formData.get('target_department') as 'hospitalidade' | 'dh' | 'secretaria' | 'outro',
-      request_type: formData.get('request_type') as string,
-      subject,
-      description: (formData.get('description') as string) || null,
-    })
-    redirect(`/${slug}/pendentes?msg=servico_enviado`)
-  }
-
   // ── Gráficos ─────────────────────────────────────────────────────────────────
   const categoryCounts = items.reduce<Record<string, number>>((acc, i) => {
     acc[i.categoria] = (acc[i.categoria] ?? 0) + 1; return acc
@@ -762,7 +744,6 @@ export default async function PendentesPage({ params, searchParams }: Props) {
   ]
 
   const hasPendingItems = items.length > 0
-  const hasMsgServico   = msg === 'servico_enviado'
   const fmtMoney = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
   return (
@@ -779,11 +760,6 @@ export default async function PendentesPage({ params, searchParams }: Props) {
       />
       <main className="p-4 md:p-6 space-y-4">
 
-        {hasMsgServico && (
-          <div className="border rounded-lg px-4 py-3 text-sm bg-blue-50 border-blue-200 text-blue-700">
-            Solicitação de serviço enviada com sucesso.
-          </div>
-        )}
         {isPreview && (
           <div className="border rounded-lg px-4 py-3 text-sm bg-amber-50 border-amber-200 text-amber-800">
             Modo visualização do super admin: use esta tela para conferir permissões e listas antes de executar ações reais.
@@ -1235,59 +1211,6 @@ export default async function PendentesPage({ params, searchParams }: Props) {
               />
             )}
 
-            {/* ── Formulário: Nova solicitação de serviço (lider_eted) ── */}
-            {isLiderEted && (
-              <div className="bg-white rounded-xl border border-gray-200 p-5">
-                <h3 className="text-sm font-semibold text-gray-700 mb-1">Nova Solicitação de Serviço</h3>
-                <p className="text-xs text-gray-400 mb-3">
-                  Para convidar professor, solicitar hospedagem ou outro suporte da base.
-                </p>
-                <form action={handleServiceRequestFromEted} className="space-y-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Destino</label>
-                      <select name="target_department" required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
-                        <option value="hospitalidade">Hospitalidade</option>
-                        <option value="dh">DH</option>
-                        <option value="secretaria">Secretaria</option>
-                        <option value="outro">Outro</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Tipo</label>
-                      <select name="request_type" required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
-                        <option value="convidar_professor">Convidar professor</option>
-                        <option value="hospedagem">Hospedagem</option>
-                        <option value="logistica">Logística</option>
-                        <option value="outro">Outro</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">
-                      Assunto <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      name="subject" required placeholder="Resumo da solicitação..."
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Descrição</label>
-                    <textarea
-                      name="description" rows={2} placeholder="Detalhes adicionais..."
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 resize-none"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 transition-colors"
-                  >
-                    Enviar Solicitação
-                  </button>
-                </form>
-              </div>
-            )}
           </>
         )}
       </main>

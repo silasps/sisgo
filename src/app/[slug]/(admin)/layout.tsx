@@ -12,7 +12,19 @@ import { Toaster } from 'sonner'
 import { Suspense } from 'react'
 import { FlashToast } from '@/components/ui/FlashToast'
 
-type NavItem = { href: string; label: string; icon: string; alert?: boolean }
+type RegularNavItem = { href: string; label: string; icon: string; alert?: boolean }
+type DividerNavItem  = { divider: true; label: string }
+type NavItem = RegularNavItem | DividerNavItem
+
+const PESSOAL_DIVIDER: DividerNavItem = { divider: true, label: 'Pessoal' }
+const PESSOAL_ICONS   = new Set(['refeicoes', 'contas'])
+
+function addPersonalSplit(items: RegularNavItem[], personalIcons = PESSOAL_ICONS): NavItem[] {
+  const op   = items.filter(i => !personalIcons.has(i.icon))
+  const pers = items.filter(i =>  personalIcons.has(i.icon))
+  if (pers.length === 0) return op
+  return [...op, PESSOAL_DIVIDER, ...pers]
+}
 
 function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPending: boolean, hasReservationsPending: boolean, hasOwnCashScope: boolean): NavItem[] {
   const allRoles = [role, ...accumulatedRoles]
@@ -30,14 +42,12 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
   const canSeeManutencao    = userHasAnyRole(allRoles, MANUTENCAO_ROLES)
   const canBuyMeals         = true
   const canSeeReservas      = isManagement || isHospitalidade || is('lider_eted') || isObreiroEted || isAluno || isAssociado || isLiderMinisterio || isObreiroMinisterio
-  const toNavItem = (item: NavItem & { show: boolean }): NavItem => ({
-    href: item.href,
-    label: item.label,
-    icon: item.icon,
-    alert: item.alert,
-  })
 
-  const all: Array<NavItem & { show: boolean }> = [
+  type AllItem = RegularNavItem & { show: boolean }
+  const toItem = (i: AllItem): RegularNavItem => ({ href: i.href, label: i.label, icon: i.icon, alert: i.alert })
+  const pick = (...ends: string[]) => (i: AllItem) => ends.some(e => i.href.endsWith(e))
+
+  const all: AllItem[] = [
     { href: `/${slug}/dashboard`,    label: 'Dashboard',        icon: 'dashboard',     show: true },
     { href: `/${slug}/calendario`,   label: 'Calendário',       icon: 'calendario',    show: true },
     { href: `/${slug}/pendentes`,    label: 'Pendentes',        icon: 'pendentes',     show: true, alert: hasPending },
@@ -52,7 +62,7 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
     { href: `/${slug}/caixa`,        label: 'Caixa da área',    icon: 'caixa',         show: hasOwnCashScope },
     { href: `/${slug}/cozinha`,      label: 'Cozinha',          icon: 'cozinha',       show: isManagement || is('secretaria') || isCozinha },
     { href: `/${slug}/cozinha/estoque`, label: 'Estoque',       icon: 'estoque',       show: isManagement || is('secretaria') || isCozinha },
-    { href: `/${slug}/manutencao`,   label: 'Manutenção',       icon: 'manutencao',    show: true },
+    { href: `/${slug}/manutencao`,   label: 'Solicitações',     icon: 'solicitacoes',  show: true },
     { href: `/${slug}/manutencao/estoque`, label: 'Est. Manutenção', icon: 'estoque',  show: canSeeManutencao },
     { href: `/${slug}/financeiro`,   label: 'Financeiro',       icon: 'financeiro',    show: canSeeGeneralFinance },
     { href: `/${slug}/minhas-contas`, label: 'Minhas Contas',   icon: 'contas',        show: true },
@@ -60,42 +70,33 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
   ]
 
   if (isHospitalidade) {
-    return all.filter(i =>
-      i.href.endsWith('/calendario') || i.href.endsWith('/pendentes') || i.href.endsWith('/pessoas') || i.href.endsWith('/reservas') || i.href.endsWith('/refeicoes')
-    ).map(toNavItem)
+    return addPersonalSplit(all.filter(pick('/calendario', '/pendentes', '/pessoas', '/reservas', '/refeicoes')).map(toItem))
   }
 
   if (isCozinha) {
-    return all.filter(i =>
-      i.href.endsWith('/dashboard') || i.href.endsWith('/calendario') || i.href.endsWith('/cozinha') || i.href.endsWith('/cozinha/estoque') || i.href.endsWith('/pendentes') || i.href.endsWith('/refeicoes') || i.href.endsWith('/manutencao')
-    ).map(toNavItem)
+    return addPersonalSplit(all.filter(pick('/dashboard', '/calendario', '/cozinha', '/cozinha/estoque', '/pendentes', '/refeicoes', '/manutencao')).map(toItem))
   }
 
   if (isManutencao) {
-    return all.filter(i =>
-      i.href.endsWith('/dashboard') || i.href.endsWith('/calendario') || i.href.endsWith('/pendentes') || i.href.endsWith('/manutencao') || i.href.endsWith('/manutencao/estoque') || i.href.endsWith('/refeicoes') || i.href.endsWith('/minhas-contas')
-    ).map(toNavItem)
+    return addPersonalSplit(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/manutencao', '/manutencao/estoque', '/refeicoes', '/minhas-contas')).map(toItem))
   }
 
   if (isObreiroMinisterio) {
-    return all.filter(i => i.href.endsWith('/calendario') || i.href.endsWith('/presenca') || i.href.endsWith('/pendentes') || i.href.endsWith('/ministerios') || i.href.endsWith('/reservas') || i.href.endsWith('/refeicoes') || i.href.endsWith('/minhas-contas')).map(toNavItem)
+    return addPersonalSplit(all.filter(pick('/calendario', '/presenca', '/pendentes', '/ministerios', '/reservas', '/refeicoes', '/minhas-contas')).map(toItem))
   }
 
   if (isObreiroEted) {
-    return all.filter(i =>
-      i.href.endsWith('/dashboard') || i.href.endsWith('/calendario') || i.href.endsWith('/presenca') || i.href.endsWith('/pendentes') || i.href.endsWith('/escolas') || i.href.endsWith('/reservas') || i.href.endsWith('/refeicoes') || i.href.endsWith('/minhas-contas')
-    ).map(toNavItem)
+    return addPersonalSplit(all.filter(pick('/dashboard', '/calendario', '/presenca', '/pendentes', '/escolas', '/reservas', '/refeicoes', '/minhas-contas')).map(toItem))
   }
 
-  if (isAluno) {
-    return all.filter(i => i.href.endsWith('/dashboard') || i.href.endsWith('/calendario') || i.href.endsWith('/reservas') || i.href.endsWith('/refeicoes') || i.href.endsWith('/minhas-contas')).map(toNavItem)
+  if (isAluno || isAssociado) {
+    return addPersonalSplit(
+      all.filter(pick('/dashboard', '/calendario', '/reservas', '/refeicoes', '/minhas-contas')).map(toItem),
+      new Set(['reservas', 'refeicoes', 'contas']),
+    )
   }
 
-  if (isAssociado) {
-    return all.filter(i => i.href.endsWith('/dashboard') || i.href.endsWith('/calendario') || i.href.endsWith('/reservas') || i.href.endsWith('/refeicoes') || i.href.endsWith('/minhas-contas')).map(toNavItem)
-  }
-
-  return all.filter(i => i.show).map(toNavItem)
+  return addPersonalSplit(all.filter(i => i.show).map(toItem))
 }
 
 type Props = { children: React.ReactNode; params: Promise<{ slug: string }> }

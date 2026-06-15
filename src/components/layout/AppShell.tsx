@@ -3,7 +3,7 @@
 import { createContext, useContext, useState } from 'react'
 import { Sidebar } from './Sidebar'
 
-type NavItem = { href: string; label: string; icon: string; alert?: boolean }
+type NavItem = { href: string; label: string; icon: string; alert?: boolean } | { divider: true; label: string }
 
 const NavCtx = createContext<{ openNav: () => void }>({ openNav: () => {} })
 export const useMobileNav = () => useContext(NavCtx)

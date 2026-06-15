@@ -7,12 +7,12 @@ import {
   LayoutDashboard, AlertTriangle, Users, Church, GraduationCap,
   ClipboardList, Music2, BedDouble, UtensilsCrossed, Landmark,
   ChefHat, Package, DollarSign, Receipt, Settings, LogOut,
-  UserCheck, CalendarDays, Wrench, Building2, Eye, Code2,
+  UserCheck, CalendarDays, Wrench, Building2, Eye, Code2, Inbox,
   type LucideIcon,
 } from 'lucide-react'
 import { SisgoLogo } from './Logo'
 
-type NavItem = { href: string; label: string; icon: string; alert?: boolean }
+type NavItem = { href: string; label: string; icon: string; alert?: boolean } | { divider: true; label: string }
 type SidebarProps = {
   items: NavItem[]
   subtitle?: string
@@ -38,6 +38,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   cozinha:        ChefHat,
   estoque:        Package,
   manutencao:     Wrench,
+  solicitacoes:   Inbox,
   financeiro:     DollarSign,
   contas:         Receipt,
   configuracoes:  Settings,
@@ -96,7 +97,17 @@ export function Sidebar({ items, subtitle, logoUrl, sisgoLogo = false, isOpen = 
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {items.map(item => {
+        {items.map((item, idx) => {
+          if ('divider' in item) {
+            return (
+              <div key={`div-${idx}`} className="pt-3 pb-1 mx-1">
+                <div className="border-t border-dark-800 mb-2" />
+                <span className="px-2 text-[10px] font-semibold uppercase tracking-widest text-gray-600 select-none">
+                  {item.label}
+                </span>
+              </div>
+            )
+          }
           const active = pathname === item.href || pathname.startsWith(item.href + '/')
           return (
             <Link
