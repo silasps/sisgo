@@ -7,15 +7,17 @@ import {
   LayoutDashboard, AlertTriangle, Users, Church, GraduationCap,
   ClipboardList, Music2, BedDouble, UtensilsCrossed, Landmark,
   ChefHat, Package, DollarSign, Receipt, Settings, LogOut,
-  UserCheck, CalendarDays, Wrench,
+  UserCheck, CalendarDays, Wrench, Building2, Eye, Code2,
   type LucideIcon,
 } from 'lucide-react'
+import { SisgoLogo } from './Logo'
 
 type NavItem = { href: string; label: string; icon: string; alert?: boolean }
 type SidebarProps = {
   items: NavItem[]
   subtitle?: string
   logoUrl?: string
+  sisgoLogo?: boolean
   isOpen?: boolean
   onClose?: () => void
 }
@@ -39,6 +41,9 @@ const ICON_MAP: Record<string, LucideIcon> = {
   financeiro:     DollarSign,
   contas:         Receipt,
   configuracoes:  Settings,
+  bases:          Building2,
+  supervisao:     Eye,
+  dev:            Code2,
 }
 
 function NavIcon({ name, className }: { name: string; className?: string }) {
@@ -47,7 +52,7 @@ function NavIcon({ name, className }: { name: string; className?: string }) {
   return <Icon size={16} className={className} aria-hidden />
 }
 
-export function Sidebar({ items, subtitle, logoUrl, isOpen = false, onClose }: SidebarProps) {
+export function Sidebar({ items, subtitle, logoUrl, sisgoLogo = false, isOpen = false, onClose }: SidebarProps) {
   const pathname = usePathname()
 
   return (
@@ -61,16 +66,20 @@ export function Sidebar({ items, subtitle, logoUrl, isOpen = false, onClose }: S
     >
       <div className="px-5 py-5 border-b border-dark-800 flex items-start justify-between gap-2">
         <div>
-          <Image
-            src={logoUrl ?? '/images/logo-white.png'}
-            alt={subtitle ?? 'Logo'}
-            width={110}
-            height={38}
-            className="object-contain"
-            priority
-            unoptimized={!!logoUrl}
-            onError={(e) => { e.currentTarget.style.display = 'none' }}
-          />
+          {sisgoLogo && !logoUrl ? (
+            <SisgoLogo size={34} />
+          ) : (
+            <Image
+              src={logoUrl ?? '/images/logo-white.png'}
+              alt={subtitle ?? 'Logo'}
+              width={110}
+              height={38}
+              className="object-contain"
+              priority
+              unoptimized={!!logoUrl}
+              onError={(e) => { e.currentTarget.style.display = 'none' }}
+            />
+          )}
           {subtitle && (
             <p className="text-xs text-brand-400 mt-1.5 font-medium">{subtitle}</p>
           )}

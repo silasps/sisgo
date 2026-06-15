@@ -5,12 +5,12 @@ import { redirect } from 'next/navigation'
 import { accentCssVars } from '@/lib/accent-colors'
 
 const NAV: { href: string; label: string; icon: string }[] = [
-  { href: '/superadmin', label: 'Visão Geral', icon: '◈' },
-  { href: '/superadmin/bases', label: 'Bases', icon: '🏛' },
-  { href: '/superadmin/supervisao', label: 'Supervisão', icon: '◎' },
-  { href: '/superadmin/inscricoes', label: 'Inscrições', icon: '📋' },
-  { href: '/superadmin/configuracoes', label: 'Configurações', icon: '⚙️' },
-  { href: '/superadmin/dev', label: 'Área Dev', icon: '🛠' },
+  { href: '/superadmin', label: 'Visão Geral', icon: 'dashboard' },
+  { href: '/superadmin/bases', label: 'Bases', icon: 'bases' },
+  { href: '/superadmin/supervisao', label: 'Supervisão', icon: 'supervisao' },
+  { href: '/superadmin/inscricoes', label: 'Inscrições', icon: 'inscricoes' },
+  { href: '/superadmin/configuracoes', label: 'Configurações', icon: 'configuracoes' },
+  { href: '/superadmin/dev', label: 'Área Dev', icon: 'dev' },
 ]
 
 export default async function SuperAdminLayout({ children }: { children: React.ReactNode }) {
@@ -40,7 +40,7 @@ export default async function SuperAdminLayout({ children }: { children: React.R
   return (
     <>
       <style>{`:root{${accentCssVars(accentKey)}}`}</style>
-      <AppShell items={NAV} subtitle="Super Admin" logoUrl={logoUrl}>
+      <AppShell items={NAV} subtitle="Super Admin" logoUrl={logoUrl} sisgoLogo>
         {children}
       </AppShell>
     </>

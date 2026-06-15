@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Fundo circular teal escuro -->
+  <circle cx="50" cy="50" r="50" fill="#15343B"/>
+  <!-- Esfera (anel externo) -->
+  <circle cx="50" cy="50" r="34" stroke="#F5F1E8" stroke-width="2.2" fill="none" opacity="0.3"/>
+  <!-- Anel orbital pontilhado -->
+  <ellipse cx="50" cy="50" rx="32" ry="12" stroke="#F5F1E8" stroke-width="1.8" fill="none" opacity="0.18" stroke-dasharray="4 6"/>
+  <!-- S — arco superior (claro) -->
+  <path d="M33 50 Q33 26 50 26 Q67 26 70 39" stroke="#F5F1E8" stroke-width="7" stroke-linecap="round" fill="none"/>
+  <!-- S — arco inferior (teal) -->
+  <path d="M67 50 Q67 74 50 74 Q33 74 30 61" stroke="#2A9D96" stroke-width="7" stroke-linecap="round" fill="none"/>
+  <!-- Ponte central -->
+  <path d="M33 50 L67 50" stroke="#F5F1E8" stroke-width="3.5" stroke-linecap="round" fill="none" opacity="0.35"/>
+</svg>

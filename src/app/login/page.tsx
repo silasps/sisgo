@@ -2,8 +2,8 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import Image from 'next/image'
 import Link from 'next/link'
+import { SisgoLogo } from '@/components/layout/Logo'
 import { login, register, loginWithGoogle } from './actions'
 
 function LoginPageInner() {
@@ -85,17 +85,9 @@ function LoginPageInner() {
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
           <Link href="/">
-            <Image
-              src="/images/logo-white.png"
-              alt="JOCUM A.T."
-              width={160}
-              height={55}
-              className="object-contain"
-              priority
-              onError={(e) => { e.currentTarget.style.display = 'none' }}
-            />
+            <SisgoLogo size={38} />
           </Link>
-          <p className="text-brand-400 text-xs font-medium tracking-widest uppercase mt-2">
+          <p className="text-brand-400 text-xs font-medium tracking-widest uppercase mt-3">
             Sistema de Gestão
           </p>
         </div>

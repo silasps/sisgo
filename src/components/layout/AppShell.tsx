@@ -12,12 +12,14 @@ export function AppShell({
   items,
   subtitle,
   logoUrl,
+  sisgoLogo,
   className,
   children,
 }: {
   items: NavItem[]
   subtitle?: string
   logoUrl?: string
+  sisgoLogo?: boolean
   className?: string
   children: React.ReactNode
 }) {
@@ -37,6 +39,7 @@ export function AppShell({
           items={items}
           subtitle={subtitle}
           logoUrl={logoUrl}
+          sisgoLogo={sisgoLogo}
           isOpen={open}
           onClose={() => setOpen(false)}
         />
