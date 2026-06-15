@@ -6,6 +6,7 @@ const NAV: { href: string; label: string; icon: string }[] = [
   { href: '/superadmin', label: 'Visão Geral', icon: '◈' },
   { href: '/superadmin/bases', label: 'Bases', icon: '🏛' },
   { href: '/superadmin/supervisao', label: 'Supervisão', icon: '◎' },
+  { href: '/superadmin/inscricoes', label: 'Inscrições', icon: '📋' },
   { href: '/superadmin/dev', label: 'Área Dev', icon: '🛠' },
 ]
 

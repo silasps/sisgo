@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { getEmailQuota, EMAIL_LIMITS } from '@/lib/email/getEmailQuota'
@@ -6,18 +7,24 @@ import { getEmailQuota, EMAIL_LIMITS } from '@/lib/email/getEmailQuota'
 export default async function SuperAdminDashboard() {
   const supabase = await createClient()
 
+  const sb = createAdminClient()
+
   const [
     { count: totalOrgs },
     { count: activeOrgs },
     { count: totalUsers },
     { data: bases },
     quota,
+    { count: pendingPre },
+    { count: pendingStaff },
   ] = await Promise.all([
     supabase.from('organizations').select('*', { count: 'exact', head: true }),
     supabase.from('organizations').select('*', { count: 'exact', head: true }).eq('active', true),
     supabase.from('organization_users').select('*', { count: 'exact', head: true }),
     supabase.from('organizations').select('id, name, slug, city, state, active, created_at').order('name'),
     getEmailQuota(),
+    sb.from('school_interest_forms').select('*', { count: 'exact', head: true }).in('status', ['pendente', 'formulario_enviado', 'em_contato', 'em_analise']),
+    sb.from('staff_applications').select('*', { count: 'exact', head: true }).in('status', ['pendente', 'em_analise']),
   ])
 
   return (
@@ -44,9 +51,38 @@ export default async function SuperAdminDashboard() {
           <StatCard label="Usuários" value={totalUsers ?? 0} icon="👤" />
         </div>
 
+        {/* Inscrições soltas */}
+        {((pendingPre ?? 0) > 0 || (pendingStaff ?? 0) > 0) && (
+          <section>
+            <h2 className="font-semibold text-gray-900 mb-3">Inscrições pendentes</h2>
+            <div className="grid sm:grid-cols-2 gap-3">
+              {(pendingPre ?? 0) > 0 && (
+                <Link href="/superadmin/inscricoes?tab=pre" className="group flex items-center gap-4 bg-white rounded-xl border border-yellow-200 hover:border-yellow-400 p-4 transition-colors">
+                  <div className="w-10 h-10 rounded-xl bg-yellow-50 flex items-center justify-center text-xl flex-shrink-0">📋</div>
+                  <div className="min-w-0">
+                    <p className="text-xl font-bold text-gray-900">{pendingPre ?? 0}</p>
+                    <p className="text-xs text-gray-500">Pré-inscrições pendentes</p>
+                  </div>
+                  <span className="ml-auto text-brand-500 text-sm font-semibold group-hover:translate-x-0.5 transition-transform">→</span>
+                </Link>
+              )}
+              {(pendingStaff ?? 0) > 0 && (
+                <Link href="/superadmin/inscricoes?tab=obreiros" className="group flex items-center gap-4 bg-white rounded-xl border border-blue-200 hover:border-blue-400 p-4 transition-colors">
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-xl flex-shrink-0">👷</div>
+                  <div className="min-w-0">
+                    <p className="text-xl font-bold text-gray-900">{pendingStaff ?? 0}</p>
+                    <p className="text-xs text-gray-500">Candidatos a obreiro</p>
+                  </div>
+                  <span className="ml-auto text-brand-500 text-sm font-semibold group-hover:translate-x-0.5 transition-transform">→</span>
+                </Link>
+              )}
+            </div>
+          </section>
+        )}
+
         {/* E-mails */}
         <section>
-          <h2 className="font-semibold text-gray-900 mb-3">E-mails (Resend free tier)</h2>
+          <h2 className="font-semibold text-gray-900 mb-3">E-mails (Brevo free tier)</h2>
           <div className="grid sm:grid-cols-2 gap-4">
             <EmailQuotaCard
               label="Hoje"
