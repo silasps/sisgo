@@ -67,11 +67,12 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
     .eq('user_id', user.id)
     .eq('active', true)
     .single()
-  const role        = (orgUser?.roles as unknown as { name: string } | null)?.name ?? ''
-  const isManagement = isManagementRole(role)
-  const isLiderEted  = role === 'lider_eted'
+  const role          = (orgUser?.roles as unknown as { name: string } | null)?.name ?? ''
+  const isManagement  = isManagementRole(role)
+  const isLiderEted   = role === 'lider_eted'
+  const isObreiroEted = role === 'obreiro_eted'
 
-  if (!isManagement && !isLiderEted) notFound()
+  if (!isManagement && !isLiderEted && !isObreiroEted) notFound()
 
   const { data: escola } = await supabase
     .from('schools')
@@ -885,6 +886,85 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
               </div>
             )}
           </div>
+
+          {/* Incorporar no site */}
+          {publicUrl && (escola as unknown as { is_public: boolean }).is_public && (
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <h2 className="text-sm font-semibold text-gray-700 mb-3">Incorporar no site</h2>
+              <p className="text-xs text-gray-400 mb-3">
+                Cole o código abaixo no site da base para exibir o formulário de pré-inscrição.
+              </p>
+              <EmbedCodeBox embedPath={`${publicUrl}/embed`} />
+            </div>
+          )}
+
+          {/* Reservas */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <h2 className="text-sm font-semibold text-gray-700 mb-1">Reservas</h2>
+            <p className="text-xs text-gray-400 mb-3">
+              Solicite espaços para atividades ou quartos para professores convidados.
+            </p>
+            <Link href={`/${slug}/reservas`}
+              className="block text-center w-full px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
+              Solicitar / Ver Reservas →
+            </Link>
+          </div>
+        </main>
+      )}
+
+      {/* ════════ VISÃO OBREIRO DE ESCOLA ═══════════════════════════════════════════════ */}
+      {isObreiroEted && (
+        <main className="p-4 md:p-6 space-y-4 max-w-2xl">
+
+          {/* Info da escola */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5 flex items-start justify-between gap-3">
+            <div>
+              <h2 className="font-semibold text-gray-900">{escola.name}</h2>
+              {(escola as unknown as { subtitle: string | null }).subtitle && (
+                <p className="text-sm text-gray-500 mt-1">{(escola as unknown as { subtitle: string | null }).subtitle}</p>
+              )}
+            </div>
+            <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${escola.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+              {escola.active ? 'Ativa' : 'Inativa'}
+            </span>
+          </div>
+
+          {/* Turmas — links rápidos */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <h2 className="text-sm font-semibold text-gray-700 mb-3">Turmas ({turmas?.length ?? 0})</h2>
+            {turmas && turmas.length > 0 ? (
+              <ul className="divide-y divide-gray-100">
+                {turmas.map(t => (
+                  <li key={t.id}>
+                    <Link href={`/${slug}/escolas/${id}/turmas/${t.id}`}
+                      className="flex items-center justify-between py-2.5 hover:text-brand-600 transition-colors group">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900 group-hover:text-brand-700">{t.name}</p>
+                        <p className="text-xs text-gray-400">
+                          {[t.year, t.semester ? `${t.semester}º sem.` : null].filter(Boolean).join(' · ')}
+                          {t.starts_at ? ` · Início: ${new Date(t.starts_at).toLocaleDateString('pt-BR')}` : ''}
+                        </p>
+                      </div>
+                      <span className="text-gray-300 group-hover:text-brand-400">→</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-gray-400">Nenhuma turma cadastrada.</p>
+            )}
+          </div>
+
+          {/* Incorporar no site */}
+          {publicUrl && (escola as unknown as { is_public: boolean }).is_public && (
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <h2 className="text-sm font-semibold text-gray-700 mb-3">Incorporar no site</h2>
+              <p className="text-xs text-gray-400 mb-3">
+                Cole este código no site da base para exibir o formulário de pré-inscrição diretamente.
+              </p>
+              <EmbedCodeBox embedPath={`${publicUrl}/embed`} />
+            </div>
+          )}
 
           {/* Reservas */}
           <div className="bg-white rounded-xl border border-gray-200 p-5">
