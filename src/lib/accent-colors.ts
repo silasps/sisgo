@@ -42,6 +42,11 @@ export const ACCENT_COLORS = {
     hex:   { 400: '#facc15', 500: '#eab308', 600: '#ca8a04' },
     rgb:   { 400: '250 204 21', 500: '234 179 8', 600: '202 138 4' },
   },
+  petroleo: {
+    label: 'Petróleo',
+    hex:   { 400: '#408e8a', 500: '#1d6b67', 600: '#16504d' },
+    rgb:   { 400: '64 142 138', 500: '29 107 103', 600: '22 80 77' },
+  },
 } as const
 
 export type AccentColorKey = keyof typeof ACCENT_COLORS
