@@ -2,10 +2,10 @@
 
 import type { Lang } from '@/lib/i18n/forms'
 
-const OPTIONS: { lang: Lang; label: string }[] = [
-  { lang: 'pt', label: 'PT' },
-  { lang: 'en', label: 'EN' },
-  { lang: 'es', label: 'ES' },
+const OPTIONS: { lang: Lang; label: string; flag: string }[] = [
+  { lang: 'pt', label: 'PT', flag: '🇧🇷' },
+  { lang: 'en', label: 'EN', flag: '🇺🇸' },
+  { lang: 'es', label: 'ES', flag: '🇪🇸' },
 ]
 
 export function LangSwitcher({
@@ -35,7 +35,7 @@ export function LangSwitcher({
                 : 'bg-white text-gray-500 border-gray-200 hover:border-indigo-300 hover:text-indigo-600',
             ].join(' ')}
           >
-            {o.label}
+            <span className="mr-1">{o.flag}</span>{o.label}
           </button>
         ))}
       </div>
