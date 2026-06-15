@@ -1,3 +1,5 @@
+import { createAdminClient } from '@/lib/supabase/admin'
+
 type Params = {
   to: string
   schoolName: string
@@ -6,7 +8,7 @@ type Params = {
 
 export async function sendVerificationEmail({ to, schoolName, verifyUrl }: Params): Promise<{ success: boolean; error?: string }> {
   const apiKey = process.env.BREVO_API_KEY
-  const fromEmail = process.env.BREVO_FROM_EMAIL ?? 'noreply@example.com'
+  const fromEmail = process.env.BREVO_FROM_EMAIL ?? 'noreply@sisgomission.com'
 
   const html = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -67,13 +69,21 @@ export async function sendVerificationEmail({ to, schoolName, verifyUrl }: Param
       }),
     })
 
+    const db = createAdminClient()
+
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      return { success: false, error: (body as { message?: string }).message ?? `HTTP ${res.status}` }
+      const error = (body as { message?: string }).message ?? `HTTP ${res.status}`
+      console.error('[sendVerificationEmail] erro Brevo:', error, '| to:', to)
+      try { await db.from('email_logs').insert({ to_email: to, status: 'failed', error }) } catch { /* log failure não bloqueia */ }
+      return { success: false, error }
     }
 
+    try { await db.from('email_logs').insert({ to_email: to, status: 'sent', error: null }) } catch { /* log failure não bloqueia */ }
     return { success: true }
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : 'Erro desconhecido' }
+    const error = err instanceof Error ? err.message : 'Erro desconhecido'
+    console.error('[sendVerificationEmail] exceção:', error, '| to:', to)
+    return { success: false, error }
   }
 }

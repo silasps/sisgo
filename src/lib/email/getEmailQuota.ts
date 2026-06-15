@@ -1,8 +1,8 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export const EMAIL_LIMITS = {
-  daily: 100,
-  monthly: 3000,
+  daily: 300,
+  monthly: 9000,
 } as const
 
 export type EmailQuota = {

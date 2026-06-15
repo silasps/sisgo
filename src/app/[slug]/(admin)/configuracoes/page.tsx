@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { notFound, redirect } from 'next/navigation'
 import { BrandingForm } from './BrandingForm'
-import { updateAreaCashScopes } from './actions'
+import { updateAreaCashScopes, updateRoleAccumulations } from './actions'
 import { asLooseClient } from '@/lib/supabase/loose-client'
 import { schoolTypeShortLabel } from '@/lib/schools'
 
@@ -10,6 +10,20 @@ type Props = { params: Promise<{ slug: string }> }
 
 const BRANDING_ROLES = ['superadmin', 'lider_base']
 const CASH_SCOPE_ROLES = ['superadmin', 'lider_base']
+const ACCUMULATION_ROLES = ['superadmin', 'lider_base']
+
+const ACCUMULATION_OPTIONS = [
+  { role: 'dh',           label: 'DH',           canAccumulate: ['secretaria', 'hospitalidade', 'cozinha'] },
+  { role: 'secretaria',   label: 'Secretaria',    canAccumulate: ['hospitalidade', 'cozinha'] },
+  { role: 'lider_eted',   label: 'Líder ETED',    canAccumulate: ['secretaria', 'hospitalidade', 'cozinha'] },
+  { role: 'hospitalidade', label: 'Hospitalidade', canAccumulate: ['cozinha'] },
+] as const
+
+const EXTRA_ROLE_LABELS: Record<string, string> = {
+  secretaria: 'Secretaria',
+  hospitalidade: 'Hospitalidade',
+  cozinha: 'Cozinha',
+}
 
 export default async function ConfiguracoesPage({ params }: Props) {
   const { slug } = await params
@@ -20,7 +34,7 @@ export default async function ConfiguracoesPage({ params }: Props) {
 
   const { data: org } = await supabase
     .from('organizations')
-    .select('id, name, slug, email, city, state, logo_url, accent_color')
+    .select('id, name, slug, email, city, state, logo_url, accent_color, role_accumulations')
     .eq('slug', slug)
     .single()
 
@@ -39,6 +53,8 @@ export default async function ConfiguracoesPage({ params }: Props) {
 
   const canBrand = BRANDING_ROLES.includes(roleName)
   const canConfigureCashScopes = CASH_SCOPE_ROLES.includes(roleName)
+  const canConfigureAccumulations = ACCUMULATION_ROLES.includes(roleName)
+  const currentAccumulations = (org?.role_accumulations as Record<string, string[]> | null) ?? {}
 
   const [{ data: schools }, { data: ministries }, { data: cashScopes }] = canConfigureCashScopes
     ? await Promise.all([
@@ -140,6 +156,40 @@ export default async function ConfiguracoesPage({ params }: Props) {
               </button>
             </form>
           </Section>
+        )}
+
+        {canConfigureAccumulations && (
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <h2 className="font-semibold text-gray-900 mb-1">Acúmulo de funções</h2>
+            <p className="text-sm text-gray-500 mb-5">
+              Configure quais funções adicionais uma pessoa cobre nesta base. O acúmulo vale para todos com aquela função.
+            </p>
+            <form action={updateRoleAccumulations.bind(null, org.id, slug)} className="space-y-5">
+              {ACCUMULATION_OPTIONS.map(option => (
+                <div key={option.role} className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                  <p className="text-sm font-semibold text-gray-800 mb-3">
+                    <span className="text-brand-600">{option.label}</span> acumula também:
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    {option.canAccumulate.map(extra => (
+                      <label key={extra} className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 hover:border-brand-300 hover:bg-brand-50/40">
+                        <input
+                          type="checkbox"
+                          name={`acc_${option.role}_${extra}`}
+                          defaultChecked={(currentAccumulations[option.role] ?? []).includes(extra)}
+                          className="h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-400"
+                        />
+                        <span className="text-sm text-gray-700">{EXTRA_ROLE_LABELS[extra]}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              <button className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800">
+                Salvar acúmulo de funções
+              </button>
+            </form>
+          </div>
         )}
 
       </main>

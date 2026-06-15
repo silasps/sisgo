@@ -44,6 +44,29 @@ export async function updateLogoUrl(orgId: string, slug: string, logoUrl: string
   revalidatePath(`/${slug}/configuracoes`)
 }
 
+const ACCUMULABLE_PAIRS: [string, string][] = [
+  ['dh', 'secretaria'], ['dh', 'hospitalidade'], ['dh', 'cozinha'],
+  ['secretaria', 'hospitalidade'], ['secretaria', 'cozinha'],
+  ['lider_eted', 'secretaria'], ['lider_eted', 'hospitalidade'], ['lider_eted', 'cozinha'],
+  ['hospitalidade', 'cozinha'],
+]
+
+export async function updateRoleAccumulations(orgId: string, slug: string, formData: FormData) {
+  const admin = await verifyAccess(orgId)
+  if (!admin) return
+
+  const accumulations: Record<string, string[]> = {}
+  for (const [source, target] of ACCUMULABLE_PAIRS) {
+    if (formData.get(`acc_${source}_${target}`) === 'on') {
+      if (!accumulations[source]) accumulations[source] = []
+      accumulations[source].push(target)
+    }
+  }
+
+  await admin.from('organizations').update({ role_accumulations: accumulations }).eq('id', orgId)
+  revalidatePath(`/${slug}/configuracoes`)
+}
+
 export async function updateAreaCashScopes(orgId: string, slug: string, formData: FormData) {
   const verifiedAdmin = await verifyAccess(orgId)
   if (!verifiedAdmin) return

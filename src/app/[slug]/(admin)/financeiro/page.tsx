@@ -7,7 +7,7 @@ import Link from 'next/link'
 import type { InputHTMLAttributes } from 'react'
 import { getRolePreview } from '@/lib/role-preview'
 import { asLooseClient } from '@/lib/supabase/loose-client'
-import { isGeneralFinanceRole } from '@/lib/auth/permissions'
+import { isGeneralFinanceRole, userHasAnyRole, GENERAL_FINANCE_ROLES } from '@/lib/auth/permissions'
 
 type Props = { params: Promise<{ slug: string }> }
 
@@ -43,20 +43,23 @@ export default async function FinanceiroPage({ params }: Props) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: org } = await supabase.from('organizations').select('id').eq('slug', slug).single()
+  const { data: org } = await supabase.from('organizations').select('id, role_accumulations').eq('slug', slug).single()
   const orgId = org?.id ?? ''
   if (!orgId) notFound()
 
   const { data: orgUsers } = await supabase
-    .from('organization_users').select('organization_id, roles(name)')
+    .from('organization_users').select('organization_id, roles(name), extra_roles')
     .eq('user_id', user.id).eq('active', true)
-  const userOrgRows = (orgUsers ?? []) as unknown as Array<{ organization_id: string | null; roles: { name: string } | null }>
+  const userOrgRows = (orgUsers ?? []) as unknown as Array<{ organization_id: string | null; roles: { name: string } | null; extra_roles?: string[] | null }>
   const superadminRow = userOrgRows.find(r => r.roles?.name === 'superadmin')
   const currentOrgRow = userOrgRows.find(r => r.organization_id === orgId)
   const realRole = superadminRow?.roles?.name ?? currentOrgRow?.roles?.name ?? ''
   const preview = await getRolePreview(realRole)
   const role = preview?.role ?? realRole
-  if (!isGeneralFinanceRole(role)) notFound()
+  const orgAccumulations = (org?.role_accumulations as Record<string, string[]> | null) ?? {}
+  const accumulatedRoles = orgAccumulations[role] ?? []
+  const extraRoles = (currentOrgRow?.extra_roles as string[] | null) ?? []
+  if (!userHasAnyRole([role, ...accumulatedRoles, ...extraRoles], GENERAL_FINANCE_ROLES)) notFound()
   if (realRole !== 'superadmin' && !currentOrgRow) redirect('/login')
 
   const today = new Date()

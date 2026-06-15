@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { confirmMealPayment, createMealConsumers, updateMealSettings } from './actions'
 import { MealConsumerDateForm } from './MealConsumerDateForm'
 import { MealSettingsEditor } from './MealSettingsEditor'
-import { isManagementRole } from '@/lib/auth/permissions'
+import { userHasAnyRole, MANAGEMENT_ROLES, KITCHEN_ROLES, GENERAL_FINANCE_ROLES } from '@/lib/auth/permissions'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -71,30 +71,31 @@ export default async function CozinhaPage({ params, searchParams }: Props) {
 
   const [{ data: { user } }, { data: org }] = await Promise.all([
     supabase.auth.getUser(),
-    supabase.from('organizations').select('id').eq('slug', slug).single(),
+    supabase.from('organizations').select('id, role_accumulations').eq('slug', slug).single(),
   ])
   if (!user || !org) notFound()
 
   const { data: orgUsers } = await supabase
     .from('organization_users')
-    .select('organization_id, roles(name)')
+    .select('organization_id, roles(name), extra_roles')
     .eq('user_id', user.id)
     .eq('active', true)
 
   const rows = (orgUsers ?? []) as unknown as Array<{
     organization_id: string | null
     roles: { name: string } | null
+    extra_roles?: string[] | null
   }>
   const superadminRow = rows.find(row => row.roles?.name === 'superadmin')
   const currentOrgRow = rows.find(row => row.organization_id === org.id)
   const realRole = superadminRow?.roles?.name ?? currentOrgRow?.roles?.name ?? ''
   const preview = await getRolePreview(realRole)
   const role = preview?.role ?? realRole
-  const isManagement = isManagementRole(role)
-  const isSecretaria = role === 'secretaria'
-  const isCozinha = role === 'cozinha'
-  const canView = isManagement || isSecretaria || isCozinha
-  const canManageMeals = isManagement || isSecretaria
+  const orgAccumulations = (org?.role_accumulations as Record<string, string[]> | null) ?? {}
+  const extraRoles = (currentOrgRow?.extra_roles as string[] | null) ?? []
+  const allRoles = [role, ...(orgAccumulations[role] ?? []), ...extraRoles]
+  const canView = userHasAnyRole(allRoles, KITCHEN_ROLES)
+  const canManageMeals = userHasAnyRole(allRoles, GENERAL_FINANCE_ROLES)
   if (!canView) notFound()
 
   const sbAdmin = createAdminClient()

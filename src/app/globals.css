@@ -3,11 +3,11 @@
 @tailwind utilities;
 
 @layer base {
-  /* Valores padrão — sobrescritos pelo layout admin via <style> inline */
+  /* Valores padrão SISGO — sobrescritos pelo layout admin via <style> inline */
   :root {
-    --brand-400: 248 149 71;
-    --brand-500: 244 121 32;
-    --brand-600: 224 94 10;
+    --brand-400: 47 160 155;
+    --brand-500: 29 107 103;
+    --brand-600: 21 80 77;
   }
 
   html {
@@ -22,6 +22,16 @@
   /* Offset para nav fixa nas âncoras */
   [id] {
     scroll-margin-top: 5rem;
+  }
+}
+
+@layer components {
+  .glass-card {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(29, 107, 103, 0.12);
+    box-shadow: 0 4px 32px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   }
 }
 
@@ -44,6 +54,11 @@
   .scrollbar-none::-webkit-scrollbar {
     display: none;
   }
+}
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50%       { opacity: 1;   transform: scale(1.06); }
 }
 
 @keyframes shimmer {

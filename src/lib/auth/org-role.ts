@@ -46,9 +46,22 @@ export async function getCurrentOrganizationRole(
   }
 
   const preview = await getRolePreview(realRole)
+  const displayRole = preview?.role ?? realRole
+
+  const db = createAdminClient()
+  const [{ data: orgData }, { data: orgUserData }] = await Promise.all([
+    db.from('organizations').select('role_accumulations').eq('id', organizationId).single(),
+    db.from('organization_users').select('extra_roles').eq('user_id', userId).eq('organization_id', organizationId).eq('active', true).single(),
+  ])
+  const accumulations = (orgData?.role_accumulations as Record<string, string[]> | null) ?? {}
+  const accumulatedRoles: string[] = accumulations[displayRole] ?? []
+  const extraRoles: string[] = (orgUserData?.extra_roles as string[] | null) ?? []
+
   return {
     realRole,
-    role: preview?.role ?? realRole,
+    role: displayRole,
     preview,
+    accumulatedRoles,
+    extraRoles,
   }
 }

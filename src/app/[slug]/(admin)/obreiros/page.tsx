@@ -18,6 +18,7 @@ type OrgUserRow = {
   active: boolean
   created_at: string
   roles: RoleRow | null
+  extra_roles?: string[] | null
 }
 type StaffProfileRow = {
   id: string
@@ -74,7 +75,7 @@ export default async function ObreirosPage({ params, searchParams }: Props) {
 
   const { data: org } = await supabase
     .from('organizations')
-    .select('id, name')
+    .select('id, name, role_accumulations')
     .eq('slug', slug)
     .single()
 
@@ -104,7 +105,7 @@ export default async function ObreirosPage({ params, searchParams }: Props) {
   const [{ data: orgUsers }, { data: allRoles }, { data: profilesRaw }, { data: authUsersData }, { data: schoolsRaw }, { data: ministriesRaw }] = await Promise.all([
     supabase
       .from('organization_users')
-      .select('id, user_id, active, created_at, roles(id, name, label)')
+      .select('id, user_id, active, created_at, roles(id, name, label), extra_roles')
       .eq('organization_id', org.id)
       .order('created_at', { ascending: false }),
     supabase
@@ -131,6 +132,7 @@ export default async function ObreirosPage({ params, searchParams }: Props) {
       .order('name'),
   ])
 
+  const orgAccumulations = (org?.role_accumulations as Record<string, string[]> | null) ?? {}
   const roles = sortRoles(withRequiredStaffRoles(((allRoles ?? []) as RoleRow[]).filter(r => STAFF_ROLE_ORDER.includes(r.name))))
     .map(role => ({ ...role, label: roleLabel(role) }))
   const schools = (schoolsRaw ?? []) as { id: string; name: string }[]
@@ -141,6 +143,8 @@ export default async function ObreirosPage({ params, searchParams }: Props) {
       .filter(profile => profile.user_id)
       .map(profile => [profile.user_id as string, profile])
   )
+
+  const viewerIsDH = role === 'dh' || realRole === 'superadmin'
 
   const rows = ((orgUsers ?? []) as unknown as OrgUserRow[])
     .filter(row => row.roles && STAFF_ROLE_ORDER.includes(row.roles.name))
@@ -225,6 +229,9 @@ export default async function ObreirosPage({ params, searchParams }: Props) {
                   email={row.email}
                   active={row.active}
                   isCurrentUser={row.user_id === user.id}
+                  accumulatedRoleLabels={(orgAccumulations[row.roles?.name ?? ''] ?? []).map(r => roles.find(role => role.name === r)?.label ?? r)}
+                  currentExtraRoles={(row.extra_roles as string[] | null) ?? []}
+                  viewerIsDH={viewerIsDH}
                 />
               ))}
             </div>

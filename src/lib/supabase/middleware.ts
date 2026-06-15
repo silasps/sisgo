@@ -36,8 +36,48 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  const { data: { session } } = await supabase.auth.getSession()
-  const user = session?.user ?? null
+  let user = null
+  try {
+    // getSession() pode RETORNAR o erro (sem lançar) quando o refresh token
+    // está inválido — por isso verificamos tanto o error retornado quanto o
+    // thrown. O SDK loga internamente via console.error antes de retornar,
+    // então precisamos reagir rápido para limpar os cookies e evitar que server
+    // components nessa mesma requisição tentem reusar o token morto.
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
+    const sessionErrMsg = sessionError?.message ?? ''
+    if (sessionErrMsg.includes('Refresh Token')) {
+      throw sessionError
+    }
+
+    user = session?.user ?? null
+  } catch (error) {
+    // Refresh token inválido/expirado (ex: projeto Supabase resetado em dev).
+    // Limpa os cookies de auth no request E na response: o request.cookies
+    // determina o que os server components enxergam via cookies() nesta mesma
+    // requisição, portanto é necessário limpar em ambos.
+    const message = error instanceof Error ? error.message : String(error)
+    if (message.includes('Refresh Token')) {
+      const authCookieNames = request.cookies
+        .getAll()
+        .filter(c => c.name.startsWith('sb-') && c.name.includes('auth-token'))
+        .map(c => c.name)
+
+      // Reescreve o header Cookie sem os tokens mortos para que cookies() nos
+      // Server Components desta requisição não os enxergue (deletar de
+      // request.cookies não altera o header Cookie subjacente).
+      const newHeaders = new Headers(request.headers)
+      const remaining = request.cookies.getAll()
+        .filter(c => !authCookieNames.includes(c.name))
+        .map(c => `${c.name}=${c.value}`)
+        .join('; ')
+      newHeaders.set('cookie', remaining)
+      supabaseResponse = NextResponse.next({ request: { headers: newHeaders } })
+      for (const name of authCookieNames) supabaseResponse.cookies.delete(name)
+    } else {
+      throw error
+    }
+  }
   const pathname = request.nextUrl.pathname
 
   // Landing page, bases e rotas públicas de base — sempre públicas

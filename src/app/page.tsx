@@ -1,9 +1,41 @@
 import Link from 'next/link'
-import Image from 'next/image'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { CursorGlow } from '@/components/CursorGlow'
+import { RevealBackground } from '@/components/RevealBackground'
 
 type Props = { searchParams: Promise<{ code?: string }> }
+
+function SisgoSymbol({ size = 32 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+      {/* Esfera */}
+      <circle cx="50" cy="50" r="44" stroke="#F5F1E8" strokeWidth="2.5" fill="none" opacity="0.25" />
+      {/* Anel orbital */}
+      <ellipse cx="50" cy="50" rx="42" ry="16" stroke="#F5F1E8" strokeWidth="2" fill="none" opacity="0.15" strokeDasharray="5 7" />
+      {/* S — arco superior */}
+      <path d="M32 50 Q32 22 50 22 Q68 22 72 38" stroke="#F5F1E8" strokeWidth="8" strokeLinecap="round" fill="none" />
+      {/* S — arco inferior */}
+      <path d="M68 50 Q68 78 50 78 Q32 78 28 62" stroke="#1D6B67" strokeWidth="8" strokeLinecap="round" fill="none" />
+      {/* Ponte central */}
+      <path d="M32 50 L68 50" stroke="#F5F1E8" strokeWidth="4" strokeLinecap="round" fill="none" opacity="0.35" />
+    </svg>
+  )
+}
+
+function SisgoWordmark({ size = 32 }: { size?: number }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <SisgoSymbol size={size} />
+      <span
+        className="font-semibold tracking-[0.12em]"
+        style={{ color: '#F5F1E8', fontSize: size * 0.55 }}
+      >
+        SISGO
+      </span>
+    </div>
+  )
+}
 
 export default async function LandingPage({ searchParams }: Props) {
   const { code } = await searchParams
@@ -16,21 +48,34 @@ export default async function LandingPage({ searchParams }: Props) {
     .order('name')
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-white flex flex-col antialiased">
+    <>
+      {/* Força background escuro no body para evitar flash branco */}
+      <style>{`html,body{background:#040c0b}`}</style>
+
+    <div className="min-h-screen text-white flex flex-col antialiased">
+
+      {/* ── Backgrounds fixos (z-0) ── */}
+      <RevealBackground />
+
+
+      {/* Grain overlay */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 z-[9998]"
+        style={{
+          opacity: 0.025,
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+          backgroundSize: '200px',
+        }}
+      />
+
+      {/* ── Todo o conteúdo em z-[1] para ficar ACIMA dos backgrounds fixos ── */}
+      <div className="relative z-[1] flex flex-col flex-1">
 
       {/* ── Navbar ── */}
-      <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-[#09090b]/80 backdrop-blur-xl">
+      <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-[#060a0a]/70 backdrop-blur-xl">
         <nav className="max-w-6xl mx-auto px-5 sm:px-8 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Image
-              src="/images/logo-white.png"
-              alt="SISGO"
-              width={90}
-              height={32}
-              className="object-contain"
-              priority
-            />
-          </div>
+          <SisgoWordmark size={26} />
           <div className="hidden sm:flex items-center gap-6 text-sm text-zinc-400">
             <a href="#funcionalidades" className="hover:text-white transition-colors">Funcionalidades</a>
             <a href="#bases" className="hover:text-white transition-colors">Bases</a>
@@ -39,7 +84,10 @@ export default async function LandingPage({ searchParams }: Props) {
             <Link href="/login" className="px-3 py-1.5 text-sm text-zinc-400 hover:text-white transition-colors font-medium">
               Entrar
             </Link>
-            <Link href="/login?tab=cadastro" className="px-4 py-1.5 bg-white text-zinc-900 text-sm font-semibold rounded-lg hover:bg-zinc-100 transition-colors">
+            <Link
+              href="/login?tab=cadastro"
+              className="px-4 py-1.5 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg transition-colors"
+            >
               Criar conta
             </Link>
           </div>
@@ -47,40 +95,73 @@ export default async function LandingPage({ searchParams }: Props) {
       </header>
 
       {/* ── Hero ── */}
-      <section className="relative overflow-hidden px-5 sm:px-8 pt-20 pb-24 sm:pt-28 sm:pb-32 flex flex-col items-center text-center">
-        {/* glow de fundo */}
-        <div className="pointer-events-none absolute inset-0 flex items-start justify-center">
-          <div className="mt-10 w-[600px] h-[300px] rounded-full bg-brand-500/20 blur-[120px]" />
+      <section className="relative overflow-hidden px-5 sm:px-8 pt-24 pb-28 sm:pt-32 sm:pb-36 flex flex-col items-center text-center">
+        {/* Ambient orbs */}
+        <div className="pointer-events-none absolute inset-0" aria-hidden>
+          <div
+            className="absolute rounded-full"
+            style={{
+              top: '-8%', left: '15%',
+              width: '520px', height: '520px',
+              background: 'radial-gradient(circle, rgba(29,107,103,0.18) 0%, transparent 70%)',
+              filter: 'blur(60px)',
+              animation: 'pulse-slow 7s ease-in-out infinite',
+            }}
+          />
+          <div
+            className="absolute rounded-full"
+            style={{
+              top: '25%', right: '5%',
+              width: '320px', height: '320px',
+              background: 'radial-gradient(circle, rgba(29,107,103,0.10) 0%, transparent 70%)',
+              filter: 'blur(60px)',
+              animation: 'pulse-slow 9s ease-in-out infinite 2s',
+            }}
+          />
+          <div
+            className="absolute rounded-full"
+            style={{
+              bottom: '0', left: '5%',
+              width: '400px', height: '260px',
+              background: 'radial-gradient(circle, rgba(21,52,59,0.35) 0%, transparent 70%)',
+              filter: 'blur(80px)',
+              animation: 'pulse-slow 11s ease-in-out infinite 4s',
+            }}
+          />
         </div>
 
         <div className="relative max-w-4xl">
-          <div className="inline-flex items-center gap-2 border border-white/10 bg-white/5 text-xs text-zinc-400 px-3 py-1.5 rounded-full mb-8 font-medium">
+          <div className="inline-flex items-center gap-2 border border-brand-500/25 bg-brand-500/8 text-xs text-brand-400 px-3 py-1.5 rounded-full mb-8 font-medium backdrop-blur-sm">
             <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-pulse" />
-            Sistema de gestão para organizações missionárias
+            Sistema de gestão para bases missionárias
           </div>
 
           <h1 className="text-4xl sm:text-6xl md:text-7xl font-bold tracking-tight leading-[1.1]">
             Gestão completa.<br />
-            <span className="bg-gradient-to-r from-brand-400 to-brand-300 bg-clip-text text-transparent">
+            <span style={{ background: 'linear-gradient(135deg, rgb(47,160,155) 0%, #5AC4BF 60%, #8ADBD7 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
               Para qualquer base.
             </span>
           </h1>
 
-          <p className="mt-6 text-base sm:text-xl text-zinc-400 max-w-2xl mx-auto leading-relaxed">
+          <p className="mt-5 text-xs sm:text-sm font-medium tracking-[0.18em] uppercase text-brand-400/60">
+            Muitas áreas. Uma operação compartilhada.
+          </p>
+
+          <p className="mt-5 text-base sm:text-lg text-zinc-400 max-w-2xl mx-auto leading-relaxed">
             Centralize pessoas, escolas, obreiros, ministérios, finanças e muito mais
-            em uma plataforma moderna — pensada especificamente para o contexto missionário.
+            em uma plataforma moderna — pensada para o contexto missionário.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-10">
             <Link
               href="/login?tab=cadastro"
-              className="w-full sm:w-auto px-6 py-3 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-xl transition-all text-sm shadow-lg shadow-brand-500/20 hover:shadow-brand-500/30"
+              className="w-full sm:w-auto px-6 py-3 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-xl transition-all text-sm shadow-lg shadow-brand-500/20 hover:shadow-brand-500/30 hover:-translate-y-0.5"
             >
               Começar gratuitamente
             </Link>
             <a
               href="#bases"
-              className="w-full sm:w-auto px-6 py-3 border border-white/10 hover:bg-white/5 text-zinc-300 hover:text-white font-medium rounded-xl transition-all text-sm"
+              className="w-full sm:w-auto px-6 py-3 border border-white/10 hover:border-brand-500/30 hover:bg-brand-500/5 text-zinc-300 hover:text-white font-medium rounded-xl transition-all text-sm"
             >
               Ver bases cadastradas →
             </a>
@@ -89,7 +170,7 @@ export default async function LandingPage({ searchParams }: Props) {
       </section>
 
       {/* ── Stats ── */}
-      <section className="border-y border-white/[0.06] bg-white/[0.02] px-5 sm:px-8 py-10">
+      <section className="border-y border-white/[0.06] bg-white/[0.02] backdrop-blur-sm px-5 sm:px-8 py-10">
         <div className="max-w-4xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-6 text-center">
           {STATS.map(s => (
             <div key={s.label}>
@@ -101,7 +182,7 @@ export default async function LandingPage({ searchParams }: Props) {
       </section>
 
       {/* ── Funcionalidades ── */}
-      <section id="funcionalidades" className="px-5 sm:px-8 py-20 sm:py-28 max-w-6xl mx-auto w-full">
+      <section id="funcionalidades" className="relative px-5 sm:px-8 py-20 sm:py-28 max-w-6xl mx-auto w-full">
         <div className="text-center mb-14">
           <p className="text-xs font-semibold uppercase tracking-widest text-brand-400 mb-3">Funcionalidades</p>
           <h2 className="text-3xl sm:text-4xl font-bold">Tudo que sua base precisa</h2>
@@ -110,40 +191,37 @@ export default async function LandingPage({ searchParams }: Props) {
           </p>
         </div>
 
-        {/* Features destaque — 2 cards grandes */}
         <div className="grid sm:grid-cols-2 gap-4 mb-4">
           {FEATURES_BIG.map(f => (
-            <div key={f.title} className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.03] p-7 hover:bg-white/[0.05] transition-colors">
+            <div key={f.title} className="glass-card relative overflow-hidden rounded-2xl p-7 hover:border-brand-500/30 transition-all duration-300 group">
               <div className="w-10 h-10 rounded-xl bg-brand-500/15 border border-brand-500/20 flex items-center justify-center text-xl mb-5">
                 {f.icon}
               </div>
-              <h3 className="text-lg font-semibold mb-2">{f.title}</h3>
+              <h3 className="text-lg font-semibold mb-2 group-hover:text-brand-400 transition-colors">{f.title}</h3>
               <p className="text-sm text-zinc-400 leading-relaxed">{f.desc}</p>
-              <div className="pointer-events-none absolute bottom-0 right-0 w-32 h-32 bg-brand-500/5 rounded-full blur-2xl" />
+              <div className="pointer-events-none absolute bottom-0 right-0 w-40 h-40 bg-brand-500/5 rounded-full blur-3xl group-hover:bg-brand-500/10 transition-all duration-500" />
             </div>
           ))}
         </div>
 
-        {/* Features grade — 3 cards médios */}
         <div className="grid sm:grid-cols-3 gap-4 mb-4">
           {FEATURES_MID.map(f => (
-            <div key={f.title} className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-6 hover:bg-white/[0.05] transition-colors">
+            <div key={f.title} className="glass-card rounded-2xl p-6 hover:border-brand-500/30 transition-all duration-300 group">
               <p className="text-2xl mb-4">{f.icon}</p>
-              <h3 className="font-semibold mb-1.5">{f.title}</h3>
+              <h3 className="font-semibold mb-1.5 group-hover:text-brand-400 transition-colors">{f.title}</h3>
               <p className="text-xs text-zinc-500 leading-relaxed">{f.desc}</p>
             </div>
           ))}
         </div>
 
-        {/* Features grade — 2 cards */}
         <div className="grid sm:grid-cols-2 gap-4">
           {FEATURES_SMALL.map(f => (
-            <div key={f.title} className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-6 hover:bg-white/[0.05] transition-colors flex items-start gap-4">
-              <div className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center text-lg flex-shrink-0">
+            <div key={f.title} className="glass-card rounded-2xl p-6 hover:border-brand-500/30 transition-all duration-300 flex items-start gap-4 group">
+              <div className="w-9 h-9 rounded-lg bg-brand-500/10 border border-brand-500/15 flex items-center justify-center text-lg flex-shrink-0">
                 {f.icon}
               </div>
               <div>
-                <h3 className="font-semibold text-sm mb-1">{f.title}</h3>
+                <h3 className="font-semibold text-sm mb-1 group-hover:text-brand-400 transition-colors">{f.title}</h3>
                 <p className="text-xs text-zinc-500 leading-relaxed">{f.desc}</p>
               </div>
             </div>
@@ -166,7 +244,7 @@ export default async function LandingPage({ searchParams }: Props) {
                     {i + 1}
                   </div>
                   {i < 2 && (
-                    <div className="hidden sm:block flex-1 h-px border-t border-dashed border-white/10" />
+                    <div className="hidden sm:block flex-1 h-px border-t border-dashed border-brand-500/20" />
                   )}
                 </div>
                 <div>
@@ -195,7 +273,7 @@ export default async function LandingPage({ searchParams }: Props) {
                 <a
                   key={org.id}
                   href={`/${org.slug}`}
-                  className="group flex items-center gap-4 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5 hover:bg-white/[0.06] hover:border-brand-500/30 transition-all duration-200"
+                  className="group glass-card flex items-center gap-4 rounded-2xl p-5 hover:border-brand-500/30 transition-all duration-200 hover:-translate-y-0.5"
                 >
                   {org.logo_url ? (
                     <img src={org.logo_url} alt={org.name} className="w-11 h-11 rounded-xl object-cover bg-white/10 flex-shrink-0" />
@@ -222,27 +300,27 @@ export default async function LandingPage({ searchParams }: Props) {
 
       {/* ── CTA Final ── */}
       <section className="border-t border-white/[0.06] px-5 sm:px-8 py-20 sm:py-28">
-        <div className="max-w-3xl mx-auto text-center relative">
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <div className="w-96 h-40 rounded-full bg-brand-500/10 blur-3xl" />
+        <div className="max-w-3xl mx-auto relative">
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden>
+            <div className="w-[500px] h-56 rounded-full bg-brand-500/10 blur-3xl" />
           </div>
-          <div className="relative">
+          <div className="relative glass-card rounded-3xl p-10 sm:p-16 text-center border-brand-500/20">
             <h2 className="text-3xl sm:text-5xl font-bold mb-5">
               Pronto para modernizar<br className="hidden sm:block" /> sua base?
             </h2>
-            <p className="text-zinc-400 mb-10 text-sm sm:text-base">
+            <p className="text-zinc-400 mb-10 text-sm sm:text-base max-w-md mx-auto">
               Crie sua conta gratuitamente e comece a organizar sua base missionária hoje.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
               <Link
                 href="/login?tab=cadastro"
-                className="w-full sm:w-auto px-8 py-3.5 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-xl transition-all text-sm shadow-lg shadow-brand-500/20"
+                className="w-full sm:w-auto px-8 py-3.5 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-xl transition-all text-sm shadow-lg shadow-brand-500/20 hover:-translate-y-0.5"
               >
                 Criar conta gratuita
               </Link>
               <Link
                 href="/login"
-                className="w-full sm:w-auto px-8 py-3.5 border border-white/10 hover:bg-white/5 text-zinc-300 hover:text-white font-medium rounded-xl transition-all text-sm"
+                className="w-full sm:w-auto px-8 py-3.5 border border-white/10 hover:border-brand-500/30 hover:bg-brand-500/5 text-zinc-300 hover:text-white font-medium rounded-xl transition-all text-sm"
               >
                 Já tenho acesso
               </Link>
@@ -254,15 +332,9 @@ export default async function LandingPage({ searchParams }: Props) {
       {/* ── Footer ── */}
       <footer className="border-t border-white/[0.06] px-5 sm:px-8 py-8">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Image
-              src="/images/logo-white.png"
-              alt="SISGO"
-              width={70}
-              height={25}
-              className="object-contain opacity-60"
-            />
-            <span className="text-xs text-zinc-600">© {new Date().getFullYear()} SISGO. Todos os direitos reservados.</span>
+          <div className="flex items-center gap-3 opacity-60">
+            <SisgoWordmark size={22} />
+            <span className="text-xs text-zinc-600">© {new Date().getFullYear()} Todos os direitos reservados.</span>
           </div>
           <div className="flex items-center gap-5 text-xs text-zinc-600">
             <Link href="/bases" className="hover:text-zinc-400 transition-colors">Bases</Link>
@@ -272,13 +344,15 @@ export default async function LandingPage({ searchParams }: Props) {
         </div>
       </footer>
 
+      </div>{/* fim z-[1] content wrapper */}
     </div>
+    </>
   )
 }
 
 const STATS = [
   { value: 'Multi', label: 'base — uma plataforma' },
-  { value: '10+', label: 'módulos integrados' },
+  { value: '10+',  label: 'módulos integrados' },
   { value: '100%', label: 'contexto missionário' },
   { value: 'Real', label: 'time — sempre atualizado' },
 ]

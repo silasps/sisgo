@@ -1,6 +1,7 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 
 const BLOCKED_ROLE_NAMES = ['superadmin', 'admin_base', 'lider_base']
@@ -169,6 +170,40 @@ export async function createStaffUser(formData: FormData) {
       await admin.from('staff_profiles').insert(payload)
     }
   }
+
+  redirect(`/${slug}/obreiros`)
+}
+
+export async function updateExtraRoles(formData: FormData) {
+  const orgUserId = formData.get('org_user_id') as string
+  const orgId = formData.get('org_id') as string
+  const slug = formData.get('slug') as string
+  const extraRoles = formData.getAll('extra_roles').map(String).filter(Boolean)
+
+  if (!orgUserId || !orgId) return
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+
+  const { data: memberships } = await supabase
+    .from('organization_users')
+    .select('organization_id, roles(name)')
+    .eq('user_id', user.id)
+    .eq('active', true)
+
+  type M = { organization_id: string | null; roles: { name: string } | null }
+  const list = (memberships ?? []) as unknown as M[]
+  const isSuperAdmin = list.some(m => m.roles?.name === 'superadmin')
+  const isDH = list.some(m => m.roles?.name === 'dh' && m.organization_id === orgId)
+  if (!isSuperAdmin && !isDH) return
+
+  const admin = createAdminClient()
+  await admin
+    .from('organization_users')
+    .update({ extra_roles: extraRoles, updated_at: new Date().toISOString() })
+    .eq('id', orgUserId)
+    .eq('organization_id', orgId)
 
   redirect(`/${slug}/obreiros`)
 }

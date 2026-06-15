@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { ChevronDown, X } from 'lucide-react'
-import { changeRole, createStaffUser, toggleActive } from './actions'
+import { changeRole, createStaffUser, toggleActive, updateExtraRoles } from './actions'
 
 type RoleRow = { id: string; name: string; label: string }
 type OptionRow = { id: string; name: string }
@@ -281,11 +281,15 @@ export function ToggleActiveForm({
 export function ObreiroCard({
   orgUserId, userId, currentRoleId, currentRoleName, currentArea, currentRoleTitle,
   roles, schools, ministries, slug, orgId, fullName, email, active, isCurrentUser,
+  accumulatedRoleLabels = [], currentExtraRoles = [], viewerIsDH = false,
 }: {
   orgUserId: string; userId: string; currentRoleId: string; currentRoleName: string
   currentArea?: string | null; currentRoleTitle?: string | null
   roles: RoleRow[]; schools: OptionRow[]; ministries: OptionRow[]
   slug: string; orgId: string; fullName: string; email: string; active: boolean; isCurrentUser: boolean
+  accumulatedRoleLabels?: string[]
+  currentExtraRoles?: string[]
+  viewerIsDH?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [scope, setScope] = useState(scopeForRole(currentRoleName, currentArea))
@@ -326,6 +330,14 @@ export function ObreiroCard({
               {currentRoleTitle && !['voluntário', 'voluntario', 'obreiro'].includes(currentRoleTitle.toLowerCase()) && (
                 <span className="rounded-md border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-500">{currentRoleTitle}</span>
               )}
+              {(accumulatedRoleLabels.length > 0 || currentExtraRoles.length > 0) && (
+                <span className="rounded-md bg-amber-50 border border-amber-100 px-2 py-0.5 text-xs text-amber-700">
+                  +{[
+                    ...accumulatedRoleLabels,
+                    ...currentExtraRoles.map(r => roles.find(role => role.name === r)?.label ?? r),
+                  ].join(', ')}
+                </span>
+              )}
             </div>
           </div>
           <span className={`shrink-0 mt-0.5 rounded-full px-2 py-0.5 text-xs font-medium ${active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
@@ -349,29 +361,60 @@ export function ObreiroCard({
 
       {/* Formulário expandível */}
       {open && (
-        <form action={changeRole} className="border-t border-gray-100 p-4 space-y-3 bg-white">
-          <input type="hidden" name="org_user_id" value={orgUserId} />
-          <input type="hidden" name="user_id" value={userId} />
-          <input type="hidden" name="current_role_id" value={currentRoleId} />
-          <input type="hidden" name="role_id" value={roleId} />
-          <input type="hidden" name="area" value={area} />
-          <input type="hidden" name="role_title" value={roleTitle} />
-          <input type="hidden" name="slug" value={slug} />
-          <input type="hidden" name="org_id" value={orgId} />
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">Área</label>
-              <AreaSelector roles={roles} schools={schools} ministries={ministries} scope={scope} setScope={setScope} />
+        <>
+          <form action={changeRole} className="border-t border-gray-100 p-4 space-y-3 bg-white">
+            <input type="hidden" name="org_user_id" value={orgUserId} />
+            <input type="hidden" name="user_id" value={userId} />
+            <input type="hidden" name="current_role_id" value={currentRoleId} />
+            <input type="hidden" name="role_id" value={roleId} />
+            <input type="hidden" name="area" value={area} />
+            <input type="hidden" name="role_title" value={roleTitle} />
+            <input type="hidden" name="slug" value={slug} />
+            <input type="hidden" name="org_id" value={orgId} />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Área</label>
+                <AreaSelector roles={roles} schools={schools} ministries={ministries} scope={scope} setScope={setScope} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Função</label>
+                <FunctionSelector scope={scope} assignmentRole={assignmentRole} setAssignmentRole={setAssignmentRole} />
+              </div>
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">Função</label>
-              <FunctionSelector scope={scope} assignmentRole={assignmentRole} setAssignmentRole={setAssignmentRole} />
-            </div>
-          </div>
-          <button type="submit" className="w-full rounded-lg bg-brand-500 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600">
-            Salvar alterações
-          </button>
-        </form>
+            <button type="submit" className="w-full rounded-lg bg-brand-500 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600">
+              Salvar alterações
+            </button>
+          </form>
+
+          {viewerIsDH && (
+            <form action={updateExtraRoles} className="border-t border-dashed border-amber-200 bg-amber-50/40 p-4 space-y-3">
+              <input type="hidden" name="org_user_id" value={orgUserId} />
+              <input type="hidden" name="org_id" value={orgId} />
+              <input type="hidden" name="slug" value={slug} />
+              <p className="text-xs font-semibold text-gray-700">Funções adicionais</p>
+              <p className="text-xs text-gray-400 -mt-2">Áreas extras que esta pessoa também cobre individualmente.</p>
+              <div className="flex flex-wrap gap-2">
+                {roles
+                  .filter(r => r.name !== currentRoleName && !['superadmin', 'admin_base', 'lider_base'].includes(r.name))
+                  .map(r => (
+                    <label key={r.name} className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs hover:border-amber-300 hover:bg-amber-50">
+                      <input
+                        type="checkbox"
+                        name="extra_roles"
+                        value={r.name}
+                        defaultChecked={currentExtraRoles.includes(r.name)}
+                        className="h-3.5 w-3.5 rounded border-gray-300 text-amber-500 focus:ring-amber-400"
+                      />
+                      <span className="text-gray-700">{r.label}</span>
+                    </label>
+                  ))}
+              </div>
+              <button type="submit" className="rounded-lg bg-amber-500 hover:bg-amber-600 px-4 py-1.5 text-xs font-semibold text-white transition-colors">
+                Salvar funções adicionais
+              </button>
+            </form>
+          )}
+        </>
       )}
     </div>
   )

@@ -564,6 +564,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         formUrl,
         expiresAt,
         replyTo: escola.contact_email,
+        language: (form as unknown as { language?: string }).language,
         organizationId: (form as unknown as { organization_id: string }).organization_id,
         schoolId: escola.id,
       })

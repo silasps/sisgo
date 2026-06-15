@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { headers } from 'next/headers'
 
 type AuthLikeError = {
   message?: string
@@ -46,6 +47,49 @@ function authErrorMessage(error: AuthLikeError | null | undefined, fallback: str
   }
 
   return fallback
+}
+
+function normalizeSiteUrl(url: string) {
+  const cleanUrl = url.trim().replace(/^['"]|['"]$/g, '')
+  const withProtocol = /^https?:\/\//i.test(cleanUrl) ? cleanUrl : `https://${cleanUrl}`
+
+  try {
+    const parsed = new URL(withProtocol)
+    return parsed.origin
+  } catch {
+    return null
+  }
+}
+
+function isLocalSiteUrl(url: string) {
+  const normalized = normalizeSiteUrl(url)
+  return !!normalized && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(normalized)
+}
+
+async function getSiteUrl() {
+  const hdrs = await headers()
+  const host = hdrs.get('x-forwarded-host') || hdrs.get('host')
+  if (
+    process.env.NEXT_PUBLIC_SITE_URL
+    && (!isLocalSiteUrl(process.env.NEXT_PUBLIC_SITE_URL) || host?.includes('localhost'))
+  ) {
+    const siteUrl = normalizeSiteUrl(process.env.NEXT_PUBLIC_SITE_URL)
+    if (siteUrl) return siteUrl
+  }
+
+  const vercelUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL
+  if (vercelUrl) {
+    const siteUrl = normalizeSiteUrl(vercelUrl)
+    if (siteUrl) return siteUrl
+  }
+
+  if (host) {
+    const proto = hdrs.get('x-forwarded-proto')?.split(',')[0]?.trim() || 'https'
+    const siteUrl = normalizeSiteUrl(`${proto}://${host.split(',')[0].trim()}`)
+    if (siteUrl) return siteUrl
+  }
+
+  return 'http://localhost:3000'
 }
 
 export async function login(formData: FormData) {
@@ -99,8 +143,7 @@ export async function login(formData: FormData) {
 
 export async function loginWithGoogle() {
   const supabase = await createClient()
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL
-    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+  const siteUrl = await getSiteUrl()
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
@@ -108,7 +151,7 @@ export async function loginWithGoogle() {
       skipBrowserRedirect: true,
     },
   })
-  if (error || !data.url) return { error: 'Não foi possível iniciar o login com Google.' }
+  if (error || !data.url) return { error: error?.message || 'Não foi possível iniciar o login com Google.' }
   return { redirectTo: data.url }
 }
 

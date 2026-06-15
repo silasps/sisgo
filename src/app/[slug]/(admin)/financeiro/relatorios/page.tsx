@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/Header'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
-import { isGeneralFinanceRole } from '@/lib/auth/permissions'
+import { userHasAnyRole, GENERAL_FINANCE_ROLES } from '@/lib/auth/permissions'
 
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ year?: string; month?: string }> }
 
@@ -17,15 +17,17 @@ export default async function RelatoriosPage({ params, searchParams }: Props) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: org } = await supabase.from('organizations').select('id').eq('slug', slug).single()
+  const { data: org } = await supabase.from('organizations').select('id, role_accumulations').eq('slug', slug).single()
   if (!org) notFound()
   const orgId = org.id
 
   const { data: orgUser } = await supabase
-    .from('organization_users').select('roles(name)')
+    .from('organization_users').select('roles(name), extra_roles')
     .eq('user_id', user.id).eq('active', true).single()
   const role = (orgUser?.roles as unknown as { name: string } | null)?.name ?? ''
-  if (!isGeneralFinanceRole(role)) notFound()
+  const orgAccumulations = (org?.role_accumulations as Record<string, string[]> | null) ?? {}
+  const extraRoles = (orgUser?.extra_roles as string[] | null) ?? []
+  if (!userHasAnyRole([role, ...(orgAccumulations[role] ?? []), ...extraRoles], GENERAL_FINANCE_ROLES)) notFound()
 
   const today = new Date()
   const year = Number(qYear ?? today.getFullYear())

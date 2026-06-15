@@ -73,7 +73,7 @@ function buildHtml(p: Params): string {
 
 export async function sendApprovalEmail(params: Params): Promise<void> {
   const apiKey = process.env.BREVO_API_KEY
-  const fromEmail = process.env.BREVO_FROM_EMAIL ?? 'noreply@example.com'
+  const fromEmail = process.env.BREVO_FROM_EMAIL ?? 'noreply@sisgomission.com'
   if (!apiKey) return
 
   let status: 'sent' | 'failed' = 'sent'
