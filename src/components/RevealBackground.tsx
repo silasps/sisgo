@@ -15,7 +15,7 @@ const BASE_R        = 160
 const STROKE_STEP   = 10
 const COVERAGE_GOAL = 0.85
 const SAMPLE_GAP    = 4
-const LERP          = 0.12 // 0–1: menor = mais atraso no cursor
+const LERP          = 0.18 // 0–1: menor = mais atraso no cursor
 const FADE_MS       = 1000
 
 export function RevealBackground() {
