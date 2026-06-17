@@ -5,6 +5,7 @@ import { getRolePreview } from '@/lib/role-preview'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { userHasAnyRole, MANUTENCAO_ROLES } from '@/lib/auth/permissions'
+import { AlertTriangle, MapPin } from 'lucide-react'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -167,7 +168,7 @@ export default async function EstoqueManutencaoPage({ params, searchParams }: Pr
       <div className="flex-1 px-4 pb-8 max-w-4xl mx-auto w-full">
 
         {/* KPIs */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4 mb-6 animate-stagger">
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <p className="text-xs text-gray-500 mb-1">Total de itens</p>
             <p className="text-2xl font-bold text-gray-900">{items.length}</p>
@@ -185,7 +186,7 @@ export default async function EstoqueManutencaoPage({ params, searchParams }: Pr
         {/* Alerta estoque baixo */}
         {lowStock.length > 0 && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
-            <p className="text-sm font-semibold text-red-700 mb-2">⚠️ Itens com estoque baixo ou zerado</p>
+            <p className="text-sm font-semibold text-red-700 mb-2"><AlertTriangle className="size-4 inline -mt-0.5" /> Itens com estoque baixo ou zerado</p>
             <ul className="space-y-1">
               {lowStock.map(i => (
                 <li key={i.id} className="text-sm text-red-600">
@@ -283,7 +284,7 @@ export default async function EstoqueManutencaoPage({ params, searchParams }: Pr
                             {item.code && <span className="text-xs text-gray-400 font-mono">{item.code}</span>}
                             {item.category && <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{item.category}</span>}
                           </div>
-                          {item.location && <p className="text-xs text-gray-400 mt-0.5">📍 {item.location}</p>}
+                          {item.location && <p className="text-xs text-gray-400 mt-0.5"><MapPin className="size-3 inline -mt-0.5" /> {item.location}</p>}
                           {item.notes && <p className="text-xs text-gray-400 mt-0.5">{item.notes}</p>}
                         </div>
                         <div className="text-right">

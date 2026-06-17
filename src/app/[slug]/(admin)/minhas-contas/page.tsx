@@ -87,7 +87,7 @@ export default async function MinhasContasPage({ params }: Props) {
         </div>
 
         {/* KPIs */}
-        <section className="grid grid-cols-3 gap-3">
+        <section className="grid grid-cols-3 gap-3 animate-stagger">
           <div className={`rounded-xl border p-4 ${totalOverdue > 0 ? 'bg-red-50 border-red-100' : 'bg-yellow-50 border-yellow-100'}`}>
             <p className={`text-xl font-bold ${totalOverdue > 0 ? 'text-red-600' : 'text-yellow-600'}`}>{fmt(totalPending)}</p>
             <p className="text-xs text-gray-600 mt-0.5">Em aberto</p>

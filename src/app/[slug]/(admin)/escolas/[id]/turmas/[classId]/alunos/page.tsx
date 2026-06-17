@@ -90,7 +90,7 @@ export default async function AlunosTurmaPage({ params }: Props) {
           </Link>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-3 animate-stagger">
           {[
             { label: 'Total', value: total, color: 'text-gray-700' },
             { label: 'Ativos', value: ativos, color: 'text-green-700' },

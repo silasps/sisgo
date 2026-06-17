@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { confirmMealPayment, createMealConsumers, updateMealSettings } from './actions'
 import { MealConsumerDateForm } from './MealConsumerDateForm'
 import { MealSettingsEditor } from './MealSettingsEditor'
-import { userHasAnyRole, MANAGEMENT_ROLES, KITCHEN_ROLES, GENERAL_FINANCE_ROLES } from '@/lib/auth/permissions'
+import { userHasAnyRole, KITCHEN_ROLES, GENERAL_FINANCE_ROLES } from '@/lib/auth/permissions'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -301,7 +301,7 @@ export default async function CozinhaPage({ params, searchParams }: Props) {
           </button>
         </form>
 
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5 animate-stagger">
           <MetricCard label="Consumidores" value={visibleConsumerTotal} />
           <MetricCard label="Porções" value={mealPortionTotal} />
           {mealTotals.slice(0, 3).map(item => (

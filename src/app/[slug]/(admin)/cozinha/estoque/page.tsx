@@ -3,9 +3,10 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/Header'
 import { getRolePreview } from '@/lib/role-preview'
+import { AlertTriangle } from 'lucide-react'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
-import { createStockEntry, createStockItem, createStockMovement, createStockSupplier, removeStockItem, removeStockSupplier, updateStockItem, updateStockSupplier } from '../actions'
+import { createStockEntry, createStockItem, createStockMovement, createStockSupplier, removeStockSupplier, updateStockSupplier } from '../actions'
 import { InternationalPhoneField } from '@/components/ui/InternationalPhoneField'
 import { userHasAnyRole, KITCHEN_ROLES } from '@/lib/auth/permissions'
 
@@ -33,24 +34,6 @@ function fmtDate(date: string | null) {
 
 function optionalText(formData: FormData, key: string) {
   return String(formData.get(key) ?? '').trim() || null
-}
-
-function whatsappDigits(value: string | null | undefined): string | null {
-  const digits = (value ?? '').replace(/\D/g, '')
-  if (digits.length === 10 || digits.length === 11) return `55${digits}`
-  if (digits.length >= 12 && digits.length <= 15) return digits
-  return null
-}
-
-function formatSupplierPhone(country: string | null | undefined, value: string | null | undefined) {
-  const phone = value ?? ''
-  const digits = phone.replace(/\D/g, '')
-  if (!digits) return null
-  if ((country ?? 'BR') === 'BR') {
-    if (digits.length === 11) return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`
-    if (digits.length === 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`
-  }
-  return phone
 }
 
 export default async function EstoqueCozinhaPage({ params, searchParams }: Props) {
@@ -147,34 +130,6 @@ export default async function EstoqueCozinhaPage({ params, searchParams }: Props
     redirect(`/${slug}/cozinha/estoque?tab=estoque&msg=estoque_criado`)
   }
 
-  const handleUpdateStockItem = async (formData: FormData) => {
-    'use server'
-    const name = String(formData.get('name') ?? '').trim()
-    if (!name) return
-    await updateStockItem({
-      id: String(formData.get('item_id') ?? ''),
-      organizationId: org.id,
-      code: normalizeCode(String(formData.get('code') ?? name)),
-      name,
-      category: String(formData.get('category') ?? '').trim() || null,
-      unit: String(formData.get('unit') ?? 'un').trim() || 'un',
-      minQuantity: Number(formData.get('min_quantity') ?? 0),
-      defaultLocation: String(formData.get('default_location') ?? '').trim() || null,
-      critical: formData.get('critical') === 'on',
-      notes: String(formData.get('notes') ?? '').trim() || null,
-    })
-    redirect(`/${slug}/cozinha/estoque?tab=estoque&q=${encodeURIComponent(q)}&msg=item_atualizado`)
-  }
-
-  const handleRemoveStockItem = async (formData: FormData) => {
-    'use server'
-    await removeStockItem({
-      id: String(formData.get('item_id') ?? ''),
-      organizationId: org.id,
-    })
-    redirect(`/${slug}/cozinha/estoque?tab=estoque&q=${encodeURIComponent(q)}&msg=estoque_removido`)
-  }
-
   const handleCreateStockEntry = async (formData: FormData) => {
     'use server'
     await createStockEntry({
@@ -267,7 +222,6 @@ export default async function EstoqueCozinhaPage({ params, searchParams }: Props
 
   // Derived data
   const criticalItems = items.filter(item => item.critical && Number(item.quantity ?? 0) <= Number(item.min_quantity ?? 0))
-  const lowItems = items.filter(item => !item.critical && Number(item.quantity ?? 0) <= Number(item.min_quantity ?? 0))
   const in7days = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]
   const expiring7 = (lots ?? []).filter(l => l.expiration_date && l.expiration_date <= in7days)
   const expiring30 = expiringLots.filter(l => l.expiration_date && l.expiration_date > in7days)
@@ -312,7 +266,7 @@ export default async function EstoqueCozinhaPage({ params, searchParams }: Props
         {/* ── Alertas ───────────────────────────────────────────────── */}
         {(criticalItems.length > 0 || expiring7.length > 0) && (
           <section className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-2">
-            <p className="text-sm font-semibold text-red-700">⚠ Atenção imediata</p>
+            <p className="text-sm font-semibold text-red-700 flex items-center gap-1.5"><AlertTriangle className="size-4" /> Atenção imediata</p>
             {criticalItems.map(i => (
               <p key={i.id} className="text-xs text-red-600">
                 <span className="font-medium">{i.name}</span> — estoque crítico: {Number(i.quantity ?? 0).toLocaleString('pt-BR')} {i.unit} (mín: {Number(i.min_quantity ?? 0).toLocaleString('pt-BR')})

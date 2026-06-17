@@ -27,7 +27,7 @@ export function ContasPagarKpiCards({ totalOverdue, totalMonth, totalPaid, overd
 
   return (
     <>
-      <section className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      <section className="grid grid-cols-2 sm:grid-cols-3 gap-3 animate-stagger">
         {kpis.map(k => (
           <button key={k.type} onClick={() => setOpen(k.type)}
             className={`${k.bg} border ${k.border} rounded-xl p-4 text-left w-full cursor-pointer transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0`}>

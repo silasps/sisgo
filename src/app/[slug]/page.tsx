@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { SuperAdminContextBar } from '@/components/layout/SuperAdminContextBar'
 import { notFound } from 'next/navigation'
 import { schoolTypeShortLabel } from '@/lib/schools'
+import { BookOpen } from 'lucide-react'
 
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ preview?: string }> }
 
@@ -77,7 +78,7 @@ export default async function PublicBasePage({ params, searchParams }: Props) {
         <p className="text-gray-500 mb-8 sm:mb-10 text-sm sm:text-base">Encontre a escola certa para o seu chamado.</p>
 
         {schools && schools.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-stagger">
             {schools.map((school) => (
               <a
                 key={school.id}
@@ -92,8 +93,8 @@ export default async function PublicBasePage({ params, searchParams }: Props) {
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-4xl bg-gradient-to-br from-brand-900 to-dark-900">
-                      📚
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-brand-900 to-dark-900">
+                      <BookOpen className="size-10 text-white/40" />
                     </div>
                   )}
                 </div>
@@ -116,7 +117,7 @@ export default async function PublicBasePage({ params, searchParams }: Props) {
           </div>
         ) : (
           <div className="text-center py-16 text-gray-400">
-            <p className="text-5xl mb-4">📚</p>
+            <BookOpen className="size-12 mx-auto mb-4 text-gray-300" />
             <p>Nenhuma escola disponível no momento.</p>
           </div>
         )}

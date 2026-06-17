@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { notFound } from 'next/navigation'
 import { FormularioInscricao } from './FormularioInscricao'
+import { CheckCircle2 } from 'lucide-react'
 
 type Props = { params: Promise<{ slug: string; token: string }> }
 
@@ -49,7 +50,7 @@ export default async function FormularioPage({ params }: Props) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
         <div className="bg-white rounded-2xl shadow p-10 max-w-md text-center">
-          <p className="text-4xl mb-4">✅</p>
+          <CheckCircle2 className="size-12 mx-auto mb-4 text-green-500" />
           <h1 className="text-xl font-bold text-gray-900 mb-2">Formulário já enviado</h1>
           <p className="text-gray-500 text-sm">
             Seu formulário já foi enviado e está em análise. A equipe entrará em contato em breve.

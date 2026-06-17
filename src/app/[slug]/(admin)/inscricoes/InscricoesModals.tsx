@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Modal } from '@/components/ui/Modal'
 import { gerarLinkReferencia } from '@/app/[slug]/formulario/[token]/actions'
+import { Link as LinkIcon, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 
 type ClassOption = { id: string; school_id: string; name: string; starts_at: string | null; schoolName: string | null }
@@ -313,7 +314,7 @@ export function LinksReferenciaAdminButton({
               <p className="text-xs font-semibold text-gray-700">{label}</p>
               <button onClick={() => gerar(tipo)} disabled={loading === tipo}
                 className={`w-full py-2.5 px-4 ${btnClass} disabled:opacity-60 text-white font-semibold rounded-xl transition-colors text-sm`}>
-                {loading === tipo ? 'Gerando…' : links[tipo] ? '↻ Novo link' : '🔗 Gerar link'}
+                {loading === tipo ? 'Gerando…' : links[tipo] ? <><RefreshCw className="size-3 inline -mt-0.5" /> Novo link</> : <><LinkIcon className="size-3 inline -mt-0.5" /> Gerar link</>}
               </button>
               {links[tipo] && (
                 <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">

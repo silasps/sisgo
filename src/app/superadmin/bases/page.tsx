@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
+import { Landmark } from 'lucide-react'
 
 export default async function BasesPage() {
   const supabase = await createClient()
@@ -26,7 +27,7 @@ export default async function BasesPage() {
       <main className="p-4 md:p-6">
         {!bases?.length ? (
           <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
-            <p className="text-2xl mb-2">🏛</p>
+            <Landmark className="size-8 mx-auto mb-2 text-gray-300" />
             <p className="text-gray-500 text-sm mb-4">Nenhuma base cadastrada ainda.</p>
             <Link
               href="/superadmin/bases/nova"

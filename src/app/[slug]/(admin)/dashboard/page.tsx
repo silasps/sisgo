@@ -1,10 +1,18 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/Header'
-import { DonutChart } from '@/components/ui/DonutChart'
+import { AnimatedDonutChart } from '@/components/ui/AnimatedDonutChart'
+import { FinancialMiniChart } from '@/components/ui/FinancialMiniChart'
+import { AnimatedNumber } from '@/components/ui/AnimatedNumber'
 import Link from 'next/link'
 import { getRolePreview } from '@/lib/role-preview'
 import { isManagementRole } from '@/lib/auth/permissions'
+import type { LucideIcon } from 'lucide-react'
+import {
+  Users, Briefcase, GraduationCap, BookOpen, Music, Home,
+  CalendarDays, AlertTriangle, ClipboardList, CheckCircle2,
+  User, Wallet, LayoutDashboard,
+} from 'lucide-react'
 
 type Props = { params: Promise<{ slug: string }> }
 
@@ -77,12 +85,12 @@ export default async function BaseDashboard({ params }: Props) {
       <>
         <Header title="Dashboard" />
         <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <StatCard label="Reservas" value={myReservations ?? 0} icon="🏠" href={`/${slug}/reservas`} color="orange" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 animate-stagger">
+            <StatCard label="Reservas" value={myReservations ?? 0} icon={Home} href={`/${slug}/reservas`} color="orange" />
           </div>
 
           <SectionCard title="Minha visão" href={`/${slug}/reservas`} linkLabel="Ver reservas">
-            <EmptyState icon="👤" label="Acesso restrito às suas próprias solicitações" />
+            <EmptyState icon={User} label="Acesso restrito às suas próprias solicitações" />
           </SectionCard>
         </main>
       </>
@@ -137,15 +145,15 @@ export default async function BaseDashboard({ params }: Props) {
       <>
         <Header title="Dashboard" />
         <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <StatCard label="Quartos pendentes" value={pendingRooms ?? 0} icon="🏠" href={`/${slug}/reservas`} color="orange" />
-            <StatCard label="Hospedagens do mês" value={approvedRooms ?? 0} icon="📅" href={`/${slug}/reservas?tab=quartos`} color="green" />
-            <StatCard label="Solicitações" value={serviceRequests ?? 0} icon="⚠" href={`/${slug}/pendentes`} color="pink" />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 animate-stagger">
+            <StatCard label="Quartos pendentes" value={pendingRooms ?? 0} icon={Home} href={`/${slug}/reservas`} color="orange" />
+            <StatCard label="Hospedagens do mês" value={approvedRooms ?? 0} icon={CalendarDays} href={`/${slug}/reservas?tab=quartos`} color="green" />
+            <StatCard label="Solicitações" value={serviceRequests ?? 0} icon={AlertTriangle} href={`/${slug}/pendentes`} color="pink" />
           </div>
 
           <SectionCard title="Reservas de quarto recentes" href={`/${slug}/reservas`} linkLabel="Ver reservas">
             {!latestRooms || latestRooms.length === 0 ? (
-              <EmptyState icon="🏠" label="Nenhuma reserva de quarto encontrada" />
+              <EmptyState icon={Home} label="Nenhuma reserva de quarto encontrada" />
             ) : (
               <div className="divide-y divide-gray-100">
                 {latestRooms.map(room => (
@@ -198,13 +206,13 @@ export default async function BaseDashboard({ params }: Props) {
       <>
         <Header title="Dashboard" />
         <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <StatCard label={isLiderMinisterio ? 'Pedidos ao DH' : 'Minhas solicitações'} value={pendingRequests ?? 0} icon="⚠" href={`/${slug}/ministerios`} color="pink" />
-            <StatCard label="Reservas" value={myReservations ?? 0} icon="🏠" href={`/${slug}/reservas`} color="orange" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 animate-stagger">
+            <StatCard label={isLiderMinisterio ? 'Pedidos ao DH' : 'Minhas solicitações'} value={pendingRequests ?? 0} icon={AlertTriangle} href={`/${slug}/ministerios`} color="pink" />
+            <StatCard label="Reservas" value={myReservations ?? 0} icon={Home} href={`/${slug}/reservas`} color="orange" />
           </div>
 
           <SectionCard title={isLiderMinisterio ? 'Administração do ministério' : 'Minha atuação'} href={`/${slug}/ministerios`} linkLabel="Ver ministério">
-            <EmptyState icon="🎵" label={ministry?.name ? `Escopo: ${ministry.name}` : 'Acesso restrito às solicitações da sua atuação'} />
+            <EmptyState icon={Music} label={ministry?.name ? `Escopo: ${ministry.name}` : 'Acesso restrito às solicitações da sua atuação'} />
           </SectionCard>
         </main>
       </>
@@ -228,8 +236,8 @@ export default async function BaseDashboard({ params }: Props) {
       <>
         <Header title="Dashboard" />
         <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <StatCard label="Solicitações da área" value={serviceRequests ?? 0} icon="⚠" href={`/${slug}/pendentes`} color="pink" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 animate-stagger">
+            <StatCard label="Solicitações da área" value={serviceRequests ?? 0} icon={AlertTriangle} href={`/${slug}/pendentes`} color="pink" />
           </div>
 
           <SectionCard
@@ -238,7 +246,7 @@ export default async function BaseDashboard({ params }: Props) {
             linkLabel={isCozinha ? 'Abrir cozinha' : undefined}
           >
             <EmptyState
-              icon="◈"
+              icon={LayoutDashboard}
               label={scopedDepartments[0] === 'no-match'
                 ? 'Nenhum departamento foi vinculado a este papel ainda'
                 : `Escopo: ${scopedDepartments.join(', ')}`}
@@ -279,15 +287,15 @@ export default async function BaseDashboard({ params }: Props) {
       <>
         <Header title="Dashboard" />
         <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <StatCard label="Turmas ativas" value={classCount ?? 0} icon="📚" href={`/${slug}/escolas`} color="orange" />
-            <StatCard label="Pré-inscrições" value={pendingInterests ?? 0} icon="📋" href={`/${slug}/inscricoes`} color="blue" />
-            <StatCard label="Inscrições em análise" value={pendingStudentApps ?? 0} icon="🎓" href={`/${slug}/inscricoes`} color="purple" />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 animate-stagger">
+            <StatCard label="Turmas ativas" value={classCount ?? 0} icon={BookOpen} href={`/${slug}/escolas`} color="orange" />
+            <StatCard label="Pré-inscrições" value={pendingInterests ?? 0} icon={ClipboardList} href={`/${slug}/inscricoes`} color="blue" />
+            <StatCard label="Inscrições em análise" value={pendingStudentApps ?? 0} icon={GraduationCap} href={`/${slug}/inscricoes`} color="purple" />
           </div>
 
           <SectionCard title="Turmas da sua escola" href={`/${slug}/escolas`} linkLabel="Ver escolas">
             {!activeClasses || activeClasses.length === 0 ? (
-              <EmptyState icon="📚" label="Nenhuma turma ativa na sua escola" />
+              <EmptyState icon={BookOpen} label="Nenhuma turma ativa na sua escola" />
             ) : (
               <div className="divide-y divide-gray-100">
                 {activeClasses.map((c) => {
@@ -326,7 +334,7 @@ export default async function BaseDashboard({ params }: Props) {
         <Header title="Dashboard" />
         <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
           <SectionCard title="Minha área">
-            <EmptyState icon="◈" label="Nenhum painel específico configurado para este perfil" />
+            <EmptyState icon={LayoutDashboard} label="Nenhum painel específico configurado para este perfil" />
           </SectionCard>
         </main>
       </>
@@ -363,11 +371,14 @@ export default async function BaseDashboard({ params }: Props) {
       .gte('ends_at', today)
       .order('starts_at', { ascending: true })
       .limit(5),
-    supabase
-      .from('financial_transactions')
-      .select('amount, type, status')
-      .eq('organization_id', orgId)
-      .gte('date', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]),
+    (() => {
+      const d = new Date(); d.setMonth(d.getMonth() - 5)
+      return supabase
+        .from('financial_transactions')
+        .select('amount, type, date')
+        .eq('organization_id', orgId)
+        .gte('date', new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0])
+    })(),
   ])
 
   // ── Presença atual ─────────────────────────────────────────
@@ -522,13 +533,31 @@ export default async function BaseDashboard({ params }: Props) {
   const combinedSegments = [...interestSegments, ...personSegments]
 
   // ── Financial summary ───────────────────────────────────────
-  type Lancamento = { amount: number; type: string; status: string }
+  type Lancamento = { amount: number; type: string; date: string }
   const lancamentos: Lancamento[] = financeiro ?? []
-  const receitas = lancamentos.filter(l => l.type === 'income').reduce((s, l) => s + (l.amount ?? 0), 0)
-  const despesas = lancamentos.filter(l => l.type === 'expense').reduce((s, l) => s + (l.amount ?? 0), 0)
+  const curMonthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
+  const curMonthLanc = lancamentos.filter(l => l.date >= curMonthStart)
+  const receitas = curMonthLanc.filter(l => l.type === 'income').reduce((s, l) => s + (l.amount ?? 0), 0)
+  const despesas = curMonthLanc.filter(l => l.type === 'expense').reduce((s, l) => s + (l.amount ?? 0), 0)
   const saldo = receitas - despesas
   const temFinanceiro = lancamentos.length > 0
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+
+  // Dados mensais para o gráfico de barras (últimos 6 meses)
+  const MONTH_NAMES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+  const financeByMonth: { month: string; income: number; expense: number }[] = []
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(); d.setMonth(d.getMonth() - i)
+    const y = d.getFullYear(), m = d.getMonth()
+    const start = `${y}-${String(m + 1).padStart(2, '0')}-01`
+    const nextM = m === 11 ? `${y + 1}-01-01` : `${y}-${String(m + 2).padStart(2, '0')}-01`
+    const monthLanc = lancamentos.filter(l => l.date >= start && l.date < nextM)
+    financeByMonth.push({
+      month: MONTH_NAMES[m],
+      income: monthLanc.filter(l => l.type === 'income').reduce((s, l) => s + (l.amount ?? 0), 0),
+      expense: monthLanc.filter(l => l.type === 'expense').reduce((s, l) => s + (l.amount ?? 0), 0),
+    })
+  }
 
   const totalPending = (pendingInterests ?? 0) + (pendingStaffApps ?? 0) + (pendingStudentApps ?? 0)
 
@@ -543,12 +572,12 @@ export default async function BaseDashboard({ params }: Props) {
       <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
 
         {/* ── Stat Cards ─────────────────────────────── */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          <StatCard label="Pessoas" value={peopleCount ?? 0} icon="👥" href={`/${slug}/pessoas`} color="blue" />
-          <StatCard label="Obreiros" value={staffCount ?? 0} icon="⛪" href={`/${slug}/obreiros`} color="green" />
-          <StatCard label="Alunos" value={studentCount ?? 0} icon="🎓" href={`/${slug}/pessoas`} color="purple" />
-          <StatCard label="Escolas" value={schoolCount ?? 0} icon="📚" href={`/${slug}/escolas`} color="orange" />
-          <StatCard label="Ministérios" value={ministryCount ?? 0} icon="🎵" href={`/${slug}/ministerios`} color="pink" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 animate-stagger">
+          <StatCard label="Pessoas" value={peopleCount ?? 0} icon={Users} href={`/${slug}/pessoas`} color="blue" />
+          <StatCard label="Obreiros" value={staffCount ?? 0} icon={Briefcase} href={`/${slug}/obreiros`} color="green" />
+          <StatCard label="Alunos" value={studentCount ?? 0} icon={GraduationCap} href={`/${slug}/pessoas`} color="purple" />
+          <StatCard label="Escolas" value={schoolCount ?? 0} icon={BookOpen} href={`/${slug}/escolas`} color="orange" />
+          <StatCard label="Ministérios" value={ministryCount ?? 0} icon={Music} href={`/${slug}/ministerios`} color="pink" />
         </div>
 
         {/* ── Alerta de pendências ────────────────────── */}
@@ -557,7 +586,7 @@ export default async function BaseDashboard({ params }: Props) {
             href={`/${slug}/pendentes`}
             className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 hover:bg-amber-100 transition-colors"
           >
-            <span className="text-xl">⚠️</span>
+            <AlertTriangle className="size-5 text-amber-500 flex-shrink-0" />
             <div className="flex-1">
               <p className="text-sm font-semibold text-amber-800">
                 {totalPending} {totalPending === 1 ? 'item pendente' : 'itens pendentes'} aguardando sua atenção
@@ -580,17 +609,17 @@ export default async function BaseDashboard({ params }: Props) {
           {/* Pendências detalhadas */}
           <SectionCard title="Pendências" badge={totalPending} href={`/${slug}/pendentes`} linkLabel="Ver todas">
             {totalPending === 0 ? (
-              <EmptyState icon="✅" label="Nenhuma pendência" />
+              <EmptyState icon={CheckCircle2} label="Nenhuma pendência" />
             ) : (
               <div className="space-y-1">
                 {(pendingInterests ?? 0) > 0 && (
-                  <PendingRow icon="📋" label="Interesses de inscrição" count={pendingInterests ?? 0} href={`/${slug}/inscricoes`} />
+                  <PendingRow icon={ClipboardList} label="Interesses de inscrição" count={pendingInterests ?? 0} href={`/${slug}/inscricoes`} />
                 )}
                 {(pendingStaffApps ?? 0) > 0 && (
-                  <PendingRow icon="⛪" label="Candidaturas de obreiro" count={pendingStaffApps ?? 0} href={`/${slug}/pessoas`} />
+                  <PendingRow icon={Briefcase} label="Candidaturas de obreiro" count={pendingStaffApps ?? 0} href={`/${slug}/pessoas`} />
                 )}
                 {(pendingStudentApps ?? 0) > 0 && (
-                  <PendingRow icon="🎓" label="Inscrições de escola" count={pendingStudentApps ?? 0} href={`/${slug}/inscricoes`} />
+                  <PendingRow icon={GraduationCap} label="Inscrições de escola" count={pendingStudentApps ?? 0} href={`/${slug}/inscricoes`} />
                 )}
               </div>
             )}
@@ -599,7 +628,7 @@ export default async function BaseDashboard({ params }: Props) {
           {/* Turmas ativas */}
           <SectionCard title="Turmas ativas" href={`/${slug}/escolas`} linkLabel="Ver escolas">
             {!activeClasses || activeClasses.length === 0 ? (
-              <EmptyState icon="📚" label="Nenhuma turma ativa" />
+              <EmptyState icon={BookOpen} label="Nenhuma turma ativa" />
             ) : (
               <div className="divide-y divide-gray-100">
                 {activeClasses.map((c) => {
@@ -631,7 +660,7 @@ export default async function BaseDashboard({ params }: Props) {
           {/* Na base agora */}
           <SectionCard title="Na base agora" badge={presentNow.length} href={`/${slug}/presenca`} linkLabel="Ver presença">
             {presentNow.length === 0 ? (
-              <EmptyState icon="🏠" label="Ninguém registrado na base" />
+              <EmptyState icon={Home} label="Ninguém registrado na base" />
             ) : (
               <div className="flex flex-wrap gap-2">
                 {presentNow.map((p, i) => {
@@ -658,7 +687,7 @@ export default async function BaseDashboard({ params }: Props) {
             linkLabel="Ver tudo"
           >
             {!temFinanceiro ? (
-              <EmptyState icon="💰" label="Nenhum lançamento neste mês" />
+              <EmptyState icon={Wallet} label="Nenhum lançamento neste mês" />
             ) : (
               <div className="space-y-3">
                 <div className="flex items-center justify-between p-2.5 rounded-lg bg-green-50">
@@ -688,22 +717,36 @@ export default async function BaseDashboard({ params }: Props) {
 
         </div>
 
-        {/* ── Gráfico de pessoas ─────────────────────── */}
-        <SectionCard
-          title="Gerenciamento de pessoas"
-          href={`/${slug}/pessoas`}
-          linkLabel="Ver pessoas"
-        >
-          <p className="text-xs text-gray-400 mb-4">
-            Escopo: <span className="font-medium text-gray-600">{chartScope}</span>
-            {' · '}inclui pré-inscrições e cadastrados
-          </p>
-          {combinedSegments.every(s => s.value === 0) ? (
-            <EmptyState icon="👥" label="Nenhuma pessoa registrada" />
-          ) : (
-            <DonutChart segments={combinedSegments} title="pessoas" />
-          )}
-        </SectionCard>
+        {/* ── Gráficos ────────────────────────────────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <SectionCard
+            title="Gerenciamento de pessoas"
+            href={`/${slug}/pessoas`}
+            linkLabel="Ver pessoas"
+          >
+            <p className="text-xs text-gray-400 mb-4">
+              Escopo: <span className="font-medium text-gray-600">{chartScope}</span>
+              {' · '}inclui pré-inscrições e cadastrados
+            </p>
+            {combinedSegments.every(s => s.value === 0) ? (
+              <EmptyState icon={Users} label="Nenhuma pessoa registrada" />
+            ) : (
+              <AnimatedDonutChart segments={combinedSegments} title="pessoas" />
+            )}
+          </SectionCard>
+
+          <SectionCard
+            title="Financeiro — últimos 6 meses"
+            href={`/${slug}/financeiro`}
+            linkLabel="Ver detalhes"
+          >
+            {financeByMonth.every(m => m.income === 0 && m.expense === 0) ? (
+              <EmptyState icon={Wallet} label="Nenhum lançamento nos últimos 6 meses" />
+            ) : (
+              <FinancialMiniChart data={financeByMonth} />
+            )}
+          </SectionCard>
+        </div>
 
       </main>
     </>
@@ -720,14 +763,14 @@ const colorMap = {
   pink:   { bg: 'bg-pink-50',    icon: 'text-pink-500',   num: 'text-pink-700',   label: 'text-pink-500'   },
 }
 
-function StatCard({ label, value, icon, href, color }: {
-  label: string; value: number; icon: string; href: string; color: keyof typeof colorMap
+function StatCard({ label, value, icon: Icon, href, color }: {
+  label: string; value: number; icon: LucideIcon; href: string; color: keyof typeof colorMap
 }) {
   const c = colorMap[color]
   return (
     <Link href={href} className={`${c.bg} rounded-xl p-4 flex flex-col gap-2 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm`}>
-      <span className={`text-2xl leading-none ${c.icon}`}>{icon}</span>
-      <p className={`text-3xl font-bold leading-none ${c.num}`}>{value.toLocaleString('pt-BR')}</p>
+      <Icon className={`size-6 ${c.icon}`} />
+      <p className={`text-3xl font-bold leading-none ${c.num}`}><AnimatedNumber value={value} /></p>
       <p className={`text-xs font-semibold uppercase tracking-wide ${c.label}`}>{label}</p>
     </Link>
   )
@@ -754,11 +797,11 @@ function SectionCard({ title, children, badge, href, linkLabel }: {
   )
 }
 
-function PendingRow({ icon, label, count, href }: { icon: string; label: string; count: number; href: string }) {
+function PendingRow({ icon: Icon, label, count, href }: { icon: LucideIcon; label: string; count: number; href: string }) {
   return (
     <Link href={href} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-red-50 transition-colors group">
       <div className="flex items-center gap-2">
-        <span className="text-base">{icon}</span>
+        <Icon className="size-4 text-gray-500 group-hover:text-red-600 transition-colors" />
         <span className="text-sm text-gray-700 group-hover:text-red-700 transition-colors">{label}</span>
       </div>
       <span className="text-xs font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded-full">{count}</span>
@@ -766,10 +809,10 @@ function PendingRow({ icon, label, count, href }: { icon: string; label: string;
   )
 }
 
-function EmptyState({ icon, label }: { icon: string; label: string }) {
+function EmptyState({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-6 gap-2 text-gray-400">
-      <span className="text-2xl opacity-50">{icon}</span>
+      <Icon className="size-8 opacity-40" />
       <p className="text-sm">{label}</p>
     </div>
   )

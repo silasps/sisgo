@@ -4,7 +4,8 @@ import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { SisgoLogo } from '@/components/layout/Logo'
-import { login, register, loginWithGoogle } from './actions'
+import { createClient } from '@/lib/supabase/client'
+import { getLoginRedirect, register, loginWithGoogle } from './actions'
 
 function LoginPageInner() {
   const params = useSearchParams()
@@ -29,19 +30,50 @@ function LoginPageInner() {
     if (params.get('tab') === 'cadastro') setTab('cadastro')
   }, [params])
 
+  useEffect(() => {
+    let active = true
+
+    async function redirectAuthenticatedUser() {
+      const { data: { user } } = await createClient().auth.getUser()
+      if (!active || !user) return
+
+      const result = await getLoginRedirect()
+      if (!active || result.error || !result.redirectTo) return
+      window.location.replace(result.redirectTo)
+    }
+
+    redirectAuthenticatedUser()
+
+    return () => {
+      active = false
+    }
+  }, [])
+
   async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setLoading(true); setError(null)
 
-    let result: Awaited<ReturnType<typeof login>>
+    const formData = new FormData(e.currentTarget)
+    const supabase = createClient()
+
     try {
-      result = await login(new FormData(e.currentTarget))
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: String(formData.get('email') ?? '').trim(),
+        password: String(formData.get('password') ?? ''),
+      })
+
+      if (authError) {
+        setError('E-mail ou senha inválidos.')
+        setLoading(false)
+        return
+      }
     } catch {
       setError('Erro inesperado ao conectar. Tente novamente.')
       setLoading(false)
       return
     }
 
+    const result = await getLoginRedirect()
     if (result.error) { setError(result.error); setLoading(false); return }
 
     // Timeout: se o redirect não ocorrer em 10s, informa o usuário

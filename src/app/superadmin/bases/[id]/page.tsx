@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import { User, Briefcase, GraduationCap, BookOpen, Music } from 'lucide-react'
 
 type Props = { params: Promise<{ id: string }> }
 
@@ -85,14 +86,14 @@ export default async function BaseDetailPage({ params }: Props) {
         {/* Estatísticas */}
         <div>
           <h2 className="font-semibold text-gray-900 mb-3">Resumo</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 animate-stagger">
             <Link href={`/superadmin/bases/${orgId}/usuarios`} className="block">
-              <MiniStat label="Usuários" value={userCount ?? 0} icon="👤" clickable />
+              <MiniStat label="Usuários" value={userCount ?? 0} icon={User} clickable />
             </Link>
-            <MiniStat label="Obreiros" value={staffCount ?? 0} icon="⛪" />
-            <MiniStat label="Alunos" value={studentCount ?? 0} icon="🎓" />
-            <MiniStat label="Escolas" value={schoolCount ?? 0} icon="📚" />
-            <MiniStat label="Ministérios" value={ministryCount ?? 0} icon="🎵" />
+            <MiniStat label="Obreiros" value={staffCount ?? 0} icon={Briefcase} />
+            <MiniStat label="Alunos" value={studentCount ?? 0} icon={GraduationCap} />
+            <MiniStat label="Escolas" value={schoolCount ?? 0} icon={BookOpen} />
+            <MiniStat label="Ministérios" value={ministryCount ?? 0} icon={Music} />
           </div>
         </div>
       </main>
@@ -109,12 +110,12 @@ function Info({ label, value }: { label: string; value: string | null | undefine
   )
 }
 
-function MiniStat({ label, value, icon, clickable }: { label: string; value: number; icon: string; clickable?: boolean }) {
+function MiniStat({ label, value, icon: Icon, clickable }: { label: string; value: number; icon: React.ComponentType<{ className?: string }>; clickable?: boolean }) {
   return (
     <div className={`bg-white rounded-xl border p-4 text-center transition-colors ${
       clickable ? 'border-brand-200 hover:bg-brand-50 cursor-pointer' : 'border-gray-200'
     }`}>
-      <p className="text-lg mb-1">{icon}</p>
+      <div className="flex justify-center mb-1"><Icon className="size-5 text-brand-500" /></div>
       <p className="text-xl font-bold text-gray-900">{value}</p>
       <p className="text-xs text-gray-500 mt-0.5">{label}</p>
     </div>

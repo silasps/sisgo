@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getRolePreview } from '@/lib/role-preview'
 import { ReferenceModal } from './ReferenceModal'
+import { Pencil, FileText } from 'lucide-react'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
@@ -362,7 +363,7 @@ export default async function FormularioViewerPage({ params }: Props) {
               href={`/${slug}/inscricoes/formulario/${id}/editar`}
               className="inline-flex items-center gap-2 px-4 py-2 bg-white text-indigo-700 font-semibold text-sm rounded-xl hover:bg-indigo-50 transition-colors"
             >
-              ✏️ Preencher / editar formulário
+              <Pencil className="size-3.5 inline -mt-0.5" /> Preencher / editar formulário
             </Link>
             <p className="text-indigo-300 text-xs mt-1.5">Edite os campos diretamente aqui no sistema.</p>
           </div>
@@ -376,7 +377,7 @@ export default async function FormularioViewerPage({ params }: Props) {
 
             {isExterno && (
               <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-                <span className="text-lg leading-none mt-0.5">📄</span>
+                <FileText className="size-5 text-gray-400 mt-0.5" />
                 <div>
                   <p className="text-sm font-semibold text-amber-800">Formulário recebido por outro meio</p>
                   <p className="text-xs text-amber-700 mt-0.5">

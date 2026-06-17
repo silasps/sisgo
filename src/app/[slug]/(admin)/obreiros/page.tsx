@@ -210,7 +210,7 @@ export default async function ObreirosPage({ params, searchParams }: Props) {
               <p className="text-sm text-gray-400">Nenhum resultado para &ldquo;{q}&rdquo;.</p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-3 animate-stagger">
               {filteredRows.map(row => (
                 <ObreiroCard
                   key={row.id}

@@ -1,8 +1,11 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { CursorGlow } from '@/components/CursorGlow'
 import { RevealBackground } from '@/components/RevealBackground'
+import {
+  GraduationCap, Users, Wallet, UtensilsCrossed, Home,
+  Music, CalendarDays,
+} from 'lucide-react'
 
 type Props = { searchParams: Promise<{ code?: string }> }
 
@@ -171,7 +174,7 @@ export default async function LandingPage({ searchParams }: Props) {
 
       {/* ── Stats ── */}
       <section className="border-y border-white/[0.06] bg-white/[0.02] backdrop-blur-sm px-5 sm:px-8 py-10">
-        <div className="max-w-4xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-6 text-center">
+        <div className="max-w-4xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-6 text-center animate-stagger">
           {STATS.map(s => (
             <div key={s.label}>
               <p className="text-2xl sm:text-3xl font-bold text-white">{s.value}</p>
@@ -194,8 +197,8 @@ export default async function LandingPage({ searchParams }: Props) {
         <div className="grid sm:grid-cols-2 gap-4 mb-4">
           {FEATURES_BIG.map(f => (
             <div key={f.title} className="glass-card relative overflow-hidden rounded-2xl p-7 hover:border-brand-500/30 transition-all duration-300 group">
-              <div className="w-10 h-10 rounded-xl bg-brand-500/15 border border-brand-500/20 flex items-center justify-center text-xl mb-5">
-                {f.icon}
+              <div className="w-10 h-10 rounded-xl bg-brand-500/15 border border-brand-500/20 flex items-center justify-center mb-5">
+                <f.icon className="size-5 text-brand-400" />
               </div>
               <h3 className="text-lg font-semibold mb-2 group-hover:text-brand-400 transition-colors">{f.title}</h3>
               <p className="text-sm text-zinc-400 leading-relaxed">{f.desc}</p>
@@ -207,7 +210,7 @@ export default async function LandingPage({ searchParams }: Props) {
         <div className="grid sm:grid-cols-3 gap-4 mb-4">
           {FEATURES_MID.map(f => (
             <div key={f.title} className="glass-card rounded-2xl p-6 hover:border-brand-500/30 transition-all duration-300 group">
-              <p className="text-2xl mb-4">{f.icon}</p>
+              <f.icon className="size-6 text-brand-400 mb-4" />
               <h3 className="font-semibold mb-1.5 group-hover:text-brand-400 transition-colors">{f.title}</h3>
               <p className="text-xs text-zinc-500 leading-relaxed">{f.desc}</p>
             </div>
@@ -217,8 +220,8 @@ export default async function LandingPage({ searchParams }: Props) {
         <div className="grid sm:grid-cols-2 gap-4">
           {FEATURES_SMALL.map(f => (
             <div key={f.title} className="glass-card rounded-2xl p-6 hover:border-brand-500/30 transition-all duration-300 flex items-start gap-4 group">
-              <div className="w-9 h-9 rounded-lg bg-brand-500/10 border border-brand-500/15 flex items-center justify-center text-lg flex-shrink-0">
-                {f.icon}
+              <div className="w-9 h-9 rounded-lg bg-brand-500/10 border border-brand-500/15 flex items-center justify-center flex-shrink-0">
+                <f.icon className="size-4 text-brand-400" />
               </div>
               <div>
                 <h3 className="font-semibold text-sm mb-1 group-hover:text-brand-400 transition-colors">{f.title}</h3>
@@ -268,7 +271,7 @@ export default async function LandingPage({ searchParams }: Props) {
                 Clique em uma base para ver as escolas e oportunidades de inscrição.
               </p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 animate-stagger">
               {orgs.map(org => (
                 <a
                   key={org.id}
@@ -359,12 +362,12 @@ const STATS = [
 
 const FEATURES_BIG = [
   {
-    icon: '🎓',
+    icon: GraduationCap,
     title: 'Escolas e inscrições',
     desc: 'Gerencie ETEDs e escolas de segundo nível com turmas, presenças, atividades, certificados e todo o fluxo de inscrição — do formulário público até a aprovação do candidato.',
   },
   {
-    icon: '👥',
+    icon: Users,
     title: 'Pessoas e obreiros',
     desc: 'Cadastro completo de toda a comunidade da base: alunos, obreiros, voluntários e associados. Perfis com saúde, documentos e histórico centralizado em um só lugar.',
   },
@@ -372,17 +375,17 @@ const FEATURES_BIG = [
 
 const FEATURES_MID = [
   {
-    icon: '💰',
+    icon: Wallet,
     title: 'Financeiro',
     desc: 'Cobranças, contas a pagar, relatórios e controle de caixa por área — tudo com visibilidade por perfil de acesso.',
   },
   {
-    icon: '🍽️',
+    icon: UtensilsCrossed,
     title: 'Cozinha',
     desc: 'Cardápio, estoque, refeições flexíveis e pagamentos integrados. Do pedido à comprovação, sem papel.',
   },
   {
-    icon: '🏠',
+    icon: Home,
     title: 'Reservas',
     desc: 'Quartos e instalações com formulário customizável, aprovações e controle de disponibilidade.',
   },
@@ -390,12 +393,12 @@ const FEATURES_MID = [
 
 const FEATURES_SMALL = [
   {
-    icon: '🎵',
+    icon: Music,
     title: 'Ministérios',
     desc: 'Organize equipes, líderes e membros com solicitações e pendências automatizadas.',
   },
   {
-    icon: '📅',
+    icon: CalendarDays,
     title: 'Calendário e presença',
     desc: 'Eventos, aulas e controle de presença com lançamento de faltas e declarações.',
   },

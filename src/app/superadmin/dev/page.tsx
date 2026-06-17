@@ -1,5 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { FeedbackCard } from './FeedbackCard'
+import { Lightbulb, Settings, CheckCircle2, Trash2 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 
 type Status = 'novo' | 'em_andamento' | 'feito' | 'descartado'
 
@@ -12,11 +14,11 @@ type Feedback = {
   status: Status
 }
 
-const COLUMNS: { status: Status; label: string; icon: string; headerColor: string; emptyMsg: string }[] = [
-  { status: 'novo',         label: 'Novos',         icon: '💡', headerColor: 'border-blue-400 bg-blue-50',    emptyMsg: 'Nenhuma sugestão nova' },
-  { status: 'em_andamento', label: 'Em andamento',  icon: '⚙️', headerColor: 'border-amber-400 bg-amber-50',  emptyMsg: 'Nada em andamento' },
-  { status: 'feito',        label: 'Feitos',         icon: '✅', headerColor: 'border-green-400 bg-green-50',  emptyMsg: 'Nada concluído ainda' },
-  { status: 'descartado',   label: 'Descartados',   icon: '🗑', headerColor: 'border-gray-300 bg-gray-50',   emptyMsg: 'Nada descartado' },
+const COLUMNS: { status: Status; label: string; icon: LucideIcon; headerColor: string; emptyMsg: string }[] = [
+  { status: 'novo',         label: 'Novos',         icon: Lightbulb,    headerColor: 'border-blue-400 bg-blue-50',    emptyMsg: 'Nenhuma sugestão nova' },
+  { status: 'em_andamento', label: 'Em andamento',  icon: Settings,     headerColor: 'border-amber-400 bg-amber-50',  emptyMsg: 'Nada em andamento' },
+  { status: 'feito',        label: 'Feitos',         icon: CheckCircle2, headerColor: 'border-green-400 bg-green-50',  emptyMsg: 'Nada concluído ainda' },
+  { status: 'descartado',   label: 'Descartados',   icon: Trash2,       headerColor: 'border-gray-300 bg-gray-50',   emptyMsg: 'Nada descartado' },
 ]
 
 export default async function DevPage() {
@@ -64,8 +66,8 @@ export default async function DevPage() {
         {total > 0 && (
           <div className="flex gap-2 flex-wrap">
             {COLUMNS.map(c => (
-              <span key={c.status} className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${c.headerColor}`}>
-                {c.icon} {grouped[c.status].length} {c.label}
+              <span key={c.status} className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${c.headerColor} inline-flex items-center gap-1.5`}>
+                <c.icon className="size-3.5" /> {grouped[c.status].length} {c.label}
               </span>
             ))}
           </div>
@@ -74,18 +76,18 @@ export default async function DevPage() {
 
       {total === 0 ? (
         <div className="bg-gray-50 border border-gray-200 rounded-2xl px-6 py-16 text-center">
-          <p className="text-3xl mb-3">💡</p>
+          <Lightbulb className="size-8 mx-auto mb-3 text-gray-300" />
           <p className="text-gray-500 text-sm">Nenhuma sugestão enviada ainda.</p>
           <p className="text-gray-400 text-xs mt-1">O botão aparece em todas as páginas do sistema.</p>
         </div>
       ) : (
         /* Kanban — 4 colunas no desktop, empilhado no mobile */
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 animate-stagger">
           {COLUMNS.map(col => (
             <div key={col.status} className="flex flex-col gap-3">
               {/* Cabeçalho da coluna */}
               <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-l-4 ${col.headerColor}`}>
-                <span>{col.icon}</span>
+                <col.icon className="size-4" />
                 <span className="font-bold text-sm text-gray-800">{col.label}</span>
                 <span className="ml-auto text-xs font-bold text-gray-500 bg-white px-2 py-0.5 rounded-full shadow-sm">
                   {grouped[col.status].length}

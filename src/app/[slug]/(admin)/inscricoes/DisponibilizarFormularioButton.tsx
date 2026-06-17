@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useEffect } from 'react'
 import Link from 'next/link'
+import { AlertTriangle, Link as LinkIcon, ClipboardList, Loader2 } from 'lucide-react'
 
 type ActionResult = {
   url?: string
@@ -44,7 +45,7 @@ function CopiedToast({ visible }: { visible: boolean }) {
             : 'opacity-0 scale-90 translate-y-3'
           }`}
       >
-        <span className="text-2xl">🔗</span>
+        <LinkIcon className="size-6 text-brand-500" />
         <span className="text-base font-semibold tracking-tight">Link copiado!</span>
       </div>
     </div>
@@ -111,11 +112,11 @@ export function DisponibilizarFormularioButton({ interestFormId, slug, action, s
           disabled={isPending}
           className="inline-flex items-center gap-1 text-xs px-3 py-1.5 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors disabled:opacity-60"
         >
-          {isPending ? '⏳ Gerando…' : '📋 Disponibilizar formulário'}
+          {isPending ? <><Loader2 className="size-3.5 inline -mt-0.5 animate-spin" /> Gerando…</> : <><ClipboardList className="size-3.5 inline -mt-0.5" /> Disponibilizar formulário</>}
         </button>
         {emailDisabled && (
           <p className="text-xs text-orange-500 leading-tight max-w-[200px]" title={emailDisabledReason}>
-            ⚠ Sem envio automático
+            <AlertTriangle className="size-3.5 inline -mt-0.5" /> Sem envio automático
           </p>
         )}
       </div>
@@ -127,7 +128,7 @@ export function DisponibilizarFormularioButton({ interestFormId, slug, action, s
       {emailNotice && (
         <div className="fixed inset-0 z-50 flex items-end justify-center p-6 pointer-events-none">
           <div className="pointer-events-auto bg-white rounded-2xl shadow-xl border border-yellow-100 p-5 max-w-sm w-full">
-            <p className="text-sm text-gray-800 mb-3 leading-relaxed">⚠ {emailNotice.msg}</p>
+            <p className="text-sm text-gray-800 mb-3 leading-relaxed"><AlertTriangle className="size-3.5 inline -mt-0.5" /> {emailNotice.msg}</p>
             <div className="flex items-center gap-2">
               {emailNotice.schoolId && (
                 <Link

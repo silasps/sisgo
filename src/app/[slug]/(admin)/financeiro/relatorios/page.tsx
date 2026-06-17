@@ -133,7 +133,7 @@ export default async function RelatoriosPage({ params, searchParams }: Props) {
         </form>
 
         {/* Resultado resumo */}
-        <section className="grid grid-cols-3 gap-3">
+        <section className="grid grid-cols-3 gap-3 animate-stagger">
           <div className="bg-green-50 rounded-xl border border-gray-200 p-4">
             <p className="text-xl font-bold text-green-600">{fmt(totalReceita)}</p>
             <p className="text-xs text-gray-500 mt-0.5">Total de receitas</p>

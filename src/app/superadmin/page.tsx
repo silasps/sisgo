@@ -2,7 +2,10 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
+import { AnimatedNumber } from '@/components/ui/AnimatedNumber'
 import { getEmailQuota, EMAIL_LIMITS } from '@/lib/email/getEmailQuota'
+import type { LucideIcon } from 'lucide-react'
+import { Landmark, CheckCircle2, User, AlertTriangle, MapPin, Mail } from 'lucide-react'
 
 export default async function SuperAdminDashboard() {
   const supabase = await createClient()
@@ -48,17 +51,19 @@ export default async function SuperAdminDashboard() {
       <main className="p-4 md:p-6 space-y-8">
 
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-2 sm:gap-4">
-          <StatCard label="Total de bases" value={totalOrgs ?? 0} icon="🏛" />
-          <StatCard label="Bases ativas" value={activeOrgs ?? 0} icon="✅" />
-          <StatCard label="Usuários" value={totalUsers ?? 0} icon="👤" />
+        <div className="grid grid-cols-3 gap-2 sm:gap-4 animate-stagger">
+          <StatCard label="Total de bases" value={totalOrgs ?? 0} icon={Landmark} />
+          <StatCard label="Bases ativas" value={activeOrgs ?? 0} icon={CheckCircle2} />
+          <StatCard label="Usuários" value={totalUsers ?? 0} icon={User} />
         </div>
 
         {/* Inscrições soltas */}
         {looseCount > 0 && (
           <section>
             <Link href="/superadmin/inscricoes" className="group flex items-center gap-4 bg-white rounded-xl border border-yellow-200 hover:border-yellow-400 p-4 transition-colors">
-              <div className="w-10 h-10 rounded-xl bg-yellow-50 flex items-center justify-center text-xl flex-shrink-0">👤</div>
+              <div className="w-10 h-10 rounded-xl bg-yellow-50 flex items-center justify-center flex-shrink-0">
+                <User className="size-5 text-yellow-600" />
+              </div>
               <div className="min-w-0">
                 <p className="text-xl font-bold text-gray-900">{looseCount}</p>
                 <p className="text-xs text-gray-500">{looseCount === 1 ? 'usuário sem base' : 'usuários sem base'}</p>
@@ -87,7 +92,7 @@ export default async function SuperAdminDashboard() {
           </div>
           {quota.exceeded && (
             <p className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2">
-              ⚠ Limite atingido — o envio automático está pausado para todas as bases. O limite reinicia diariamente às 00h / mensalmente no dia 1.
+              <AlertTriangle className="size-4 inline -mt-0.5" /> Limite atingido — o envio automático está pausado para todas as bases. O limite reinicia diariamente às 00h / mensalmente no dia 1.
             </p>
           )}
         </section>
@@ -103,7 +108,7 @@ export default async function SuperAdminDashboard() {
               </Link>
             </div>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 animate-stagger">
               {bases.map(base => (
                 <div key={base.id} className="group relative rounded-xl border border-gray-200 bg-white p-4 transition-colors hover:border-brand-300">
                   <Link
@@ -125,7 +130,7 @@ export default async function SuperAdminDashboard() {
                   </div>
                   {(base.city || base.state) && (
                     <p className="relative z-10 mb-3 text-xs text-gray-500">
-                      📍 {[base.city, base.state].filter(Boolean).join(', ')}
+                      <MapPin className="size-3.5 inline -mt-0.5" /> {[base.city, base.state].filter(Boolean).join(', ')}
                     </p>
                   )}
                   <div className="relative z-10 flex gap-2 border-t border-gray-100 pt-2">
@@ -152,12 +157,12 @@ export default async function SuperAdminDashboard() {
   )
 }
 
-function StatCard({ label, value, icon }: { label: string; value: number; icon: string }) {
+function StatCard({ label, value, icon: Icon }: { label: string; value: number; icon: LucideIcon }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 flex flex-col sm:flex-row items-center sm:items-center gap-1 sm:gap-3 text-center sm:text-left">
-      <span className="text-xl sm:text-xl">{icon}</span>
+      <Icon className="size-5 text-brand-500" />
       <div>
-        <p className="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">{value}</p>
+        <p className="text-xl sm:text-2xl font-bold text-gray-900 leading-tight"><AnimatedNumber value={value} /></p>
         <p className="text-xs text-gray-500 leading-tight">{label}</p>
       </div>
     </div>
@@ -180,7 +185,7 @@ function EmailQuotaCard({ label, used, limit, exceeded }: {
   return (
     <div className={`bg-white rounded-xl border p-4 ${exceeded ? 'border-red-200' : 'border-gray-200'}`}>
       <div className="flex items-center justify-between mb-2">
-        <p className="text-sm font-medium text-gray-700">✉ {label}</p>
+        <p className="text-sm font-medium text-gray-700 flex items-center gap-1.5"><Mail className="size-4" /> {label}</p>
         <p className={`text-sm font-bold tabular-nums ${exceeded ? 'text-red-600' : 'text-gray-900'}`}>
           {used.toLocaleString('pt-BR')} / {limit.toLocaleString('pt-BR')}
         </p>

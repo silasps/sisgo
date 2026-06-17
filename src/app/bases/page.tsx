@@ -2,6 +2,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { Landmark } from 'lucide-react'
 
 type Props = { searchParams: Promise<{ code?: string }> }
 
@@ -55,7 +56,7 @@ export default async function BasesPage({ searchParams }: Props) {
       {/* Grid de bases */}
       <section className="px-5 sm:px-10 pb-16 max-w-6xl mx-auto w-full flex-1">
         {orgs && orgs.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-stagger">
             {orgs.map(org => (
               <a
                 key={org.id}
@@ -91,7 +92,7 @@ export default async function BasesPage({ searchParams }: Props) {
           </div>
         ) : (
           <div className="text-center py-20 text-gray-500">
-            <p className="text-5xl mb-4">🏛</p>
+            <Landmark className="size-12 mx-auto mb-4 text-gray-300" />
             <p className="font-medium">Nenhuma base disponível no momento.</p>
           </div>
         )}

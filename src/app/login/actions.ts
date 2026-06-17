@@ -141,6 +141,42 @@ export async function login(formData: FormData) {
   return { redirectTo: `/${org.slug}/pessoas` }
 }
 
+export async function getLoginRedirect() {
+  const supabase = await createClient()
+  const { data: { user }, error } = await supabase.auth.getUser()
+
+  if (error || !user) return { error: 'Sessão não encontrada. Faça login novamente.' }
+
+  const { data: orgUsers, error: orgError } = await supabase
+    .from('organization_users')
+    .select('roles(name), organization_id')
+    .eq('user_id', user.id)
+    .eq('active', true)
+
+  if (orgError || !orgUsers?.length) {
+    return { redirectTo: '/bases' }
+  }
+
+  const rows = orgUsers as unknown as Array<{ organization_id: string | null; roles: { name: string } | null }>
+  const roleNames = rows.map(row => row.roles?.name).filter(Boolean)
+
+  if (roleNames.includes('superadmin')) return { redirectTo: '/superadmin' }
+  if (roleNames.includes('supervisor_bases')) return { redirectTo: '/supervisor' }
+
+  const orgId = rows.find(row => row.organization_id)?.organization_id
+  if (!orgId) return { redirectTo: '/bases' }
+
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('slug')
+    .eq('id', orgId)
+    .single()
+
+  if (!org?.slug) return { redirectTo: '/bases' }
+
+  return { redirectTo: `/${org.slug}/pessoas` }
+}
+
 export async function loginWithGoogle() {
   const supabase = await createClient()
   const siteUrl = await getSiteUrl()

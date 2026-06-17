@@ -4,10 +4,11 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/Header'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
+import { ClipboardList, Receipt, CalendarDays, BarChart3 } from 'lucide-react'
 import type { InputHTMLAttributes } from 'react'
 import { getRolePreview } from '@/lib/role-preview'
 import { asLooseClient } from '@/lib/supabase/loose-client'
-import { isGeneralFinanceRole, userHasAnyRole, GENERAL_FINANCE_ROLES } from '@/lib/auth/permissions'
+import { userHasAnyRole, GENERAL_FINANCE_ROLES } from '@/lib/auth/permissions'
 
 type Props = { params: Promise<{ slug: string }> }
 
@@ -122,8 +123,6 @@ export default async function FinanceiroPage({ params }: Props) {
   const receitasMes = monthTx.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0)
   const despesasMes = monthTx.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
   const saldoMes = receitasMes - despesasMes
-  const receitas = transactions.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0)
-  const despesas = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
   const restrictedBalance = transactions
     .filter(t => t.finance_funds?.restriction_type === 'restricted')
     .reduce((s, t) => s + (t.type === 'income' ? Number(t.amount) : -Number(t.amount)), 0)
@@ -247,16 +246,16 @@ export default async function FinanceiroPage({ params }: Props) {
         />
 
         {/* ── Módulos ──────────────────────────────────────────────── */}
-        <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <section className="grid grid-cols-2 md:grid-cols-4 gap-3 animate-stagger">
           {[
-            { href: `/${slug}/financeiro/tabela-valores`, icon: '📋', title: 'Tabela de Valores', desc: 'Preços por semestre', alert: false },
-            { href: `/${slug}/financeiro/cobrancas`, icon: '🧾', title: 'Cobranças', desc: totalChargesOverdue > 0 ? `${fmt(totalChargesOverdue)} em atraso` : `${fmt(totalChargesPending)} pendente`, alert: totalChargesOverdue > 0 },
-            { href: `/${slug}/financeiro/contas-pagar`, icon: '📅', title: 'Contas a Pagar', desc: totalPayablesOverdue > 0 ? `${fmt(totalPayablesOverdue)} vencido` : `${fmt(totalPayablesDueSoon)} em 7 dias`, alert: totalPayablesOverdue > 0 },
-            { href: `/${slug}/financeiro/relatorios`, icon: '📊', title: 'Relatórios', desc: 'DRE e fluxo de caixa', alert: false },
+            { href: `/${slug}/financeiro/tabela-valores`, icon: ClipboardList, title: 'Tabela de Valores', desc: 'Preços por semestre', alert: false },
+            { href: `/${slug}/financeiro/cobrancas`, icon: Receipt, title: 'Cobranças', desc: totalChargesOverdue > 0 ? `${fmt(totalChargesOverdue)} em atraso` : `${fmt(totalChargesPending)} pendente`, alert: totalChargesOverdue > 0 },
+            { href: `/${slug}/financeiro/contas-pagar`, icon: CalendarDays, title: 'Contas a Pagar', desc: totalPayablesOverdue > 0 ? `${fmt(totalPayablesOverdue)} vencido` : `${fmt(totalPayablesDueSoon)} em 7 dias`, alert: totalPayablesOverdue > 0 },
+            { href: `/${slug}/financeiro/relatorios`, icon: BarChart3, title: 'Relatórios', desc: 'DRE e fluxo de caixa', alert: false },
           ].map(m => (
             <Link key={m.href} href={m.href}
               className={`group relative rounded-xl border bg-white p-4 cursor-pointer transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 ${m.alert ? 'border-red-200 bg-red-50' : 'border-gray-200'}`}>
-              <p className="text-2xl mb-2">{m.icon}</p>
+              <m.icon className={`size-6 mb-2 ${m.alert ? 'text-red-500' : 'text-brand-500'}`} />
               <p className={`text-sm font-semibold group-hover:text-brand-600 transition-colors ${m.alert ? 'text-red-700' : 'text-gray-900'}`}>{m.title}</p>
               <p className={`text-xs mt-0.5 ${m.alert ? 'text-red-600 font-medium' : 'text-gray-400'}`}>{m.desc}</p>
               <span className="absolute top-3 right-3 text-xs text-brand-500 opacity-0 group-hover:opacity-100 transition-opacity">→</span>
@@ -503,25 +502,6 @@ export default async function FinanceiroPage({ params }: Props) {
 }
 
 // ── Componentes ────────────────────────────────────────────────────────
-
-const colorMap = {
-  green:  { bg: 'bg-green-50',  val: 'text-green-600',  border: 'border-green-100' },
-  red:    { bg: 'bg-red-50',    val: 'text-red-600',    border: 'border-red-100' },
-  brand:  { bg: 'bg-brand-50',  val: 'text-brand-600',  border: 'border-brand-100' },
-  orange: { bg: 'bg-orange-50', val: 'text-orange-600', border: 'border-orange-100' },
-  gray:   { bg: 'bg-white',     val: 'text-gray-900',   border: 'border-gray-200' },
-}
-
-function KpiCard({ label, value, sub, color }: { label: string; value: string; sub: string; color: keyof typeof colorMap }) {
-  const c = colorMap[color]
-  return (
-    <div className={`${c.bg} border ${c.border} rounded-xl p-4`}>
-      <p className={`text-xl font-bold ${c.val}`}>{value}</p>
-      <p className="text-xs font-medium text-gray-700 mt-1">{label}</p>
-      <p className="text-xs text-gray-400 mt-0.5">{sub}</p>
-    </div>
-  )
-}
 
 function StatusBadge({ status }: { status: string | null }) {
   const map: Record<string, { label: string; cls: string }> = {

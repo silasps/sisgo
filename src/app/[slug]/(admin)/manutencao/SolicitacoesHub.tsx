@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
-import { BedDouble, Wrench, FileText, Users, MoreHorizontal, type LucideIcon } from 'lucide-react'
+import { BedDouble, Wrench, FileText, Users, MoreHorizontal, MapPin, type LucideIcon } from 'lucide-react'
 
 type DeptDef = {
   id: string
@@ -259,7 +259,7 @@ export function SolicitacoesHub({ deptInfos, requests, handleCreate, handleStatu
                       <p className="font-semibold text-gray-900 text-sm">{req.subject}</p>
 
                       {req.location_notes && (
-                        <p className="text-xs text-gray-500">📍 {req.location_notes}</p>
+                        <p className="text-xs text-gray-500"><MapPin className="size-3 inline -mt-0.5" /> {req.location_notes}</p>
                       )}
                       {req.description && (
                         <p className="text-xs text-gray-600 whitespace-pre-line">{req.description}</p>
@@ -332,7 +332,7 @@ export function SolicitacoesHub({ deptInfos, requests, handleCreate, handleStatu
                         <label className="block text-xs font-medium text-gray-600 mb-1">Prioridade</label>
                         <select name="priority" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)]">
                           <option value="normal">Normal</option>
-                          <option value="urgente">🔴 Urgente</option>
+                          <option value="urgente">● Urgente</option>
                         </select>
                       </div>
                     )}

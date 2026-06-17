@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { gerarLinkReferencia } from '@/app/[slug]/formulario/[token]/actions'
+import { Link as LinkIcon } from 'lucide-react'
 
 export function GerarLinkRefBtn({ slug, applicationId, tipo }: {
   slug: string
@@ -35,7 +36,7 @@ export function GerarLinkRefBtn({ slug, applicationId, tipo }: {
     return (
       <button onClick={handleGerar} disabled={loading}
         className="mt-3 w-full py-2 px-3 bg-indigo-50 hover:bg-indigo-100 disabled:opacity-60 text-indigo-700 text-xs font-semibold rounded-lg transition-colors">
-        {loading ? 'Gerando…' : '🔗 Gerar link para enviar'}
+        {loading ? 'Gerando…' : <><LinkIcon className="size-3.5 inline -mt-0.5" /> Gerar link para enviar</>}
       </button>
     )
   }

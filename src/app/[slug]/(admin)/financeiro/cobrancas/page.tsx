@@ -129,7 +129,7 @@ export default async function CobrancasPage({ params, searchParams }: Props) {
     redirect(`/${slug}/financeiro/cobrancas`)
   }
 
-  const handleMarkOverdue = async (formData: FormData) => {
+  const handleMarkOverdue = async () => {
     'use server'
     const today = new Date().toISOString().slice(0, 10)
     await createAdminClient()

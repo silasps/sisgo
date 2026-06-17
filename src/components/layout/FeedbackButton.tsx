@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { saveFeedback } from '@/lib/feedback/saveFeedback'
+import { Lightbulb } from 'lucide-react'
 
 const PAGE_LABELS: Record<string, string> = {
   dashboard: 'Dashboard',
@@ -71,7 +72,7 @@ export function FeedbackButton() {
         title="Enviar sugestão"
         className="fixed bottom-5 right-5 z-40 flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg transition-all duration-200 px-4 py-3 text-sm font-semibold group"
       >
-        <span>💡</span>
+        <Lightbulb className="size-4" />
         <span className="max-w-0 overflow-hidden group-hover:max-w-[5rem] transition-all duration-200 whitespace-nowrap text-xs">
           Sugestão
         </span>

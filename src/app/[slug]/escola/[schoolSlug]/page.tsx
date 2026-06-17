@@ -274,7 +274,7 @@ export default async function SchoolPublicPage({ params, searchParams }: Props) 
               <h2 className="text-3xl sm:text-4xl font-black mt-2">{activeClass.name}</h2>
             </div>
 
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-10">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-10 animate-stagger">
               {activeClass.starts_at && (
                 <InfoTile label="Início" value={formatDate(activeClass.starts_at) ?? '—'} />
               )}

@@ -39,7 +39,7 @@ function roleForScope(scope: string, assignmentRole: string) {
 function areaForScope(scope: string, fallbackArea?: string | null) {
   if (scope.startsWith('school:')) return scope.replace('school:', '')
   if (scope.startsWith('ministry:')) return scope.replace('ministry:', '')
-  return ''
+  return fallbackArea ?? ''
 }
 
 function assignmentForRole(roleName: string, roleTitle?: string | null) {
@@ -78,7 +78,6 @@ function ministryOptions(ministries: OptionRow[]) {
 }
 
 function AreaSelector({
-  roles,
   schools,
   ministries,
   scope,
@@ -86,7 +85,6 @@ function AreaSelector({
   compact,
   formId,
 }: {
-  roles: RoleRow[]
   schools: OptionRow[]
   ministries: OptionRow[]
   scope: string
@@ -206,7 +204,6 @@ export function ChangeRoleCells({
     <>
       <td className="hidden px-4 py-3 text-gray-500 md:table-cell">
         <AreaSelector
-          roles={roles}
           schools={schools}
           ministries={ministries}
           scope={scope}
@@ -374,7 +371,7 @@ export function ObreiroCard({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-600">Área</label>
-                <AreaSelector roles={roles} schools={schools} ministries={ministries} scope={scope} setScope={setScope} />
+                <AreaSelector schools={schools} ministries={ministries} scope={scope} setScope={setScope} />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-600">Função</label>
@@ -457,7 +454,6 @@ export function CreateStaffUserForm({
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-700">Área</label>
           <AreaSelector
-            roles={roles}
             schools={schools}
             ministries={ministries}
             scope={scope}

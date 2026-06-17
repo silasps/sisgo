@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { updateFeedbackStatus, deleteFeedback } from './actions'
+import { Trash2 } from 'lucide-react'
 
 type Status = 'novo' | 'em_andamento' | 'feito' | 'descartado'
 
@@ -80,7 +81,7 @@ export function FeedbackCard({ item }: { item: Feedback }) {
           className="ml-auto text-xs text-gray-300 hover:text-red-400 transition-colors px-1"
           title="Excluir"
         >
-          🗑
+          <Trash2 className="size-3.5" />
         </button>
       </div>
 

@@ -340,7 +340,7 @@ export default async function MinisterioDetailPage({ params, searchParams }: Pro
 
         {/* ════════ VISÃO DH ════════════════════════════════════════════════════ */}
         {isManagement && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 animate-stagger">
 
             {/* Coluna principal */}
             <div className="lg:col-span-2 space-y-4">

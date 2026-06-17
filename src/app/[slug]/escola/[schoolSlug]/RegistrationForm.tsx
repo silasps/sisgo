@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { submitPreRegistration } from './actions'
 import { PHONE_COUNTRIES, LANGUAGES } from '@/lib/i18n/phoneCountries'
+import { PartyPopper } from 'lucide-react'
 import { LangSwitcher } from '@/components/ui/LangSwitcher'
 import { getFormDict, normalizeLang } from '@/lib/i18n/forms'
 import type { Lang } from '@/lib/i18n/forms'
@@ -78,7 +79,7 @@ export function RegistrationForm({
   if (status === 'success') {
     return (
       <div className="text-center py-16 px-8 bg-brand-50 rounded-3xl border border-brand-100">
-        <div className="text-5xl mb-4">🎉</div>
+        <PartyPopper className="size-12 mx-auto mb-4 text-brand-500" />
         <h3 className="text-2xl font-black text-gray-950 mb-2">{d.registration.success_title}</h3>
         <p className="text-gray-600">{d.registration.success_body}</p>
       </div>

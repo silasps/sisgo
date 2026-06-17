@@ -389,7 +389,7 @@ export default async function PresencaPage({ params, searchParams }: Props) {
       <main className="space-y-4 p-4 md:p-6">
 
         {/* KPIs */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 animate-stagger">
           <div className="flex items-center gap-3 rounded-xl bg-green-50 p-4">
             <div className="rounded-lg bg-green-100 p-2">
               <UserCheck size={20} className="text-green-600" />

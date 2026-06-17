@@ -19,7 +19,7 @@ export function PrintControls({ backHref }: Props) {
       >
         Imprimir / Salvar PDF
       </button>
-      <p className="text-xs text-gray-400">Use Ctrl+P → "Salvar como PDF" para gerar o arquivo.</p>
+      <p className="text-xs text-gray-400">Use Ctrl+P → &quot;Salvar como PDF&quot; para gerar o arquivo.</p>
     </div>
   )
 }

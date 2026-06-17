@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { notFound } from 'next/navigation'
 import { FormularioReferencia } from './FormularioReferencia'
+import { CheckCircle2 } from 'lucide-react'
 import { normalizeLang, getFormDict } from '@/lib/i18n/forms'
 
 type Props = {
@@ -67,7 +68,7 @@ export default async function ReferenciaPage({ params, searchParams }: Props) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
         <div className="bg-white rounded-2xl shadow p-10 max-w-md text-center">
-          <p className="text-4xl mb-4">✅</p>
+          <CheckCircle2 className="size-12 mx-auto mb-4 text-green-500" />
           <h1 className="text-xl font-bold text-gray-900 mb-2">{d.ref.already_sent_title}</h1>
           <p className="text-gray-500 text-sm">{d.ref.already_sent_body}</p>
         </div>

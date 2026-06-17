@@ -3,6 +3,7 @@
 import { useRef, useState, useContext, createContext, useMemo } from 'react'
 import { getFormDict, normalizeLang, t } from '@/lib/i18n/forms'
 import type { FormDict, Lang } from '@/lib/i18n/forms'
+import { HeartHandshake } from 'lucide-react'
 import { ptDict } from '@/lib/i18n/forms'
 import { LangSwitcher } from '@/components/ui/LangSwitcher'
 
@@ -1043,7 +1044,7 @@ function SubmittedScreen({ slug, applicationId, schoolName, d }: {
   return (
     <div className="text-center py-12 px-4 space-y-8">
       <div>
-        <div className="text-6xl mb-4">🙏</div>
+        <HeartHandshake className="size-14 mx-auto mb-4 text-brand-500" />
         <h2 className="text-3xl font-black text-gray-900 mb-3">{d.submitted.title}</h2>
         <p className="text-gray-600 max-w-md mx-auto text-base leading-relaxed">
           {t(d.submitted.body, { school: schoolName })}

@@ -15,6 +15,7 @@ import { EmbedCodeBox } from '@/components/ui/EmbedCodeBox'
 
 import { isManagementRole } from '@/lib/auth/permissions'
 import { SCHOOL_TYPES } from '@/lib/schools'
+import { CheckCircle2, AlertTriangle, Settings } from 'lucide-react'
 
 type Props = {
   params: Promise<{ slug: string; id: string }>
@@ -401,7 +402,7 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-stagger">
 
             {/* Coluna principal */}
             <div className="lg:col-span-2 space-y-6">
@@ -492,10 +493,10 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                   const email   = (escola as unknown as { contact_email: string | null }).contact_email
                   const verified = (escola as unknown as { contact_email_verified: boolean }).contact_email_verified
                   if (!email) return null
-                  if (verified) return <p className="text-xs text-green-600">✅ E-mail verificado</p>
+                  if (verified) return <p className="text-xs text-green-600 flex items-center gap-1"><CheckCircle2 className="size-3.5" /> E-mail verificado</p>
                   return (
                     <div className="flex items-center gap-3 flex-wrap">
-                      <p className="text-xs text-orange-500">⚠ Aguardando verificação — verifique a caixa de entrada de <strong>{email}</strong></p>
+                      <p className="text-xs text-orange-500 flex items-center gap-1"><AlertTriangle className="size-3.5 flex-shrink-0" /> Aguardando verificação — verifique a caixa de entrada de <strong>{email}</strong></p>
                       <button type="submit" formAction={reenviarVerificacao} className="text-xs text-brand-500 hover:text-brand-600 underline underline-offset-2 whitespace-nowrap">
                         Reenviar link
                       </button>
@@ -510,7 +511,7 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                   <h2 className="font-semibold text-gray-900">Formulário de inscrição</h2>
                   <Link href={`/${slug}/escolas/${id}/formulario`}
                     className="text-xs font-semibold text-brand-600 hover:text-brand-800 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-lg transition-colors">
-                    ⚙️ Configurar campos
+                    <Settings className="size-3.5 inline -mt-0.5" /> Configurar campos
                   </Link>
                 </div>
                 <p className="text-xs text-gray-400 mb-4">Ative ou desative campos do formulário que os candidatos preenchem.</p>

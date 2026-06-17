@@ -38,7 +38,7 @@ export default async function EscolasPage({ params }: Props) {
             </Link>
           </div>
         ) : (
-          <div className="space-y-8">
+          <div className="space-y-8 animate-stagger">
             <SchoolSection title="ETED" schools={eteds} slug={slug} />
             <SchoolSection title="Escolas de 2º Nível" schools={secondLevelSchools} slug={slug} />
             {otherSchools.length > 0 && <SchoolSection title="Outras escolas" schools={otherSchools} slug={slug} />}
@@ -61,7 +61,7 @@ function SchoolSection({ title, schools, slug }: { title: string; schools: Schoo
           Nenhuma escola cadastrada nesta area.
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 animate-stagger">
           {schools.map(e => <SchoolCard key={e.id} school={e} slug={slug} />)}
         </div>
       )}

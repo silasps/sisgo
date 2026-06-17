@@ -46,7 +46,7 @@ export function StockKpiCards({ items, expiringLots, lowStockTotal, criticalLowT
 
   return (
     <>
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 animate-stagger">
         {kpis.map(k => {
           const c = kpiColors[k.color]
           return (

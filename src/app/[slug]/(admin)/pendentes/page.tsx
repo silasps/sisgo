@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/Header'
-import { DonutChart } from '@/components/ui/DonutChart'
+import { AnimatedDonutChart } from '@/components/ui/AnimatedDonutChart'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { updateServiceStatus, cancelRequest } from '../ministerios/[id]/actions'
@@ -1080,11 +1080,11 @@ export default async function PendentesPage({ params, searchParams }: Props) {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="bg-white rounded-xl border border-gray-200 p-5">
                     <h3 className="text-sm font-semibold text-gray-700 mb-4">Por categoria</h3>
-                    <DonutChart segments={categorySegments} title="total" />
+                    <AnimatedDonutChart segments={categorySegments} title="total" />
                   </div>
                   <div className="bg-white rounded-xl border border-gray-200 p-5">
                     <h3 className="text-sm font-semibold text-gray-700 mb-4">Por urgência</h3>
-                    <DonutChart segments={urgencySegments} title="total" />
+                    <AnimatedDonutChart segments={urgencySegments} title="total" />
                   </div>
                 </div>
 

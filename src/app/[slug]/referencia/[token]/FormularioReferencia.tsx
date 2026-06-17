@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { salvarReferencia } from './actions'
 import { InternationalPhoneField } from '@/components/ui/InternationalPhoneField'
+import { HeartHandshake } from 'lucide-react'
 import { LangSwitcher } from '@/components/ui/LangSwitcher'
 import { getFormDict, normalizeLang, t } from '@/lib/i18n/forms'
 import type { Lang } from '@/lib/i18n/forms'
@@ -261,7 +262,7 @@ export function FormularioReferencia({ token, tipo, candidatoNome, escolaNome, i
   if (submitted) {
     return (
       <div className="text-center py-16 px-8">
-        <div className="text-6xl mb-4">🙏</div>
+        <HeartHandshake className="size-14 mx-auto mb-4 text-brand-500" />
         <h2 className="text-2xl font-black text-gray-900 mb-3">{d.ref.success_title}</h2>
         <p className="text-gray-600 max-w-sm mx-auto leading-relaxed">
           {t(d.ref.success_body, { school: escolaNome })}
