@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Firebase credentials
+android/app/google-services.json
+ios/App/App/GoogleService-Info.plist

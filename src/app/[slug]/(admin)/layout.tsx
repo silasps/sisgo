@@ -11,6 +11,7 @@ import { isManagementRole, isGeneralFinanceRole, MANUTENCAO_ROLES, userHasAnyRol
 import { Toaster } from 'sonner'
 import { Suspense } from 'react'
 import { FlashToast } from '@/components/ui/FlashToast'
+import { PushNotificationManager } from '@/components/PushNotificationManager'
 
 type RegularNavItem = { href: string; label: string; icon: string; alert?: boolean }
 type DividerNavItem  = { divider: true; label: string }
@@ -376,6 +377,7 @@ export default async function SlugLayout({ children, params }: Props) {
       <Suspense>
         <FlashToast />
       </Suspense>
+      <PushNotificationManager />
     </div>
   )
 }
