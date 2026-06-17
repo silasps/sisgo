@@ -360,6 +360,7 @@ export default async function EstoqueCozinhaPage({ params, searchParams }: Props
                         const isLow = !item.critical && minQty > 0 && qty <= minQty
                         const pct = minQty > 0 ? Math.min(100, Math.round((qty / minQty) * 100)) : 100
                         const itemLots = (lots ?? []).filter(l => l.item_id === item.id)
+                        const itemBarcodes = barcodes.filter(b => b.itemId === item.id)
 
                         return (
                           <div key={item.id} className={`px-4 py-3 ${isCriticalLow ? 'bg-red-50' : isLow ? 'bg-yellow-50' : ''}`}>
@@ -383,6 +384,16 @@ export default async function EstoqueCozinhaPage({ params, searchParams }: Props
                                     {itemLots.length} lote{itemLots.length > 1 ? 's' : ''} ·{' '}
                                     {itemLots.some(l => l.expiration_date && l.expiration_date <= in7days) && <span className="text-red-500 font-medium">vence em breve</span>}
                                   </p>
+                                )}
+                                {itemBarcodes.length > 0 && (
+                                  <div className="mt-1.5 flex flex-wrap gap-1">
+                                    {itemBarcodes.map(b => (
+                                      <span key={b.barcode} className="inline-flex items-center gap-1 text-[10px] bg-blue-50 text-blue-700 border border-blue-100 px-1.5 py-0.5 rounded font-mono">
+                                        {b.brand ? <span className="font-sans font-medium">{b.brand}</span> : null}
+                                        {b.packageQty ? `${b.packageQty}${b.packageUnit ?? ''}` : b.barcode}
+                                      </span>
+                                    ))}
+                                  </div>
                                 )}
                               </div>
                               <div className="flex-shrink-0 text-right">
