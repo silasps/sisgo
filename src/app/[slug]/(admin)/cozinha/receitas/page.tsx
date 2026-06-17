@@ -6,8 +6,8 @@ import Link from 'next/link'
 import { getRolePreview } from '@/lib/role-preview'
 import { userHasAnyRole, KITCHEN_ROLES } from '@/lib/auth/permissions'
 import { ReceitaForm } from './ReceitaForm'
-import { createRecipe, updateRecipe, removeRecipe, saveIngredients, confirmProduction } from './actions'
-import { ChefHat, Clock, UtensilsCrossed, Trash2, Pencil, Plus } from 'lucide-react'
+import { createRecipe, updateRecipe, removeRecipe, saveIngredients, confirmProduction, seedDefaultRecipes } from './actions'
+import { ChefHat, Clock, UtensilsCrossed, Trash2, Pencil, Plus, Download } from 'lucide-react'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -139,11 +139,19 @@ export default async function ReceitasPage({ params, searchParams }: Props) {
     await confirmProduction({ organizationId: org.id, recipeId, portions, createdBy: user.id })
   }
 
+  const handleSeedDefaults = async () => {
+    'use server'
+    const count = await seedDefaultRecipes(org.id, user.id)
+    redirect(`/${slug}/cozinha/receitas?msg=seed_${count}`)
+  }
+
   const msgInfo: Record<string, string> = {
     receita_criada: 'Receita criada. Agora adicione os ingredientes.',
     receita_atualizada: 'Receita atualizada.',
     receita_removida: 'Receita removida.',
   }
+
+  const seedMsg = msg?.startsWith('seed_') ? `${msg.replace('seed_', '')} receitas padrão importadas com sucesso!` : null
 
   return (
     <>
@@ -157,10 +165,29 @@ export default async function ReceitasPage({ params, searchParams }: Props) {
       />
       <main className="p-4 md:p-6 space-y-5 max-w-4xl mx-auto">
 
-        {msg && msgInfo[msg] && (
+        {(msg && msgInfo[msg]) || seedMsg ? (
           <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-            {msgInfo[msg]}
+            {seedMsg ?? msgInfo[msg!]}
           </div>
+        ) : null}
+
+        {/* Carregar receitas padrão */}
+        {recipeList.length === 0 && !edit && (
+          <form action={handleSeedDefaults}>
+            <div className="rounded-xl border border-brand-200 bg-brand-50 p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-brand-800">Receitas padrão brasileiras</p>
+                <p className="text-xs text-brand-600 mt-0.5">
+                  Importe 18 fichas técnicas prontas (arroz, feijão, strogonoff, feijoada, sopas, etc.)
+                  com ingredientes e quantidades por porção. Os insumos são criados automaticamente no estoque.
+                  Tudo editável depois.
+                </p>
+              </div>
+              <button className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors flex-shrink-0">
+                <Download className="size-4" /> Importar receitas
+              </button>
+            </div>
+          </form>
         )}
 
         {/* ── Formulário de nova receita / edição ────────── */}

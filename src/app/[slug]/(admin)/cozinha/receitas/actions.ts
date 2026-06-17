@@ -1,6 +1,7 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { RECEITAS_PADRAO, INSUMOS_PADRAO } from './receitas-padrao'
 
 export async function createRecipe(data: {
   organizationId: string
@@ -112,4 +113,84 @@ export async function confirmProduction(data: {
       updated_at: new Date().toISOString(),
     }).eq('id', ing.item_id)
   }
+}
+
+function normalizeCode(value: string) {
+  return value.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '').toUpperCase().slice(0, 16)
+}
+
+export async function seedDefaultRecipes(organizationId: string, createdBy: string) {
+  const sb = createAdminClient()
+
+  // 1. Buscar itens de estoque existentes
+  const { data: existingItems } = await sb
+    .from('kitchen_stock_items')
+    .select('id, name')
+    .eq('organization_id', organizationId)
+    .eq('active', true)
+  const itemByName = new Map((existingItems ?? []).map(i => [i.name.toLowerCase(), i.id]))
+
+  // 2. Criar itens de estoque que não existem
+  for (const insumo of INSUMOS_PADRAO) {
+    if (itemByName.has(insumo.nome.toLowerCase())) continue
+    const { data } = await sb.from('kitchen_stock_items').insert({
+      organization_id: organizationId,
+      code: normalizeCode(insumo.nome),
+      name: insumo.nome,
+      category: insumo.categoria,
+      unit: insumo.unidade,
+      quantity: 0,
+      min_quantity: 0,
+      created_by: createdBy,
+    }).select('id').single()
+    if (data) itemByName.set(insumo.nome.toLowerCase(), data.id)
+  }
+
+  // 3. Buscar receitas existentes para não duplicar
+  const { data: existingRecipes } = await sb
+    .from('kitchen_recipes')
+    .select('name')
+    .eq('organization_id', organizationId)
+    .eq('active', true)
+  const existingNames = new Set((existingRecipes ?? []).map(r => r.name.toLowerCase()))
+
+  // 4. Criar receitas e ingredientes
+  let created = 0
+  for (const receita of RECEITAS_PADRAO) {
+    if (existingNames.has(receita.nome.toLowerCase())) continue
+
+    const { data: newRecipe } = await sb.from('kitchen_recipes').insert({
+      organization_id: organizationId,
+      name: receita.nome,
+      category: receita.categoria,
+      portion_yield: receita.rendimentoPorcoes,
+      prep_time_minutes: receita.tempoMinutos,
+      instructions: receita.instrucoes,
+      meal_ids: receita.mealIds,
+      created_by: createdBy,
+    }).select('id').single()
+    if (!newRecipe) continue
+
+    const ingredientsToInsert = receita.ingredientes
+      .map((ing, i) => {
+        const itemId = itemByName.get(ing.nome.toLowerCase())
+        if (!itemId) return null
+        return {
+          recipe_id: newRecipe.id,
+          item_id: itemId,
+          quantity_per_portion: ing.qtdPorPorcao,
+          unit: ing.unidade,
+          notes: null,
+          sort_order: i,
+        }
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null)
+
+    if (ingredientsToInsert.length > 0) {
+      await sb.from('kitchen_recipe_ingredients').insert(ingredientsToInsert)
+    }
+    created++
+  }
+
+  return created
 }
