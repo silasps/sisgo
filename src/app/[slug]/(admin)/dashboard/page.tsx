@@ -11,7 +11,7 @@ import type { LucideIcon } from 'lucide-react'
 import {
   Users, Briefcase, GraduationCap, BookOpen, Music, Home,
   CalendarDays, AlertTriangle, ClipboardList, CheckCircle2,
-  User, Wallet, LayoutDashboard,
+  User, Wallet, LayoutDashboard, MessageSquare, Wrench, UtensilsCrossed, BedDouble,
 } from 'lucide-react'
 
 type Props = { params: Promise<{ slug: string }> }
@@ -353,6 +353,10 @@ export default async function BaseDashboard({ params }: Props) {
     { count: pendingInterests },
     { count: pendingStaffApps },
     { count: pendingStudentApps },
+    { count: pendingMinistryReqs },
+    { count: pendingServiceReqs },
+    { data: pendingMealRows },
+    { count: pendingReservations },
     { data: activeClasses },
     { data: financeiro },
   ] = await Promise.all([
@@ -364,6 +368,10 @@ export default async function BaseDashboard({ params }: Props) {
     sbAdmin.from('school_interest_forms').select('*', { count: 'exact', head: true }).eq('organization_id', orgId).eq('status', 'pendente'),
     supabase.from('staff_applications').select('*', { count: 'exact', head: true }).eq('organization_id', orgId).in('status', ['pendente', 'em_analise']),
     supabase.from('student_applications').select('*', { count: 'exact', head: true }).eq('organization_id', orgId).in('status', ['pendente', 'em_analise']),
+    supabase.from('ministry_pending_requests').select('*', { count: 'exact', head: true }).eq('organization_id', orgId).eq('status', 'pendente'),
+    supabase.from('service_requests').select('*', { count: 'exact', head: true }).eq('organization_id', orgId).in('status', ['pendente', 'em_analise']),
+    sbAdmin.from('kitchen_meal_consumers').select('purchase_group_id').eq('organization_id', orgId).eq('payment_status', 'pending'),
+    sbAdmin.from('reservations').select('*', { count: 'exact', head: true }).eq('organization_id', orgId).eq('status', 'pendente'),
     supabase
       .from('school_classes')
       .select('id, name, year, semester, starts_at, ends_at, max_students, schools!inner(name, organization_id)')
@@ -380,6 +388,8 @@ export default async function BaseDashboard({ params }: Props) {
         .gte('date', new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0])
     })(),
   ])
+
+  const pendingMeals = new Set((pendingMealRows ?? []).map((r: { purchase_group_id: string }) => r.purchase_group_id)).size
 
   // ── Presença atual ─────────────────────────────────────────
   type PresenceRow = { people: unknown }
@@ -560,6 +570,7 @@ export default async function BaseDashboard({ params }: Props) {
   }
 
   const totalPending = (pendingInterests ?? 0) + (pendingStaffApps ?? 0) + (pendingStudentApps ?? 0)
+    + (pendingMinistryReqs ?? 0) + (pendingServiceReqs ?? 0) + pendingMeals + (pendingReservations ?? 0)
 
   // Donut chart title (scope label)
   const chartScope = isEtedLeader
@@ -593,9 +604,13 @@ export default async function BaseDashboard({ params }: Props) {
               </p>
               <p className="text-xs text-amber-600 mt-0.5">
                 {[
-                  pendingInterests ? `${pendingInterests} interesse${pendingInterests > 1 ? 's' : ''} de inscrição` : null,
-                  pendingStaffApps ? `${pendingStaffApps} candidatura${pendingStaffApps > 1 ? 's' : ''} de obreiro` : null,
-                  pendingStudentApps ? `${pendingStudentApps} inscrição${pendingStudentApps > 1 ? 's' : ''} de escola` : null,
+                  pendingInterests ? `${pendingInterests} interesse${(pendingInterests ?? 0) > 1 ? 's' : ''} de inscrição` : null,
+                  pendingStaffApps ? `${pendingStaffApps} candidatura${(pendingStaffApps ?? 0) > 1 ? 's' : ''} de obreiro` : null,
+                  pendingStudentApps ? `${pendingStudentApps} inscrição${(pendingStudentApps ?? 0) > 1 ? 'ões' : ''} de escola` : null,
+                  pendingMinistryReqs ? `${pendingMinistryReqs} pedido${(pendingMinistryReqs ?? 0) > 1 ? 's' : ''} de ministério` : null,
+                  pendingServiceReqs ? `${pendingServiceReqs} solicitação${(pendingServiceReqs ?? 0) > 1 ? 'ões' : ''} de serviço` : null,
+                  pendingMeals ? `${pendingMeals} refeição${pendingMeals > 1 ? 'ões' : ''} pendente${pendingMeals > 1 ? 's' : ''}` : null,
+                  pendingReservations ? `${pendingReservations} reserva${(pendingReservations ?? 0) > 1 ? 's' : ''} pendente${(pendingReservations ?? 0) > 1 ? 's' : ''}` : null,
                 ].filter(Boolean).join(' · ')}
               </p>
             </div>
@@ -616,10 +631,22 @@ export default async function BaseDashboard({ params }: Props) {
                   <PendingRow icon={ClipboardList} label="Interesses de inscrição" count={pendingInterests ?? 0} href={`/${slug}/inscricoes`} />
                 )}
                 {(pendingStaffApps ?? 0) > 0 && (
-                  <PendingRow icon={Briefcase} label="Candidaturas de obreiro" count={pendingStaffApps ?? 0} href={`/${slug}/pessoas`} />
+                  <PendingRow icon={Briefcase} label="Candidaturas de obreiro" count={pendingStaffApps ?? 0} href={`/${slug}/pendentes`} />
                 )}
                 {(pendingStudentApps ?? 0) > 0 && (
                   <PendingRow icon={GraduationCap} label="Inscrições de escola" count={pendingStudentApps ?? 0} href={`/${slug}/inscricoes`} />
+                )}
+                {(pendingMinistryReqs ?? 0) > 0 && (
+                  <PendingRow icon={MessageSquare} label="Pedidos de ministério" count={pendingMinistryReqs ?? 0} href={`/${slug}/pendentes`} />
+                )}
+                {(pendingServiceReqs ?? 0) > 0 && (
+                  <PendingRow icon={Wrench} label="Solicitações de serviço" count={pendingServiceReqs ?? 0} href={`/${slug}/pendentes`} />
+                )}
+                {pendingMeals > 0 && (
+                  <PendingRow icon={UtensilsCrossed} label="Refeições sem pagamento" count={pendingMeals} href={`/${slug}/pendentes`} />
+                )}
+                {(pendingReservations ?? 0) > 0 && (
+                  <PendingRow icon={BedDouble} label="Reservas pendentes" count={pendingReservations ?? 0} href={`/${slug}/reservas`} />
                 )}
               </div>
             )}
