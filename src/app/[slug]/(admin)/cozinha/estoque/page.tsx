@@ -10,6 +10,7 @@ import { createStockEntry, createStockItem, createStockMovement, createStockSupp
 import { InternationalPhoneField } from '@/components/ui/InternationalPhoneField'
 import { userHasAnyRole, KITCHEN_ROLES } from '@/lib/auth/permissions'
 import { BarcodeScanButton, BarcodeField } from './BarcodeScanButton'
+import { BarcodeManager } from './BarcodeManager'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -520,6 +521,13 @@ export default async function EstoqueCozinhaPage({ params, searchParams }: Props
                   </button>
                 </form>
               </details>
+
+              {/* Gerar código de barras interno */}
+              <BarcodeManager
+                items={items.map(i => ({ id: i.id, name: i.name, code: i.code ?? i.name, unit: i.unit }))}
+                barcodes={barcodes.map(b => ({ ...b, description: null }))}
+                onGenerate={handleRegisterBarcode}
+              />
 
               {/* Lotes a vencer */}
               {expiring30.length > 0 && (
