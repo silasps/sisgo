@@ -9,6 +9,7 @@ import Link from 'next/link'
 import { createStockEntry, createStockItem, createStockMovement, createStockSupplier, removeStockSupplier, updateStockSupplier } from '../actions'
 import { InternationalPhoneField } from '@/components/ui/InternationalPhoneField'
 import { userHasAnyRole, KITCHEN_ROLES } from '@/lib/auth/permissions'
+import { BarcodeScanButton, BarcodeField } from './BarcodeScanButton'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -71,14 +72,14 @@ export default async function EstoqueCozinhaPage({ params, searchParams }: Props
   const sbAdmin = createAdminClient()
   let stockQuery = sbAdmin
     .from('kitchen_stock_items')
-    .select('id, code, name, category, unit, quantity, min_quantity, default_location, critical, notes')
+    .select('id, code, name, category, unit, quantity, min_quantity, default_location, critical, notes, barcode')
     .eq('organization_id', org.id)
     .eq('active', true)
     .order('name', { ascending: true })
 
   const search = q.trim()
   if (search) {
-    stockQuery = stockQuery.or(`name.ilike.%${search}%,code.ilike.%${search}%`)
+    stockQuery = stockQuery.or(`name.ilike.%${search}%,code.ilike.%${search}%,barcode.eq.${search}`)
   }
 
   const [{ data: stockItems }, { data: lots }, { data: movements }, { data: suppliers }] = await Promise.all([
@@ -125,6 +126,7 @@ export default async function EstoqueCozinhaPage({ params, searchParams }: Props
       defaultLocation: String(formData.get('default_location') ?? '').trim() || null,
       critical: formData.get('critical') === 'on',
       notes: String(formData.get('notes') ?? '').trim() || null,
+      barcode: String(formData.get('barcode') ?? '').trim() || null,
       createdBy: user.id,
     })
     redirect(`/${slug}/cozinha/estoque?tab=estoque&msg=estoque_criado`)
@@ -424,6 +426,7 @@ export default async function EstoqueCozinhaPage({ params, searchParams }: Props
                 </div>
                 <form action={handleCreateStockEntry} className="space-y-2.5 p-4">
                   <SbSelect name="item_id" label="Item *" options={items.map(i => [i.id, i.name])} />
+                  <BarcodeScanButton items={items.map(i => ({ id: i.id, name: i.name, barcode: (i as unknown as { barcode: string | null }).barcode }))} targetSelectName="item_id" />
                   <div className="grid grid-cols-2 gap-2">
                     <SbField name="quantity" label="Qtd *" type="number" step="0.01" min="0" required />
                     <SbSelect name="source_type" label="Origem" options={[['compra','Compra'],['doacao','Doação'],['outro','Outro']]} />
@@ -448,6 +451,7 @@ export default async function EstoqueCozinhaPage({ params, searchParams }: Props
                 </div>
                 <form action={handleCreateStockMovement} className="space-y-2.5 p-4">
                   <SbSelect name="item_id" label="Item *" options={items.map(i => [i.id, i.name])} />
+                  <BarcodeScanButton items={items.map(i => ({ id: i.id, name: i.name, barcode: (i as unknown as { barcode: string | null }).barcode }))} targetSelectName="item_id" />
                   <div className="grid grid-cols-2 gap-2">
                     <SbField name="quantity" label="Qtd *" type="number" step="0.01" min="0" required />
                     <SbSelect name="movement_type" label="Tipo" options={[['saida','Saída'],['perda','Perda'],['ajuste','Ajuste'],['transferencia','Transferência'],['doacao_saida','Doação']]} />
@@ -475,6 +479,7 @@ export default async function EstoqueCozinhaPage({ params, searchParams }: Props
                     <SbField name="min_quantity" label="Qtd mínima" type="number" step="0.01" min="0" defaultValue="0" />
                     <SbField name="default_location" label="Localização" placeholder="Ex: Armário A" />
                   </div>
+                  <BarcodeField />
                   <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                     <input type="checkbox" name="critical" className="rounded border-gray-300 text-brand-500 focus:ring-brand-400" />
                     Marcar como crítico

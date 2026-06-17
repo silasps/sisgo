@@ -527,6 +527,7 @@ export async function createStockItem(data: {
   defaultLocation: string | null
   critical: boolean
   notes: string | null
+  barcode?: string | null
   createdBy: string
 }) {
   const sb = createAdminClient()
@@ -541,6 +542,7 @@ export async function createStockItem(data: {
     default_location: data.defaultLocation,
     critical:        data.critical,
     notes:           data.notes,
+    barcode:         data.barcode ?? null,
     created_by:      data.createdBy,
   })
   if (error) throw new Error(error.message)

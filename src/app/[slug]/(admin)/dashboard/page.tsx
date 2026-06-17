@@ -365,7 +365,7 @@ export default async function BaseDashboard({ params }: Props) {
     supabase.from('student_profiles').select('*', { count: 'exact', head: true }).eq('organization_id', orgId).eq('active', true),
     supabase.from('schools').select('*', { count: 'exact', head: true }).eq('organization_id', orgId).eq('active', true),
     supabase.from('ministries').select('*', { count: 'exact', head: true }).eq('organization_id', orgId).eq('active', true),
-    sbAdmin.from('school_interest_forms').select('*', { count: 'exact', head: true }).eq('organization_id', orgId).eq('status', 'pendente'),
+    sbAdmin.from('school_interest_forms').select('*', { count: 'exact', head: true }).eq('organization_id', orgId).not('status', 'in', '("convertido","descartado")'),
     supabase.from('staff_applications').select('*', { count: 'exact', head: true }).eq('organization_id', orgId).in('status', ['pendente', 'em_analise']),
     supabase.from('student_applications').select('*', { count: 'exact', head: true }).eq('organization_id', orgId).in('status', ['pendente', 'em_analise']),
     supabase.from('ministry_pending_requests').select('*', { count: 'exact', head: true }).eq('organization_id', orgId).eq('status', 'pendente'),

@@ -62,6 +62,7 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
     { href: `/${slug}/caixa`,        label: 'Caixa da área',    icon: 'caixa',         show: hasOwnCashScope },
     { href: `/${slug}/cozinha`,      label: 'Cozinha',          icon: 'cozinha',       show: isManagement || is('secretaria') || isCozinha },
     { href: `/${slug}/cozinha/estoque`, label: 'Estoque',       icon: 'estoque',       show: isManagement || is('secretaria') || isCozinha },
+    { href: `/${slug}/cozinha/receitas`, label: 'Receitas',     icon: 'receitas',      show: isManagement || is('secretaria') || isCozinha },
     { href: `/${slug}/manutencao`,   label: 'Solicitações',     icon: 'solicitacoes',  show: true },
     { href: `/${slug}/manutencao/estoque`, label: 'Est. Manutenção', icon: 'estoque',  show: canSeeManutencao },
     { href: `/${slug}/financeiro`,   label: 'Financeiro',       icon: 'financeiro',    show: canSeeGeneralFinance },
@@ -74,7 +75,7 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
   }
 
   if (isCozinha) {
-    return addPersonalSplit(all.filter(pick('/dashboard', '/calendario', '/cozinha', '/cozinha/estoque', '/pendentes', '/refeicoes', '/manutencao')).map(toItem))
+    return addPersonalSplit(all.filter(pick('/dashboard', '/calendario', '/cozinha', '/cozinha/estoque', '/cozinha/receitas', '/pendentes', '/refeicoes', '/manutencao')).map(toItem))
   }
 
   if (isManutencao) {
