@@ -835,3 +835,25 @@ export async function removeStockSupplier(data: {
     .eq('organization_id', data.organizationId)
   if (error) throw new Error(error.message)
 }
+
+export async function registerBarcode(data: {
+  organizationId: string
+  itemId: string
+  barcode: string
+  brand: string | null
+  description: string | null
+  packageQuantity: number
+  packageUnit: string
+}) {
+  const sb = createAdminClient()
+  const { error } = await sb.from('kitchen_stock_barcodes').upsert({
+    organization_id: data.organizationId,
+    item_id: data.itemId,
+    barcode: data.barcode,
+    brand: data.brand,
+    description: data.description,
+    package_quantity: data.packageQuantity,
+    package_unit: data.packageUnit,
+  }, { onConflict: 'organization_id,barcode' })
+  if (error) throw new Error(error.message)
+}

@@ -6,7 +6,7 @@ import { getRolePreview } from '@/lib/role-preview'
 import { AlertTriangle } from 'lucide-react'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
-import { createStockEntry, createStockItem, createStockMovement, createStockSupplier, removeStockSupplier, updateStockSupplier } from '../actions'
+import { createStockEntry, createStockItem, createStockMovement, createStockSupplier, removeStockSupplier, updateStockSupplier, registerBarcode } from '../actions'
 import { InternationalPhoneField } from '@/components/ui/InternationalPhoneField'
 import { userHasAnyRole, KITCHEN_ROLES } from '@/lib/auth/permissions'
 import { BarcodeScanButton, BarcodeField } from './BarcodeScanButton'
@@ -82,7 +82,7 @@ export default async function EstoqueCozinhaPage({ params, searchParams }: Props
     stockQuery = stockQuery.or(`name.ilike.%${search}%,code.ilike.%${search}%,barcode.eq.${search}`)
   }
 
-  const [{ data: stockItems }, { data: lots }, { data: movements }, { data: suppliers }] = await Promise.all([
+  const [{ data: stockItems }, { data: lots }, { data: movements }, { data: suppliers }, { data: barcodeRows }] = await Promise.all([
     stockQuery,
     sbAdmin
       .from('kitchen_stock_lots')
@@ -103,9 +103,29 @@ export default async function EstoqueCozinhaPage({ params, searchParams }: Props
       .eq('organization_id', org.id)
       .eq('active', true)
       .order('name', { ascending: true }),
+    sbAdmin
+      .from('kitchen_stock_barcodes')
+      .select('barcode, item_id, brand, package_quantity, package_unit')
+      .eq('organization_id', org.id),
   ])
   const items = stockItems ?? []
   const itemById = new Map(items.map(item => [item.id, item]))
+  const barcodes = (barcodeRows ?? []).map((b: { barcode: string; item_id: string; brand: string | null; package_quantity: number | null; package_unit: string | null }) => ({
+    barcode: b.barcode, itemId: b.item_id, brand: b.brand, packageQty: b.package_quantity ? Number(b.package_quantity) : null, packageUnit: b.package_unit,
+  }))
+
+  const handleRegisterBarcode = async (data: { barcode: string; itemId: string; brand: string; description: string; packageQty: number; packageUnit: string }) => {
+    'use server'
+    await registerBarcode({
+      organizationId: org.id,
+      itemId: data.itemId,
+      barcode: data.barcode,
+      brand: data.brand || null,
+      description: data.description || null,
+      packageQuantity: data.packageQty,
+      packageUnit: data.packageUnit,
+    })
+  }
   const lowStockTotal = items.filter(item => Number(item.quantity ?? 0) <= Number(item.min_quantity ?? 0)).length
   const criticalLowTotal = items.filter(item => item.critical && Number(item.quantity ?? 0) <= Number(item.min_quantity ?? 0)).length
   const today = todayIso()
@@ -426,7 +446,7 @@ export default async function EstoqueCozinhaPage({ params, searchParams }: Props
                 </div>
                 <form action={handleCreateStockEntry} className="space-y-2.5 p-4">
                   <SbSelect name="item_id" label="Item *" options={items.map(i => [i.id, i.name])} />
-                  <BarcodeScanButton items={items.map(i => ({ id: i.id, name: i.name, barcode: (i as unknown as { barcode: string | null }).barcode }))} targetSelectName="item_id" />
+                  <BarcodeScanButton items={items.map(i => ({ id: i.id, name: i.name, unit: i.unit }))} barcodes={barcodes} targetSelectName="item_id" targetQtyName="quantity" onRegister={handleRegisterBarcode} />
                   <div className="grid grid-cols-2 gap-2">
                     <SbField name="quantity" label="Qtd *" type="number" step="0.01" min="0" required />
                     <SbSelect name="source_type" label="Origem" options={[['compra','Compra'],['doacao','Doação'],['outro','Outro']]} />
@@ -451,7 +471,7 @@ export default async function EstoqueCozinhaPage({ params, searchParams }: Props
                 </div>
                 <form action={handleCreateStockMovement} className="space-y-2.5 p-4">
                   <SbSelect name="item_id" label="Item *" options={items.map(i => [i.id, i.name])} />
-                  <BarcodeScanButton items={items.map(i => ({ id: i.id, name: i.name, barcode: (i as unknown as { barcode: string | null }).barcode }))} targetSelectName="item_id" />
+                  <BarcodeScanButton items={items.map(i => ({ id: i.id, name: i.name, unit: i.unit }))} barcodes={barcodes} targetSelectName="item_id" targetQtyName="quantity" onRegister={handleRegisterBarcode} />
                   <div className="grid grid-cols-2 gap-2">
                     <SbField name="quantity" label="Qtd *" type="number" step="0.01" min="0" required />
                     <SbSelect name="movement_type" label="Tipo" options={[['saida','Saída'],['perda','Perda'],['ajuste','Ajuste'],['transferencia','Transferência'],['doacao_saida','Doação']]} />
