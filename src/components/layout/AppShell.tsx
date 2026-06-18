@@ -48,7 +48,7 @@ export function AppShell({
           onClose={() => setOpen(false)}
         />
 
-        <div className="flex-1 md:ml-60 flex flex-col overflow-auto scroll-smooth min-w-0 pb-16 md:pb-0">
+        <div className="flex-1 md:ml-60 flex flex-col overflow-auto scroll-smooth min-w-0">
           {children}
         </div>
       </div>
