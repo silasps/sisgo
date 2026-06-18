@@ -24,19 +24,9 @@ export async function GET(request: NextRequest) {
       }
     )
 
-    const { error, data: sessionData } = await supabase.auth.exchangeCodeForSession(code)
+    const { error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error) {
-      const isNative = searchParams.get('native') === '1'
-
-      if (isNative && sessionData.session) {
-        const params = new URLSearchParams({
-          access_token: sessionData.session.access_token,
-          refresh_token: sessionData.session.refresh_token,
-        })
-        return NextResponse.redirect(`sisgo://auth/callback?${params}`)
-      }
-
       const { data: { user } } = await supabase.auth.getUser()
       const dest = user ? await getPostLoginDest(supabase, user.id) : '/bases'
 
