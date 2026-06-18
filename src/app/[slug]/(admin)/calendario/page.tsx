@@ -351,7 +351,8 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
 
   return (
     <>
-      <Header title="Calendário" mobileSize="large" />
+      <Header title="Calendário" border={false} />
+      <div className="h-10 border-b border-gray-200 bg-white md:hidden" aria-hidden="true" />
       <CalendarWorkspace
         year={year}
         slug={slug}
