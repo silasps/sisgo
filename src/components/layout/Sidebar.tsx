@@ -8,6 +8,7 @@ import {
   ClipboardList, Music2, BedDouble, UtensilsCrossed, Landmark,
   ChefHat, Package, DollarSign, Receipt, Settings, LogOut,
   UserCheck, CalendarDays, Wrench, Building2, Eye, Code2, Inbox, CookingPot,
+  Hotel, DoorOpen,
   type LucideIcon,
 } from 'lucide-react'
 import { SisgoLogo } from './Logo'
@@ -22,7 +23,7 @@ type SidebarProps = {
   onClose?: () => void
 }
 
-const ICON_MAP: Record<string, LucideIcon> = {
+export const ICON_MAP: Record<string, LucideIcon> = {
   dashboard:      LayoutDashboard,
   calendario:     CalendarDays,
   pendentes:      AlertTriangle,
@@ -33,6 +34,8 @@ const ICON_MAP: Record<string, LucideIcon> = {
   inscricoes:     ClipboardList,
   ministerios:    Music2,
   reservas:       BedDouble,
+  hospedagem:     Hotel,
+  quartos:        DoorOpen,
   refeicoes:      UtensilsCrossed,
   caixa:          Landmark,
   cozinha:        ChefHat,

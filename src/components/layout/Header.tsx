@@ -1,32 +1,21 @@
 'use client'
 
-import { useMobileNav } from './AppShell'
-
 type HeaderProps = {
   title: string
   actions?: React.ReactNode
 }
 
 export function Header({ title, actions }: HeaderProps) {
-  const { openNav } = useMobileNav()
-
   return (
     <header className="h-16 shrink-0 border-b border-gray-200 bg-white flex items-center justify-between px-4 md:px-6 sticky top-0 z-10">
       <div className="flex items-center gap-3 min-w-0">
         <h1 className="text-lg font-semibold text-gray-900 truncate">{title}</h1>
       </div>
-      <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-        {actions}
-        <button
-          onClick={openNav}
-          className="md:hidden p-2 text-gray-500 hover:text-gray-900 transition-colors flex-shrink-0"
-          aria-label="Abrir menu"
-        >
-          <svg width="22" height="22" viewBox="0 0 20 20" fill="none">
-            <path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
-          </svg>
-        </button>
-      </div>
+      {actions && (
+        <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+          {actions}
+        </div>
+      )}
     </header>
   )
 }

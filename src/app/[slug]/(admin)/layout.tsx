@@ -7,11 +7,12 @@ import { accentCssVars } from '@/lib/accent-colors'
 import { getRolePreview } from '@/lib/role-preview'
 import { asLooseClient } from '@/lib/supabase/loose-client'
 import { FeedbackButton } from '@/components/layout/FeedbackButton'
-import { isManagementRole, isGeneralFinanceRole, MANUTENCAO_ROLES, userHasAnyRole } from '@/lib/auth/permissions'
+import { isManagementRole, isGeneralFinanceRole, MANUTENCAO_ROLES, HOSPEDAGEM_ROLES, userHasAnyRole } from '@/lib/auth/permissions'
 import { Toaster } from 'sonner'
 import { Suspense } from 'react'
 import { FlashToast } from '@/components/ui/FlashToast'
 import { PushNotificationManager } from '@/components/PushNotificationManager'
+import type { BottomBarItem } from '@/components/layout/BottomNav'
 
 type RegularNavItem = { href: string; label: string; icon: string; alert?: boolean }
 type DividerNavItem  = { divider: true; label: string }
@@ -41,6 +42,7 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
   const isManutencao        = is('manutencao')
   const canSeeGeneralFinance = isGeneralFinanceRole(role) || accumulatedRoles.some(r => isGeneralFinanceRole(r))
   const canSeeManutencao    = userHasAnyRole(allRoles, MANUTENCAO_ROLES)
+  const canSeeHospedagem    = userHasAnyRole(allRoles, HOSPEDAGEM_ROLES)
   const canBuyMeals         = true
   const canSeeReservas      = isManagement || isHospitalidade || is('lider_eted') || isObreiroEted || isAluno || isAssociado || isLiderMinisterio || isObreiroMinisterio
 
@@ -59,6 +61,8 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
     { href: `/${slug}/inscricoes`,   label: 'Inscrições',       icon: 'inscricoes',    show: isManagement || is('lider_eted') },
     { href: `/${slug}/ministerios`,  label: 'Ministérios',      icon: 'ministerios',   show: isManagement || isLiderMinisterio || isObreiroMinisterio },
     { href: `/${slug}/reservas`,     label: 'Reservas',         icon: 'reservas',      show: canSeeReservas, alert: hasReservationsPending },
+    { href: `/${slug}/hospedagem`,   label: 'Hospedagem',       icon: 'hospedagem',    show: canSeeHospedagem },
+    { href: `/${slug}/hospedagem/quartos`, label: 'Quartos',    icon: 'quartos',       show: canSeeHospedagem },
     { href: `/${slug}/refeicoes`,    label: 'Minhas refeições', icon: 'refeicoes',     show: canBuyMeals },
     { href: `/${slug}/caixa`,        label: 'Caixa da área',    icon: 'caixa',         show: hasOwnCashScope },
     { href: `/${slug}/cozinha`,      label: 'Cozinha',          icon: 'cozinha',       show: isManagement || is('secretaria') || isCozinha },
@@ -72,7 +76,7 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
   ]
 
   if (isHospitalidade) {
-    return addPersonalSplit(all.filter(pick('/calendario', '/pendentes', '/pessoas', '/reservas', '/refeicoes')).map(toItem))
+    return addPersonalSplit(all.filter(pick('/calendario', '/pendentes', '/pessoas', '/reservas', '/hospedagem', '/hospedagem/quartos', '/refeicoes')).map(toItem))
   }
 
   if (isCozinha) {
@@ -99,6 +103,73 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
   }
 
   return addPersonalSplit(all.filter(i => i.show).map(toItem))
+}
+
+const BOTTOM_BAR_LABELS: Record<string, string> = {
+  'Dashboard': 'Início',
+  'Minhas refeições': 'Refeições',
+}
+
+const BOTTOM_BAR_FIRST_TAB: Record<string, string> = {
+  hospitalidade: 'hospedagem',
+  cozinha: 'cozinha',
+  manutencao: 'solicitacoes',
+}
+
+const BOTTOM_BAR_FOURTH_PRIORITY: Record<string, string[]> = {
+  superadmin:  ['escolas'],
+  admin_base:  ['escolas'],
+  lider_base:  ['escolas'],
+  dh:          ['presenca'],
+  lider_eted:  ['inscricoes', 'escolas'],
+  obreiro_eted: ['inscricoes', 'escolas'],
+}
+
+function pickBottomBarItems(navItems: NavItem[], role: string): BottomBarItem[] {
+  const regular = navItems.filter((i): i is RegularNavItem => !('divider' in i))
+  const has = (icon: string) => regular.some(i => i.icon === icon)
+
+  const firstTab = BOTTOM_BAR_FIRST_TAB[role] ?? 'dashboard'
+  const fourthCandidates = BOTTOM_BAR_FOURTH_PRIORITY[role] ?? []
+  const fourthTab = fourthCandidates.find(icon => has(icon)) ?? 'refeicoes'
+
+  const priorities = [firstTab, 'calendario', 'pendentes', fourthTab]
+
+  const barItems: BottomBarItem[] = priorities
+    .map(icon => regular.find(i => i.icon === icon))
+    .filter((i): i is RegularNavItem => i != null)
+    .map(i => ({
+      href: i.href,
+      label: BOTTOM_BAR_LABELS[i.label] ?? i.label,
+      icon: i.icon,
+      alert: i.alert,
+    }))
+
+  const barIcons = new Set(barItems.map(i => i.icon))
+  const hasOverflowAlert = regular.some(i => !barIcons.has(i.icon) && i.alert)
+
+  barItems.push({ href: '#more', label: 'Mais', icon: 'more', isMore: true, alert: hasOverflowAlert })
+
+  return barItems
+}
+
+function pickOverflowItems(navItems: NavItem[], bottomBarItems: BottomBarItem[]): NavItem[] {
+  const barIcons = new Set(bottomBarItems.filter(i => !i.isMore).map(i => i.icon))
+
+  const filtered: NavItem[] = []
+  for (const item of navItems) {
+    if ('divider' in item) {
+      filtered.push(item)
+    } else if (!barIcons.has(item.icon)) {
+      filtered.push(item)
+    }
+  }
+
+  return filtered.filter((item, i, arr) => {
+    if (!('divider' in item)) return true
+    if (i === 0 || i === arr.length - 1) return false
+    return arr.slice(i + 1).some(x => !('divider' in x))
+  })
 }
 
 type Props = { children: React.ReactNode; params: Promise<{ slug: string }> }
@@ -351,6 +422,9 @@ export default async function SlugLayout({ children, params }: Props) {
     ])
     : [{ data: [] }, { data: [] }]
 
+  const navItems = buildNav(slug, role, [...accumulatedRoles, ...extraRoles], hasPending, reservationsPending > 0, hasOwnCashScope)
+  const bottomItems = pickBottomBarItems(navItems, role)
+
   return (
     <div className="flex flex-col h-dvh">
       <style>{`:root{${accentCssVars(accentKey)}}`}</style>
@@ -366,7 +440,9 @@ export default async function SlugLayout({ children, params }: Props) {
         />
       )}
       <AppShell
-        items={buildNav(slug, role, [...accumulatedRoles, ...extraRoles], hasPending, reservationsPending > 0, hasOwnCashScope)}
+        items={navItems}
+        bottomBarItems={bottomItems}
+        overflowItems={pickOverflowItems(navItems, bottomItems)}
         subtitle={org.name}
         logoUrl={(org as { logo_url?: string | null }).logo_url ?? undefined}
         className="flex flex-1 min-h-0 overflow-hidden"

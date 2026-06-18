@@ -43,12 +43,18 @@ function SisgoWordmark({ size = 32 }: { size?: number }) {
 export default async function LandingPage({ searchParams }: Props) {
   const { code } = await searchParams
   if (code) redirect(`/auth/callback?code=${code}`)
-  const supabase = await createClient()
-  const { data: orgs } = await supabase
-    .from('organizations')
-    .select('id, name, slug, city, state, logo_url')
-    .eq('active', true)
-    .order('name')
+  let orgs: { id: string; name: string; slug: string; city: string | null; state: string | null; logo_url: string | null }[] | null = null
+  try {
+    const supabase = await createClient()
+    const { data } = await supabase
+      .from('organizations')
+      .select('id, name, slug, city, state, logo_url')
+      .eq('active', true)
+      .order('name')
+    orgs = data
+  } catch {
+    // Stale auth session — render as anonymous
+  }
 
   return (
     <>

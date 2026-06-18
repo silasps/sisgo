@@ -64,6 +64,15 @@ export const MANUTENCAO_ROLES: readonly Role[] = [
   'manutencao',
 ]
 
+/** Papéis com acesso ao módulo de hospedagem (gestão de quartos) */
+export const HOSPEDAGEM_ROLES: readonly Role[] = [
+  'superadmin',
+  'admin_base',
+  'lider_base',
+  'dh',
+  'hospitalidade',
+]
+
 /** Papéis que podem ver o módulo de reservas */
 export const RESERVATION_ROLES: readonly Role[] = [
   'superadmin',
@@ -94,6 +103,11 @@ export function isGeneralFinanceRole(role: string): boolean {
 /** Verifica se o papel tem acesso à cozinha */
 export function isKitchenRole(role: string): boolean {
   return (KITCHEN_ROLES as readonly string[]).includes(role)
+}
+
+/** Verifica se o papel tem acesso ao módulo de hospedagem */
+export function canSeeHospedagem(role: string): boolean {
+  return (HOSPEDAGEM_ROLES as readonly string[]).includes(role)
 }
 
 /** Verifica se o papel pode ver o módulo de reservas */

@@ -70,7 +70,7 @@ export function FeedbackButton() {
       <button
         onClick={() => setOpen(true)}
         title="Enviar sugestão"
-        className="fixed bottom-5 right-5 z-40 flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg transition-all duration-200 px-4 py-3 text-sm font-semibold group"
+        className="fixed bottom-20 md:bottom-5 right-5 z-40 flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg transition-all duration-200 px-4 py-3 text-sm font-semibold group"
       >
         <Lightbulb className="size-4" />
         <span className="max-w-0 overflow-hidden group-hover:max-w-[5rem] transition-all duration-200 whitespace-nowrap text-xs">

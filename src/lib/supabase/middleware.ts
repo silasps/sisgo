@@ -52,20 +52,16 @@ export async function updateSession(request: NextRequest) {
   if (userError) {
     const msg = userError.message ?? ''
     if (msg.includes('Refresh Token') || msg.includes('Invalid Refresh Token')) {
-      // Refresh token inválido/expirado — limpa cookies de auth
       const authCookieNames = request.cookies
         .getAll()
         .filter(c => c.name.startsWith('sb-') && c.name.includes('auth-token'))
         .map(c => c.name)
 
-      const newHeaders = new Headers(request.headers)
-      const remaining = request.cookies.getAll()
-        .filter(c => !authCookieNames.includes(c.name))
-        .map(c => `${c.name}=${c.value}`)
-        .join('; ')
-      newHeaders.set('cookie', remaining)
-      supabaseResponse = NextResponse.next({ request: { headers: newHeaders } })
-      for (const name of authCookieNames) supabaseResponse.cookies.delete(name)
+      for (const name of authCookieNames) request.cookies.delete(name)
+      supabaseResponse = NextResponse.next({ request })
+      for (const name of authCookieNames) {
+        supabaseResponse.cookies.set(name, '', { maxAge: 0, path: '/' })
+      }
     }
   }
   // Copia cookies de sessão (ex: token refreshed) para respostas de redirect

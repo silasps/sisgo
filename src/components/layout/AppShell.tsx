@@ -1,15 +1,17 @@
 'use client'
 
-import { createContext, useContext, useState } from 'react'
+import { useState } from 'react'
 import { Sidebar } from './Sidebar'
+import { BottomNav, type BottomBarItem } from './BottomNav'
+import { NavCtx } from './nav-context'
+export { useMobileNav } from './nav-context'
 
 type NavItem = { href: string; label: string; icon: string; alert?: boolean } | { divider: true; label: string }
 
-const NavCtx = createContext<{ openNav: () => void }>({ openNav: () => {} })
-export const useMobileNav = () => useContext(NavCtx)
-
 export function AppShell({
   items,
+  bottomBarItems,
+  overflowItems,
   subtitle,
   logoUrl,
   sisgoLogo,
@@ -17,6 +19,8 @@ export function AppShell({
   children,
 }: {
   items: NavItem[]
+  bottomBarItems?: BottomBarItem[]
+  overflowItems?: NavItem[]
   subtitle?: string
   logoUrl?: string
   sisgoLogo?: boolean
@@ -44,10 +48,14 @@ export function AppShell({
           onClose={() => setOpen(false)}
         />
 
-        <div className="flex-1 md:ml-60 flex flex-col overflow-auto scroll-smooth min-w-0">
+        <div className="flex-1 md:ml-60 flex flex-col overflow-auto scroll-smooth min-w-0 pb-16 md:pb-0">
           {children}
         </div>
       </div>
+
+      {bottomBarItems && overflowItems && (
+        <BottomNav items={bottomBarItems} overflowItems={overflowItems} />
+      )}
     </NavCtx.Provider>
   )
 }
