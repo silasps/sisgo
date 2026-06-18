@@ -76,7 +76,7 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
   ]
 
   if (isHospitalidade) {
-    return addPersonalSplit(all.filter(pick('/calendario', '/pendentes', '/pessoas', '/reservas', '/hospedagem', '/hospedagem/quartos', '/refeicoes')).map(toItem))
+    return addPersonalSplit(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/pessoas', '/reservas', '/hospedagem', '/hospedagem/quartos', '/refeicoes')).map(toItem))
   }
 
   if (isCozinha) {
@@ -88,7 +88,7 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
   }
 
   if (isObreiroMinisterio) {
-    return addPersonalSplit(all.filter(pick('/calendario', '/presenca', '/pendentes', '/ministerios', '/reservas', '/refeicoes', '/minhas-contas')).map(toItem))
+    return addPersonalSplit(all.filter(pick('/dashboard', '/calendario', '/presenca', '/pendentes', '/ministerios', '/reservas', '/refeicoes', '/minhas-contas')).map(toItem))
   }
 
   if (isObreiroEted) {
@@ -110,30 +110,28 @@ const BOTTOM_BAR_LABELS: Record<string, string> = {
   'Minhas refeições': 'Refeições',
 }
 
-const BOTTOM_BAR_FIRST_TAB: Record<string, string> = {
-  hospitalidade: 'hospedagem',
-  cozinha: 'cozinha',
-  manutencao: 'solicitacoes',
-}
-
 const BOTTOM_BAR_FOURTH_PRIORITY: Record<string, string[]> = {
-  superadmin:  ['escolas'],
-  admin_base:  ['escolas'],
-  lider_base:  ['escolas'],
-  dh:          ['presenca'],
-  lider_eted:  ['inscricoes', 'escolas'],
-  obreiro_eted: ['inscricoes', 'escolas'],
+  superadmin:          ['escolas'],
+  admin_base:          ['escolas'],
+  lider_base:          ['escolas'],
+  dh:                  ['presenca'],
+  hospitalidade:       ['hospedagem'],
+  cozinha:             ['cozinha'],
+  manutencao:          ['solicitacoes'],
+  lider_eted:          ['inscricoes', 'escolas'],
+  obreiro_eted:        ['inscricoes', 'escolas'],
+  lider_ministerio:    ['ministerios'],
+  obreiro_ministerio:  ['ministerios'],
 }
 
 function pickBottomBarItems(navItems: NavItem[], role: string): BottomBarItem[] {
   const regular = navItems.filter((i): i is RegularNavItem => !('divider' in i))
   const has = (icon: string) => regular.some(i => i.icon === icon)
 
-  const firstTab = BOTTOM_BAR_FIRST_TAB[role] ?? 'dashboard'
   const fourthCandidates = BOTTOM_BAR_FOURTH_PRIORITY[role] ?? []
   const fourthTab = fourthCandidates.find(icon => has(icon)) ?? 'refeicoes'
 
-  const priorities = [firstTab, 'calendario', 'pendentes', fourthTab]
+  const priorities = ['dashboard', 'calendario', 'pendentes', fourthTab]
 
   const barItems: BottomBarItem[] = priorities
     .map(icon => regular.find(i => i.icon === icon))
