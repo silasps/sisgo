@@ -12,7 +12,7 @@ export function SkText({ w = 'w-32', h = 'h-4' }: { w?: string; h?: string }) {
 /* Cabeçalho de página (Header) */
 export function SkHeader() {
   return (
-    <div className="h-14 border-b border-gray-200 bg-white flex items-center justify-between px-6">
+    <div className="h-16 md:h-14 border-b border-gray-200 bg-white flex items-center justify-between px-4 md:px-6">
       <Sk className="h-5 w-36" />
       <Sk className="h-8 w-24 rounded-lg" />
     </div>
