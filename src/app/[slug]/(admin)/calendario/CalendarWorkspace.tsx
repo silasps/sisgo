@@ -377,8 +377,8 @@ function WeekView({
   return (
     <div className="rounded-xl border border-gray-200 bg-white -mx-4 md:mx-0">
       {/* Day headers — sticky, syncs horizontal scroll with grid */}
-      <div className="sticky top-0 z-10 bg-white border-b border-gray-100 rounded-t-xl overflow-hidden">
-        <div ref={headerRef} className="min-w-[560px] flex">
+      <div ref={headerRef} className="sticky top-0 z-10 bg-white border-b border-gray-100 rounded-t-xl overflow-hidden">
+        <div className="min-w-[560px] flex">
           <div className="w-14 shrink-0" />
           {weekDays.map(day => {
             const isToday    = day === today
