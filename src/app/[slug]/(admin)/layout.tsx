@@ -76,11 +76,11 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
   ]
 
   if (isHospitalidade) {
-    return addPersonalSplit(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/pessoas', '/reservas', '/hospedagem', '/hospedagem/quartos', '/refeicoes')).map(toItem))
+    return addPersonalSplit(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/pessoas', '/reservas', '/hospedagem', '/hospedagem/quartos', '/manutencao', '/refeicoes', '/minhas-contas')).map(toItem))
   }
 
   if (isCozinha) {
-    return addPersonalSplit(all.filter(pick('/dashboard', '/calendario', '/cozinha', '/cozinha/estoque', '/cozinha/receitas', '/pendentes', '/refeicoes', '/manutencao')).map(toItem))
+    return addPersonalSplit(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/cozinha', '/cozinha/estoque', '/cozinha/receitas', '/manutencao', '/refeicoes', '/minhas-contas')).map(toItem))
   }
 
   if (isManutencao) {
@@ -88,16 +88,16 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
   }
 
   if (isObreiroMinisterio) {
-    return addPersonalSplit(all.filter(pick('/dashboard', '/calendario', '/presenca', '/pendentes', '/ministerios', '/reservas', '/refeicoes', '/minhas-contas')).map(toItem))
+    return addPersonalSplit(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/ministerios', '/reservas', '/manutencao', '/refeicoes', '/minhas-contas')).map(toItem))
   }
 
   if (isObreiroEted) {
-    return addPersonalSplit(all.filter(pick('/dashboard', '/calendario', '/presenca', '/pendentes', '/escolas', '/reservas', '/refeicoes', '/minhas-contas')).map(toItem))
+    return addPersonalSplit(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/escolas', '/reservas', '/manutencao', '/refeicoes', '/minhas-contas')).map(toItem))
   }
 
   if (isAluno || isAssociado) {
     return addPersonalSplit(
-      all.filter(pick('/dashboard', '/calendario', '/reservas', '/refeicoes', '/minhas-contas')).map(toItem),
+      all.filter(pick('/dashboard', '/calendario', '/pendentes', '/reservas', '/manutencao', '/refeicoes', '/minhas-contas')).map(toItem),
       new Set(['reservas', 'refeicoes', 'contas']),
     )
   }
