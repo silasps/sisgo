@@ -425,7 +425,7 @@ function WeekView({
         {/* Time grid */}
         <div className="flex overflow-y-auto" style={{ maxHeight: '520px' }}>
           {/* Hour labels */}
-          <div className="w-14 shrink-0" style={{ height: gridH }}>
+          <div className="w-14 shrink-0 relative" style={{ height: gridH }}>
             {hours.map((h, i) => (
               <div
                 key={h}
