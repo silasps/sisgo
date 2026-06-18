@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { ScanBarcode, X, Keyboard } from 'lucide-react'
+import { ScanBarcode, X, Keyboard, Loader2 } from 'lucide-react'
 
 type Props = {
   onScan: (code: string) => void
@@ -9,12 +9,28 @@ type Props = {
   className?: string
 }
 
-function hasNativeBarcodeDetector(): boolean {
-  return typeof globalThis !== 'undefined' && 'BarcodeDetector' in globalThis
+let detectorClassPromise: Promise<any> | null = null
+
+function getDetectorClass(): Promise<any> {
+  if (detectorClassPromise) return detectorClassPromise
+
+  if (typeof globalThis !== 'undefined' && 'BarcodeDetector' in globalThis) {
+    // @ts-expect-error BarcodeDetector not in TS lib
+    detectorClassPromise = Promise.resolve(globalThis.BarcodeDetector)
+    return detectorClassPromise
+  }
+
+  detectorClassPromise = import('barcode-detector/pure').then(m => m.BarcodeDetector)
+  return detectorClassPromise
+}
+
+function canUseCamera(): boolean {
+  return typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia
 }
 
 export function BarcodeScanner({ onScan, placeholder = 'Código de barras', className = '' }: Props) {
   const [mode, setMode] = useState<'idle' | 'scanning' | 'manual'>('idle')
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastCode, setLastCode] = useState<string | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -29,6 +45,7 @@ export function BarcodeScanner({ onScan, placeholder = 'Código de barras', clas
   const close = useCallback(() => {
     stopCamera()
     setMode('idle')
+    setLoading(false)
     setError(null)
   }, [stopCamera])
 
@@ -40,29 +57,30 @@ export function BarcodeScanner({ onScan, placeholder = 'Código de barras', clas
 
   useEffect(() => {
     if (mode !== 'scanning') return
-    if (!hasNativeBarcodeDetector()) {
-      setError('Seu navegador não suporta leitura de código de barras. Use o modo manual.')
-      setMode('manual')
-      return
-    }
 
     let cancelled = false
     let rafId: number
 
     async function startScanning() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
-        })
+        setLoading(true)
+
+        const [DetectorClass, stream] = await Promise.all([
+          getDetectorClass(),
+          navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+          }),
+        ])
+
         if (cancelled) { stream.getTracks().forEach(t => t.stop()); return }
         streamRef.current = stream
         if (videoRef.current) {
           videoRef.current.srcObject = stream
           await videoRef.current.play()
         }
+        setLoading(false)
 
-        // @ts-expect-error BarcodeDetector is not yet in TS lib
-        const detector = new globalThis.BarcodeDetector({
+        const detector = new DetectorClass({
           formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'qr_code'],
         })
 
@@ -83,6 +101,7 @@ export function BarcodeScanner({ onScan, placeholder = 'Código de barras', clas
         rafId = requestAnimationFrame(tick)
       } catch {
         if (!cancelled) {
+          setLoading(false)
           setError('Não foi possível acessar a câmera. Verifique as permissões.')
           setMode('manual')
         }
@@ -101,6 +120,11 @@ export function BarcodeScanner({ onScan, placeholder = 'Código de barras', clas
     return (
       <div className={`relative rounded-xl overflow-hidden border border-gray-300 bg-black ${className}`}>
         <video ref={videoRef} className="w-full h-48 object-cover" muted playsInline />
+        {loading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+            <Loader2 className="size-6 text-white animate-spin" />
+          </div>
+        )}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="w-3/4 h-16 border-2 border-white/60 rounded-lg" />
         </div>
@@ -133,7 +157,7 @@ export function BarcodeScanner({ onScan, placeholder = 'Código de barras', clas
             }
           }}
         />
-        {hasNativeBarcodeDetector() && (
+        {canUseCamera() && (
           <button onClick={() => setMode('scanning')} className="px-3 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors" title="Usar câmera">
             <ScanBarcode className="size-4 text-gray-600" />
           </button>
@@ -155,7 +179,7 @@ export function BarcodeScanner({ onScan, placeholder = 'Código de barras', clas
       {error && <p className="text-xs text-red-500">{error}</p>}
       <button
         type="button"
-        onClick={() => setMode(hasNativeBarcodeDetector() ? 'scanning' : 'manual')}
+        onClick={() => setMode(canUseCamera() ? 'scanning' : 'manual')}
         className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:text-brand-700 hover:bg-brand-50 px-3 py-1.5 rounded-lg border border-brand-200 transition-colors"
       >
         <ScanBarcode className="size-3.5" />

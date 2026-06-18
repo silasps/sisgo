@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { BarcodeScanner } from '@/components/ui/BarcodeScanner'
-import { ScanBarcode, Plus, Check } from 'lucide-react'
+import { ScanBarcode, Check } from 'lucide-react'
 
 type BarcodeEntry = { barcode: string; itemId: string; brand: string | null; packageQty: number | null; packageUnit: string | null }
 type StockItem = { id: string; name: string; unit: string }

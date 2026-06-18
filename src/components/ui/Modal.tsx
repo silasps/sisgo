@@ -7,10 +7,11 @@ type Props = {
   onClose: () => void
   title: string
   subtitle?: string
+  hideFooter?: boolean
   children: React.ReactNode
 }
 
-export function Modal({ open, onClose, title, subtitle, children }: Props) {
+export function Modal({ open, onClose, title, subtitle, hideFooter, children }: Props) {
   useEffect(() => {
     if (!open) return
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -39,11 +40,13 @@ export function Modal({ open, onClose, title, subtitle, children }: Props) {
           </button>
         </div>
         <div className="overflow-y-auto flex-1">{children}</div>
-        <div className="border-t border-gray-100 px-5 py-3 flex-shrink-0">
-          <button onClick={onClose} className="w-full rounded-xl bg-gray-100 hover:bg-gray-200 py-2.5 text-sm font-medium text-gray-600 transition-colors">
-            Fechar
-          </button>
-        </div>
+        {!hideFooter && (
+          <div className="border-t border-gray-100 px-5 py-3 flex-shrink-0">
+            <button onClick={onClose} className="w-full rounded-xl bg-gray-100 hover:bg-gray-200 py-2.5 text-sm font-medium text-gray-600 transition-colors">
+              Fechar
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

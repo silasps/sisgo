@@ -17,7 +17,7 @@ type Props = {
   onConfirmProduction: (recipeId: string, portions: number) => Promise<void>
 }
 
-export function ReceitaForm({ recipeId, recipeName, portionYield, stockItems, initialIngredients, onSave, onConfirmProduction }: Props) {
+export function ReceitaForm({ recipeId, recipeName, stockItems, initialIngredients, onSave, onConfirmProduction }: Props) {
   const [ingredients, setIngredients] = useState<Ingredient[]>(initialIngredients)
   const [simPortions, setSimPortions] = useState(50)
   const [showSim, setShowSim] = useState(false)
