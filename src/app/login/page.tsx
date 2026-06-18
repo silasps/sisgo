@@ -30,11 +30,17 @@ function LoginPageInner() {
   useEffect(() => {
     if (!isNativePlatform()) return
     let cleanup: (() => void) | undefined
-    import('@capacitor/browser').then(({ Browser }) => {
-      const listener = Browser.addListener('browserFinished', async () => {
-        const supabase = createClient()
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
+
+    import('@capacitor/app').then(({ App }) => {
+      const listener = App.addListener('appUrlOpen', async ({ url }) => {
+        const parsed = new URL(url)
+        const accessToken = parsed.searchParams.get('access_token')
+        const refreshToken = parsed.searchParams.get('refresh_token')
+        if (accessToken && refreshToken) {
+          const supabase = createClient()
+          await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+          const { Browser } = await import('@capacitor/browser')
+          await Browser.close()
           localStorage.setItem('sisgo_has_session', '1')
           const result = await getLoginRedirect()
           if (result.redirectTo) window.location.href = result.redirectTo
@@ -43,15 +49,17 @@ function LoginPageInner() {
       })
       cleanup = () => { listener.then(h => h.remove()) }
     })
+
     return () => cleanup?.()
   }, [])
 
   async function handleGoogle() {
     setGoogleLoading(true); setError(null)
-    const result = await loginWithGoogle()
+    const native = isNativePlatform()
+    const result = await loginWithGoogle(native)
     if ('error' in result && result.error) { setError(result.error); setGoogleLoading(false); return }
     const url = (result as { redirectTo: string }).redirectTo
-    if (isNativePlatform()) {
+    if (native) {
       const { Browser } = await import('@capacitor/browser')
       await Browser.open({ url, presentationStyle: 'popover' })
       return

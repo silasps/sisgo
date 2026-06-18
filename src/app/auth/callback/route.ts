@@ -24,14 +24,23 @@ export async function GET(request: NextRequest) {
       }
     )
 
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
+    const { error, data: sessionData } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error) {
+      const isNative = searchParams.get('native') === '1'
+
+      if (isNative && sessionData.session) {
+        const params = new URLSearchParams({
+          access_token: sessionData.session.access_token,
+          refresh_token: sessionData.session.refresh_token,
+        })
+        return NextResponse.redirect(`sisgo://auth/callback?${params}`)
+      }
+
       const { data: { user } } = await supabase.auth.getUser()
       const dest = user ? await getPostLoginDest(supabase, user.id) : '/bases'
 
       const response = NextResponse.redirect(`${origin}${dest}`)
-      // Copia os cookies de sessão para o redirect — sem isso o browser fica deslogado
       for (const { name, value, options } of cookiesToSet) {
         response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2])
       }
