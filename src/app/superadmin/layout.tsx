@@ -38,11 +38,12 @@ export default async function SuperAdminLayout({ children }: { children: React.R
   const logoUrl = map['superadmin_logo_url'] ?? undefined
 
   return (
-    <>
+    <div className="flex flex-col h-dvh">
       <style>{`:root{${accentCssVars(accentKey)}}`}</style>
-      <AppShell items={NAV} subtitle="Super Admin" logoUrl={logoUrl} sisgoLogo>
+      <div className="shrink-0 h-[env(safe-area-inset-top)] bg-white" />
+      <AppShell items={NAV} subtitle="Super Admin" logoUrl={logoUrl} sisgoLogo className="flex flex-1 min-h-0 overflow-hidden">
         {children}
       </AppShell>
-    </>
+    </div>
   )
 }

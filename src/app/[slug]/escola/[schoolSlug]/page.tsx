@@ -76,7 +76,7 @@ export default async function SchoolPublicPage({ params, searchParams }: Props) 
     <div className="min-h-screen bg-white">
 
       {/* NAV */}
-      <nav className="fixed top-0 left-0 right-0 z-40 bg-black/60 backdrop-blur-md border-b border-white/10 pt-[env(safe-area-inset-top)]">
+      <nav className="fixed top-0 left-0 right-0 z-40 bg-black/60 backdrop-blur-md border-b border-white/10">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-3">
           <a href={`/${slug}`} className="text-white font-bold text-base sm:text-lg tracking-tight hover:text-brand-400 transition-colors truncate">
             {org.name}

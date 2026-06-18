@@ -293,7 +293,7 @@ export default async function FormularioEditorPage({ params }: Props) {
   return (
     <>
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 md:px-6 py-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
+      <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 md:px-6 py-3">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3 flex-wrap">
             <Link href={`/${slug}/inscricoes/formulario/${id}`}

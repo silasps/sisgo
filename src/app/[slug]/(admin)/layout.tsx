@@ -354,6 +354,7 @@ export default async function SlugLayout({ children, params }: Props) {
   return (
     <div className="flex flex-col h-dvh">
       <style>{`:root{${accentCssVars(accentKey)}}`}</style>
+      <div className={`shrink-0 h-[env(safe-area-inset-top)] ${isSuperAdmin ? 'bg-gray-900' : 'bg-white'}`} />
       {isSuperAdmin && (
         <SuperAdminContextBar
           mode="admin"
