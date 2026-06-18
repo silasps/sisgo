@@ -918,7 +918,6 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     <>
       <Header
         title="Inscrições"
-        mobileHeight="dashboard"
         actions={
           <div className="flex items-center gap-2">
             <NovaPreInscricaoButton

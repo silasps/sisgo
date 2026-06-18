@@ -351,7 +351,7 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
 
   return (
     <>
-      <Header title="Calendário" mobileHeight="dashboard" />
+      <Header title="Calendário" />
       <CalendarWorkspace
         year={year}
         slug={slug}

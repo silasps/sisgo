@@ -189,7 +189,7 @@ export default async function SolicitacoesPage({ params, searchParams }: Props) 
 
   return (
     <div className="flex flex-col h-full overflow-auto">
-      <Header title="Solicitações de Serviço" mobileHeight="dashboard" />
+      <Header title="Solicitações de Serviço" />
       <div className="flex-1 px-4 pb-8 pt-4 max-w-5xl mx-auto w-full">
         <SolicitacoesHub
           deptInfos={deptInfos}

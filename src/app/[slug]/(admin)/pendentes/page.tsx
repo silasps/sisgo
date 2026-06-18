@@ -750,7 +750,6 @@ export default async function PendentesPage({ params, searchParams }: Props) {
     <>
       <Header
         title="Pendentes"
-        mobileHeight="dashboard"
         actions={
           totalUrgentes > 0 ? (
             <span className="px-3 py-1 bg-red-100 text-red-700 text-sm font-semibold rounded-full">
