@@ -75,7 +75,7 @@ export default async function ConfiguracoesPage({ params }: Props) {
 
   return (
     <>
-      <Header title="Configurações" />
+      <Header title="Configurações" mobileHeight="dashboard" />
       <main className="p-4 md:p-6 space-y-8 max-w-4xl">
 
         <Section title="Minha conta">

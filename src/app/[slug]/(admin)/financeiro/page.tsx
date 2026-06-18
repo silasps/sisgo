@@ -234,7 +234,7 @@ export default async function FinanceiroPage({ params }: Props) {
 
   return (
     <>
-      <Header title="Financeiro" />
+      <Header title="Financeiro" mobileHeight="dashboard" />
       <main className="p-4 md:p-6 space-y-5">
 
         {/* ── KPIs do mês ─────────────────────────────────────────── */}

@@ -5,15 +5,18 @@ import { useMobileNav } from './AppShell'
 type HeaderProps = {
   title: string
   actions?: React.ReactNode
-  border?: boolean
+  mobileHeight?: 'default' | 'dashboard'
 }
 
-export function Header({ title, actions, border = true }: HeaderProps) {
+export function Header({ title, actions, mobileHeight = 'default' }: HeaderProps) {
   const { openNav } = useMobileNav()
-  const borderClass = border ? 'border-b border-gray-200' : ''
+  const mobileHeightValue = mobileHeight === 'dashboard' ? '104px' : '64px'
 
   return (
-    <header className={`h-16 md:h-14 ${borderClass} bg-white flex items-center justify-between px-4 md:px-6 sticky top-0 z-10`}>
+    <header
+      style={{ '--admin-header-mobile-height': mobileHeightValue } as React.CSSProperties}
+      className="h-[var(--admin-header-mobile-height)] md:h-14 border-b border-gray-200 bg-white flex items-center justify-between px-4 md:px-6 sticky top-0 z-10"
+    >
       <div className="flex items-center gap-3 min-w-0">
         <h1 className="font-semibold text-gray-900 truncate">{title}</h1>
       </div>

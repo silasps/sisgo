@@ -384,6 +384,7 @@ export default async function PresencaPage({ params, searchParams }: Props) {
     <>
       <Header
         title="Presença na Base"
+        mobileHeight="dashboard"
         actions={<AusenciaModal staff={scopedStaffForAbsence} orgId={orgId} slug={slug} upcoming={upcoming.filter(item => !visibleScope.visiblePersonIds || visibleScope.visiblePersonIds.has(item.person_id))} />}
       />
       <main className="space-y-4 p-4 md:p-6">
