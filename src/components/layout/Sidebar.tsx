@@ -60,14 +60,16 @@ export function Sidebar({ items, subtitle, logoUrl, sisgoLogo = false, isOpen = 
   return (
     <aside
       className={[
-        'fixed inset-y-0 left-0 z-30 w-64 bg-dark-950 flex flex-col border-r border-dark-800',
+        'fixed inset-y-0 z-30 w-64 bg-dark-950 flex flex-col',
+        'right-0 border-l border-dark-800',
+        'md:left-0 md:right-auto md:border-l-0 md:border-r md:border-dark-800',
         'transition-transform duration-200 ease-in-out',
         'md:w-60 md:translate-x-0',
-        isOpen ? 'translate-x-0' : '-translate-x-full',
+        isOpen ? 'translate-x-0' : 'translate-x-full',
       ].join(' ')}
     >
-      <div className="px-5 py-5 border-b border-dark-800 flex items-start justify-between gap-2">
-        <div>
+      <div className="px-5 py-5 border-b border-dark-800 flex items-start justify-between gap-2 flex-row-reverse md:flex-row">
+        <div className="flex-1 min-w-0">
           {sisgoLogo && !logoUrl ? (
             <SisgoLogo size={34} />
           ) : (
@@ -88,7 +90,7 @@ export function Sidebar({ items, subtitle, logoUrl, sisgoLogo = false, isOpen = 
         </div>
         <button
           onClick={onClose}
-          className="md:hidden p-1 text-gray-500 hover:text-white transition-colors"
+          className="md:hidden p-1 text-gray-500 hover:text-white transition-colors flex-shrink-0"
           aria-label="Fechar menu"
         >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">

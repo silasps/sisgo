@@ -11,22 +11,22 @@ export function Header({ title, actions }: HeaderProps) {
   const { openNav } = useMobileNav()
 
   return (
-    <header className="h-14 border-b border-gray-200 bg-white flex items-center justify-between px-4 md:px-6 sticky top-0 z-10">
+    <header className="h-16 md:h-14 border-b border-gray-200 bg-white flex items-center justify-between px-4 md:px-6 sticky top-0 z-10">
       <div className="flex items-center gap-3 min-w-0">
+        <h1 className="font-semibold text-gray-900 truncate">{title}</h1>
+      </div>
+      <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+        {actions}
         <button
           onClick={openNav}
-          className="md:hidden p-1.5 -ml-1 text-gray-500 hover:text-gray-900 transition-colors flex-shrink-0"
+          className="md:hidden p-2 text-gray-500 hover:text-gray-900 transition-colors flex-shrink-0"
           aria-label="Abrir menu"
         >
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <svg width="22" height="22" viewBox="0 0 20 20" fill="none">
             <path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
           </svg>
         </button>
-        <h1 className="font-semibold text-gray-900 truncate">{title}</h1>
       </div>
-      {actions && (
-        <div className="flex items-center gap-2 flex-shrink-0 ml-2">{actions}</div>
-      )}
     </header>
   )
 }
