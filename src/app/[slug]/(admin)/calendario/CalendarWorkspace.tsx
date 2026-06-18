@@ -330,8 +330,8 @@ function MonthView({
 
 // ─── WeekView ──────────────────────────────────────────────────────────────────
 
-const WEEK_HOUR_START = 7
-const WEEK_HOUR_END   = 22
+const DEFAULT_HOUR_START = 6
+const DEFAULT_HOUR_END   = 24
 const SLOT_H = 52 // px per hour
 
 function WeekView({
@@ -343,17 +343,27 @@ function WeekView({
   onGoToDay: (d: string) => void
   onEditEvent: (e: CalendarEvent) => void
 }) {
-  const hours    = Array.from({ length: WEEK_HOUR_END - WEEK_HOUR_START }, (_, i) => WEEK_HOUR_START + i)
+  const weekEvents = weekDays.flatMap(day => (eventsByDay.get(day) ?? []).filter(e => !!e.starts_at))
+  let hourStart = DEFAULT_HOUR_START
+  let hourEnd   = DEFAULT_HOUR_END
+  for (const ev of weekEvents) {
+    const sh = new Date(ev.starts_at!).getHours()
+    const eh = ev.ends_at ? new Date(ev.ends_at).getHours() + (new Date(ev.ends_at).getMinutes() > 0 ? 1 : 0) : sh + 1
+    if (sh < hourStart) hourStart = sh
+    if (eh > hourEnd) hourEnd = Math.min(eh + 1, 24)
+  }
+
+  const hours    = Array.from({ length: hourEnd - hourStart }, (_, i) => hourStart + i)
   const gridH    = hours.length * SLOT_H
   const hasAllDay = weekDays.some(day => (eventsByDay.get(day) ?? []).some(e => !e.starts_at))
 
   function eventPos(event: CalendarEvent) {
     const s = new Date(event.starts_at!)
-    const startMin = Math.max((s.getHours() - WEEK_HOUR_START) * 60 + s.getMinutes(), 0)
+    const startMin = Math.max((s.getHours() - hourStart) * 60 + s.getMinutes(), 0)
     let durationMin = 60
     if (event.ends_at) {
       const e = new Date(event.ends_at)
-      const endMin = (e.getHours() - WEEK_HOUR_START) * 60 + e.getMinutes()
+      const endMin = (e.getHours() - hourStart) * 60 + e.getMinutes()
       durationMin = Math.max(endMin - startMin, 30)
     }
     return { top: startMin * SLOT_H / 60, height: Math.max(durationMin * SLOT_H / 60, 22) }
