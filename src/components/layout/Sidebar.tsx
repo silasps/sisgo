@@ -66,7 +66,7 @@ export function Sidebar({ items, subtitle, logoUrl, sisgoLogo = false, isOpen = 
         isOpen ? 'translate-x-0' : '-translate-x-full',
       ].join(' ')}
     >
-      <div className="px-5 py-5 border-b border-dark-800 flex items-start justify-between gap-2">
+      <div className="px-5 py-5 pt-[calc(env(safe-area-inset-top)+1.25rem)] border-b border-dark-800 flex items-start justify-between gap-2">
         <div>
           {sisgoLogo && !logoUrl ? (
             <SisgoLogo size={34} />

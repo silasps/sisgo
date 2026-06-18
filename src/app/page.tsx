@@ -76,7 +76,7 @@ export default async function LandingPage({ searchParams }: Props) {
       <div className="relative z-[1] flex flex-col flex-1">
 
       {/* ── Navbar ── */}
-      <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-[#060a0a]/70 backdrop-blur-xl">
+      <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-[#060a0a]/70 backdrop-blur-xl pt-[env(safe-area-inset-top)]">
         <nav className="max-w-6xl mx-auto px-5 sm:px-8 h-14 flex items-center justify-between">
           <SisgoWordmark size={26} />
           <div className="hidden sm:flex items-center gap-6 text-sm text-zinc-400">

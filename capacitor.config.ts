@@ -7,6 +7,13 @@ const config: CapacitorConfig = {
   server: {
     url: 'https://www.sisgomission.com/login',
     cleartext: false,
+    allowNavigation: [
+      'www.sisgomission.com',
+      'sisgomission.com',
+      'accounts.google.com',
+      '*.google.com',
+      '*.supabase.co',
+    ],
   },
   plugins: {
     SplashScreen: {
@@ -16,17 +23,17 @@ const config: CapacitorConfig = {
       showSpinner: false,
     },
     StatusBar: {
-      style: 'DARK',
-      backgroundColor: '#15343B',
+      style: 'LIGHT',
+      overlaysWebView: true,
     },
   },
   android: {
     allowMixedContent: false,
-    backgroundColor: '#15343B',
+    backgroundColor: '#F9FAFB',
   },
   ios: {
-    contentInset: 'automatic',
-    backgroundColor: '#15343B',
+    contentInset: 'never',
+    backgroundColor: '#F9FAFB',
     preferredContentMode: 'mobile',
     scheme: 'SISGO',
   },

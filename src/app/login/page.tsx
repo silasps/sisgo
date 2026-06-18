@@ -23,6 +23,7 @@ function LoginPageInner() {
     setGoogleLoading(true); setError(null)
     const result = await loginWithGoogle()
     if ('error' in result && result.error) { setError(result.error); setGoogleLoading(false); return }
+    localStorage.setItem('sisgo_has_session', '1')
     window.location.href = (result as { redirectTo: string }).redirectTo
   }
 
@@ -39,6 +40,7 @@ function LoginPageInner() {
 
       const result = await getLoginRedirect()
       if (!active || result.error || !result.redirectTo) return
+      localStorage.setItem('sisgo_has_session', '1')
       window.location.replace(result.redirectTo)
     }
 
@@ -75,6 +77,8 @@ function LoginPageInner() {
 
     const result = await getLoginRedirect()
     if (result.error) { setError(result.error); setLoading(false); return }
+
+    localStorage.setItem('sisgo_has_session', '1')
 
     // Timeout: se o redirect não ocorrer em 10s, informa o usuário
     const timeout = setTimeout(() => {
