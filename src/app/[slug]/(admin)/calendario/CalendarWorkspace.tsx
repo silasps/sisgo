@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { AlertTriangle, CalendarDays, CalendarPlus, CalendarRange, ChevronLeft, ChevronRight, Clock, LayoutList, Plus, Save, Trash2, X } from 'lucide-react'
-import { useMemo, useState, useTransition } from 'react'
+import { useCallback, useMemo, useRef, useState, useTransition } from 'react'
 
 export type CalendarLayer = 'base' | 'escola' | 'pessoal' | 'auto'
 export type CalendarEventType = 'evento' | 'feriado' | 'trimestre' | 'escola' | 'aula' | 'tema' | 'nota' | 'outro'
@@ -369,12 +369,16 @@ function WeekView({
     return { top: startMin * SLOT_H / 60, height: Math.max(durationMin * SLOT_H / 60, 22) }
   }
 
-  return (
-    <div className="-mx-4 overflow-x-auto rounded-xl border border-gray-200 bg-white md:mx-0">
-      <div className="min-w-[560px]">
+  const headerRef = useRef<HTMLDivElement>(null)
+  const syncScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    if (headerRef.current) headerRef.current.scrollLeft = e.currentTarget.scrollLeft
+  }, [])
 
-        {/* Day headers */}
-        <div className="flex border-b border-gray-100">
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white -mx-4 md:mx-0">
+      {/* Day headers — sticky, syncs horizontal scroll with grid */}
+      <div className="sticky top-0 z-10 bg-white border-b border-gray-100 rounded-t-xl overflow-hidden">
+        <div ref={headerRef} className="min-w-[560px] flex">
           <div className="w-14 shrink-0" />
           {weekDays.map(day => {
             const isToday    = day === today
@@ -391,7 +395,6 @@ function WeekView({
                 <p className="text-[10px] font-medium uppercase tracking-widest text-gray-400">
                   {WEEKDAYS_FULL[new Date(`${day}T12:00:00`).getDay()]}
                 </p>
-                {/* Number — click here to go to day view */}
                 <span
                   role="button"
                   onClick={e => { e.stopPropagation(); onGoToDay(day) }}
@@ -406,90 +409,90 @@ function WeekView({
             )
           })}
         </div>
+      </div>
 
-        {/* All-day events */}
-        {hasAllDay && (
-          <div className="flex border-b border-gray-100">
-            <div className="w-14 shrink-0 flex items-center justify-end pr-2 py-1">
-              <span className="text-[9px] font-semibold uppercase tracking-wider text-gray-300">Dia todo</span>
+      {/* Grid body — horizontally scrollable, syncs header */}
+      <div className="overflow-x-auto" onScroll={syncScroll}>
+        <div className="min-w-[560px]">
+          {/* All-day events */}
+          {hasAllDay && (
+            <div className="flex border-b border-gray-100">
+              <div className="w-14 shrink-0 flex items-center justify-end pr-2 py-1">
+                <span className="text-[9px] font-semibold uppercase tracking-wider text-gray-300">Dia todo</span>
+              </div>
+              {weekDays.map(day => {
+                const allDay = (eventsByDay.get(day) ?? []).filter(e => !e.starts_at)
+                return (
+                  <div key={day} className="flex-1 border-l border-gray-100 space-y-0.5 p-1 min-h-8">
+                    {allDay.map(event => (
+                      <button
+                        key={`${event.layer}:${event.id}`}
+                        onClick={() => onEditEvent(event)}
+                        className={`w-full truncate rounded border px-1.5 py-0.5 text-left text-[10px] hover:opacity-80 ${EVENT_STYLE[event.event_type]}`}
+                      >
+                        {event.title}
+                      </button>
+                    ))}
+                  </div>
+                )
+              })}
             </div>
+          )}
+
+          {/* Time grid */}
+          <div className="flex">
+            {/* Hour labels */}
+            <div className="w-14 shrink-0 relative" style={{ height: gridH }}>
+              {hours.map((h, i) => (
+                <div
+                  key={h}
+                  style={{ height: SLOT_H, top: i * SLOT_H }}
+                  className="absolute w-14 flex items-start justify-end pr-2 pt-0.5"
+                >
+                  <span className="text-[10px] tabular-nums text-gray-400">{String(h).padStart(2, '0')}:00</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Day columns */}
             {weekDays.map(day => {
-              const allDay = (eventsByDay.get(day) ?? []).filter(e => !e.starts_at)
+              const timed      = (eventsByDay.get(day) ?? []).filter(e => !!e.starts_at)
+              const isSelected = day === selectedDate
               return (
-                <div key={day} className="flex-1 border-l border-gray-100 space-y-0.5 p-1 min-h-8">
-                  {allDay.map(event => (
-                    <button
-                      key={`${event.layer}:${event.id}`}
-                      onClick={() => onEditEvent(event)}
-                      className={`w-full truncate rounded border px-1.5 py-0.5 text-left text-[10px] hover:opacity-80 ${EVENT_STYLE[event.event_type]}`}
-                    >
-                      {event.title}
-                    </button>
+                <div
+                  key={day}
+                  onClick={() => onSelectDate(day)}
+                  className={`relative flex-1 cursor-pointer border-l border-gray-100 transition-colors ${
+                    isSelected ? 'bg-brand-50/20' : 'hover:bg-gray-50/60'
+                  }`}
+                  style={{ height: gridH }}
+                >
+                  {hours.map((_, i) => (
+                    <div key={i} style={{ top: i * SLOT_H }} className="absolute left-0 right-0 border-t border-gray-100" />
                   ))}
+                  {hours.map((_, i) => (
+                    <div key={`h${i}`} style={{ top: i * SLOT_H + SLOT_H / 2 }} className="absolute left-0 right-0 border-t border-dashed border-gray-50" />
+                  ))}
+                  {timed.map(event => {
+                    const { top, height } = eventPos(event)
+                    return (
+                      <button
+                        key={`${event.layer}:${event.id}`}
+                        onClick={e => { e.stopPropagation(); onEditEvent(event) }}
+                        title={event.title}
+                        style={{ top, height, left: 2, right: 2 }}
+                        className={`absolute overflow-hidden rounded border px-1 py-0.5 text-left text-[10px] leading-tight transition-opacity hover:opacity-75 ${EVENT_STYLE[event.event_type]}`}
+                      >
+                        <span className="block font-semibold">{formatTime(event.starts_at!)}</span>
+                        <span className="block truncate">{event.title}</span>
+                      </button>
+                    )
+                  })}
                 </div>
               )
             })}
           </div>
-        )}
-
-        {/* Time grid */}
-        <div className="flex">
-          {/* Hour labels */}
-          <div className="w-14 shrink-0 relative" style={{ height: gridH }}>
-            {hours.map((h, i) => (
-              <div
-                key={h}
-                style={{ height: SLOT_H, top: i * SLOT_H }}
-                className="absolute w-14 flex items-start justify-end pr-2 pt-0.5"
-              >
-                <span className="text-[10px] tabular-nums text-gray-400">{String(h).padStart(2, '0')}:00</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Day columns */}
-          {weekDays.map(day => {
-            const timed      = (eventsByDay.get(day) ?? []).filter(e => !!e.starts_at)
-            const isSelected = day === selectedDate
-            return (
-              <div
-                key={day}
-                onClick={() => onSelectDate(day)}
-                className={`relative flex-1 cursor-pointer border-l border-gray-100 transition-colors ${
-                  isSelected ? 'bg-brand-50/20' : 'hover:bg-gray-50/60'
-                }`}
-                style={{ height: gridH }}
-              >
-                {/* Hour grid lines */}
-                {hours.map((_, i) => (
-                  <div key={i} style={{ top: i * SLOT_H }} className="absolute left-0 right-0 border-t border-gray-100" />
-                ))}
-                {/* Half-hour lines */}
-                {hours.map((_, i) => (
-                  <div key={`h${i}`} style={{ top: i * SLOT_H + SLOT_H / 2 }} className="absolute left-0 right-0 border-t border-dashed border-gray-50" />
-                ))}
-
-                {/* Events */}
-                {timed.map(event => {
-                  const { top, height } = eventPos(event)
-                  return (
-                    <button
-                      key={`${event.layer}:${event.id}`}
-                      onClick={e => { e.stopPropagation(); onEditEvent(event) }}
-                      title={event.title}
-                      style={{ top, height, left: 2, right: 2 }}
-                      className={`absolute overflow-hidden rounded border px-1 py-0.5 text-left text-[10px] leading-tight transition-opacity hover:opacity-75 ${EVENT_STYLE[event.event_type]}`}
-                    >
-                      <span className="block font-semibold">{formatTime(event.starts_at!)}</span>
-                      <span className="block truncate">{event.title}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            )
-          })}
         </div>
-
       </div>
     </div>
   )
