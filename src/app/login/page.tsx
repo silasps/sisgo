@@ -7,6 +7,14 @@ import { SisgoLogo } from '@/components/layout/Logo'
 import { createClient } from '@/lib/supabase/client'
 import { getLoginRedirect, register, loginWithGoogle } from './actions'
 
+function isNativePlatform() {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Capacitor } = require('@capacitor/core')
+    return Capacitor.isNativePlatform()
+  } catch { return false }
+}
+
 function LoginPageInner() {
   const params = useSearchParams()
   const [tab, setTab] = useState<'login' | 'cadastro'>(
@@ -19,12 +27,37 @@ function LoginPageInner() {
   const [showConfirm, setShowConfirm] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
 
+  useEffect(() => {
+    if (!isNativePlatform()) return
+    let cleanup: (() => void) | undefined
+    import('@capacitor/browser').then(({ Browser }) => {
+      const listener = Browser.addListener('browserFinished', async () => {
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          localStorage.setItem('sisgo_has_session', '1')
+          const result = await getLoginRedirect()
+          if (result.redirectTo) window.location.href = result.redirectTo
+        }
+        setGoogleLoading(false)
+      })
+      cleanup = () => { listener.then(h => h.remove()) }
+    })
+    return () => cleanup?.()
+  }, [])
+
   async function handleGoogle() {
     setGoogleLoading(true); setError(null)
     const result = await loginWithGoogle()
     if ('error' in result && result.error) { setError(result.error); setGoogleLoading(false); return }
+    const url = (result as { redirectTo: string }).redirectTo
+    if (isNativePlatform()) {
+      const { Browser } = await import('@capacitor/browser')
+      await Browser.open({ url, presentationStyle: 'popover' })
+      return
+    }
     localStorage.setItem('sisgo_has_session', '1')
-    window.location.href = (result as { redirectTo: string }).redirectTo
+    window.location.href = url
   }
 
   useEffect(() => {
