@@ -33,19 +33,15 @@ function LoginPageInner() {
 
     import('@capacitor/app').then(({ App }) => {
       const listener = App.addListener('appUrlOpen', async ({ url }) => {
-        const parsed = new URL(url)
-        const accessToken = parsed.searchParams.get('access_token')
-        const refreshToken = parsed.searchParams.get('refresh_token')
-        if (accessToken && refreshToken) {
-          const supabase = createClient()
-          await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
-          const { Browser } = await import('@capacitor/browser')
-          await Browser.close()
-          localStorage.setItem('sisgo_has_session', '1')
-          const result = await getLoginRedirect()
-          if (result.redirectTo) window.location.href = result.redirectTo
-        }
-        setGoogleLoading(false)
+        const code = new URL(url).searchParams.get('code')
+        if (!code) return setGoogleLoading(false)
+        const supabase = createClient()
+        const { error } = await supabase.auth.exchangeCodeForSession(code)
+        if (error) { setError('Falha ao completar login.'); setGoogleLoading(false); return }
+        try { const { Browser } = await import('@capacitor/browser'); await Browser.close() } catch {}
+        localStorage.setItem('sisgo_has_session', '1')
+        const result = await getLoginRedirect()
+        if (result.redirectTo) window.location.href = result.redirectTo
       })
       cleanup = () => { listener.then(h => h.remove()) }
     })
@@ -55,17 +51,26 @@ function LoginPageInner() {
 
   async function handleGoogle() {
     setGoogleLoading(true); setError(null)
-    const native = isNativePlatform()
-    const result = await loginWithGoogle(native)
-    if ('error' in result && result.error) { setError(result.error); setGoogleLoading(false); return }
-    const url = (result as { redirectTo: string }).redirectTo
-    if (native) {
+
+    if (isNativePlatform()) {
+      const supabase = createClient()
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/api/auth/native-callback`,
+          skipBrowserRedirect: true,
+        },
+      })
+      if (error || !data.url) { setError(error?.message || 'Erro'); setGoogleLoading(false); return }
       const { Browser } = await import('@capacitor/browser')
-      await Browser.open({ url, presentationStyle: 'popover' })
+      await Browser.open({ url: data.url, presentationStyle: 'popover' })
       return
     }
+
+    const result = await loginWithGoogle()
+    if ('error' in result && result.error) { setError(result.error); setGoogleLoading(false); return }
     localStorage.setItem('sisgo_has_session', '1')
-    window.location.href = url
+    window.location.href = (result as { redirectTo: string }).redirectTo
   }
 
   useEffect(() => {

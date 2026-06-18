@@ -177,14 +177,13 @@ export async function getLoginRedirect() {
   return { redirectTo: `/${org.slug}/pessoas` }
 }
 
-export async function loginWithGoogle(native = false) {
+export async function loginWithGoogle() {
   const supabase = await createClient()
   const siteUrl = await getSiteUrl()
-  const callbackPath = native ? '/api/auth/native-callback' : '/auth/callback'
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: `${siteUrl}${callbackPath}`,
+      redirectTo: `${siteUrl}/auth/callback`,
       skipBrowserRedirect: true,
     },
   })

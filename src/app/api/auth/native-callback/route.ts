@@ -1,35 +1,17 @@
-import { NextResponse, type NextRequest } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
+import { type NextRequest } from 'next/server'
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url)
-  const code = searchParams.get('code')
+  const code = new URL(request.url).searchParams.get('code')
 
   if (!code) {
-    return NextResponse.redirect('sisgo://auth/error?message=no_code')
+    return new Response('Missing code', { status: 400 })
   }
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return request.cookies.getAll() },
-        setAll() { /* native flow — no cookies needed */ },
-      },
-    },
+  return new Response(
+    `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>
+<script>window.location.replace("sisgo://auth/callback?code=${encodeURIComponent(code)}");</script>
+<p style="font-family:system-ui;text-align:center;margin-top:40vh">Voltando ao SISGO…</p>
+</body></html>`,
+    { headers: { 'Content-Type': 'text/html' } },
   )
-
-  const { error, data } = await supabase.auth.exchangeCodeForSession(code)
-
-  if (error || !data.session) {
-    return NextResponse.redirect('sisgo://auth/error?message=exchange_failed')
-  }
-
-  const params = new URLSearchParams({
-    access_token: data.session.access_token,
-    refresh_token: data.session.refresh_token,
-  })
-
-  return NextResponse.redirect(`sisgo://auth/callback?${params}`)
 }
