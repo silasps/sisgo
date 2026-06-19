@@ -62,7 +62,6 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
       .select('id, room_id, bed_id, guest_name, guest_type, check_in, check_out, status, school_id')
       .eq('organization_id', org.id)
       .in('status', ['confirmada', 'checkin'])
-      .lte('check_in', today)
       .order('check_in'),
     sbAdmin.from('schools')
       .select('id, name')
@@ -83,9 +82,14 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
   // School name map for display
   const schoolMap = new Map(schools.map(s => [s.id, s.name]))
 
-  // ── KPIs ────────────────────────────────────────────────────────────────────
-  const activeBeds   = bedsList.filter(b => b.status !== 'manutencao')
-  const occupiedBeds = bedsList.filter(b => b.status === 'ocupada').length
+  // ── KPIs (ocupação real de HOJE, não pelo status da cama) ────────────────
+  const activeBeds = bedsList.filter(b => b.status !== 'manutencao')
+  const bedsOccupiedToday = new Set(
+    allocsList
+      .filter(a => a.bed_id && a.check_in <= today && a.check_out > today)
+      .map(a => a.bed_id)
+  )
+  const occupiedBeds = bedsOccupiedToday.size
   const availBeds    = activeBeds.length - occupiedBeds
   const arrivalsToday  = allocsList.filter(a => a.check_in === today).length
   const departuresToday = allocsList.filter(a => a.check_out === today).length

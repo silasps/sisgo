@@ -161,8 +161,10 @@ export async function createAllocation(data: {
   if (error) throw new Error(error.message)
 
   if (data.bedId) {
+    const today = new Date().toISOString().split('T')[0]
+    const bedStatus = data.checkIn <= today ? 'ocupada' : 'reservada'
     await sb.from('beds').update({
-      status: 'ocupada',
+      status: bedStatus,
       updated_at: new Date().toISOString(),
     }).eq('id', data.bedId).eq('organization_id', data.organizationId)
   }
@@ -233,6 +235,9 @@ export async function allocateWholeRoom(data: {
     .eq('organization_id', data.organizationId)
     .neq('status', 'manutencao')
 
+  const today = new Date().toISOString().split('T')[0]
+  const bedStatus = data.checkIn <= today ? 'ocupada' : 'reservada'
+
   for (const bed of (roomBeds ?? [])) {
     await sb.from('room_allocations').insert({
       organization_id: data.organizationId,
@@ -247,7 +252,7 @@ export async function allocateWholeRoom(data: {
       created_by:      data.createdBy,
     })
     await sb.from('beds').update({
-      status: 'ocupada',
+      status: bedStatus,
       updated_at: new Date().toISOString(),
     }).eq('id', bed.id)
   }
