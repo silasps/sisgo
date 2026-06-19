@@ -53,7 +53,6 @@ export default async function SolicitacoesPage({ params, searchParams }: Props) 
   const isSecretaria = allRoles.includes('secretaria')
   const isDeptRole = isHospitalidade || isManutencao || isSecretaria
 
-  // Quem pode resolver qual departamento
   const resolverDepts = new Set<string>()
   if (isManagement) {
     ;['hospitalidade', 'manutencao', 'secretaria', 'dh', 'outro'].forEach(d => resolverDepts.add(d))
@@ -63,7 +62,6 @@ export default async function SolicitacoesPage({ params, searchParams }: Props) 
     if (isSecretaria) resolverDepts.add('secretaria')
   }
 
-  // Quais departamentos são visíveis
   let visibleDeptIds: string[]
   if (isManagement || !isDeptRole) {
     visibleDeptIds = ['hospitalidade', 'manutencao', 'secretaria', 'dh', 'outro']
@@ -71,28 +69,29 @@ export default async function SolicitacoesPage({ params, searchParams }: Props) 
     visibleDeptIds = [...resolverDepts]
   }
 
-  // Buscar solicitações
   const baseQuery = (isManagement ? sbAdmin : supabase)
     .from('service_requests')
-    .select('id, request_type, subject, description, priority, location_notes, status, created_at, target_department, requester_id')
+    .select('id, request_type, subject, description, priority, location_notes, status, created_at, target_department, requester_id, assigned_to, redirected_from')
     .eq('organization_id', org.id)
     .in('target_department', visibleDeptIds)
     .order('created_at', { ascending: false })
 
-  // Papel não gestor e não deptRole vê apenas as próprias
   const { data: rawRequests } = (!isManagement && !isDeptRole)
     ? await baseQuery.eq('requester_id', user.id)
     : await baseQuery
 
-  // Nomes dos solicitantes para gestão/dept
   let nameMap = new Map<string, string>()
   if (isManagement || isDeptRole) {
-    const ids = [...new Set((rawRequests ?? []).map((r: { requester_id: string }) => r.requester_id))]
-    if (ids.length > 0) {
+    const userIds = new Set<string>()
+    for (const r of (rawRequests ?? []) as Array<{ requester_id: string; assigned_to: string | null }>) {
+      userIds.add(r.requester_id)
+      if (r.assigned_to) userIds.add(r.assigned_to)
+    }
+    if (userIds.size > 0) {
       const { data: people } = await sbAdmin
         .from('people')
         .select('user_id, full_name')
-        .in('user_id', ids)
+        .in('user_id', [...userIds])
       nameMap = new Map(
         (people ?? []).map((p: { user_id: string | null; full_name: string }) => [p.user_id ?? '', p.full_name])
       )
@@ -103,6 +102,7 @@ export default async function SolicitacoesPage({ params, searchParams }: Props) 
     id: string; request_type: string; subject: string; description: string | null
     priority: string | null; location_notes: string | null; status: string
     created_at: string; target_department: string; requester_id: string
+    assigned_to: string | null; redirected_from: string | null
   }) => ({
     id: r.id,
     request_type: r.request_type,
@@ -114,12 +114,13 @@ export default async function SolicitacoesPage({ params, searchParams }: Props) 
     created_at: r.created_at,
     target_department: r.target_department,
     requesterName: nameMap.get(r.requester_id) ?? null,
+    assignedToName: r.assigned_to ? (nameMap.get(r.assigned_to) ?? null) : null,
+    redirected_from: r.redirected_from,
   }))
 
-  // Contagens abertas por departamento
   const openCounts = new Map<string, number>()
   for (const r of requests) {
-    if (['pendente', 'em_analise'].includes(r.status)) {
+    if (['pendente', 'em_analise', 'em_andamento'].includes(r.status)) {
       openCounts.set(r.target_department, (openCounts.get(r.target_department) ?? 0) + 1)
     }
   }
@@ -128,6 +129,7 @@ export default async function SolicitacoesPage({ params, searchParams }: Props) 
     id,
     openCount: openCounts.get(id) ?? 0,
     canResolve: resolverDepts.has(id),
+    canRedirect: isManagement,
     showEstoqueLink: id === 'manutencao' && userHasAnyRole(allRoles, MANUTENCAO_ROLES),
     slug,
   }))
@@ -177,8 +179,45 @@ export default async function SolicitacoesPage({ params, searchParams }: Props) 
     const status = String(formData.get('status') ?? '')
     const { data: { user: u } } = await (await createClient()).auth.getUser()
     if (!u || !id || !status) return
-    await (await createClient()).from('service_requests').update({
+    await createAdminClient().from('service_requests').update({
       status,
+      reviewed_by: u.id,
+      reviewed_at: new Date().toISOString(),
+    }).eq('id', id)
+    revalidatePath(`/${slug}/manutencao`)
+  }
+
+  const handleAssign = async (formData: FormData) => {
+    'use server'
+    const id = String(formData.get('id') ?? '')
+    const { data: { user: u } } = await (await createClient()).auth.getUser()
+    if (!u || !id) return
+    await createAdminClient().from('service_requests').update({
+      assigned_to: u.id,
+      status: 'em_analise',
+      reviewed_by: u.id,
+      reviewed_at: new Date().toISOString(),
+    }).eq('id', id)
+    revalidatePath(`/${slug}/manutencao`)
+  }
+
+  const handleRedirect = async (formData: FormData) => {
+    'use server'
+    const id = String(formData.get('id') ?? '')
+    const newDept = String(formData.get('new_department') ?? '')
+    const { data: { user: u } } = await (await createClient()).auth.getUser()
+    if (!u || !id || !newDept) return
+
+    const sb = createAdminClient()
+    const { data: req } = await sb.from('service_requests')
+      .select('target_department')
+      .eq('id', id)
+      .single()
+    if (!req) return
+
+    await sb.from('service_requests').update({
+      target_department: newDept,
+      redirected_from: req.target_department,
       reviewed_by: u.id,
       reviewed_at: new Date().toISOString(),
     }).eq('id', id)
@@ -196,6 +235,8 @@ export default async function SolicitacoesPage({ params, searchParams }: Props) 
           requests={requests}
           handleCreate={handleCreate}
           handleStatus={handleStatus}
+          handleAssign={handleAssign}
+          handleRedirect={handleRedirect}
           successMsg={successMsg}
         />
       </div>

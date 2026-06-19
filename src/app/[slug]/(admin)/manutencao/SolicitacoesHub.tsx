@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
-import { BedDouble, Wrench, FileText, Users, MoreHorizontal, MapPin, type LucideIcon } from 'lucide-react'
+import { BedDouble, Wrench, FileText, Users, MoreHorizontal, MapPin, ArrowRight, UserCheck, type LucideIcon } from 'lucide-react'
 
 type DeptDef = {
   id: string
@@ -83,12 +83,20 @@ const REQUEST_TYPES: Record<string, { value: string; label: string }[]> = {
   ],
 }
 
-const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
-  pendente:   { label: 'Pendente',     cls: 'bg-yellow-100 text-yellow-800' },
-  em_analise: { label: 'Em andamento', cls: 'bg-blue-100 text-blue-800' },
-  resolvido:  { label: 'Resolvido',    cls: 'bg-green-100 text-green-800' },
-  rejeitado:  { label: 'Rejeitado',    cls: 'bg-red-100 text-red-800' },
+const STATUS_CONFIG: Record<string, { label: string; cls: string; step: number }> = {
+  pendente:      { label: 'Pendente',      cls: 'bg-yellow-100 text-yellow-800', step: 0 },
+  em_analise:    { label: 'Em análise',    cls: 'bg-blue-100 text-blue-800',     step: 1 },
+  em_andamento:  { label: 'Em andamento',  cls: 'bg-cyan-100 text-cyan-800',     step: 2 },
+  resolvido:     { label: 'Resolvido',     cls: 'bg-green-100 text-green-800',   step: 3 },
+  rejeitado:     { label: 'Rejeitado',     cls: 'bg-red-100 text-red-800',       step: -1 },
 }
+
+const TIMELINE_STEPS = [
+  { key: 'pendente',     label: 'Pendente' },
+  { key: 'em_analise',   label: 'Análise' },
+  { key: 'em_andamento', label: 'Andamento' },
+  { key: 'resolvido',    label: 'Resolvido' },
+]
 
 const REQUEST_TYPE_LABELS: Record<string, string> = {
   hospedagem: 'Hospedagem', logistica: 'Logística', refeicao_especial: 'Refeição especial',
@@ -101,6 +109,7 @@ export type DeptInfo = {
   id: string
   openCount: number
   canResolve: boolean
+  canRedirect: boolean
   showEstoqueLink: boolean
   slug: string
 }
@@ -116,6 +125,8 @@ export type RequestItem = {
   created_at: string
   target_department: string
   requesterName: string | null
+  assignedToName: string | null
+  redirected_from: string | null
 }
 
 type Props = {
@@ -123,6 +134,8 @@ type Props = {
   requests: RequestItem[]
   handleCreate: (fd: FormData) => Promise<void>
   handleStatus: (fd: FormData) => Promise<void>
+  handleAssign: (fd: FormData) => Promise<void>
+  handleRedirect: (fd: FormData) => Promise<void>
   successMsg?: string
 }
 
@@ -130,10 +143,44 @@ function fmtDate(d: string) {
   return new Date(d).toLocaleDateString('pt-BR')
 }
 
-export function SolicitacoesHub({ deptInfos, requests, handleCreate, handleStatus, successMsg }: Props) {
+function StatusTimeline({ status }: { status: string }) {
+  const cfg = STATUS_CONFIG[status]
+  if (!cfg || cfg.step < 0) {
+    return (
+      <div className="flex items-center gap-1 mt-2">
+        <div className="h-1 flex-1 rounded-full bg-red-200" />
+        <span className="text-[9px] text-red-500 font-medium">Rejeitado</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-0.5 mt-2">
+      {TIMELINE_STEPS.map((step, i) => {
+        const done = cfg.step >= i
+        const active = cfg.step === i
+        return (
+          <div key={step.key} className="flex-1 flex flex-col items-center gap-0.5">
+            <div className={`h-1 w-full rounded-full transition-colors ${
+              done ? (active ? 'bg-brand-500' : 'bg-green-400') : 'bg-gray-200'
+            }`} />
+            <span className={`text-[8px] leading-none ${
+              done ? (active ? 'text-brand-600 font-semibold' : 'text-green-600') : 'text-gray-300'
+            }`}>
+              {step.label}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+export function SolicitacoesHub({ deptInfos, requests, handleCreate, handleStatus, handleAssign, handleRedirect, successMsg }: Props) {
   const [activeDeptId, setActiveDeptId] = useState<string | null>(null)
   const [tab, setTab] = useState<'abertas' | 'resolvidas'>('abertas')
   const [showForm, setShowForm] = useState(false)
+  const [redirectingId, setRedirectingId] = useState<string | null>(null)
 
   const deptMap = new Map(deptInfos.map(d => [d.id, d]))
   const activeDef = DEPT_DEFS.find(d => d.id === activeDeptId)
@@ -143,7 +190,7 @@ export function SolicitacoesHub({ deptInfos, requests, handleCreate, handleStatu
 
   const modalRequests = requests.filter(r => {
     if (r.target_department !== activeDeptId) return false
-    const isOpen = ['pendente', 'em_analise'].includes(r.status)
+    const isOpen = ['pendente', 'em_analise', 'em_andamento'].includes(r.status)
     return tab === 'abertas' ? isOpen : !isOpen
   })
 
@@ -151,11 +198,13 @@ export function SolicitacoesHub({ deptInfos, requests, handleCreate, handleStatu
     setActiveDeptId(id)
     setTab('abertas')
     setShowForm(false)
+    setRedirectingId(null)
   }
 
   function closeModal() {
     setActiveDeptId(null)
     setShowForm(false)
+    setRedirectingId(null)
   }
 
   return (
@@ -241,7 +290,9 @@ export function SolicitacoesHub({ deptInfos, requests, handleCreate, handleStatu
             ) : (
               <div className="flex flex-col gap-3">
                 {modalRequests.map(req => {
-                  const s = STATUS_CONFIG[req.status] ?? { label: req.status, cls: 'bg-gray-100 text-gray-700' }
+                  const s = STATUS_CONFIG[req.status] ?? { label: req.status, cls: 'bg-gray-100 text-gray-700', step: -1 }
+                  const isOpenStatus = ['pendente', 'em_analise', 'em_andamento'].includes(req.status)
+
                   return (
                     <div key={req.id} className="rounded-xl border border-gray-200 p-4 flex flex-col gap-2 bg-gray-50">
                       <div className="flex items-start justify-between gap-2 flex-wrap">
@@ -251,6 +302,11 @@ export function SolicitacoesHub({ deptInfos, requests, handleCreate, handleStatu
                           </span>
                           {req.priority === 'urgente' && (
                             <span className="text-xs font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded">Urgente</span>
+                          )}
+                          {req.redirected_from && (
+                            <span className="text-[10px] text-gray-400 italic">
+                              redirecionado de {DEPT_DEFS.find(d => d.id === req.redirected_from)?.label ?? req.redirected_from}
+                            </span>
                           )}
                         </div>
                         <span className={`text-xs font-medium px-2 py-0.5 rounded ${s.cls}`}>{s.label}</span>
@@ -265,18 +321,45 @@ export function SolicitacoesHub({ deptInfos, requests, handleCreate, handleStatu
                         <p className="text-xs text-gray-600 whitespace-pre-line">{req.description}</p>
                       )}
 
+                      {/* Responsável */}
+                      {req.assignedToName ? (
+                        <p className="text-xs text-brand-600 flex items-center gap-1">
+                          <UserCheck className="size-3" /> {req.assignedToName}
+                        </p>
+                      ) : isOpenStatus && activeInfo.canResolve ? (
+                        <form action={handleAssign} className="inline">
+                          <input type="hidden" name="id" value={req.id} />
+                          <button type="submit" className="text-xs text-gray-400 hover:text-brand-600 flex items-center gap-1 transition-colors">
+                            <UserCheck className="size-3" /> Assumir
+                          </button>
+                        </form>
+                      ) : null}
+
+                      {/* Timeline */}
+                      <StatusTimeline status={req.status} />
+
                       <div className="flex items-center justify-between flex-wrap gap-2 pt-1 border-t border-gray-100">
                         <span className="text-xs text-gray-400">
                           {req.requesterName ? `${req.requesterName} · ` : ''}
                           {fmtDate(req.created_at)}
                         </span>
-                        {activeInfo.canResolve && !['resolvido', 'rejeitado'].includes(req.status) && (
+
+                        {activeInfo.canResolve && isOpenStatus && (
                           <div className="flex gap-2 flex-wrap">
                             {req.status === 'pendente' && (
                               <form action={handleStatus}>
                                 <input type="hidden" name="id" value={req.id} />
                                 <input type="hidden" name="status" value="em_analise" />
                                 <button type="submit" className="text-xs px-3 py-1 rounded-lg border border-blue-300 text-blue-700 hover:bg-blue-50 transition-colors">
+                                  Analisar
+                                </button>
+                              </form>
+                            )}
+                            {req.status === 'em_analise' && (
+                              <form action={handleStatus}>
+                                <input type="hidden" name="id" value={req.id} />
+                                <input type="hidden" name="status" value="em_andamento" />
+                                <button type="submit" className="text-xs px-3 py-1 rounded-lg border border-cyan-300 text-cyan-700 hover:bg-cyan-50 transition-colors">
                                   Iniciar
                                 </button>
                               </form>
@@ -295,6 +378,41 @@ export function SolicitacoesHub({ deptInfos, requests, handleCreate, handleStatu
                                 Rejeitar
                               </button>
                             </form>
+                          </div>
+                        )}
+
+                        {/* Redirecionar — só para "outro" e management */}
+                        {activeInfo.canRedirect && activeDeptId === 'outro' && isOpenStatus && (
+                          <div>
+                            {redirectingId === req.id ? (
+                              <form action={handleRedirect} className="flex items-center gap-1">
+                                <input type="hidden" name="id" value={req.id} />
+                                <select
+                                  name="new_department"
+                                  required
+                                  className="text-xs border border-gray-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-brand-400"
+                                >
+                                  <option value="">Para…</option>
+                                  {DEPT_DEFS.filter(d => d.id !== 'outro').map(d => (
+                                    <option key={d.id} value={d.id}>{d.label}</option>
+                                  ))}
+                                </select>
+                                <button type="submit" className="text-xs px-2 py-1 rounded-lg bg-brand-500 text-white hover:bg-brand-600 transition-colors">
+                                  <ArrowRight size={12} />
+                                </button>
+                                <button type="button" onClick={() => setRedirectingId(null)} className="text-xs text-gray-400 hover:text-gray-600">
+                                  ✕
+                                </button>
+                              </form>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setRedirectingId(req.id)}
+                                className="text-xs text-gray-400 hover:text-brand-600 flex items-center gap-1 transition-colors"
+                              >
+                                <ArrowRight size={12} /> Redirecionar
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
@@ -317,7 +435,7 @@ export function SolicitacoesHub({ deptInfos, requests, handleCreate, handleStatu
                 <p className="text-sm font-semibold text-gray-700 mb-3">Nova solicitação para {activeDef.label}</p>
                 <form action={handleCreate} className="space-y-3">
                   <input type="hidden" name="target_department" value={activeDeptId} />
-                  <div className={`grid gap-3 ${activeDeptId === 'manutencao' ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
+                  <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Tipo *</label>
                       <select name="request_type" required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)]">
@@ -327,15 +445,13 @@ export function SolicitacoesHub({ deptInfos, requests, handleCreate, handleStatu
                         ))}
                       </select>
                     </div>
-                    {activeDeptId === 'manutencao' && (
-                      <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Prioridade</label>
-                        <select name="priority" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)]">
-                          <option value="normal">Normal</option>
-                          <option value="urgente">● Urgente</option>
-                        </select>
-                      </div>
-                    )}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Prioridade</label>
+                      <select name="priority" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)]">
+                        <option value="normal">Normal</option>
+                        <option value="urgente">Urgente</option>
+                      </select>
+                    </div>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Assunto *</label>

@@ -175,10 +175,150 @@ export async function createServiceRequest(
 }
 
 // ── Hospitalidade / gestão: atualiza status de serviço ───────────────────────
-export async function updateServiceStatus(requestId: string, status: string) {
+export async function updateServiceStatus(requestId: string, status: string, reviewedBy: string) {
   const sb = createAdminClient()
   await sb.from('service_requests').update({
-    status: status as 'pendente' | 'em_analise' | 'resolvido' | 'rejeitado',
+    status: status as 'pendente' | 'em_analise' | 'em_andamento' | 'resolvido' | 'rejeitado',
+    reviewed_by: reviewedBy,
     reviewed_at: new Date().toISOString(),
   }).eq('id', requestId)
+}
+
+// ── Assumir solicitação de serviço ───────────────────────────────────────────
+export async function assignServiceRequest(requestId: string, userId: string) {
+  const sb = createAdminClient()
+  await sb.from('service_requests').update({
+    assigned_to: userId,
+    status: 'em_analise',
+    reviewed_by: userId,
+    reviewed_at: new Date().toISOString(),
+  }).eq('id', requestId)
+}
+
+// ── Redirecionar solicitação de "outro" para departamento específico ─────────
+export async function redirectServiceRequest(requestId: string, newDepartment: string, reviewedBy: string) {
+  const sb = createAdminClient()
+  const { data: req } = await sb.from('service_requests')
+    .select('target_department')
+    .eq('id', requestId)
+    .single()
+  if (!req) throw new Error('Solicitação não encontrada')
+
+  await sb.from('service_requests').update({
+    target_department: newDepartment,
+    redirected_from: req.target_department,
+    reviewed_by: reviewedBy,
+    reviewed_at: new Date().toISOString(),
+  }).eq('id', requestId)
+}
+
+// ── Transferência de obreiro entre ministérios ───────────────────────────────
+
+export async function requestTransfer(data: {
+  organizationId: string
+  personId: string
+  fromMinistryId: string
+  toMinistryId: string
+  requestedBy: string
+  reason: string | null
+}) {
+  const sb = createAdminClient()
+  const { error } = await sb.from('ministry_transfers').insert({
+    organization_id:  data.organizationId,
+    person_id:        data.personId,
+    from_ministry_id: data.fromMinistryId,
+    to_ministry_id:   data.toMinistryId,
+    requested_by:     data.requestedBy,
+    reason:           data.reason,
+  })
+  if (error) throw new Error(error.message)
+}
+
+export async function respondTransferAsDestination(
+  transferId: string,
+  userId: string,
+  accept: boolean,
+  notes: string | null,
+) {
+  const sb = createAdminClient()
+  const { error } = await sb.from('ministry_transfers').update({
+    status:           accept ? 'aceito_destino' : 'rejeitado_destino',
+    dest_reviewed_by: userId,
+    dest_reviewed_at: new Date().toISOString(),
+    dest_notes:       notes,
+    updated_at:       new Date().toISOString(),
+  }).eq('id', transferId).eq('status', 'pendente_destino')
+  if (error) throw new Error(error.message)
+}
+
+export async function confirmTransferAsDH(
+  transferId: string,
+  userId: string,
+  confirm: boolean,
+  notes: string | null,
+) {
+  const sb = createAdminClient()
+
+  if (!confirm) {
+    await sb.from('ministry_transfers').update({
+      status:         'rejeitado_dh',
+      dh_reviewed_by: userId,
+      dh_reviewed_at: new Date().toISOString(),
+      dh_notes:       notes,
+      updated_at:     new Date().toISOString(),
+    }).eq('id', transferId).eq('status', 'aceito_destino')
+    return
+  }
+
+  const { data: transfer } = await sb.from('ministry_transfers')
+    .select('*')
+    .eq('id', transferId)
+    .eq('status', 'aceito_destino')
+    .single()
+  if (!transfer) throw new Error('Transferência não encontrada')
+
+  const { data: currentMember } = await sb.from('ministry_members')
+    .select('id')
+    .eq('ministry_id', transfer.from_ministry_id)
+    .eq('person_id', transfer.person_id)
+    .eq('active', true)
+    .single()
+  if (currentMember) await removeMember(currentMember.id)
+
+  const { data: defaultRole } = await sb.from('ministry_roles')
+    .select('id')
+    .eq('ministry_id', transfer.to_ministry_id)
+    .eq('name', 'Membro')
+    .single()
+  await addMember(transfer.to_ministry_id, transfer.person_id, defaultRole?.id ?? null)
+
+  const { data: destMinistry } = await sb.from('ministries')
+    .select('name')
+    .eq('id', transfer.to_ministry_id)
+    .single()
+  if (destMinistry) {
+    await sb.from('staff_profiles')
+      .update({ area: destMinistry.name, updated_at: new Date().toISOString() })
+      .eq('person_id', transfer.person_id)
+      .eq('organization_id', transfer.organization_id)
+  }
+
+  const today = new Date().toISOString().split('T')[0]
+  await sb.from('ministry_transfers').update({
+    status:         'efetivado',
+    dh_reviewed_by: userId,
+    dh_reviewed_at: new Date().toISOString(),
+    dh_notes:       notes,
+    effective_date: today,
+    updated_at:     new Date().toISOString(),
+  }).eq('id', transferId)
+}
+
+export async function cancelTransfer(transferId: string, userId: string) {
+  const sb = createAdminClient()
+  await sb.from('ministry_transfers')
+    .update({ status: 'cancelado', updated_at: new Date().toISOString() })
+    .eq('id', transferId)
+    .eq('requested_by', userId)
+    .in('status', ['pendente_destino', 'aceito_destino'])
 }
