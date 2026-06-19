@@ -4,6 +4,7 @@ import { Header } from '@/components/layout/Header'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { userHasAnyRole, GENERAL_FINANCE_ROLES } from '@/lib/auth/permissions'
+import { ExportButtons } from './ExportButtons'
 
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ year?: string; month?: string }> }
 
@@ -116,21 +117,39 @@ export default async function RelatoriosPage({ params, searchParams }: Props) {
       <main className="p-4 md:p-6 space-y-6 max-w-4xl">
 
         {/* Filtro de período */}
-        <form method="get" action={`/${slug}/financeiro/relatorios`} className="flex flex-wrap gap-2 items-center bg-white rounded-xl border border-gray-200 p-3">
-          <span className="text-xs font-medium text-gray-600">Período:</span>
-          <select name="year" defaultValue={year} className="text-sm px-3 py-1.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-400">
-            {years.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-          <select name="month" defaultValue={String(qMonth ?? '')} className="text-sm px-3 py-1.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-400">
-            {months.map(m => <option key={m.v} value={m.v}>{m.l}</option>)}
-          </select>
-          <button type="submit" className="px-4 py-1.5 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
-            Atualizar
-          </button>
-          <span className="ml-auto text-xs text-gray-400">
-            {new Date(`${periodStart}T00:00:00`).toLocaleDateString('pt-BR')} → {new Date(`${periodEnd}T00:00:00`).toLocaleDateString('pt-BR')}
-          </span>
-        </form>
+        <div className="bg-white rounded-xl border border-gray-200 p-3 space-y-3">
+          <form method="get" action={`/${slug}/financeiro/relatorios`} className="flex flex-wrap gap-2 items-center">
+            <span className="text-xs font-medium text-gray-600">Período:</span>
+            <select name="year" defaultValue={year} className="text-sm px-3 py-1.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-400">
+              {years.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <select name="month" defaultValue={String(qMonth ?? '')} className="text-sm px-3 py-1.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-400">
+              {months.map(m => <option key={m.v} value={m.v}>{m.l}</option>)}
+            </select>
+            <button type="submit" className="px-4 py-1.5 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
+              Atualizar
+            </button>
+            <span className="ml-auto text-xs text-gray-400">
+              {new Date(`${periodStart}T00:00:00`).toLocaleDateString('pt-BR')} → {new Date(`${periodEnd}T00:00:00`).toLocaleDateString('pt-BR')}
+            </span>
+          </form>
+          <ExportButtons
+            periodLabel={`${new Date(`${periodStart}T00:00:00`).toLocaleDateString('pt-BR')} a ${new Date(`${periodEnd}T00:00:00`).toLocaleDateString('pt-BR')}`}
+            totalReceita={totalReceita}
+            totalDespesa={totalDespesa}
+            resultado={resultado}
+            receitaByCategory={receitaByCategory}
+            despesaByCategory={despesaByCategory}
+            transactions={transactions.map(t => ({
+              date: t.date,
+              description: t.description,
+              type: t.type,
+              category: t.finance_categories?.name ?? t.category ?? 'Sem categoria',
+              fund: t.finance_funds?.name ?? '',
+              amount: Number(t.amount),
+            }))}
+          />
+        </div>
 
         {/* Resultado resumo */}
         <section className="grid grid-cols-3 gap-3 animate-stagger">

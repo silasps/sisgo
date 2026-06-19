@@ -109,3 +109,10 @@
     animation: none;
   }
 }
+
+@media print {
+  aside, nav, .shrink-0, button[type="submit"], form[method="get"],
+  [data-no-print] { display: none !important; }
+  body { background: white !important; padding: 0 !important; }
+  main { max-width: 100% !important; padding: 1rem !important; }
+}
