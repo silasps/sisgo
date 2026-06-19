@@ -7,6 +7,7 @@ import {
   updateMinistry, assignLeader, removeLeader,
   addMember, removeMember, approveRequest, rejectRequest,
   submitMemberRequest, cancelRequest, createServiceRequest,
+  requestTransfer, respondTransferAsDestination, confirmTransferAsDH, cancelTransfer,
 } from './actions'
 import { isManagementRole } from '@/lib/auth/permissions'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
@@ -127,6 +128,44 @@ export default async function MinisterioDetailPage({ params, searchParams }: Pro
   if (leaderRow) {
     const { data: { user: lu } } = await sbAdmin.auth.admin.getUserById(leaderRow.user_id)
     leaderEmail = lu?.email ?? null
+  }
+
+  // ── Transferências ───────────────────────────────────────────────────────────
+  type TransferRow = {
+    id: string; person_id: string; from_ministry_id: string; to_ministry_id: string
+    reason: string | null; status: string; created_at: string
+    dest_notes: string | null; dh_notes: string | null
+  }
+  const { data: transfersRaw } = await sbAdmin.from('ministry_transfers')
+    .select('id, person_id, from_ministry_id, to_ministry_id, reason, status, created_at, dest_notes, dh_notes')
+    .eq('organization_id', orgId)
+    .or(`from_ministry_id.eq.${id},to_ministry_id.eq.${id}`)
+    .order('created_at', { ascending: false })
+    .limit(30)
+  const transfers = (transfersRaw ?? []) as TransferRow[]
+
+  const transferPersonIds = [...new Set(transfers.map(t => t.person_id))]
+  const transferMinistryIds = [...new Set(transfers.flatMap(t => [t.from_ministry_id, t.to_ministry_id]))]
+  let transferPersonMap = new Map<string, string>()
+  let transferMinistryMap = new Map<string, string>()
+  if (transferPersonIds.length > 0) {
+    const { data: pData } = await sbAdmin.from('people').select('id, full_name').in('id', transferPersonIds)
+    transferPersonMap = new Map((pData ?? []).map(p => [p.id, p.full_name]))
+  }
+  if (transferMinistryIds.length > 0) {
+    const { data: mData } = await sbAdmin.from('ministries').select('id, name').in('id', transferMinistryIds)
+    transferMinistryMap = new Map((mData ?? []).map(m => [m.id, m.name]))
+  }
+
+  let otherMinistries: Array<{ id: string; name: string }> = []
+  if (isLiderMinisterio || isManagement) {
+    const { data: mData } = await supabase.from('ministries')
+      .select('id, name')
+      .eq('organization_id', orgId)
+      .eq('active', true)
+      .neq('id', id)
+      .order('name')
+    otherMinistries = mData ?? []
   }
 
   // ── Dados exclusivos do DH ───────────────────────────────────────────────────
@@ -292,13 +331,53 @@ export default async function MinisterioDetailPage({ params, searchParams }: Pro
     redirect(`/${slug}/ministerios/${id}?msg=servico_enviado`)
   }
 
+  // ── Transfer actions ─────────────────────────────────────────────────────────
+  const handleRequestTransfer = async (formData: FormData) => {
+    'use server'
+    const personId = formData.get('person_id') as string
+    const toMinistryId = formData.get('to_ministry_id') as string
+    const reason = (formData.get('reason') as string)?.trim() || null
+    if (!personId || !toMinistryId) return
+    await requestTransfer({ organizationId: orgId, personId, fromMinistryId: id, toMinistryId, requestedBy: user.id, reason })
+    redirect(`/${slug}/ministerios/${id}?msg=transfer_enviada`)
+  }
+
+  const handleRespondTransfer = async (formData: FormData) => {
+    'use server'
+    const transferId = formData.get('transfer_id') as string
+    const accept = formData.get('accept') === 'true'
+    const notes = (formData.get('notes') as string)?.trim() || null
+    await respondTransferAsDestination(transferId, user.id, accept, notes)
+    redirect(`/${slug}/ministerios/${id}?msg=${accept ? 'transfer_aceita' : 'transfer_rejeitada'}`)
+  }
+
+  const handleConfirmTransfer = async (formData: FormData) => {
+    'use server'
+    const transferId = formData.get('transfer_id') as string
+    const confirm = formData.get('confirm') === 'true'
+    const notes = (formData.get('notes') as string)?.trim() || null
+    await confirmTransferAsDH(transferId, user.id, confirm, notes)
+    redirect(`/${slug}/ministerios/${id}?msg=${confirm ? 'transfer_efetivada' : 'transfer_rejeitada_dh'}`)
+  }
+
+  const handleCancelTransfer = async (formData: FormData) => {
+    'use server'
+    await cancelTransfer(formData.get('transfer_id') as string, user.id)
+    redirect(`/${slug}/ministerios/${id}`)
+  }
+
   // ── Mensagens de feedback ────────────────────────────────────────────────────
   const msgs: Record<string, { text: string; cls: string }> = {
     criado:          { text: 'Ministério criado com sucesso.', cls: 'bg-green-50 border-green-200 text-green-700' },
     atualizado:      { text: 'Informações atualizadas.',       cls: 'bg-green-50 border-green-200 text-green-700' },
     lider_atribuido: { text: 'Líder atribuído com sucesso.',   cls: 'bg-green-50 border-green-200 text-green-700' },
     enviada:         { text: 'Solicitação enviada. O DH será notificado.',  cls: 'bg-blue-50 border-blue-200 text-blue-700' },
-    servico_enviado: { text: 'Solicitação de serviço enviada.', cls: 'bg-blue-50 border-blue-200 text-blue-700' },
+    servico_enviado:      { text: 'Solicitação de serviço enviada.', cls: 'bg-blue-50 border-blue-200 text-blue-700' },
+    transfer_enviada:     { text: 'Transferência solicitada. O líder do ministério destino será notificado.', cls: 'bg-blue-50 border-blue-200 text-blue-700' },
+    transfer_aceita:      { text: 'Transferência aceita. O DH confirmará a efetivação.', cls: 'bg-green-50 border-green-200 text-green-700' },
+    transfer_rejeitada:   { text: 'Transferência recusada.', cls: 'bg-red-50 border-red-200 text-red-700' },
+    transfer_efetivada:   { text: 'Transferência efetivada com sucesso.', cls: 'bg-green-50 border-green-200 text-green-700' },
+    transfer_rejeitada_dh: { text: 'Transferência recusada pelo DH.', cls: 'bg-red-50 border-red-200 text-red-700' },
   }
   const msgInfo = msg ? msgs[msg] : null
 
@@ -474,6 +553,46 @@ export default async function MinisterioDetailPage({ params, searchParams }: Pro
                 )}
               </div>
 
+              {/* Transferências para confirmar (DH) */}
+              {(() => {
+                const dhTransfers = transfers.filter(t => t.status === 'aceito_destino')
+                if (dhTransfers.length === 0) return null
+                return (
+                  <div className="bg-white rounded-xl border border-amber-200 p-5">
+                    <h2 className="text-sm font-semibold text-amber-700 mb-3">
+                      Transferências p/ Confirmar
+                      <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
+                        {dhTransfers.length}
+                      </span>
+                    </h2>
+                    <ul className="space-y-3">
+                      {dhTransfers.map(t => (
+                        <li key={t.id} className="border border-amber-100 rounded-lg p-3 space-y-2">
+                          <p className="text-sm font-medium text-gray-800">
+                            {transferPersonMap.get(t.person_id) ?? '—'}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {transferMinistryMap.get(t.from_ministry_id) ?? '?'} → {transferMinistryMap.get(t.to_ministry_id) ?? '?'}
+                          </p>
+                          {t.reason && <p className="text-xs text-gray-400 italic">&ldquo;{t.reason}&rdquo;</p>}
+                          {t.dest_notes && <p className="text-xs text-green-600">Líder destino: &ldquo;{t.dest_notes}&rdquo;</p>}
+                          <form action={handleConfirmTransfer} className="flex gap-2 pt-1">
+                            <input type="hidden" name="transfer_id" value={t.id} />
+                            <input name="notes" placeholder="Observação (opcional)" className="flex-1 border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand-400" />
+                            <button type="submit" name="confirm" value="true" className="px-3 py-1.5 bg-green-500 text-white text-xs font-medium rounded-lg hover:bg-green-600 transition-colors">
+                              Efetivar
+                            </button>
+                            <button type="submit" name="confirm" value="false" className="px-3 py-1.5 border border-red-200 text-red-500 text-xs font-medium rounded-lg hover:bg-red-50 transition-colors">
+                              Recusar
+                            </button>
+                          </form>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )
+              })()}
+
               {/* Solicitações pendentes do líder */}
               <div className="bg-white rounded-xl border border-gray-200 p-5">
                 <h2 className="text-sm font-semibold text-gray-700 mb-3">
@@ -552,38 +671,104 @@ export default async function MinisterioDetailPage({ params, searchParams }: Pro
               </span>
             </div>
 
-            {/* Membros + solicitar remoção/adição */}
+            {/* Transferências recebidas (líder destino precisa aceitar) */}
+            {(() => {
+              const incoming = transfers.filter(t => t.to_ministry_id === id && t.status === 'pendente_destino')
+              if (incoming.length === 0) return null
+              return (
+                <div className="bg-white rounded-xl border border-amber-200 p-5">
+                  <h2 className="text-sm font-semibold text-amber-700 mb-3">
+                    Transferências Recebidas
+                    <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">{incoming.length}</span>
+                  </h2>
+                  <ul className="space-y-3">
+                    {incoming.map(t => (
+                      <li key={t.id} className="border border-amber-100 rounded-lg p-3 space-y-2">
+                        <p className="text-sm font-medium text-gray-800">
+                          {transferPersonMap.get(t.person_id) ?? '—'}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Vindo de: {transferMinistryMap.get(t.from_ministry_id) ?? '?'}
+                        </p>
+                        {t.reason && <p className="text-xs text-gray-400 italic">&ldquo;{t.reason}&rdquo;</p>}
+                        <form action={handleRespondTransfer} className="flex gap-2 pt-1">
+                          <input type="hidden" name="transfer_id" value={t.id} />
+                          <input name="notes" placeholder="Observação (opcional)" className="flex-1 border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand-400" />
+                          <button type="submit" name="accept" value="true" className="px-3 py-1.5 bg-green-500 text-white text-xs font-medium rounded-lg hover:bg-green-600 transition-colors">
+                            Aceitar
+                          </button>
+                          <button type="submit" name="accept" value="false" className="px-3 py-1.5 border border-red-200 text-red-500 text-xs font-medium rounded-lg hover:bg-red-50 transition-colors">
+                            Recusar
+                          </button>
+                        </form>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )
+            })()}
+
+            {/* Membros + solicitar remoção/adição/transferência */}
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <h2 className="text-sm font-semibold text-gray-700 mb-3">Membros ({members.length})</h2>
               {members.length > 0 ? (
                 <ul className="divide-y divide-gray-100 mb-3">
-                  {members.map(m => (
-                    <li key={m.id} className="py-2.5 flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <span className="text-sm font-medium text-gray-900">{m.people?.full_name ?? '—'}</span>
-                        {m.ministry_roles && (
-                          <span className="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                            {m.ministry_roles.name}
-                          </span>
+                  {members.map(m => {
+                    const hasPendingTransfer = transfers.some(t => t.person_id === m.person_id && ['pendente_destino', 'aceito_destino'].includes(t.status))
+                    return (
+                      <li key={m.id} className="py-2.5 flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <span className="text-sm font-medium text-gray-900">{m.people?.full_name ?? '—'}</span>
+                          {m.ministry_roles && (
+                            <span className="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                              {m.ministry_roles.name}
+                            </span>
+                          )}
+                          {hasPendingTransfer && (
+                            <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                              Em transferência
+                            </span>
+                          )}
+                        </div>
+                        {!hasPendingTransfer && (
+                          <div className="flex gap-2 flex-shrink-0">
+                            {otherMinistries.length > 0 && (
+                              <details className="text-right">
+                                <summary className="text-xs text-blue-500 hover:text-blue-700 cursor-pointer select-none">
+                                  Transferir
+                                </summary>
+                                <form action={handleRequestTransfer} className="mt-1.5 space-y-1">
+                                  <input type="hidden" name="person_id" value={m.person_id} />
+                                  <select name="to_ministry_id" required className="w-44 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand-400">
+                                    <option value="">Para qual ministério?</option>
+                                    {otherMinistries.map(om => (
+                                      <option key={om.id} value={om.id}>{om.name}</option>
+                                    ))}
+                                  </select>
+                                  <input name="reason" placeholder="Motivo (opcional)" className="w-44 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand-400" />
+                                  <button type="submit" className="w-44 px-2 py-1 bg-blue-50 border border-blue-200 text-blue-600 text-xs font-medium rounded hover:bg-blue-100 transition-colors">
+                                    Solicitar transferência
+                                  </button>
+                                </form>
+                              </details>
+                            )}
+                            <details className="text-right">
+                              <summary className="text-xs text-red-400 hover:text-red-600 cursor-pointer select-none">
+                                Remover
+                              </summary>
+                              <form action={handleRequestRemove} className="mt-1.5 space-y-1">
+                                <input type="hidden" name="person_id" value={m.person_id} />
+                                <input name="notes" placeholder="Motivo (opcional)" className="w-44 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand-400" />
+                                <button type="submit" className="w-44 px-2 py-1 bg-red-50 border border-red-200 text-red-600 text-xs font-medium rounded hover:bg-red-100 transition-colors">
+                                  Enviar solicitação
+                                </button>
+                              </form>
+                            </details>
+                          </div>
                         )}
-                      </div>
-                      <details className="flex-shrink-0 text-right">
-                        <summary className="text-xs text-red-400 hover:text-red-600 cursor-pointer select-none">
-                          Solicitar remoção
-                        </summary>
-                        <form action={handleRequestRemove} className="mt-1.5 space-y-1">
-                          <input type="hidden" name="person_id" value={m.person_id} />
-                          <input
-                            name="notes" placeholder="Motivo (opcional)"
-                            className="w-44 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand-400"
-                          />
-                          <button type="submit" className="w-44 px-2 py-1 bg-red-50 border border-red-200 text-red-600 text-xs font-medium rounded hover:bg-red-100 transition-colors">
-                            Enviar solicitação
-                          </button>
-                        </form>
-                      </details>
-                    </li>
-                  ))}
+                      </li>
+                    )
+                  })}
                 </ul>
               ) : (
                 <p className="text-sm text-gray-400 mb-3">Nenhum membro ainda.</p>
@@ -655,6 +840,46 @@ export default async function MinisterioDetailPage({ params, searchParams }: Pro
                 </ul>
               </div>
             )}
+
+            {/* Transferências enviadas (líder vê status) */}
+            {(() => {
+              const sent = transfers.filter(t => t.from_ministry_id === id && !['cancelado'].includes(t.status))
+              if (sent.length === 0) return null
+              const STATUS_T: Record<string, { label: string; cls: string }> = {
+                pendente_destino:  { label: 'Aguardando destino', cls: 'bg-yellow-100 text-yellow-700' },
+                aceito_destino:    { label: 'Aceito, aguarda DH', cls: 'bg-blue-100 text-blue-700' },
+                rejeitado_destino: { label: 'Recusado pelo destino', cls: 'bg-red-100 text-red-600' },
+                rejeitado_dh:      { label: 'Recusado pelo DH', cls: 'bg-red-100 text-red-600' },
+                efetivado:         { label: 'Efetivado', cls: 'bg-green-100 text-green-700' },
+              }
+              return (
+                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                  <h2 className="text-sm font-semibold text-gray-700 mb-3">Transferências Enviadas</h2>
+                  <ul className="space-y-2">
+                    {sent.map(t => {
+                      const st = STATUS_T[t.status] ?? { label: t.status, cls: 'bg-gray-100 text-gray-600' }
+                      const canCancel = ['pendente_destino', 'aceito_destino'].includes(t.status)
+                      return (
+                        <li key={t.id} className="border border-gray-100 rounded-lg p-3 flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-800 truncate">
+                              {transferPersonMap.get(t.person_id) ?? '—'} → {transferMinistryMap.get(t.to_ministry_id) ?? '?'}
+                            </p>
+                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${st.cls}`}>{st.label}</span>
+                          </div>
+                          {canCancel && (
+                            <form action={handleCancelTransfer} className="flex-shrink-0">
+                              <input type="hidden" name="transfer_id" value={t.id} />
+                              <button type="submit" className="text-xs text-gray-400 hover:text-red-500 transition-colors">Cancelar</button>
+                            </form>
+                          )}
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              )
+            })()}
 
             {/* Reservas */}
             <div className="bg-white rounded-xl border border-gray-200 p-5">

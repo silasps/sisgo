@@ -272,7 +272,7 @@ export default async function SlugLayout({ children, params }: Props) {
   }
 
   if (isManagementUser) {
-    const [{ count: ac }, { count: mc }, { count: src }] = await Promise.all([
+    const [{ count: ac }, { count: mc }, { count: src }, { count: tc }] = await Promise.all([
       supabase.from('staff_applications')
         .select('*', { count: 'exact', head: true })
         .eq('organization_id', org.id)
@@ -285,8 +285,12 @@ export default async function SlugLayout({ children, params }: Props) {
         .select('*', { count: 'exact', head: true })
         .eq('organization_id', org.id)
         .in('status', ['pendente', 'em_analise']),
+      sbAdmin.from('ministry_transfers')
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', org.id)
+        .eq('status', 'aceito_destino'),
     ])
-    pendingTotal += (ac ?? 0) + (mc ?? 0) + (src ?? 0)
+    pendingTotal += (ac ?? 0) + (mc ?? 0) + (src ?? 0) + (tc ?? 0)
   }
 
   if (!isManagementUser && isManutencaoUser) {
@@ -355,10 +359,15 @@ export default async function SlugLayout({ children, params }: Props) {
       ? { data: { ministry_id: ministryId } }
       : await supabase.from('ministry_leaders').select('ministry_id').eq('user_id', user.id).single()
     if (lm?.ministry_id) {
-      const { count } = await supabase.from('ministry_pending_requests')
-        .select('*', { count: 'exact', head: true })
-        .eq('ministry_id', lm.ministry_id).eq('status', 'pendente')
-      pendingTotal += (count ?? 0)
+      const [{ count: reqCount }, { count: transferCount }] = await Promise.all([
+        supabase.from('ministry_pending_requests')
+          .select('*', { count: 'exact', head: true })
+          .eq('ministry_id', lm.ministry_id).eq('status', 'pendente'),
+        sbAdmin.from('ministry_transfers')
+          .select('*', { count: 'exact', head: true })
+          .eq('to_ministry_id', lm.ministry_id).eq('status', 'pendente_destino'),
+      ])
+      pendingTotal += (reqCount ?? 0) + (transferCount ?? 0)
     }
   }
 
