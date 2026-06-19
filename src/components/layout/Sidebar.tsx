@@ -36,6 +36,7 @@ export const ICON_MAP: Record<string, LucideIcon> = {
   reservas:       BedDouble,
   hospedagem:     Hotel,
   quartos:        DoorOpen,
+  agenda:         CalendarDays,
   refeicoes:      UtensilsCrossed,
   caixa:          Landmark,
   cozinha:        ChefHat,

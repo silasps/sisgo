@@ -292,14 +292,22 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
         )}
 
         {/* Bed Grid */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <h2 className="text-sm font-semibold text-gray-800">Mapa de Quartos e Camas</h2>
-          <Link
-            href={`/${slug}/hospedagem/quartos`}
-            className="text-xs font-medium text-brand-500 hover:text-brand-700 transition-colors"
-          >
-            Gerenciar quartos →
-          </Link>
+          <div className="flex gap-3">
+            <Link
+              href={`/${slug}/hospedagem/agenda`}
+              className="text-xs font-medium text-brand-500 hover:text-brand-700 transition-colors"
+            >
+              Agenda de reservas →
+            </Link>
+            <Link
+              href={`/${slug}/hospedagem/quartos`}
+              className="text-xs font-medium text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              Gerenciar quartos →
+            </Link>
+          </div>
         </div>
 
         {roomsList.length === 0 ? (

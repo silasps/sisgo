@@ -63,6 +63,7 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
     { href: `/${slug}/reservas`,     label: 'Reservas',         icon: 'reservas',      show: canSeeReservas, alert: hasReservationsPending },
     { href: `/${slug}/hospedagem`,   label: 'Hospedagem',       icon: 'hospedagem',    show: canSeeHospedagem },
     { href: `/${slug}/hospedagem/quartos`, label: 'Quartos',    icon: 'quartos',       show: canSeeHospedagem },
+    { href: `/${slug}/hospedagem/agenda`,  label: 'Agenda',     icon: 'agenda',        show: canSeeHospedagem },
     { href: `/${slug}/refeicoes`,    label: 'Minhas refeições', icon: 'refeicoes',     show: canBuyMeals },
     { href: `/${slug}/caixa`,        label: 'Caixa da área',    icon: 'caixa',         show: hasOwnCashScope },
     { href: `/${slug}/cozinha`,      label: 'Cozinha',          icon: 'cozinha',       show: isManagement || is('secretaria') || isCozinha },
@@ -76,7 +77,7 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
   ]
 
   if (isHospitalidade) {
-    return addPersonalSplit(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/pessoas', '/reservas', '/hospedagem', '/hospedagem/quartos', '/manutencao', '/refeicoes', '/minhas-contas')).map(toItem))
+    return addPersonalSplit(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/pessoas', '/reservas', '/hospedagem', '/hospedagem/quartos', '/hospedagem/agenda', '/manutencao', '/refeicoes', '/minhas-contas')).map(toItem))
   }
 
   if (isCozinha) {
