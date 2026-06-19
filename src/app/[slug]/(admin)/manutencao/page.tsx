@@ -62,12 +62,7 @@ export default async function SolicitacoesPage({ params, searchParams }: Props) 
     if (isSecretaria) resolverDepts.add('secretaria')
   }
 
-  let visibleDeptIds: string[]
-  if (isManagement || !isDeptRole) {
-    visibleDeptIds = ['hospitalidade', 'manutencao', 'secretaria', 'dh', 'outro']
-  } else {
-    visibleDeptIds = [...resolverDepts]
-  }
+  const visibleDeptIds = ['hospitalidade', 'manutencao', 'secretaria', 'dh', 'outro']
 
   const baseQuery = (isManagement ? sbAdmin : supabase)
     .from('service_requests')
