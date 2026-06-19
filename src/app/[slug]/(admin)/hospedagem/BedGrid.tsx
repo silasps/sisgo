@@ -48,6 +48,7 @@ type Props = {
   allocs: AllocData[]
   schools: SchoolOption[]
   today: string
+  advanceHours: number
   slug: string
   allocateAction: (fd: FormData) => Promise<void>
   allocateRoomAction: (fd: FormData) => Promise<void>
@@ -248,7 +249,7 @@ function MaintenanceToggle({ action, id, fieldName, isInMaintenance }: {
 // ── Main Component ───────────────────────────────────────────────────────────
 
 export function BedGrid({
-  rooms, beds, allocs, schools, today, slug,
+  rooms, beds, allocs, schools, today, advanceHours, slug,
   allocateAction, allocateRoomAction,
   checkinAction, checkoutAction,
   checkinRoomAction, checkoutRoomAction,
@@ -257,9 +258,15 @@ export function BedGrid({
   const [selectedBed, setSelectedBed] = useState<BedData | null>(null)
   const [selectedRoom, setSelectedRoom] = useState<RoomData | null>(null)
 
+  const now = new Date()
+  const cutoff = new Date(now.getTime() + advanceHours * 3_600_000)
+  const cutoffDate = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, '0')}-${String(cutoff.getDate()).padStart(2, '0')}`
+
+  const visibleAllocs = allocs.filter(a => a.checkIn <= cutoffDate)
+
   const allocByBed = new Map<string, AllocData>()
   const allocsByRoom = new Map<string, AllocData[]>()
-  for (const a of allocs) {
+  for (const a of visibleAllocs) {
     if (a.bedId) allocByBed.set(a.bedId, a)
     const list = allocsByRoom.get(a.roomId) ?? []
     list.push(a)

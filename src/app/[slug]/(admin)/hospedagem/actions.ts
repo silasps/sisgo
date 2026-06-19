@@ -161,12 +161,19 @@ export async function createAllocation(data: {
   if (error) throw new Error(error.message)
 
   if (data.bedId) {
-    const today = new Date().toISOString().split('T')[0]
-    const bedStatus = data.checkIn <= today ? 'ocupada' : 'reservada'
-    await sb.from('beds').update({
-      status: bedStatus,
-      updated_at: new Date().toISOString(),
-    }).eq('id', data.bedId).eq('organization_id', data.organizationId)
+    const now = new Date()
+    const checkInDate = new Date(data.checkIn + 'T00:00:00')
+    const hoursUntil = (checkInDate.getTime() - now.getTime()) / 3_600_000
+    const { data: orgRow } = await sb.from('organizations')
+      .select('hospedagem_advance_hours').eq('id', data.organizationId).single()
+    const advanceHours = (orgRow as { hospedagem_advance_hours?: number } | null)?.hospedagem_advance_hours ?? 120
+    const bedStatus = hoursUntil <= 0 ? 'ocupada' : hoursUntil <= advanceHours ? 'reservada' : 'disponivel'
+    if (bedStatus !== 'disponivel') {
+      await sb.from('beds').update({
+        status: bedStatus,
+        updated_at: new Date().toISOString(),
+      }).eq('id', data.bedId).eq('organization_id', data.organizationId)
+    }
   }
 }
 
@@ -235,8 +242,13 @@ export async function allocateWholeRoom(data: {
     .eq('organization_id', data.organizationId)
     .neq('status', 'manutencao')
 
-  const today = new Date().toISOString().split('T')[0]
-  const bedStatus = data.checkIn <= today ? 'ocupada' : 'reservada'
+  const now = new Date()
+  const checkInDate = new Date(data.checkIn + 'T00:00:00')
+  const hoursUntil = (checkInDate.getTime() - now.getTime()) / 3_600_000
+  const { data: orgRow } = await sb.from('organizations')
+    .select('hospedagem_advance_hours').eq('id', data.organizationId).single()
+  const advanceHours = (orgRow as { hospedagem_advance_hours?: number } | null)?.hospedagem_advance_hours ?? 120
+  const bedStatus = hoursUntil <= 0 ? 'ocupada' : hoursUntil <= advanceHours ? 'reservada' : 'disponivel'
 
   for (const bed of (roomBeds ?? [])) {
     await sb.from('room_allocations').insert({
@@ -251,10 +263,12 @@ export async function allocateWholeRoom(data: {
       notes:           data.notes,
       created_by:      data.createdBy,
     })
-    await sb.from('beds').update({
-      status: bedStatus,
-      updated_at: new Date().toISOString(),
-    }).eq('id', bed.id)
+    if (bedStatus !== 'disponivel') {
+      await sb.from('beds').update({
+        status: bedStatus,
+        updated_at: new Date().toISOString(),
+      }).eq('id', bed.id)
+    }
   }
 }
 
@@ -310,6 +324,13 @@ export async function toggleRoomMaintenance(roomId: string, organizationId: stri
     status: enable ? 'manutencao' : 'ativo',
     updated_at: new Date().toISOString(),
   }).eq('id', roomId).eq('organization_id', organizationId)
+}
+
+export async function updateAdvanceHours(organizationId: string, hours: number) {
+  const sb = createAdminClient()
+  await sb.from('organizations').update({
+    hospedagem_advance_hours: hours,
+  }).eq('id', organizationId)
 }
 
 export async function toggleBedMaintenance(bedId: string, organizationId: string, enable: boolean) {

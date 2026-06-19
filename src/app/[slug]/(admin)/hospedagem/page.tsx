@@ -8,7 +8,7 @@ import { isManagementRole, canSeeHospedagem } from '@/lib/auth/permissions'
 import {
   createAllocation, updateAllocationStatus,
   allocateWholeRoom, checkinWholeRoom, checkoutWholeRoom,
-  toggleRoomMaintenance, toggleBedMaintenance,
+  toggleRoomMaintenance, toggleBedMaintenance, updateAdvanceHours,
 } from './actions'
 import { BedGrid } from './BedGrid'
 import { Hotel, BedDouble, DoorOpen, LogIn, LogOut } from 'lucide-react'
@@ -28,7 +28,7 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
 
   const [{ data: { user } }, { data: org }] = await Promise.all([
     supabase.auth.getUser(),
-    supabase.from('organizations').select('id').eq('slug', slug).single(),
+    supabase.from('organizations').select('id, hospedagem_advance_hours').eq('slug', slug).single(),
   ])
   if (!user || !org) notFound()
 
@@ -81,6 +81,7 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
 
   // School name map for display
   const schoolMap = new Map(schools.map(s => [s.id, s.name]))
+  const advanceHours = (org as { hospedagem_advance_hours?: number }).hospedagem_advance_hours ?? 120
 
   // ── KPIs (ocupação real de HOJE, não pelo status da cama) ────────────────
   const activeBeds = bedsList.filter(b => b.status !== 'manutencao')
@@ -243,10 +244,19 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
     { label: 'Saídas Hoje',       value: departuresToday,  icon: LogOut,    color: 'text-purple-600' },
   ]
 
+  const handleUpdateAdvanceHours = async (formData: FormData) => {
+    'use server'
+    const hours = parseInt(formData.get('hours') as string)
+    if (isNaN(hours) || hours < 0) return
+    await updateAdvanceHours(org.id, hours)
+    redirect(`/${slug}/hospedagem?msg=config_salva`)
+  }
+
   const msgInfo: Record<string, string> = {
-    alocado:  'Hóspede alocado com sucesso.',
-    checkin:  'Check-in realizado.',
-    checkout: 'Check-out realizado. Cama(s) liberada(s).',
+    alocado:      'Hóspede alocado com sucesso.',
+    checkin:      'Check-in realizado.',
+    checkout:     'Check-out realizado. Cama(s) liberada(s).',
+    config_salva: 'Configuração atualizada.',
   }
 
   return (
@@ -295,6 +305,34 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
           </div>
         )}
 
+        {/* Advance hours config */}
+        <div className="bg-white rounded-xl border border-gray-200 p-3 flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <span className="font-medium text-gray-700">Antecedência de reservas:</span>
+            <span>mostrar no mapa com quanto tempo antes do check-in?</span>
+          </div>
+          <form action={handleUpdateAdvanceHours} className="flex items-center gap-2">
+            <select
+              name="hours"
+              defaultValue={advanceHours}
+              className="border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400"
+            >
+              <option value="6">6 horas antes</option>
+              <option value="12">12 horas antes</option>
+              <option value="24">1 dia antes</option>
+              <option value="48">2 dias antes</option>
+              <option value="72">3 dias antes</option>
+              <option value="120">5 dias antes</option>
+              <option value="168">7 dias antes</option>
+              <option value="336">14 dias antes</option>
+              <option value="720">30 dias antes</option>
+            </select>
+            <button type="submit" className="px-3 py-1 text-xs font-medium bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-colors">
+              Salvar
+            </button>
+          </form>
+        </div>
+
         {/* Bed Grid */}
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h2 className="text-sm font-semibold text-gray-800">Mapa de Quartos e Camas</h2>
@@ -335,6 +373,7 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
             allocs={gridAllocs}
             schools={schools}
             today={today}
+            advanceHours={advanceHours}
             slug={slug}
             allocateAction={handleAllocate}
             allocateRoomAction={handleAllocateRoom}
