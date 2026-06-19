@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
-import { BedDouble, Wrench, FileText, Users, MoreHorizontal, MapPin, ArrowRight, UserCheck, type LucideIcon } from 'lucide-react'
+import { BedDouble, Wrench, FileText, Users, MoreHorizontal, MapPin, ArrowRight, UserCheck, ExternalLink, type LucideIcon } from 'lucide-react'
 
 type DeptDef = {
   id: string
@@ -55,7 +55,6 @@ const DEPT_DEFS: DeptDef[] = [
 
 const REQUEST_TYPES: Record<string, { value: string; label: string }[]> = {
   hospitalidade: [
-    { value: 'hospedagem',        label: 'Hospedagem' },
     { value: 'logistica',         label: 'Logística' },
     { value: 'refeicao_especial', label: 'Refeição especial' },
     { value: 'outro',             label: 'Outro' },
@@ -272,6 +271,21 @@ export function SolicitacoesHub({ deptInfos, requests, handleCreate, handleStatu
                 </button>
               ))}
             </div>
+
+            {/* Link de reservas para hospitalidade */}
+            {activeDeptId === 'hospitalidade' && (
+              <a
+                href={`/${activeInfo.slug}/reservas`}
+                className="flex items-center gap-2 px-4 py-3 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 text-sm font-medium hover:bg-blue-100 transition-colors"
+              >
+                <BedDouble size={18} />
+                <div className="flex-1">
+                  <p className="font-semibold">Solicitar Hospedagem</p>
+                  <p className="text-xs text-blue-500 mt-0.5">Reservar quarto para visitantes, eventos ou convidados</p>
+                </div>
+                <ExternalLink size={14} className="text-blue-400" />
+              </a>
+            )}
 
             {/* Link de estoque para manutenção */}
             {activeInfo.showEstoqueLink && (
