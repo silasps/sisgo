@@ -5,7 +5,11 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { notFound, redirect } from 'next/navigation'
 import { getRolePreview } from '@/lib/role-preview'
 import { isManagementRole, canSeeHospedagem } from '@/lib/auth/permissions'
-import { createAllocation, updateAllocationStatus } from './actions'
+import {
+  createAllocation, updateAllocationStatus,
+  allocateWholeRoom, checkinWholeRoom, checkoutWholeRoom,
+  toggleRoomMaintenance, toggleBedMaintenance,
+} from './actions'
 import { BedGrid } from './BedGrid'
 import { Hotel, BedDouble, DoorOpen, LogIn, LogOut } from 'lucide-react'
 import Link from 'next/link'
@@ -43,31 +47,41 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
   // ── Data ────────────────────────────────────────────────────────────────────
   const today = new Date().toISOString().split('T')[0]
 
-  const [{ data: rooms }, { data: beds }, { data: allocations }] = await Promise.all([
+  const [{ data: rooms }, { data: beds }, { data: allocations }, { data: schoolsData }] = await Promise.all([
     sbAdmin.from('rooms')
-      .select('id, name, floor, type, gender_constraint, capacity, status')
+      .select('id, name, floor, block, type, gender_constraint, destination, allocation_mode, capacity, status')
       .eq('organization_id', org.id)
       .neq('status', 'inativo')
+      .order('block', { nullsFirst: false })
       .order('display_order')
       .order('name'),
     sbAdmin.from('beds')
       .select('id, room_id, label, type, status')
       .eq('organization_id', org.id),
     sbAdmin.from('room_allocations')
-      .select('id, room_id, bed_id, guest_name, guest_type, check_in, check_out, status')
+      .select('id, room_id, bed_id, guest_name, guest_type, check_in, check_out, status, school_id')
       .eq('organization_id', org.id)
       .in('status', ['confirmada', 'checkin'])
       .lte('check_in', today)
       .order('check_in'),
+    sbAdmin.from('schools')
+      .select('id, name')
+      .eq('organization_id', org.id)
+      .eq('active', true)
+      .order('name'),
   ])
 
-  type RoomRow  = { id: string; name: string; floor: string | null; type: string; gender_constraint: string | null; capacity: number; status: string }
+  type RoomRow  = { id: string; name: string; floor: string | null; block: string | null; type: string; gender_constraint: string | null; destination: string; allocation_mode: string; capacity: number; status: string }
   type BedRow   = { id: string; room_id: string; label: string; type: string; status: string }
-  type AllocRow = { id: string; room_id: string; bed_id: string | null; guest_name: string; guest_type: string; check_in: string; check_out: string; status: string }
+  type AllocRow = { id: string; room_id: string; bed_id: string | null; guest_name: string; guest_type: string; check_in: string; check_out: string; status: string; school_id: string | null }
 
   const roomsList  = (rooms ?? []) as RoomRow[]
   const bedsList   = (beds ?? []) as BedRow[]
   const allocsList = (allocations ?? []) as AllocRow[]
+  const schools    = (schoolsData ?? []) as Array<{ id: string; name: string }>
+
+  // School name map for display
+  const schoolMap = new Map(schools.map(s => [s.id, s.name]))
 
   // ── KPIs ────────────────────────────────────────────────────────────────────
   const activeBeds   = bedsList.filter(b => b.status !== 'manutencao')
@@ -83,7 +97,10 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
     id: r.id,
     name: r.name,
     floor: r.floor,
+    block: r.block,
     gender: r.gender_constraint,
+    destination: r.destination,
+    allocationMode: r.allocation_mode,
     status: r.status,
   }))
 
@@ -104,7 +121,6 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
     })
 
   const gridAllocs = allocsList
-    .filter(a => a.bed_id)
     .map(a => ({
       id: a.id,
       bedId: a.bed_id,
@@ -114,6 +130,7 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
       checkIn: a.check_in,
       checkOut: a.check_out,
       allocStatus: a.status,
+      schoolName: a.school_id ? (schoolMap.get(a.school_id) ?? null) : null,
     }))
 
   // ── Server actions ──────────────────────────────────────────────────────────
@@ -125,8 +142,7 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
       organizationId: org.id,
       roomId:     formData.get('room_id') as string,
       bedId:      (formData.get('bed_id') as string) || null,
-      reservationId: null,
-      personId:   null,
+      reservationId: null, personId: null,
       guestName,
       guestType:  formData.get('guest_type') as string,
       checkIn:    formData.get('check_in') as string,
@@ -137,13 +153,31 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
     redirect(`/${slug}/hospedagem?msg=alocado`)
   }
 
+  const handleAllocateRoom = async (formData: FormData) => {
+    'use server'
+    const guestName = (formData.get('guest_name') as string).trim()
+    if (!guestName) return
+    await allocateWholeRoom({
+      organizationId: org.id,
+      roomId:     formData.get('room_id') as string,
+      guestName,
+      guestType:  formData.get('guest_type') as string,
+      schoolId:   (formData.get('school_id') as string) || null,
+      checkIn:    formData.get('check_in') as string,
+      checkOut:   formData.get('check_out') as string,
+      notes:      null,
+      createdBy:  user.id,
+    })
+    redirect(`/${slug}/hospedagem?msg=alocado`)
+  }
+
   const handleCheckin = async (formData: FormData) => {
     'use server'
     await updateAllocationStatus({
-      id:             formData.get('id') as string,
+      id: formData.get('id') as string,
       organizationId: org.id,
-      status:         'checkin',
-      bedId:          (formData.get('bed_id') as string) || null,
+      status: 'checkin',
+      bedId: (formData.get('bed_id') as string) || null,
     })
     redirect(`/${slug}/hospedagem?msg=checkin`)
   }
@@ -151,12 +185,50 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
   const handleCheckout = async (formData: FormData) => {
     'use server'
     await updateAllocationStatus({
-      id:             formData.get('id') as string,
+      id: formData.get('id') as string,
       organizationId: org.id,
-      status:         'checkout',
-      bedId:          (formData.get('bed_id') as string) || null,
+      status: 'checkout',
+      bedId: (formData.get('bed_id') as string) || null,
     })
     redirect(`/${slug}/hospedagem?msg=checkout`)
+  }
+
+  const handleCheckinRoom = async (formData: FormData) => {
+    'use server'
+    await checkinWholeRoom({
+      organizationId: org.id,
+      roomId: formData.get('room_id') as string,
+    })
+    redirect(`/${slug}/hospedagem?msg=checkin`)
+  }
+
+  const handleCheckoutRoom = async (formData: FormData) => {
+    'use server'
+    await checkoutWholeRoom({
+      organizationId: org.id,
+      roomId: formData.get('room_id') as string,
+    })
+    redirect(`/${slug}/hospedagem?msg=checkout`)
+  }
+
+  const handleToggleRoomMaintenance = async (formData: FormData) => {
+    'use server'
+    await toggleRoomMaintenance(
+      formData.get('room_id') as string,
+      org.id,
+      formData.get('enable') === 'true',
+    )
+    redirect(`/${slug}/hospedagem`)
+  }
+
+  const handleToggleBedMaintenance = async (formData: FormData) => {
+    'use server'
+    await toggleBedMaintenance(
+      formData.get('bed_id') as string,
+      org.id,
+      formData.get('enable') === 'true',
+    )
+    redirect(`/${slug}/hospedagem`)
   }
 
   const kpis = [
@@ -170,7 +242,7 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
   const msgInfo: Record<string, string> = {
     alocado:  'Hóspede alocado com sucesso.',
     checkin:  'Check-in realizado.',
-    checkout: 'Check-out realizado. Cama liberada.',
+    checkout: 'Check-out realizado. Cama(s) liberada(s).',
   }
 
   return (
@@ -219,9 +291,9 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
           </div>
         )}
 
-        {/* Bed Grid (lan house style) */}
+        {/* Bed Grid */}
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-800">Mapa de Camas</h2>
+          <h2 className="text-sm font-semibold text-gray-800">Mapa de Quartos e Camas</h2>
           <Link
             href={`/${slug}/hospedagem/quartos`}
             className="text-xs font-medium text-brand-500 hover:text-brand-700 transition-colors"
@@ -234,14 +306,14 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
           <EmptyState
             icon={Hotel}
             title="Nenhum quarto cadastrado"
-            description="Cadastre os quartos e camas da base para começar. Clique na cama para alocar um hóspede."
+            description="Cadastre os quartos e camas da base para começar."
             cta={{ label: 'Cadastrar quartos', href: `/${slug}/hospedagem/quartos` }}
           />
         ) : gridBeds.length === 0 ? (
           <EmptyState
             icon={BedDouble}
             title="Nenhuma cama cadastrada"
-            description="Os quartos existem mas não têm camas. Adicione camas para gerenciar a hospedagem."
+            description="Os quartos existem mas não têm camas. Adicione camas para gerenciar."
             cta={{ label: 'Ir para quartos', href: `/${slug}/hospedagem/quartos` }}
           />
         ) : (
@@ -249,11 +321,17 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
             rooms={gridRooms}
             beds={gridBeds}
             allocs={gridAllocs}
+            schools={schools}
             today={today}
             slug={slug}
             allocateAction={handleAllocate}
+            allocateRoomAction={handleAllocateRoom}
             checkinAction={handleCheckin}
             checkoutAction={handleCheckout}
+            checkinRoomAction={handleCheckinRoom}
+            checkoutRoomAction={handleCheckoutRoom}
+            toggleRoomMaintenanceAction={handleToggleRoomMaintenance}
+            toggleBedMaintenanceAction={handleToggleBedMaintenance}
           />
         )}
       </main>

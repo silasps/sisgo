@@ -23,12 +23,26 @@ const STATUS_OPTIONS = [
   { value: 'inativo', label: 'Inativo' },
 ] as const
 
+const DESTINATION_OPTIONS = [
+  { value: 'visita', label: 'Visitantes' },
+  { value: 'aluno', label: 'Alunos (ETED/EMF)' },
+  { value: 'obreiro', label: 'Obreiros' },
+] as const
+
+const MODE_OPTIONS = [
+  { value: 'quarto', label: 'Quarto inteiro' },
+  { value: 'cama', label: 'Cama individual' },
+] as const
+
 type RoomData = {
   id: string
   name: string
   floor: string | null
+  block: string | null
   type: string
   gender_constraint: string | null
+  destination: string
+  allocation_mode: string
   status: string
   notes: string | null
 }
@@ -83,6 +97,15 @@ export function RoomForm({ createAction, editAction, room, trigger }: Props) {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Bloco / Ala</label>
+              <input
+                name="block"
+                defaultValue={room?.block ?? ''}
+                placeholder="Ex: Bloco A, Ala Norte"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+              />
+            </div>
+            <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Andar</label>
               <input
                 name="floor"
@@ -91,6 +114,9 @@ export function RoomForm({ createAction, editAction, room, trigger }: Props) {
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
               />
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Tipo *</label>
               <select
@@ -104,9 +130,6 @@ export function RoomForm({ createAction, editAction, room, trigger }: Props) {
                 ))}
               </select>
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Gênero</label>
               <select
@@ -119,21 +142,51 @@ export function RoomForm({ createAction, editAction, room, trigger }: Props) {
                 ))}
               </select>
             </div>
-            {isEdit && (
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
-                <select
-                  name="status"
-                  defaultValue={room?.status ?? 'ativo'}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-                >
-                  {STATUS_OPTIONS.map(s => (
-                    <option key={s.value} value={s.value}>{s.label}</option>
-                  ))}
-                </select>
-              </div>
-            )}
           </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Destinado a *</label>
+              <select
+                name="destination"
+                required
+                defaultValue={room?.destination ?? 'visita'}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+              >
+                {DESTINATION_OPTIONS.map(d => (
+                  <option key={d.value} value={d.value}>{d.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Modo de alocação *</label>
+              <select
+                name="allocation_mode"
+                required
+                defaultValue={room?.allocation_mode ?? 'quarto'}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+              >
+                {MODE_OPTIONS.map(m => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {isEdit && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
+              <select
+                name="status"
+                defaultValue={room?.status ?? 'ativo'}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+              >
+                {STATUS_OPTIONS.map(s => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Observações</label>

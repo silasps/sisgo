@@ -103,8 +103,11 @@ export default async function QuartosPage({ params, searchParams }: Props) {
       organizationId:   org.id,
       name,
       floor:            (formData.get('floor') as string)?.trim() || null,
+      block:            (formData.get('block') as string)?.trim() || null,
       type:             formData.get('type') as string,
       genderConstraint: (formData.get('gender_constraint') as string) || null,
+      destination:      formData.get('destination') as string ?? 'visita',
+      allocationMode:   formData.get('allocation_mode') as string ?? 'cama',
       notes:            (formData.get('notes') as string)?.trim() || null,
       createdBy:        user.id,
     })
@@ -121,8 +124,11 @@ export default async function QuartosPage({ params, searchParams }: Props) {
       organizationId:   org.id,
       name,
       floor:            (formData.get('floor') as string)?.trim() || null,
+      block:            (formData.get('block') as string)?.trim() || null,
       type:             formData.get('type') as string,
       genderConstraint: (formData.get('gender_constraint') as string) || null,
+      destination:      formData.get('destination') as string ?? 'visita',
+      allocationMode:   formData.get('allocation_mode') as string ?? 'cama',
       status:           formData.get('status') as string ?? 'ativo',
       notes:            (formData.get('notes') as string)?.trim() || null,
     })

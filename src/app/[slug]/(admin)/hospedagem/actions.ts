@@ -8,8 +8,11 @@ export async function createRoom(data: {
   organizationId: string
   name: string
   floor: string | null
+  block: string | null
   type: string
   genderConstraint: string | null
+  destination: string
+  allocationMode: string
   notes: string | null
   createdBy: string
 }) {
@@ -18,8 +21,11 @@ export async function createRoom(data: {
     organization_id:   data.organizationId,
     name:              data.name,
     floor:             data.floor,
+    block:             data.block,
     type:              data.type,
     gender_constraint: data.genderConstraint,
+    destination:       data.destination,
+    allocation_mode:   data.allocationMode,
     capacity:          0,
     notes:             data.notes,
     created_by:        data.createdBy,
@@ -32,8 +38,11 @@ export async function updateRoom(data: {
   organizationId: string
   name: string
   floor: string | null
+  block: string | null
   type: string
   genderConstraint: string | null
+  destination: string
+  allocationMode: string
   status: string
   notes: string | null
 }) {
@@ -41,8 +50,11 @@ export async function updateRoom(data: {
   const { error } = await sb.from('rooms').update({
     name:              data.name,
     floor:             data.floor,
+    block:             data.block,
     type:              data.type,
     gender_constraint: data.genderConstraint,
+    destination:       data.destination,
+    allocation_mode:   data.allocationMode,
     status:            data.status,
     notes:             data.notes,
     updated_at:        new Date().toISOString(),
@@ -198,4 +210,107 @@ export async function cancelAllocation(data: {
     status: 'cancelada',
     bedId: data.bedId,
   })
+}
+
+// ── Whole-room allocation (visitas, alunos/ETED) ─────────────────────────────
+
+export async function allocateWholeRoom(data: {
+  organizationId: string
+  roomId: string
+  guestName: string
+  guestType: string
+  schoolId: string | null
+  checkIn: string
+  checkOut: string
+  notes: string | null
+  createdBy: string
+}) {
+  const sb = createAdminClient()
+
+  const { data: roomBeds } = await sb.from('beds')
+    .select('id')
+    .eq('room_id', data.roomId)
+    .eq('organization_id', data.organizationId)
+    .neq('status', 'manutencao')
+
+  for (const bed of (roomBeds ?? [])) {
+    await sb.from('room_allocations').insert({
+      organization_id: data.organizationId,
+      room_id:         data.roomId,
+      bed_id:          bed.id,
+      guest_name:      data.guestName,
+      guest_type:      data.guestType,
+      school_id:       data.schoolId,
+      check_in:        data.checkIn,
+      check_out:       data.checkOut,
+      notes:           data.notes,
+      created_by:      data.createdBy,
+    })
+    await sb.from('beds').update({
+      status: 'ocupada',
+      updated_at: new Date().toISOString(),
+    }).eq('id', bed.id)
+  }
+}
+
+export async function checkoutWholeRoom(data: {
+  organizationId: string
+  roomId: string
+}) {
+  const sb = createAdminClient()
+  const now = new Date().toISOString()
+  const today = now.split('T')[0]
+
+  await sb.from('room_allocations').update({
+    status: 'checkout',
+    actual_check_out: today,
+    updated_at: now,
+  })
+    .eq('room_id', data.roomId)
+    .eq('organization_id', data.organizationId)
+    .in('status', ['confirmada', 'checkin'])
+
+  await sb.from('beds').update({
+    status: 'disponivel',
+    updated_at: now,
+  })
+    .eq('room_id', data.roomId)
+    .eq('organization_id', data.organizationId)
+    .eq('status', 'ocupada')
+}
+
+export async function checkinWholeRoom(data: {
+  organizationId: string
+  roomId: string
+}) {
+  const sb = createAdminClient()
+  const now = new Date().toISOString()
+  const today = now.split('T')[0]
+
+  await sb.from('room_allocations').update({
+    status: 'checkin',
+    actual_check_in: today,
+    updated_at: now,
+  })
+    .eq('room_id', data.roomId)
+    .eq('organization_id', data.organizationId)
+    .eq('status', 'confirmada')
+}
+
+// ── Toggle manutenção ────────────────────────────────────────────────────────
+
+export async function toggleRoomMaintenance(roomId: string, organizationId: string, enable: boolean) {
+  const sb = createAdminClient()
+  await sb.from('rooms').update({
+    status: enable ? 'manutencao' : 'ativo',
+    updated_at: new Date().toISOString(),
+  }).eq('id', roomId).eq('organization_id', organizationId)
+}
+
+export async function toggleBedMaintenance(bedId: string, organizationId: string, enable: boolean) {
+  const sb = createAdminClient()
+  await sb.from('beds').update({
+    status: enable ? 'manutencao' : 'disponivel',
+    updated_at: new Date().toISOString(),
+  }).eq('id', bedId).eq('organization_id', organizationId)
 }

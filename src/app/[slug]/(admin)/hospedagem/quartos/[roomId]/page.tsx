@@ -58,7 +58,7 @@ export default async function RoomDetailPage({ params, searchParams }: Props) {
 
   // ── Fetch room ──────────────────────────────────────────────────────────────
   const { data: room } = await sbAdmin.from('rooms')
-    .select('id, name, floor, type, gender_constraint, capacity, status, notes')
+    .select('id, name, floor, block, type, gender_constraint, destination, allocation_mode, capacity, status, notes')
     .eq('id', roomId)
     .eq('organization_id', org.id)
     .single()
@@ -123,8 +123,11 @@ export default async function RoomDetailPage({ params, searchParams }: Props) {
       organizationId:   org.id,
       name,
       floor:            (formData.get('floor') as string)?.trim() || null,
+      block:            (formData.get('block') as string)?.trim() || null,
       type:             formData.get('type') as string,
       genderConstraint: (formData.get('gender_constraint') as string) || null,
+      destination:      formData.get('destination') as string ?? 'visita',
+      allocationMode:   formData.get('allocation_mode') as string ?? 'cama',
       status:           formData.get('status') as string ?? 'ativo',
       notes:            (formData.get('notes') as string)?.trim() || null,
     })
