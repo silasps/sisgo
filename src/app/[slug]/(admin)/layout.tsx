@@ -28,7 +28,7 @@ function addPersonalSplit(items: RegularNavItem[], personalIcons = PESSOAL_ICONS
   return [...op, PESSOAL_DIVIDER, ...pers]
 }
 
-function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPending: boolean, hasReservationsPending: boolean, hasOwnCashScope: boolean): NavItem[] {
+function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPending: boolean, hasReservationsPending: boolean, hasOwnCashScope: boolean, laundryEnabled: boolean): NavItem[] {
   const allRoles = [role, ...accumulatedRoles]
   const is = (r: string) => allRoles.includes(r)
   const isManagement        = isManagementRole(role)
@@ -64,6 +64,7 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
     { href: `/${slug}/hospedagem`,   label: 'Hospedagem',       icon: 'hospedagem',    show: canSeeHospedagem },
     { href: `/${slug}/hospedagem/quartos`, label: 'Quartos',    icon: 'quartos',       show: canSeeHospedagem },
     { href: `/${slug}/hospedagem/agenda`,  label: 'Agenda',     icon: 'agenda',        show: canSeeHospedagem },
+    { href: `/${slug}/hospedagem/lavanderia`, label: 'Lavanderia', icon: 'lavanderia', show: canSeeHospedagem && laundryEnabled },
     { href: `/${slug}/refeicoes`,    label: 'Minhas refeições', icon: 'refeicoes',     show: canBuyMeals },
     { href: `/${slug}/caixa`,        label: 'Caixa da área',    icon: 'caixa',         show: hasOwnCashScope },
     { href: `/${slug}/cozinha`,      label: 'Cozinha',          icon: 'cozinha',       show: isManagement || is('secretaria') || isCozinha },
@@ -77,7 +78,7 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
   ]
 
   if (isHospitalidade) {
-    return addPersonalSplit(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/pessoas', '/reservas', '/hospedagem', '/hospedagem/quartos', '/hospedagem/agenda', '/manutencao', '/refeicoes', '/minhas-contas')).map(toItem))
+    return addPersonalSplit(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/pessoas', '/reservas', '/hospedagem', '/hospedagem/quartos', '/hospedagem/agenda', '/hospedagem/lavanderia', '/manutencao', '/refeicoes', '/minhas-contas')).map(toItem))
   }
 
   if (isCozinha) {
@@ -182,7 +183,7 @@ export default async function SlugLayout({ children, params }: Props) {
 
   const { data: org } = await supabase
     .from('organizations')
-    .select('id, name, active, logo_url, accent_color, department_assignments, role_accumulations')
+    .select('id, name, active, logo_url, accent_color, department_assignments, role_accumulations, laundry_enabled')
     .eq('slug', slug)
     .single()
 
@@ -430,7 +431,8 @@ export default async function SlugLayout({ children, params }: Props) {
     ])
     : [{ data: [] }, { data: [] }]
 
-  const navItems = buildNav(slug, role, [...accumulatedRoles, ...extraRoles], hasPending, reservationsPending > 0, hasOwnCashScope)
+  const laundryEnabled = (org as { laundry_enabled?: boolean }).laundry_enabled ?? false
+  const navItems = buildNav(slug, role, [...accumulatedRoles, ...extraRoles], hasPending, reservationsPending > 0, hasOwnCashScope, laundryEnabled)
   const bottomItems = pickBottomBarItems(navItems, role)
 
   return (
