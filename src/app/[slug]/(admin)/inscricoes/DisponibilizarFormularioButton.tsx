@@ -18,6 +18,7 @@ type Props = {
   schoolId: string
   emailDisabled?: boolean
   emailDisabledReason?: string
+  label?: string
 }
 
 function CopiedToast({ visible }: { visible: boolean }) {
@@ -52,7 +53,7 @@ function CopiedToast({ visible }: { visible: boolean }) {
   )
 }
 
-export function DisponibilizarFormularioButton({ interestFormId, slug, action, schoolId, emailDisabled, emailDisabledReason }: Props) {
+export function DisponibilizarFormularioButton({ interestFormId, slug, action, schoolId, emailDisabled, emailDisabledReason, label }: Props) {
   const [isPending, startTransition] = useTransition()
   const [showCopied, setShowCopied] = useState(false)
   const [emailNotice, setEmailNotice] = useState<{
@@ -112,7 +113,7 @@ export function DisponibilizarFormularioButton({ interestFormId, slug, action, s
           disabled={isPending}
           className="inline-flex items-center gap-1 text-xs px-3 py-1.5 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors disabled:opacity-60"
         >
-          {isPending ? <><Loader2 className="size-3.5 inline -mt-0.5 animate-spin" /> Gerando…</> : <><ClipboardList className="size-3.5 inline -mt-0.5" /> Disponibilizar formulário</>}
+          {isPending ? <><Loader2 className="size-3.5 inline -mt-0.5 animate-spin" /> Gerando…</> : <><ClipboardList className="size-3.5 inline -mt-0.5" /> {label ?? 'Disponibilizar formulário'}</>}
         </button>
         {emailDisabled && (
           <p className="text-xs text-orange-500 leading-tight max-w-[200px]" title={emailDisabledReason}>

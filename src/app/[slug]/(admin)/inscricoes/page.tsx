@@ -12,6 +12,7 @@ import { SearchBar } from '@/components/ui/SearchBar'
 import { Suspense } from 'react'
 import { SCHOOL_APPLICATION_TYPES } from '@/lib/schools'
 import { ClipboardList, Mail, MessageCircle } from 'lucide-react'
+import { ServirLinkCard } from './ServirLinkCard'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -20,7 +21,7 @@ type Props = {
 
 type InscricaoItem = {
   id: string
-  tipo: 'pre_inscricao' | 'aluno' | 'obreiro'
+  tipo: 'pre_inscricao' | 'aluno' | 'obreiro' | 'pre_inscricao_obreiro'
   tipoLabel: string
   tipoColor: string
   nome: string
@@ -39,6 +40,7 @@ type InscricaoItem = {
   ministryId?: string | null
   hasLogin?: boolean
   applicationId?: string | null
+  staffApplicationId?: string | null
   hasFormData?: boolean
 }
 
@@ -174,6 +176,8 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     const now  = new Date().toISOString()
     if (tipo === 'pre_inscricao') {
       await db.from('school_interest_forms').update({ status, responded_at: now }).eq('id', id)
+    } else if (tipo === 'pre_inscricao_obreiro') {
+      await db.from('staff_interest_forms').update({ status, responded_at: now }).eq('id', id)
     } else if (tipo === 'aluno') {
       await db.from('student_applications').update({ status, reviewed_at: now }).eq('id', id)
     } else {
@@ -181,7 +185,8 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     }
     const { redirect: redir } = await import('next/navigation')
     const label = status === 'em_contato' ? 'Marcado como Em contato' : status === 'em_analise' ? 'Marcado como Em análise' : 'Status atualizado'
-    redir(`/${slug}/inscricoes?tab=${tipo === 'pre_inscricao' ? 'pre_inscricao' : tipo}&flash_success=${encodeURIComponent(label)}`)
+    const tabRedirect = tipo === 'pre_inscricao' ? 'pre_inscricao' : tipo === 'pre_inscricao_obreiro' ? 'obreiro' : tipo
+    redir(`/${slug}/inscricoes?tab=${tabRedirect}&flash_success=${encodeURIComponent(label)}`)
   }
 
   async function recusar(formData: FormData) {
@@ -205,6 +210,10 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           .update({ status: 'descartado', refusal_reason: reason, responded_at: now })
           .eq('id', id)
       }
+    } else if (tipo === 'pre_inscricao_obreiro') {
+      await db.from('staff_interest_forms')
+        .update({ status: 'descartado', refusal_reason: reason, responded_at: now, reviewed_at: now, reviewed_by: user?.id ?? null })
+        .eq('id', id)
     } else if (tipo === 'aluno') {
       await db.from('student_applications')
         .update({ status: 'reprovado', refusal_reason: reason, reviewed_at: now, reviewed_by: user?.id ?? null })
@@ -711,6 +720,115 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     revalidatePath(`/${slug}/inscricoes`)
   }
 
+  async function disponibilizarFormularioObreiro(formData: FormData) {
+    'use server'
+    const { createAdminClient: adm } = await import('@/lib/supabase/admin')
+    const { createClient } = await import('@/lib/supabase/server')
+    const { headers: hdrs } = await import('next/headers')
+    const db = adm()
+    const authClient = await createClient()
+
+    const interestFormId = formData.get('interest_form_id') as string
+    const { data: { user } } = await authClient.auth.getUser()
+
+    const { data: form } = await db
+      .from('staff_interest_forms')
+      .select('id, organization_id, full_name, email, phone, language, ministry_id, person_id')
+      .eq('id', interestFormId)
+      .single()
+
+    if (!form) return { error: 'not_found' }
+
+    const { data: existing } = await db
+      .from('staff_applications')
+      .select('id, token, token_expires_at')
+      .eq('interest_form_id', interestFormId)
+      .in('status', ['rascunho', 'enviado'])
+      .maybeSingle()
+
+    let token: string
+    let expiresAt: string
+
+    if (existing) {
+      token = existing.token!
+      expiresAt = existing.token_expires_at!
+    } else {
+      let personId = form.person_id
+      if (!personId) {
+        const { data: contact } = await db.from('person_contacts')
+          .select('person_id').eq('type', 'email').eq('value', form.email).maybeSingle()
+        if (contact) personId = contact.person_id
+      }
+      if (!personId) {
+        const { data: person } = await db.from('people')
+          .insert({ organization_id: form.organization_id, full_name: form.full_name })
+          .select('id').single()
+        personId = person?.id ?? null
+        if (personId) {
+          await db.from('person_contacts').insert({ person_id: personId, type: 'email', value: form.email, is_primary: true })
+        }
+      }
+      if (!personId) return { error: 'Não foi possível criar a pessoa.' }
+
+      const { data: newApp } = await db
+        .from('staff_applications')
+        .insert({
+          interest_form_id: interestFormId,
+          organization_id: form.organization_id,
+          person_id: personId,
+          ministry_id: form.ministry_id,
+          status: 'rascunho',
+          form_data: {
+            prefill: {
+              nome: form.full_name,
+              email: form.email,
+              telefone: form.phone,
+              idioma: form.language,
+            }
+          },
+          leader_accepted_by: user?.id ?? null,
+          leader_accepted_at: new Date().toISOString(),
+        })
+        .select('token, token_expires_at')
+        .single()
+      if (!newApp) return { error: 'Não foi possível criar o formulário.' }
+      token = newApp.token!
+      expiresAt = newApp.token_expires_at!
+    }
+
+    const headersList = await hdrs()
+    const host = headersList.get('host') ?? 'localhost:3000'
+    const protocol = host.startsWith('localhost') ? 'http' : 'https'
+    const formUrl = `${protocol}://${host}/${slug}/formulario-obreiro/${token}`
+
+    await db.from('staff_interest_forms')
+      .update({ status: 'formulario_enviado' })
+      .eq('id', interestFormId)
+
+    return { url: formUrl }
+  }
+
+  async function criarPreInscricaoObreiroManual(formData: FormData) {
+    'use server'
+    const { createAdminClient: adm } = await import('@/lib/supabase/admin')
+    const { revalidatePath } = await import('next/cache')
+    const db = adm()
+
+    const ministryIdVal = (formData.get('ministry_id') as string | null) || null
+
+    await db.from('staff_interest_forms').insert({
+      organization_id: orgId,
+      ministry_id: ministryIdVal,
+      full_name: (formData.get('full_name') as string).trim(),
+      email: (formData.get('email') as string)?.trim() || '',
+      phone: (formData.get('phone') as string)?.trim() || null,
+      message: (formData.get('message') as string)?.trim() || null,
+      status: 'pendente',
+    })
+
+    revalidatePath(`/${slug}/inscricoes`)
+  }
+
   // ── Queries ────────────────────────────────────────────────────────────────
 
   const items: InscricaoItem[] = []
@@ -813,16 +931,62 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     }
   }
 
-  // Candidatos a Obreiro
+  // Pré-inscrições de Obreiro + Candidatos a Obreiro
   if (tab === 'todas' || tab === 'obreiro') {
+    // Pré-inscrições de obreiro (staff_interest_forms)
+    type SIFRaw = {
+      id: string; full_name: string; email: string; phone: string | null
+      message: string | null; status: string; created_at: string; responded_at: string | null
+      refusal_reason: string | null; reviewed_by: string | null
+      ministry_id: string | null; person_id: string | null
+      ministries: { name: string } | null
+      staff_applications: { id: string; status: string; form_data: Record<string, unknown> | null; token: string | null }[] | null
+    }
+    const sifResult = await sb
+      .from('staff_interest_forms')
+      .select('id, full_name, email, phone, message, status, created_at, responded_at, refusal_reason, reviewed_by, ministry_id, person_id, ministries(name), staff_applications(id, status, form_data, token)')
+      .eq('organization_id', orgId)
+      .order('created_at', { ascending: false })
+
+    for (const r of ((sifResult.data ?? []) as unknown as SIFRaw[])) {
+      const ministry = r.ministries as { name: string } | null
+      const appRow = (r.staff_applications ?? []).find(a => ['enviado', 'em_analise', 'aprovado'].includes(a.status))
+        ?? (r.staff_applications ?? []).find(a => a.status === 'rascunho')
+
+      if (isFinalizado(r.status) && r.refusal_reason) {
+        historico.push({
+          id: r.id, tipo: 'Pré-inscrição Obreiro', nome: r.full_name,
+          escola: ministry?.name ?? null,
+          motivo: r.refusal_reason,
+          recusadoPor: null,
+          recusadoPorId: r.reviewed_by ?? null,
+          recusadoEm: r.responded_at ?? r.created_at,
+        })
+      } else if (!isFinalizado(r.status) || ver === 'todas') {
+        items.push({
+          id: r.id, tipo: 'pre_inscricao_obreiro', tipoLabel: 'Pré-inscrição Obreiro',
+          tipoColor: 'bg-orange-50 text-orange-700',
+          nome: r.full_name, email: r.email, phone: r.phone ?? null,
+          escola: ministry?.name ?? null, schoolId: null, turma: null, classId: null,
+          mensagem: r.message, status: r.status, notes: null,
+          criadoEm: r.created_at, diasAberto: daysAgo(r.created_at),
+          personId: r.person_id ?? null,
+          ministryId: r.ministry_id,
+          staffApplicationId: appRow?.id ?? null,
+          hasFormData: appRow ? (appRow.form_data !== null && Object.keys(appRow.form_data as object).length > 1) : false,
+        })
+      }
+    }
+
+    // Candidatos a Obreiro (staff_applications sem interest_form ou com formulário preenchido)
     type StaffRaw = {
-      id: string; ministry_id: string | null; status: string; applied_at: string; reviewed_at: string | null; reviewed_by: string | null; refusal_reason: string | null; notes: string | null
+      id: string; ministry_id: string | null; interest_form_id: string | null; status: string; applied_at: string; reviewed_at: string | null; reviewed_by: string | null; refusal_reason: string | null; notes: string | null; form_data: Record<string, unknown> | null
       people: { id: string; full_name: string } | null
       ministries: { name: string } | null
     }
     const result = await sb
       .from('staff_applications')
-      .select('id, ministry_id, status, applied_at, reviewed_at, reviewed_by, refusal_reason, notes, people(id, full_name), ministries(name)')
+      .select('id, ministry_id, interest_form_id, status, applied_at, reviewed_at, reviewed_by, refusal_reason, notes, form_data, people(id, full_name), ministries(name)')
       .eq('organization_id', orgId)
       .order('applied_at', { ascending: false })
 
@@ -831,7 +995,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     if (result.error) {
       const fallback = await sb
         .from('staff_applications')
-        .select('id, ministry_id, status, applied_at, reviewed_at, reviewed_by, notes, people(id, full_name), ministries(name)')
+        .select('id, ministry_id, interest_form_id, status, applied_at, reviewed_at, reviewed_by, notes, form_data, people(id, full_name), ministries(name)')
         .eq('organization_id', orgId)
         .order('applied_at', { ascending: false })
       rows = fallback.data ?? []
@@ -863,9 +1027,15 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       }
     }
 
+    // Só adiciona staff_applications que NÃO vieram de um interest_form (evita duplicata)
+    // OU que já estão com status enviado/em_analise (o candidato já preencheu)
     for (const r of (rows as StaffRaw[])) {
       const pessoa = r.people as { id: string; full_name: string } | null
       const ministry = r.ministries as { name: string } | null
+
+      // Se veio de interest_form e está em rascunho, já aparece como pré-inscrição acima
+      if (r.interest_form_id && r.status === 'rascunho') continue
+
       if (isFinalizado(r.status) && r.refusal_reason) {
         historico.push({
           id: r.id, tipo: 'Candidato a Obreiro', nome: pessoa?.full_name ?? '—',
@@ -886,6 +1056,8 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           personId: pessoa?.id ?? null,
           ministryId: r.ministry_id,
           hasLogin: pessoa?.id ? staffLoginByPerson.has(pessoa.id) : false,
+          staffApplicationId: r.id,
+          hasFormData: r.form_data !== null && Object.keys(r.form_data as object).length > 1,
         })
       }
     }
@@ -952,7 +1124,9 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           {TIPO_TABS.map(t => {
             const count = t.key === 'todas'
               ? items.filter(i => !isFinalizado(i.status)).length
-              : items.filter(i => i.tipo === t.key && !isFinalizado(i.status)).length
+              : t.key === 'obreiro'
+                ? items.filter(i => (i.tipo === 'obreiro' || i.tipo === 'pre_inscricao_obreiro') && !isFinalizado(i.status)).length
+                : items.filter(i => i.tipo === t.key && !isFinalizado(i.status)).length
             return (
               <Link key={t.key}
                 href={`/${slug}/inscricoes?tab=${t.key}&ver=${ver}`}
@@ -974,6 +1148,9 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         <Suspense>
           <SearchBar placeholder="Buscar por nome ou e-mail…" className="w-full sm:w-80" />
         </Suspense>
+
+        {/* Card com link da página /servir — visível na tab Obreiros */}
+        {tab === 'obreiro' && <ServirLinkCard slug={slug} />}
 
         {/* Lista */}
         {!filtered.length ? (
@@ -1027,6 +1204,22 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                           className="inline-flex items-center gap-1 text-xs text-blue-700 mt-1 bg-blue-50 border border-blue-100 px-2 py-1 rounded font-medium hover:bg-blue-100 transition-colors"
                         >
                           <ClipboardList className="size-3.5 inline -mt-0.5" /> Formulário preenchido — Ver respostas
+                        </Link>
+                      )}
+                      {item.tipo === 'pre_inscricao_obreiro' && item.staffApplicationId && item.hasFormData && (
+                        <Link
+                          href={`/${slug}/inscricoes/formulario-obreiro/${item.staffApplicationId}`}
+                          className="inline-flex items-center gap-1 text-xs text-amber-700 mt-1 bg-amber-50 border border-amber-100 px-2 py-1 rounded font-medium hover:bg-amber-100 transition-colors"
+                        >
+                          <ClipboardList className="size-3.5 inline -mt-0.5" /> Formulário preenchido — Ver respostas
+                        </Link>
+                      )}
+                      {item.tipo === 'obreiro' && item.hasFormData && item.staffApplicationId && (
+                        <Link
+                          href={`/${slug}/inscricoes/formulario-obreiro/${item.staffApplicationId}`}
+                          className="inline-flex items-center gap-1 text-xs text-amber-700 mt-1 bg-amber-50 border border-amber-100 px-2 py-1 rounded font-medium hover:bg-amber-100 transition-colors"
+                        >
+                          <ClipboardList className="size-3.5 inline -mt-0.5" /> Ver formulário preenchido
                         </Link>
                       )}
                       {item.tipo === 'obreiro' && item.status === 'em_analise' && !item.hasLogin && (
@@ -1102,10 +1295,36 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                           </div>
                         )}
 
+                        {/* Disponibilizar formulário — pré-inscrição de obreiro */}
+                        {item.tipo === 'pre_inscricao_obreiro' && !item.staffApplicationId && (
+                          <div className="col-span-2">
+                            <DisponibilizarFormularioButton
+                              interestFormId={item.id}
+                              slug={slug}
+                              schoolId="__obreiro__"
+                              action={disponibilizarFormularioObreiro}
+                              emailDisabled={false}
+                              label="Gerar formulário de obreiro"
+                            />
+                          </div>
+                        )}
+
+                        {/* Links de recomendação — obreiro com formulário enviado */}
+                        {(item.tipo === 'pre_inscricao_obreiro' || item.tipo === 'obreiro') && item.staffApplicationId && item.hasFormData && (
+                          <div className="col-span-2">
+                            <LinksReferenciaAdminButton
+                              applicationId={item.staffApplicationId}
+                              candidateName={item.nome}
+                              slug={slug}
+                              isStaff
+                            />
+                          </div>
+                        )}
+
                         <div className="col-span-2 h-px bg-gray-100" />
 
                         {/* Status */}
-                        {item.status === 'pendente' && (
+                        {item.status === 'pendente' && item.tipo !== 'pre_inscricao_obreiro' && (
                           <form action={updateStatus}>
                             <input type="hidden" name="id" value={item.id} />
                             <input type="hidden" name="tipo" value={item.tipo} />
@@ -1115,7 +1334,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                             </button>
                           </form>
                         )}
-                        {(item.status === 'pendente' || item.status === 'em_contato' || item.status === 'formulario_enviado' || item.status === 'em_analise') && item.tipo !== 'obreiro' && (
+                        {(item.status === 'pendente' || item.status === 'em_contato' || item.status === 'formulario_enviado' || item.status === 'em_analise') && item.tipo !== 'obreiro' && item.tipo !== 'pre_inscricao_obreiro' && (
                           <form action={aprovar} className="col-span-2 space-y-1.5">
                             <input type="hidden" name="id" value={item.id} />
                             <input type="hidden" name="tipo" value={item.tipo} />

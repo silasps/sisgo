@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Modal } from '@/components/ui/Modal'
 import { gerarLinkReferencia } from '@/app/[slug]/formulario/[token]/actions'
+import { gerarLinkReferenciaObreiro } from '@/app/[slug]/formulario-obreiro/[token]/actions'
 import { Link as LinkIcon, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -264,11 +265,12 @@ export function MarcarRecebidoExternoButton({
 // ── Links de recomendação (pastor / amigo) desde o admin ─────────────────
 
 export function LinksReferenciaAdminButton({
-  applicationId, candidateName, slug,
+  applicationId, candidateName, slug, isStaff,
 }: {
   applicationId: string
   candidateName: string
   slug: string
+  isStaff?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [links, setLinks] = useState<{ pastor: string | null; amigo: string | null }>({ pastor: null, amigo: null })
@@ -278,7 +280,9 @@ export function LinksReferenciaAdminButton({
   async function gerar(tipo: 'pastor' | 'amigo') {
     setLoading(tipo)
     try {
-      const result = await gerarLinkReferencia(slug, applicationId, tipo)
+      const result = isStaff
+        ? await gerarLinkReferenciaObreiro(slug, applicationId, tipo)
+        : await gerarLinkReferencia(slug, applicationId, tipo)
       if ('url' in result && result.url) {
         setLinks(prev => ({ ...prev, [tipo]: result.url }))
       }

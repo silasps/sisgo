@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 
 type Props = {
   id: string
-  tipo: 'pre_inscricao' | 'aluno' | 'obreiro'
+  tipo: 'pre_inscricao' | 'aluno' | 'obreiro' | 'pre_inscricao_obreiro'
   action: (formData: FormData) => Promise<void>
 }
 

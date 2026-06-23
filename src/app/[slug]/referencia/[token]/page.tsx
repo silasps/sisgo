@@ -24,6 +24,10 @@ export default async function ReferenciaPage({ params, searchParams }: Props) {
         id, organization_id,
         schools(name),
         school_interest_forms(full_name)
+      ),
+      staff_applications(
+        id, organization_id,
+        staff_interest_forms(full_name)
       )
     `)
     .eq('token', token)
@@ -31,25 +35,36 @@ export default async function ReferenciaPage({ params, searchParams }: Props) {
 
   if (!ref) notFound()
 
-  const app = ref.school_applications as unknown as {
+  const schoolApp = ref.school_applications as unknown as {
     id: string
     organization_id: string
     schools: { name: string } | null
     school_interest_forms: { full_name: string } | null
   } | null
 
+  const staffApp = ref.staff_applications as unknown as {
+    id: string
+    organization_id: string
+    staff_interest_forms: { full_name: string } | null
+  } | null
+
+  const app = schoolApp ?? staffApp
   if (!app) notFound()
+
+  const isStaff = !schoolApp && !!staffApp
 
   const { data: org } = await sb
     .from('organizations')
-    .select('slug, active')
+    .select('slug, active, name')
     .eq('id', app.organization_id)
     .single()
 
   if (!org?.active || org.slug !== slug) notFound()
 
-  const escolaNome = app.schools?.name ?? 'JOCUM'
-  const candidatoNome = app.school_interest_forms?.full_name ?? 'o(a) candidato(a)'
+  const escolaNome = isStaff ? (org.name ?? 'JOCUM') : ((schoolApp?.schools?.name) ?? 'JOCUM')
+  const candidatoNome = isStaff
+    ? (staffApp?.staff_interest_forms?.full_name ?? 'o(a) candidato(a)')
+    : (schoolApp?.school_interest_forms?.full_name ?? 'o(a) candidato(a)')
   const tipoLabel = ref.type === 'pastor' ? d.ref.form_type_pastor : d.ref.form_type_amigo
 
   if (new Date(ref.token_expires_at) < new Date()) {

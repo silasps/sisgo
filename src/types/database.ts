@@ -67,11 +67,17 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['person_status_history']['Insert']>
         Relationships: [Rel<'person_status_history_person_id_fkey', ['person_id'], false, 'people', ['id']>]
       }
-      staff_applications: {
-        Row: { id: string; organization_id: string; person_id: string; ministry_id: string | null; status: string; applied_at: string; reviewed_at: string | null; reviewed_by: string | null; notes: string | null }
-        Insert: { organization_id: string; person_id: string; ministry_id?: string | null; status?: string; notes?: string | null }
-        Update: Partial<Database['public']['Tables']['staff_applications']['Insert']>
+      staff_interest_forms: {
+        Row: { id: string; organization_id: string; ministry_id: string | null; person_id: string | null; full_name: string; email: string; phone: string | null; phone_country: string | null; language: string | null; message: string | null; status: string; refusal_reason: string | null; reviewed_by: string | null; reviewed_at: string | null; notified_at: string | null; responded_at: string | null; created_at: string; updated_at: string }
+        Insert: { organization_id: string; ministry_id?: string | null; person_id?: string | null; full_name: string; email: string; phone?: string | null; phone_country?: string | null; language?: string | null; message?: string | null; status?: string; refusal_reason?: string | null }
+        Update: Partial<Database['public']['Tables']['staff_interest_forms']['Insert']>
         Relationships: []
+      }
+      staff_applications: {
+        Row: { id: string; organization_id: string; person_id: string; ministry_id: string | null; interest_form_id: string | null; token: string | null; token_expires_at: string | null; form_data: Json; current_section: number; status: string; applied_at: string; reviewed_at: string | null; reviewed_by: string | null; notes: string | null; leader_accepted_by: string | null; leader_accepted_at: string | null; dh_finalized_by: string | null; dh_finalized_at: string | null; refusal_reason: string | null }
+        Insert: { organization_id: string; person_id: string; ministry_id?: string | null; interest_form_id?: string | null; token?: string | null; token_expires_at?: string | null; form_data?: Json; current_section?: number; status?: string; notes?: string | null }
+        Update: Partial<Database['public']['Tables']['staff_applications']['Insert']>
+        Relationships: [Rel<'staff_applications_interest_form_id_fkey', ['interest_form_id'], false, 'staff_interest_forms', ['id']>]
       }
       staff_profiles: {
         Row: { id: string; organization_id: string; person_id: string; user_id: string | null; role_title: string | null; area: string | null; joined_at: string | null; left_at: string | null; active: boolean; created_at: string; updated_at: string }
@@ -440,17 +446,21 @@ export type Database = {
       }
       reference_forms: {
         Row: {
-          id: string; school_application_id: string
+          id: string; school_application_id: string | null; staff_application_id: string | null
           type: 'pastor' | 'amigo'; token: string; token_expires_at: string
           status: 'pendente' | 'enviado'; form_data: Json | null; created_at: string
         }
         Insert: {
-          school_application_id: string; type: 'pastor' | 'amigo'
-          token: string; token_expires_at: string
+          school_application_id?: string | null; staff_application_id?: string | null
+          type: 'pastor' | 'amigo'
+          token?: string; token_expires_at?: string
           status?: 'pendente' | 'enviado'; form_data?: Json | null
         }
         Update: Partial<Database['public']['Tables']['reference_forms']['Insert']>
-        Relationships: [Rel<'reference_forms_school_application_id_fkey', ['school_application_id'], false, 'school_applications', ['id']>]
+        Relationships: [
+          Rel<'reference_forms_school_application_id_fkey', ['school_application_id'], false, 'school_applications', ['id']>,
+          Rel<'reference_forms_staff_application_id_fkey', ['staff_application_id'], false, 'staff_applications', ['id']>
+        ]
       }
       base_groups: {
         Row: { id: string; name: string; description: string | null; active: boolean; created_at: string }
