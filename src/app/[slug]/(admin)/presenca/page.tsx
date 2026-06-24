@@ -4,7 +4,6 @@ import { Header } from '@/components/layout/Header'
 import { SearchBar } from '@/components/ui/SearchBar'
 import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
-import { CheckInButton, CheckOutButton } from './PresencaButtons'
 import { AusenciaModal, REASON_LABELS } from './AusenciaModal'
 import { CalendarRange, Users, UserCheck } from 'lucide-react'
 
@@ -138,10 +137,8 @@ export default async function PresencaPage({ params, searchParams }: Props) {
   const rangeEnd = rangeStartRaw <= rangeEndRaw ? rangeEndRaw : rangeStartRaw
 
   const [
-    { data: orgUser },
+    { data: orgUsersForRole },
     { data: people },
-    { data: activePresences },
-    { data: todayHistory },
     { data: activeDeclarationsRaw },
     { data: upcomingDeclarationsRaw },
     { data: staffRaw },
@@ -156,28 +153,14 @@ export default async function PresencaPage({ params, searchParams }: Props) {
   ] = await Promise.all([
     supabase
       .from('organization_users')
-      .select('roles(name)')
+      .select('organization_id, roles(name)')
       .eq('user_id', user?.id ?? '')
-      .eq('active', true)
-      .single(),
+      .eq('active', true),
 
     db.from('people')
       .select('id, full_name, source')
       .eq('organization_id', orgId)
-      .eq('active', true)
       .order('full_name'),
-
-    db.from('person_presence')
-      .select('id, person_id, checked_in_at')
-      .eq('organization_id', orgId)
-      .is('checked_out_at', null)
-      .order('checked_in_at', { ascending: false }),
-
-    db.from('person_presence')
-      .select('person_id')
-      .eq('organization_id', orgId)
-      .gte('checked_in_at', new Date(new Date().setHours(0, 0, 0, 0)).toISOString())
-      .not('checked_out_at', 'is', null),
 
     db.from('absence_declarations')
       .select('person_id, reason_type, reason_notes, start_date, end_date')
@@ -237,16 +220,16 @@ export default async function PresencaPage({ params, searchParams }: Props) {
       .lte('start_date', rangeEnd)
       .gte('end_date', rangeStart),
   ])
-  const role = (orgUser?.roles as unknown as { name: string } | null)?.name ?? ''
+  const roleRows = (orgUsersForRole ?? []) as unknown as Array<{
+    organization_id: string | null
+    roles: { name: string } | null
+  }>
+  const superadminRow = roleRows.find(row => row.roles?.name === 'superadmin')
+  const currentOrgRow = roleRows.find(row => row.organization_id === orgId)
+  const role = superadminRow?.roles?.name ?? currentOrgRow?.roles?.name ?? ''
   const canPlanScale = role === 'dh' || role === 'superadmin'
 
   const allPeople = (people ?? []) as Array<{ id: string; full_name: string; source: string | null }>
-
-  const presenceByPerson = new Map(
-    (activePresences ?? []).map(p => [p.person_id, { id: p.id, since: p.checked_in_at }])
-  )
-
-  const checkedOutTodayIds = new Set((todayHistory ?? []).map(p => p.person_id))
 
   type DeclRow = { person_id: string; reason_type: string; reason_notes: string | null; start_date: string; end_date: string }
   const declarationMap = new Map(
@@ -361,20 +344,17 @@ export default async function PresencaPage({ params, searchParams }: Props) {
   const visiblePeople = visibleScope.visiblePersonIds
     ? allPeople.filter(person => visibleScope.visiblePersonIds!.has(person.id))
     : allPeople
+  const presenceEligiblePeople = visiblePeople.filter(person => person.source !== 'pre_inscricao_publica')
   const scopedStaffForAbsence = staff
     .filter(person => !visibleScope.absencePersonIds || visibleScope.absencePersonIds.has(person.person_id))
 
-  const present = visiblePeople.filter(p => presenceByPerson.has(p.id))
-  const absent  = visiblePeople.filter(p => !presenceByPerson.has(p.id) && p.source !== 'pre_inscricao_publica')
+  const present = presenceEligiblePeople.filter(person => !declarationMap.has(person.id))
+  const absent = presenceEligiblePeople.filter(person => declarationMap.has(person.id))
 
   const listToShow = tab === 'presentes' ? present : absent
   const filtered = q
     ? listToShow.filter(p => p.full_name.toLowerCase().includes(q.toLowerCase()))
     : listToShow
-
-  function formatSince(iso: string) {
-    return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-  }
 
   function formatDate(iso: string) {
     return new Date(`${iso}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
@@ -396,7 +376,7 @@ export default async function PresencaPage({ params, searchParams }: Props) {
             </div>
             <div>
               <p className="text-2xl font-bold text-green-700">{present.length}</p>
-              <p className="text-xs font-medium text-green-600">Na base agora</p>
+              <p className="text-xs font-medium text-green-600">Na base</p>
             </div>
           </div>
           <div className="flex items-center gap-3 rounded-xl bg-gray-50 p-4">
@@ -541,14 +521,12 @@ export default async function PresencaPage({ params, searchParams }: Props) {
         {filtered.length === 0 ? (
           <div className="rounded-xl border border-dashed border-gray-300 bg-white p-10 text-center">
             <p className="text-sm text-gray-400">
-              {q ? `Nenhum resultado para "${q}".` : tab === 'presentes' ? 'Ninguém na base no momento.' : 'Todos estão na base!'}
+              {q ? `Nenhum resultado para "${q}".` : tab === 'presentes' ? 'Nenhuma pessoa cadastrada neste filtro.' : 'Ninguém declarou ausência.'}
             </p>
           </div>
         ) : (
           <div className="divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white">
             {filtered.map(person => {
-              const presence = presenceByPerson.get(person.id)
-              const wasHereToday = checkedOutTodayIds.has(person.id)
               const declaration = declarationMap.get(person.id)
               const initials = getInitials(person.full_name)
               const reasonInfo = declaration ? (REASON_LABELS[declaration.reason_type] ?? REASON_LABELS.outro) : null
@@ -556,17 +534,14 @@ export default async function PresencaPage({ params, searchParams }: Props) {
               return (
                 <div key={person.id} className="flex items-center gap-3 px-4 py-3.5">
                   <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
-                    presence ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                    reasonInfo ? 'bg-gray-100 text-gray-500' : 'bg-green-100 text-green-700'
                   }`}>
                     {initials}
                   </div>
 
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-gray-900">{person.full_name}</p>
-                    {presence && (
-                      <p className="text-xs text-green-600">Desde {formatSince(presence.since)}</p>
-                    )}
-                    {!presence && reasonInfo && (
+                    {reasonInfo ? (
                       <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
                         <span className={`rounded-md px-1.5 py-0.5 text-xs font-medium ${reasonInfo.color}`}>
                           {reasonInfo.label}
@@ -575,17 +550,10 @@ export default async function PresencaPage({ params, searchParams }: Props) {
                           Volta em {formatDate(declaration!.end_date)}
                         </span>
                       </div>
-                    )}
-                    {!presence && !reasonInfo && wasHereToday && (
-                      <p className="text-xs text-gray-400">Esteve aqui hoje</p>
+                    ) : (
+                      <p className="text-xs text-green-600">Presente por padrão</p>
                     )}
                   </div>
-
-                  {presence ? (
-                    <CheckOutButton presenceId={presence.id} slug={slug} nome={person.full_name.split(' ')[0]} />
-                  ) : (
-                    <CheckInButton personId={person.id} orgId={orgId} slug={slug} nome={person.full_name.split(' ')[0]} />
-                  )}
                 </div>
               )
             })}

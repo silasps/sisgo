@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/Header'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ClipboardList, Receipt, CalendarDays, BarChart3 } from 'lucide-react'
+import { ClipboardList, Receipt, CalendarDays, BarChart3, Settings } from 'lucide-react'
 import type { InputHTMLAttributes } from 'react'
 import { getRolePreview } from '@/lib/role-preview'
 import { asLooseClient } from '@/lib/supabase/loose-client'
@@ -252,6 +252,7 @@ export default async function FinanceiroPage({ params }: Props) {
             { href: `/${slug}/financeiro/cobrancas`, icon: Receipt, title: 'Cobranças', desc: totalChargesOverdue > 0 ? `${fmt(totalChargesOverdue)} em atraso` : `${fmt(totalChargesPending)} pendente`, alert: totalChargesOverdue > 0 },
             { href: `/${slug}/financeiro/contas-pagar`, icon: CalendarDays, title: 'Contas a Pagar', desc: totalPayablesOverdue > 0 ? `${fmt(totalPayablesOverdue)} vencido` : `${fmt(totalPayablesDueSoon)} em 7 dias`, alert: totalPayablesOverdue > 0 },
             { href: `/${slug}/financeiro/relatorios`, icon: BarChart3, title: 'Relatórios', desc: 'DRE e fluxo de caixa', alert: false },
+            { href: `/${slug}/financeiro/configuracoes-pagamento`, icon: Settings, title: 'Config. pagamento', desc: 'Métodos das refeições', alert: false },
           ].map(m => (
             <Link key={m.href} href={m.href}
               className={`group relative rounded-xl border bg-white p-4 cursor-pointer transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 ${m.alert ? 'border-red-200 bg-red-50' : 'border-gray-200'}`}>

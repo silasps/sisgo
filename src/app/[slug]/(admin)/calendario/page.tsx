@@ -14,6 +14,8 @@ type Props = {
   searchParams: Promise<{ ano?: string }>
 }
 
+const CALENDAR_TIME_ZONE = 'America/Sao_Paulo'
+
 export default async function CalendarioPage({ params, searchParams }: Props) {
   const { slug } = await params
   const { ano } = await searchParams
@@ -54,8 +56,8 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
 
   const start = `${year}-01-01`
   const end = `${year}-12-31`
-  const startAt = `${start}T00:00:00`
-  const endAt = `${end}T23:59:59`
+  const startAt = localDateTimeToIso(`${start}T00:00`)
+  const endAt = localDateTimeToIso(`${end}T23:59:59`)
 
   const baseEventsQuery = admin
     .from('base_calendar_events')
@@ -135,9 +137,9 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
     title: event.title,
     description: event.description,
     event_type: event.event_type,
-    starts_on: event.starts_at.slice(0, 10),
+    starts_on: isoToCalendarDateKey(event.starts_at),
     starts_at: event.starts_at,
-    ends_on: event.ends_at ? event.ends_at.slice(0, 10) : null,
+    ends_on: event.ends_at ? isoToCalendarDateKey(event.ends_at) : null,
     ends_at: event.ends_at,
     layer: 'escola',
     source: 'manual',
@@ -156,9 +158,9 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
     title: note.title,
     description: note.notes,
     event_type: 'nota',
-    starts_on: note.starts_at.slice(0, 10),
+    starts_on: isoToCalendarDateKey(note.starts_at),
     starts_at: note.starts_at,
-    ends_on: note.ends_at ? note.ends_at.slice(0, 10) : null,
+    ends_on: note.ends_at ? isoToCalendarDateKey(note.ends_at) : null,
     ends_at: note.ends_at,
     layer: 'pessoal',
     source: 'manual',
@@ -453,7 +455,59 @@ async function getStudentSchoolIds(
 }
 
 function localDateTimeToIso(value: string) {
-  return new Date(value).toISOString()
+  return zonedLocalDateTimeToDate(value, CALENDAR_TIME_ZONE).toISOString()
+}
+
+function zonedLocalDateTimeToDate(value: string, timeZone: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/)
+  if (!match) return new Date(value)
+
+  const [, year, month, day, hour, minute, second = '0'] = match
+  const localAsUtc = Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second),
+  )
+  let utcMs = localAsUtc - getTimeZoneOffsetMs(new Date(localAsUtc), timeZone)
+  utcMs = localAsUtc - getTimeZoneOffsetMs(new Date(utcMs), timeZone)
+  return new Date(utcMs)
+}
+
+function getTimeZoneOffsetMs(date: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date)
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]))
+  const zonedAsUtc = Date.UTC(
+    Number(values.year),
+    Number(values.month) - 1,
+    Number(values.day),
+    Number(values.hour),
+    Number(values.minute),
+    Number(values.second),
+  )
+  return zonedAsUtc - date.getTime()
+}
+
+function isoToCalendarDateKey(value: string) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: CALENDAR_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date(value))
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]))
+  return `${values.year}-${values.month}-${values.day}`
 }
 
 function holidayEvents(year: number): CalendarEvent[] {

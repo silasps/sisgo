@@ -50,6 +50,7 @@ export default async function EstoqueManutencaoPage({ params, searchParams }: Pr
     supabase.from('organizations').select('id, role_accumulations').eq('slug', slug).single(),
   ])
   if (!user || !org) notFound()
+  const orgId = org.id
 
   const { data: orgUsers } = await supabase
     .from('organization_users')
@@ -63,7 +64,7 @@ export default async function EstoqueManutencaoPage({ params, searchParams }: Pr
     extra_roles?: string[] | null
   }>
   const superadminRow  = rows.find(r => r.roles?.name === 'superadmin')
-  const currentOrgRow  = rows.find(r => r.organization_id === org.id)
+  const currentOrgRow  = rows.find(r => r.organization_id === orgId)
   const realRole       = superadminRow?.roles?.name ?? currentOrgRow?.roles?.name ?? ''
   if (!realRole) redirect('/login')
 
@@ -87,8 +88,8 @@ export default async function EstoqueManutencaoPage({ params, searchParams }: Pr
     const notes        = String(formData.get('notes') ?? '').trim() || null
     const { data: { user: u } } = await (await createClient()).auth.getUser()
     if (!u) return
-    await sbAdmin.from('maintenance_stock_items').insert({
-      organization_id: org.id, code, name, category, unit, quantity: 0, min_quantity, location, notes, created_by: u.id,
+    await createAdminClient().from('maintenance_stock_items').insert({
+      organization_id: orgId, code, name, category, unit, quantity: 0, min_quantity, location, notes, created_by: u.id,
     })
     redirect(`/${slug}/manutencao/estoque?tab=estoque`)
   }
@@ -102,7 +103,8 @@ export default async function EstoqueManutencaoPage({ params, searchParams }: Pr
     const movement_date = String(formData.get('movement_date') ?? new Date().toISOString().split('T')[0])
     if (!item_id || !quantity || quantity <= 0) return
 
-    const { data: item } = await sbAdmin.from('maintenance_stock_items').select('quantity').eq('id', item_id).single()
+    const actionAdmin = createAdminClient()
+    const { data: item } = await actionAdmin.from('maintenance_stock_items').select('quantity').eq('id', item_id).single()
     if (!item) return
 
     const delta  = movement_type === 'entrada' ? quantity : movement_type === 'saida' ? -quantity : quantity - item.quantity
@@ -111,10 +113,10 @@ export default async function EstoqueManutencaoPage({ params, searchParams }: Pr
     const { data: { user: u } } = await (await createClient()).auth.getUser()
     if (!u) return
 
-    await sbAdmin.from('maintenance_stock_movements').insert({
-      organization_id: org.id, item_id, movement_type, quantity, reason, movement_date, created_by: u.id,
+    await actionAdmin.from('maintenance_stock_movements').insert({
+      organization_id: orgId, item_id, movement_type, quantity, reason, movement_date, created_by: u.id,
     })
-    await sbAdmin.from('maintenance_stock_items').update({ quantity: newQty, updated_at: new Date().toISOString() }).eq('id', item_id)
+    await actionAdmin.from('maintenance_stock_items').update({ quantity: newQty, updated_at: new Date().toISOString() }).eq('id', item_id)
     redirect(`/${slug}/manutencao/estoque?tab=estoque`)
   }
 
@@ -122,7 +124,7 @@ export default async function EstoqueManutencaoPage({ params, searchParams }: Pr
     'use server'
     const id = String(formData.get('id') ?? '')
     if (!id) return
-    await sbAdmin.from('maintenance_stock_items').update({ active: false, updated_at: new Date().toISOString() }).eq('id', id)
+    await createAdminClient().from('maintenance_stock_items').update({ active: false, updated_at: new Date().toISOString() }).eq('id', id)
     redirect(`/${slug}/manutencao/estoque?tab=estoque`)
   }
 
@@ -131,7 +133,7 @@ export default async function EstoqueManutencaoPage({ params, searchParams }: Pr
   let itemsQuery = sbAdmin
     .from('maintenance_stock_items')
     .select('id, code, name, category, unit, quantity, min_quantity, location, notes')
-    .eq('organization_id', org.id)
+    .eq('organization_id', orgId)
     .eq('active', true)
     .order('name')
   if (q) itemsQuery = itemsQuery.ilike('name', `%${q}%`)
@@ -141,7 +143,7 @@ export default async function EstoqueManutencaoPage({ params, searchParams }: Pr
   const { data: movData } = await sbAdmin
     .from('maintenance_stock_movements')
     .select('id, item_id, movement_type, quantity, reason, movement_date')
-    .eq('organization_id', org.id)
+    .eq('organization_id', orgId)
     .order('movement_date', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(50)
@@ -298,6 +300,7 @@ export default async function EstoqueManutencaoPage({ params, searchParams }: Pr
                         <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700 select-none">Registrar movimentação</summary>
                         <form action={handleMovement} className="mt-2 flex flex-col gap-2">
                           <input type="hidden" name="item_id" value={item.id} />
+                          <input type="hidden" name="id" value={item.id} />
                           <div className="grid grid-cols-3 gap-2">
                             <div>
                               <label className="block text-xs font-medium text-gray-600 mb-1">Tipo</label>
@@ -324,12 +327,9 @@ export default async function EstoqueManutencaoPage({ params, searchParams }: Pr
                             <button type="submit" className="px-3 py-1.5 rounded-lg bg-[var(--accent)] text-white text-xs font-medium hover:opacity-90 transition-opacity">
                               Registrar
                             </button>
-                            <form action={handleRemoveItem}>
-                              <input type="hidden" name="id" value={item.id} />
-                              <button type="submit" className="px-3 py-1.5 rounded-lg border border-red-200 text-red-600 text-xs hover:bg-red-50 transition-colors">
-                                Remover item
-                              </button>
-                            </form>
+                            <button formAction={handleRemoveItem} className="px-3 py-1.5 rounded-lg border border-red-200 text-red-600 text-xs hover:bg-red-50 transition-colors">
+                              Remover item
+                            </button>
                           </div>
                         </form>
                       </details>

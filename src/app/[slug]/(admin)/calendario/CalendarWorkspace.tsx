@@ -77,6 +77,7 @@ const LAYER_LABEL: Record<CalendarLayer, string> = {
 const INPUT_CLASS = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400'
 const NAV_BTN     = 'inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 transition-colors hover:bg-gray-50'
 const NAV_LABEL   = 'rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-semibold text-gray-900'
+const CALENDAR_TIME_ZONE = 'America/Sao_Paulo'
 
 // ─── Main ──────────────────────────────────────────────────────────────────────
 
@@ -90,9 +91,11 @@ export function CalendarWorkspace({ year, slug, events, schoolOptions, permissio
   const eventsByDay = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>()
     for (const event of events) {
-      const list = map.get(event.starts_on) ?? []
-      list.push(event)
-      map.set(event.starts_on, list)
+      for (const day of eventDateKeys(event)) {
+        const list = map.get(day) ?? []
+        list.push(event)
+        map.set(day, list)
+      }
     }
     return map
   }, [events])
@@ -188,8 +191,6 @@ export function CalendarWorkspace({ year, slug, events, schoolOptions, permissio
           deleteAction={actions.deleteEvent}
           onSelectDate={setSelectedDate}
           onEditEvent={openEdit}
-          onAddNew={openCreate}
-          canCreate={canCreate}
         />
       )}
 
@@ -262,12 +263,11 @@ function ViewToggle({ view, onChange }: { view: ViewMode; onChange: (v: ViewMode
 
 function MonthView({
   year, today, eventsByDay, selectedDate, permissions, deleteAction,
-  onSelectDate, onEditEvent, onAddNew, canCreate,
+  onSelectDate, onEditEvent,
 }: {
   year: number; today: string; eventsByDay: Map<string, CalendarEvent[]>
   selectedDate: string; permissions: Props['permissions']; deleteAction: Action
   onSelectDate: (d: string) => void; onEditEvent: (e: CalendarEvent) => void
-  onAddNew: (d?: string) => void; canCreate: boolean
 }) {
   const selectedEvents = eventsByDay.get(selectedDate) ?? []
 
@@ -294,21 +294,11 @@ function MonthView({
             <h2 className="text-lg font-semibold text-gray-900">{formatLongDate(selectedDate)}</h2>
             <p className="text-xs text-gray-500">{selectedEvents.length} item(ns) neste dia</p>
           </div>
-          {canCreate && (
-            <button
-              onClick={() => onAddNew(selectedDate)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
-            >
-              <Plus size={15} /> Novo
-            </button>
-          )}
         </div>
 
         {selectedEvents.length === 0 ? (
           <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-6 text-center text-sm text-gray-400">
-            {canCreate
-              ? <>Nenhum item. Clique em <strong className="text-gray-600">Novo</strong> para adicionar.</>
-              : 'Nenhum item neste dia.'}
+            Nenhum item neste dia.
           </p>
         ) : (
           <div className="space-y-3">
@@ -347,8 +337,17 @@ function WeekView({
   let hourStart = DEFAULT_HOUR_START
   let hourEnd   = DEFAULT_HOUR_END
   for (const ev of weekEvents) {
-    const sh = new Date(ev.starts_at!).getHours()
-    const eh = ev.ends_at ? new Date(ev.ends_at).getHours() + (new Date(ev.ends_at).getMinutes() > 0 ? 1 : 0) : sh + 1
+    const startDay = isoToCalendarDateKey(ev.starts_at!)
+    const endDay = ev.ends_at ? isoToCalendarDateKey(ev.ends_at) : startDay
+    if (startDay !== endDay) {
+      hourStart = 0
+      hourEnd = 24
+      continue
+    }
+    const startParts = getCalendarDateTimeParts(ev.starts_at!)
+    const endParts = ev.ends_at ? getCalendarDateTimeParts(ev.ends_at) : null
+    const sh = startParts.hour
+    const eh = endParts ? endParts.hour + (endParts.minute > 0 ? 1 : 0) : sh + 1
     if (sh < hourStart) hourStart = sh
     if (eh > hourEnd) hourEnd = Math.min(eh + 1, 24)
   }
@@ -357,15 +356,20 @@ function WeekView({
   const gridH    = hours.length * SLOT_H
   const hasAllDay = weekDays.some(day => (eventsByDay.get(day) ?? []).some(e => !e.starts_at))
 
-  function eventPos(event: CalendarEvent) {
-    const s = new Date(event.starts_at!)
-    const startMin = Math.max((s.getHours() - hourStart) * 60 + s.getMinutes(), 0)
-    let durationMin = 60
-    if (event.ends_at) {
-      const e = new Date(event.ends_at)
-      const endMin = (e.getHours() - hourStart) * 60 + e.getMinutes()
-      durationMin = Math.max(endMin - startMin, 30)
-    }
+  function eventPos(event: CalendarEvent, day: string) {
+    const startDay = isoToCalendarDateKey(event.starts_at!)
+    const endDay = event.ends_at ? isoToCalendarDateKey(event.ends_at) : startDay
+    const s = getCalendarDateTimeParts(event.starts_at!)
+    const e = event.ends_at ? getCalendarDateTimeParts(event.ends_at) : null
+    const startMin = day === startDay
+      ? Math.max((s.hour - hourStart) * 60 + s.minute, 0)
+      : 0
+    const endMin = e
+      ? day === endDay
+        ? (e.hour - hourStart) * 60 + e.minute
+        : (24 - hourStart) * 60
+      : startMin + 60
+    const durationMin = Math.max(endMin - startMin, 30)
     return { top: startMin * SLOT_H / 60, height: Math.max(durationMin * SLOT_H / 60, 22) }
   }
 
@@ -474,7 +478,9 @@ function WeekView({
                     <div key={`h${i}`} style={{ top: i * SLOT_H + SLOT_H / 2 }} className="absolute left-0 right-0 border-t border-dashed border-gray-50" />
                   ))}
                   {timed.map(event => {
-                    const { top, height } = eventPos(event)
+                    const { top, height } = eventPos(event, day)
+                    const startDay = isoToCalendarDateKey(event.starts_at!)
+                    const dayPrefix = day === startDay ? formatTime(event.starts_at!) : '00:00'
                     return (
                       <button
                         key={`${event.layer}:${event.id}`}
@@ -483,7 +489,7 @@ function WeekView({
                         style={{ top, height, left: 2, right: 2 }}
                         className={`absolute overflow-hidden rounded border px-1 py-0.5 text-left text-[10px] leading-tight transition-opacity hover:opacity-75 ${EVENT_STYLE[event.event_type]}`}
                       >
-                        <span className="block font-semibold">{formatTime(event.starts_at!)}</span>
+                        <span className="block font-semibold">{dayPrefix}</span>
                         <span className="block truncate">{event.title}</span>
                       </button>
                     )
@@ -542,7 +548,7 @@ function DayView({
             {timed.map(event => (
               <div key={`${event.layer}:${event.id}`} className="flex items-start gap-3">
                 <div className="w-11 shrink-0 pt-3 text-right text-xs font-semibold tabular-nums text-gray-400">
-                  {formatTime(event.starts_at!)}
+                  {eventTimeForDay(event, date)}
                 </div>
                 <div className="flex-1">
                   <DayEventCard
@@ -704,8 +710,8 @@ function SchoolDayModal({
     const startsVal = fd.get('starts_at') as string
     const endsVal   = fd.get('ends_at')   as string
     if (startsVal) {
-      const newStart = new Date(startsVal)
-      const newEnd   = endsVal ? new Date(endsVal) : new Date(newStart.getTime() + 60 * 60000)
+      const newStart = calendarLocalInputToDate(startsVal)
+      const newEnd   = endsVal ? calendarLocalInputToDate(endsVal) : new Date(newStart.getTime() + 60 * 60000)
 
       const hit = allEvents.find(ev => {
         if (!ev.starts_at) return false
@@ -1232,6 +1238,24 @@ function canEdit(event: CalendarEvent, permissions: Props['permissions']) {
   return false
 }
 
+function eventDateKeys(event: CalendarEvent) {
+  const start = event.starts_at ? isoToCalendarDateKey(event.starts_at) : event.starts_on
+  const end = event.ends_at ? isoToCalendarDateKey(event.ends_at) : event.ends_on ?? start
+  const days: string[] = []
+  let cursor = start
+  while (cursor <= end) {
+    days.push(cursor)
+    cursor = addDateKeyDays(cursor, 1)
+  }
+  return days
+}
+
+function addDateKeyDays(dateKey: string, days: number) {
+  const date = new Date(`${dateKey}T12:00:00`)
+  date.setDate(date.getDate() + days)
+  return toDateKeyFromDate(date)
+}
+
 function toDateKey(year: number, month: number, day: number) {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
@@ -1265,8 +1289,8 @@ function getFullWeek(dateKey: string): string[] {
 }
 
 function isoToLocalInput(value: string) {
-  const date = new Date(value)
-  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+  const parts = getCalendarDateTimeParts(value)
+  return `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}T${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`
 }
 
 function formatLongDate(date: string) {
@@ -1288,16 +1312,72 @@ function weekdayName(date: string) {
 }
 
 function formatTime(value: string) {
-  return new Date(value).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  return new Date(value).toLocaleTimeString('pt-BR', { timeZone: CALENDAR_TIME_ZONE, hour: '2-digit', minute: '2-digit' })
 }
 
 function formatEventDate(event: CalendarEvent) {
   const date = formatDate(event.starts_on)
   const time = event.starts_at ? `, ${formatTime(event.starts_at)}` : ''
   const end  = event.ends_at
-    ? ` até ${formatDate(event.ends_at.slice(0, 10))}, ${formatTime(event.ends_at)}`
+    ? ` até ${formatDate(isoToCalendarDateKey(event.ends_at))}, ${formatTime(event.ends_at)}`
     : event.ends_on
       ? ` até ${formatDate(event.ends_on)}`
       : ''
   return `${date}${time}${end}`
+}
+
+function eventTimeForDay(event: CalendarEvent, day: string) {
+  if (!event.starts_at) return ''
+  return day === isoToCalendarDateKey(event.starts_at) ? formatTime(event.starts_at) : '00:00'
+}
+
+function getCalendarDateTimeParts(value: string) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: CALENDAR_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(value))
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]))
+  return {
+    year: values.year,
+    month: Number(values.month),
+    day: Number(values.day),
+    hour: Number(values.hour),
+    minute: Number(values.minute),
+    second: Number(values.second),
+  }
+}
+
+function isoToCalendarDateKey(value: string) {
+  const parts = getCalendarDateTimeParts(value)
+  return `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`
+}
+
+function calendarLocalInputToDate(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/)
+  if (!match) return new Date(value)
+
+  const [, year, month, day, hour, minute, second = '0'] = match
+  const localAsUtc = Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second),
+  )
+  let utcMs = localAsUtc - getTimeZoneOffsetMs(new Date(localAsUtc))
+  utcMs = localAsUtc - getTimeZoneOffsetMs(new Date(utcMs))
+  return new Date(utcMs)
+}
+
+function getTimeZoneOffsetMs(date: Date) {
+  const parts = getCalendarDateTimeParts(date.toISOString())
+  const zonedAsUtc = Date.UTC(Number(parts.year), parts.month - 1, parts.day, parts.hour, parts.minute, parts.second)
+  return zonedAsUtc - date.getTime()
 }
