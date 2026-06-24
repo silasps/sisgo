@@ -52,7 +52,7 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
     supabase.from('ministry_members').select('*', { count: 'exact', head: true }).eq('ministry_id', id).eq('active', true),
     supabase.from('ministry_pending_requests').select('*', { count: 'exact', head: true }).eq('ministry_id', id).eq('status', 'pendente'),
     sbAdmin.from('ministry_messages')
-      .select('id, author_name, author_id, content, mentions, color, created_at')
+      .select('id, author_name, author_id, content, mentions, color, font, text_color, created_at')
       .eq('ministry_id', id)
       .order('created_at', { ascending: true })
       .limit(200),
@@ -65,6 +65,8 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
   const messages = (messagesRaw ?? []).map(m => ({
     ...m,
     mentions: (m.mentions as string[] | null) ?? [],
+    font: (m as unknown as { font: number }).font ?? 0,
+    text_color: (m as unknown as { text_color: number }).text_color ?? 0,
   }))
 
   const members = (membersRaw ?? []).map(m => ({
@@ -157,6 +159,8 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
     await db.from('ministry_messages').insert({
       organization_id: orgId, ministry_id: id, author_id: user.id,
       author_name: authorName, content, mentions: mentionedIds, color: nextColor,
+      font: Number(formData.get('font') ?? 0),
+      text_color: Number(formData.get('text_color') ?? 0),
     })
     redirect(`/${slug}/ministerios/${id}`)
   }

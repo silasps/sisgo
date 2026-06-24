@@ -34,7 +34,7 @@ export default async function MuralPage({ params }: Props) {
 
   const [{ data: messagesRaw }, { data: membersRaw }] = await Promise.all([
     sbAdmin.from('ministry_messages')
-      .select('id, author_name, author_id, content, mentions, color, created_at')
+      .select('id, author_name, author_id, content, mentions, color, font, text_color, created_at')
       .eq('ministry_id', id)
       .order('created_at', { ascending: true })
       .limit(200),
@@ -47,6 +47,8 @@ export default async function MuralPage({ params }: Props) {
   const messages = (messagesRaw ?? []).map(m => ({
     ...m,
     mentions: (m.mentions as string[] | null) ?? [],
+    font: (m as unknown as { font: number }).font ?? 0,
+    text_color: (m as unknown as { text_color: number }).text_color ?? 0,
   }))
 
   const members = (membersRaw ?? []).map(m => ({
@@ -81,6 +83,8 @@ export default async function MuralPage({ params }: Props) {
       content,
       mentions: mentionedIds,
       color: nextColor,
+      font: Number(formData.get('font') ?? 0),
+      text_color: Number(formData.get('text_color') ?? 0),
     })
     redirect(`/${slug}/ministerios/${id}/mural`)
   }

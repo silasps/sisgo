@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Trash2, X } from 'lucide-react'
+import { Send, Trash2, Type, Palette } from 'lucide-react'
 
 type Message = {
   id: string
@@ -10,6 +10,8 @@ type Message = {
   content: string
   mentions: string[]
   color: number
+  font: number
+  text_color: number
   created_at: string
 }
 
@@ -35,6 +37,21 @@ const ROTATIONS = [
   'rotate-[1deg]',
   '-rotate-[0.3deg]',
   'rotate-[0.5deg]',
+]
+
+const FONTS = [
+  { label: 'Aa', class: 'font-sans', name: 'Normal' },
+  { label: 'Aa', class: 'font-handwriting', name: 'Manuscrito' },
+  { label: 'Aa', class: 'font-cursive', name: 'Cursiva' },
+]
+
+const TEXT_COLORS = [
+  { class: 'text-gray-800', swatch: 'bg-gray-800', name: 'Escuro' },
+  { class: 'text-blue-900', swatch: 'bg-blue-900', name: 'Azul' },
+  { class: 'text-red-800', swatch: 'bg-red-800', name: 'Vermelho' },
+  { class: 'text-green-900', swatch: 'bg-green-900', name: 'Verde' },
+  { class: 'text-purple-900', swatch: 'bg-purple-900', name: 'Roxo' },
+  { class: 'text-amber-900', swatch: 'bg-amber-900', name: 'Âmbar' },
 ]
 
 function timeAgo(iso: string) {
@@ -74,8 +91,12 @@ type Props = {
 
 export function MuralClient({ messages, members, currentUserId, canDelete, postAction, deleteAction }: Props) {
   const [text, setText] = useState('')
+  const [font, setFont] = useState(0)
+  const [textColor, setTextColor] = useState(0)
   const [showMentions, setShowMentions] = useState(false)
   const [mentionFilter, setMentionFilter] = useState('')
+  const [showFontPicker, setShowFontPicker] = useState(false)
+  const [showColorPicker, setShowColorPicker] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
 
@@ -125,6 +146,11 @@ export function MuralClient({ messages, members, currentUserId, canDelete, postA
     }
   }, [text])
 
+  function closePickers() {
+    setShowFontPicker(false)
+    setShowColorPicker(false)
+  }
+
   return (
     <div className="flex flex-col flex-1 min-h-0">
       {/* Messages */}
@@ -142,6 +168,8 @@ export function MuralClient({ messages, members, currentUserId, canDelete, postA
               const rot = ROTATIONS[i % ROTATIONS.length]
               const isOwn = msg.author_id === currentUserId
               const canRemove = isOwn || canDelete
+              const fontClass = FONTS[msg.font % FONTS.length].class
+              const colorClass = TEXT_COLORS[msg.text_color % TEXT_COLORS.length].class
               return (
                 <div
                   key={msg.id}
@@ -153,7 +181,7 @@ export function MuralClient({ messages, members, currentUserId, canDelete, postA
                         <span className="text-xs font-bold text-gray-700">{msg.author_name}</span>
                         <span className="text-[10px] text-gray-400">{timeAgo(msg.created_at)}</span>
                       </div>
-                      <p className="text-sm text-gray-800 whitespace-pre-line leading-relaxed">
+                      <p className={`text-sm ${colorClass} ${fontClass} whitespace-pre-line leading-relaxed ${msg.font === 1 ? 'text-base' : ''}`}>
                         {renderContent(msg.content, members)}
                       </p>
                     </div>
@@ -176,6 +204,7 @@ export function MuralClient({ messages, members, currentUserId, canDelete, postA
       {/* Composer */}
       <div className="border-t border-gray-200 bg-white px-4 py-3 md:px-6">
         <div className="max-w-2xl mx-auto relative">
+          {/* Mention autocomplete */}
           {showMentions && filteredMembers.length > 0 && (
             <div className="absolute bottom-full mb-1 left-0 right-0 bg-white rounded-lg border border-gray-200 shadow-lg max-h-40 overflow-y-auto z-10">
               {filteredMembers.slice(0, 8).map(m => (
@@ -190,8 +219,69 @@ export function MuralClient({ messages, members, currentUserId, canDelete, postA
               ))}
             </div>
           )}
-          <form ref={formRef} action={postAction} onSubmit={() => setText('')} className="flex items-end gap-2">
+
+          {/* Font picker */}
+          {showFontPicker && (
+            <div className="absolute bottom-full mb-1 left-0 bg-white rounded-lg border border-gray-200 shadow-lg z-10 p-1">
+              {FONTS.map((f, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => { setFont(i); setShowFontPicker(false) }}
+                  className={`flex items-center gap-2 w-full text-left px-3 py-2 text-sm rounded-md transition-colors ${font === i ? 'bg-brand-50 text-brand-700' : 'hover:bg-gray-50'}`}
+                >
+                  <span className={`${f.class} text-base w-6 text-center`}>{f.label}</span>
+                  <span className="text-xs text-gray-500">{f.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Color picker */}
+          {showColorPicker && (
+            <div className="absolute bottom-full mb-1 left-10 bg-white rounded-lg border border-gray-200 shadow-lg z-10 p-2">
+              <div className="flex gap-1.5">
+                {TEXT_COLORS.map((tc, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => { setTextColor(i); setShowColorPicker(false) }}
+                    title={tc.name}
+                    className={`w-7 h-7 rounded-full ${tc.swatch} transition-all ${textColor === i ? 'ring-2 ring-brand-400 ring-offset-2 scale-110' : 'hover:scale-110'}`}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Toolbar + input */}
+          <div className="flex items-center gap-1 mb-1.5">
+            <button
+              type="button"
+              onClick={() => { setShowFontPicker(v => !v); setShowColorPicker(false) }}
+              title="Fonte"
+              className={`p-1.5 rounded-lg transition-colors ${showFontPicker ? 'bg-brand-50 text-brand-600' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
+            >
+              <Type size={15} />
+            </button>
+            <button
+              type="button"
+              onClick={() => { setShowColorPicker(v => !v); setShowFontPicker(false) }}
+              title="Cor do texto"
+              className={`p-1.5 rounded-lg transition-colors ${showColorPicker ? 'bg-brand-50 text-brand-600' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
+            >
+              <Palette size={15} />
+            </button>
+            <div className="flex items-center gap-1.5 ml-1 text-[10px] text-gray-400">
+              <span className={`${FONTS[font].class} ${font === 1 ? 'text-xs' : ''}`}>{FONTS[font].name}</span>
+              <span className={`inline-block w-2.5 h-2.5 rounded-full ${TEXT_COLORS[textColor].swatch}`} />
+            </div>
+          </div>
+
+          <form ref={formRef} action={postAction} onSubmit={() => { setText(''); closePickers() }} className="flex items-end gap-2">
             <input type="hidden" name="content" value={text} />
+            <input type="hidden" name="font" value={font} />
+            <input type="hidden" name="text_color" value={textColor} />
             <div className="flex-1 relative">
               <textarea
                 ref={textareaRef}
@@ -200,7 +290,7 @@ export function MuralClient({ messages, members, currentUserId, canDelete, postA
                 onKeyDown={handleKeyDown}
                 placeholder="Escreva no mural... use @ para mencionar"
                 rows={1}
-                className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 focus:bg-white transition-colors"
+                className={`w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 focus:bg-white transition-colors ${FONTS[font].class} ${TEXT_COLORS[textColor].class}`}
               />
             </div>
             <button
