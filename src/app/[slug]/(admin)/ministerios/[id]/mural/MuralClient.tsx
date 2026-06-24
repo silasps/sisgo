@@ -181,7 +181,7 @@ export function MuralClient({ messages, members, currentUserId, canDelete, postA
                         <span className="text-xs font-bold text-gray-700">{msg.author_name}</span>
                         <span className="text-[10px] text-gray-400">{timeAgo(msg.created_at)}</span>
                       </div>
-                      <p className={`text-sm ${colorClass} ${fontClass} whitespace-pre-line leading-relaxed ${msg.font === 1 ? 'text-base' : ''}`}>
+                      <p className={`${colorClass} ${fontClass} whitespace-pre-line leading-relaxed ${msg.font === 1 ? 'text-xl' : msg.font === 2 ? 'text-lg' : 'text-base'}`}>
                         {renderContent(msg.content, members)}
                       </p>
                     </div>
