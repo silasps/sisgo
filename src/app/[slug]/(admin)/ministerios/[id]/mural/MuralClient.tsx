@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Trash2, Type, Palette } from 'lucide-react'
+import { useState, useRef, useEffect, useCallback, useTransition } from 'react'
+import { Send, Trash2, Type, Palette, ALargeSmall } from 'lucide-react'
 
 type Message = {
   id: string
@@ -12,6 +12,7 @@ type Message = {
   color: number
   font: number
   text_color: number
+  font_size: number
   created_at: string
 }
 
@@ -22,12 +23,12 @@ type Member = {
 }
 
 const STICKER_COLORS = [
-  { bg: 'bg-yellow-100', border: 'border-yellow-200', shadow: 'shadow-yellow-100/50' },
-  { bg: 'bg-blue-100', border: 'border-blue-200', shadow: 'shadow-blue-100/50' },
-  { bg: 'bg-green-100', border: 'border-green-200', shadow: 'shadow-green-100/50' },
-  { bg: 'bg-pink-100', border: 'border-pink-200', shadow: 'shadow-pink-100/50' },
-  { bg: 'bg-purple-100', border: 'border-purple-200', shadow: 'shadow-purple-100/50' },
-  { bg: 'bg-orange-100', border: 'border-orange-200', shadow: 'shadow-orange-100/50' },
+  { bg: 'bg-yellow-100', border: 'border-yellow-200', shadow: 'shadow-yellow-100/50', fold: 'bg-yellow-200/80' },
+  { bg: 'bg-blue-100', border: 'border-blue-200', shadow: 'shadow-blue-100/50', fold: 'bg-blue-200/80' },
+  { bg: 'bg-green-100', border: 'border-green-200', shadow: 'shadow-green-100/50', fold: 'bg-green-200/80' },
+  { bg: 'bg-pink-100', border: 'border-pink-200', shadow: 'shadow-pink-100/50', fold: 'bg-pink-200/80' },
+  { bg: 'bg-purple-100', border: 'border-purple-200', shadow: 'shadow-purple-100/50', fold: 'bg-purple-200/80' },
+  { bg: 'bg-orange-100', border: 'border-orange-200', shadow: 'shadow-orange-100/50', fold: 'bg-orange-200/80' },
 ]
 
 const ROTATIONS = [
@@ -43,6 +44,13 @@ const FONTS = [
   { label: 'Aa', class: 'font-sans', name: 'Normal' },
   { label: 'Aa', class: 'font-handwriting', name: 'Manuscrito' },
   { label: 'Aa', class: 'font-cursive', name: 'Cursiva' },
+]
+
+const FONT_SIZES = [
+  { label: 'P', class: 'text-sm', name: 'Pequeno' },
+  { label: 'M', class: 'text-base', name: 'Médio' },
+  { label: 'G', class: 'text-lg', name: 'Grande' },
+  { label: 'GG', class: 'text-xl', name: 'Extra grande' },
 ]
 
 const TEXT_COLORS = [
@@ -84,21 +92,38 @@ type Props = {
   messages: Message[]
   members: Member[]
   currentUserId: string
+  currentUserName: string
   canDelete: boolean
+  nextColor: number
   postAction: (fd: FormData) => Promise<void>
   deleteAction: (fd: FormData) => Promise<void>
 }
 
-export function MuralClient({ messages, members, currentUserId, canDelete, postAction, deleteAction }: Props) {
+export function MuralClient({ messages: serverMessages, members, currentUserId, currentUserName, canDelete, nextColor, postAction, deleteAction }: Props) {
+  const [localMessages, setLocalMessages] = useState<Message[]>(serverMessages)
   const [text, setText] = useState('')
   const [font, setFont] = useState(0)
   const [textColor, setTextColor] = useState(0)
+  const [fontSize, setFontSize] = useState(1)
   const [showMentions, setShowMentions] = useState(false)
   const [mentionFilter, setMentionFilter] = useState('')
   const [showFontPicker, setShowFontPicker] = useState(false)
   const [showColorPicker, setShowColorPicker] = useState(false)
+  const [showSizePicker, setShowSizePicker] = useState(false)
+  const [colorCounter, setColorCounter] = useState(nextColor)
+  const [isPending, startTransition] = useTransition()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const formRef = useRef<HTMLFormElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    setLocalMessages(serverMessages)
+  }, [serverMessages])
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    }
+  }, [localMessages.length])
 
   const filteredMembers = mentionFilter
     ? members.filter(m => m.name.toLowerCase().includes(mentionFilter.toLowerCase()))
@@ -135,8 +160,50 @@ export function MuralClient({ messages, members, currentUserId, canDelete, postA
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      if (text.trim()) formRef.current?.requestSubmit()
+      if (text.trim()) handleSubmit()
     }
+  }
+
+  function handleSubmit() {
+    const content = text.trim()
+    if (!content) return
+
+    const optimisticMsg: Message = {
+      id: `temp-${Date.now()}`,
+      author_name: currentUserName,
+      author_id: currentUserId,
+      content,
+      mentions: [],
+      color: colorCounter,
+      font,
+      text_color: textColor,
+      font_size: fontSize,
+      created_at: new Date().toISOString(),
+    }
+
+    setLocalMessages(prev => [...prev, optimisticMsg])
+    setColorCounter(c => (c + 1) % STICKER_COLORS.length)
+    setText('')
+    closePickers()
+
+    const fd = new FormData()
+    fd.set('content', content)
+    fd.set('font', String(font))
+    fd.set('text_color', String(textColor))
+    fd.set('font_size', String(fontSize))
+
+    startTransition(async () => {
+      await postAction(fd)
+    })
+  }
+
+  function handleDelete(messageId: string) {
+    setLocalMessages(prev => prev.filter(m => m.id !== messageId))
+    const fd = new FormData()
+    fd.set('message_id', messageId)
+    startTransition(async () => {
+      await deleteAction(fd)
+    })
   }
 
   useEffect(() => {
@@ -149,13 +216,14 @@ export function MuralClient({ messages, members, currentUserId, canDelete, postA
   function closePickers() {
     setShowFontPicker(false)
     setShowColorPicker(false)
+    setShowSizePicker(false)
   }
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-3">
-        {messages.length === 0 ? (
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-6 space-y-3">
+        {localMessages.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-4xl mb-3">📌</p>
             <p className="text-sm text-gray-400">Nenhuma anotação no mural ainda.</p>
@@ -163,35 +231,42 @@ export function MuralClient({ messages, members, currentUserId, canDelete, postA
           </div>
         ) : (
           <div className="max-w-2xl mx-auto space-y-3">
-            {messages.map((msg, i) => {
+            {localMessages.map((msg, i) => {
               const c = STICKER_COLORS[msg.color % STICKER_COLORS.length]
               const rot = ROTATIONS[i % ROTATIONS.length]
               const isOwn = msg.author_id === currentUserId
               const canRemove = isOwn || canDelete
               const fontClass = FONTS[msg.font % FONTS.length].class
               const colorClass = TEXT_COLORS[msg.text_color % TEXT_COLORS.length].class
+              const isTemp = msg.id.startsWith('temp-')
               return (
                 <div
                   key={msg.id}
-                  className={`${c.bg} ${c.border} border rounded-lg px-4 py-3 shadow-sm ${c.shadow} ${rot} transition-all duration-200 hover:rotate-0 hover:shadow-md group`}
+                  className={`relative ${c.bg} ${c.border} border rounded-lg pl-4 pr-6 py-3 shadow-sm ${c.shadow} ${rot} transition-all duration-200 hover:rotate-0 hover:shadow-md group ${isTemp ? 'opacity-70' : ''}`}
                 >
+                  {/* Dobrinha no canto */}
+                  <div className="absolute top-0 right-0 w-5 h-5 overflow-hidden">
+                    <div className={`absolute -top-0.5 -right-0.5 w-7 h-7 ${c.fold} rotate-45 origin-bottom-left shadow-sm`} />
+                  </div>
+
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 mb-1.5">
                         <span className="text-xs font-bold text-gray-700">{msg.author_name}</span>
                         <span className="text-[10px] text-gray-400">{timeAgo(msg.created_at)}</span>
                       </div>
-                      <p className={`${colorClass} ${fontClass} whitespace-pre-line leading-relaxed ${msg.font === 1 ? 'text-xl' : msg.font === 2 ? 'text-lg' : 'text-base'}`}>
+                      <p className={`${colorClass} ${fontClass} ${FONT_SIZES[msg.font_size % FONT_SIZES.length].class} whitespace-pre-line leading-relaxed`}>
                         {renderContent(msg.content, members)}
                       </p>
                     </div>
-                    {canRemove && (
-                      <form action={deleteAction} className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                        <input type="hidden" name="message_id" value={msg.id} />
-                        <button type="submit" className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-white/50 transition-colors">
-                          <Trash2 size={13} />
-                        </button>
-                      </form>
+                    {canRemove && !isTemp && (
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(msg.id)}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 p-1 rounded text-gray-400 hover:text-red-500 hover:bg-white/50"
+                      >
+                        <Trash2 size={13} />
+                      </button>
                     )}
                   </div>
                 </div>
@@ -254,11 +329,28 @@ export function MuralClient({ messages, members, currentUserId, canDelete, postA
             </div>
           )}
 
-          {/* Toolbar + input */}
+          {/* Size picker */}
+          {showSizePicker && (
+            <div className="absolute bottom-full mb-1 left-20 bg-white rounded-lg border border-gray-200 shadow-lg z-10 p-1">
+              {FONT_SIZES.map((s, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => { setFontSize(i); setShowSizePicker(false) }}
+                  className={`flex items-center gap-2 w-full text-left px-3 py-2 rounded-md transition-colors ${fontSize === i ? 'bg-brand-50 text-brand-700' : 'hover:bg-gray-50'}`}
+                >
+                  <span className={`${s.class} font-bold w-6 text-center`}>{s.label}</span>
+                  <span className="text-xs text-gray-500">{s.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Toolbar */}
           <div className="flex items-center gap-1 mb-1.5">
             <button
               type="button"
-              onClick={() => { setShowFontPicker(v => !v); setShowColorPicker(false) }}
+              onClick={() => { setShowFontPicker(v => !v); setShowColorPicker(false); setShowSizePicker(false) }}
               title="Fonte"
               className={`p-1.5 rounded-lg transition-colors ${showFontPicker ? 'bg-brand-50 text-brand-600' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
             >
@@ -266,22 +358,30 @@ export function MuralClient({ messages, members, currentUserId, canDelete, postA
             </button>
             <button
               type="button"
-              onClick={() => { setShowColorPicker(v => !v); setShowFontPicker(false) }}
+              onClick={() => { setShowColorPicker(v => !v); setShowFontPicker(false); setShowSizePicker(false) }}
               title="Cor do texto"
               className={`p-1.5 rounded-lg transition-colors ${showColorPicker ? 'bg-brand-50 text-brand-600' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
             >
               <Palette size={15} />
             </button>
+            <button
+              type="button"
+              onClick={() => { setShowSizePicker(v => !v); setShowFontPicker(false); setShowColorPicker(false) }}
+              title="Tamanho"
+              className={`p-1.5 rounded-lg transition-colors ${showSizePicker ? 'bg-brand-50 text-brand-600' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
+            >
+              <ALargeSmall size={15} />
+            </button>
             <div className="flex items-center gap-1.5 ml-1 text-[10px] text-gray-400">
-              <span className={`${FONTS[font].class} ${font === 1 ? 'text-xs' : ''}`}>{FONTS[font].name}</span>
+              <span className={`${FONTS[font].class}`}>{FONTS[font].name}</span>
+              <span>·</span>
+              <span>{FONT_SIZES[fontSize].name}</span>
               <span className={`inline-block w-2.5 h-2.5 rounded-full ${TEXT_COLORS[textColor].swatch}`} />
             </div>
           </div>
 
-          <form ref={formRef} action={postAction} onSubmit={() => { setText(''); closePickers() }} className="flex items-end gap-2">
-            <input type="hidden" name="content" value={text} />
-            <input type="hidden" name="font" value={font} />
-            <input type="hidden" name="text_color" value={textColor} />
+          {/* Input */}
+          <div className="flex items-end gap-2">
             <div className="flex-1 relative">
               <textarea
                 ref={textareaRef}
@@ -290,17 +390,18 @@ export function MuralClient({ messages, members, currentUserId, canDelete, postA
                 onKeyDown={handleKeyDown}
                 placeholder="Escreva no mural... use @ para mencionar"
                 rows={1}
-                className={`w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 focus:bg-white transition-colors ${FONTS[font].class} ${TEXT_COLORS[textColor].class}`}
+                className={`w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:bg-white transition-colors ${FONTS[font].class} ${TEXT_COLORS[textColor].class} ${FONT_SIZES[fontSize].class}`}
               />
             </div>
             <button
-              type="submit"
-              disabled={!text.trim()}
+              type="button"
+              onClick={handleSubmit}
+              disabled={!text.trim() || isPending}
               className="shrink-0 rounded-xl bg-brand-500 p-2.5 text-white transition-colors hover:bg-brand-600 disabled:bg-gray-200 disabled:text-gray-400"
             >
               <Send size={18} />
             </button>
-          </form>
+          </div>
         </div>
       </div>
     </div>

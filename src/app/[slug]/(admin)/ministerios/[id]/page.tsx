@@ -52,7 +52,7 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
     supabase.from('ministry_members').select('*', { count: 'exact', head: true }).eq('ministry_id', id).eq('active', true),
     supabase.from('ministry_pending_requests').select('*', { count: 'exact', head: true }).eq('ministry_id', id).eq('status', 'pendente'),
     sbAdmin.from('ministry_messages')
-      .select('id, author_name, author_id, content, mentions, color, font, text_color, created_at')
+      .select('id, author_name, author_id, content, mentions, color, font, text_color, font_size, created_at')
       .eq('ministry_id', id)
       .order('created_at', { ascending: true })
       .limit(200),
@@ -67,6 +67,7 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
     mentions: (m.mentions as string[] | null) ?? [],
     font: (m as unknown as { font: number }).font ?? 0,
     text_color: (m as unknown as { text_color: number }).text_color ?? 0,
+    font_size: (m as unknown as { font_size: number }).font_size ?? 1,
   }))
 
   const members = (membersRaw ?? []).map(m => ({
@@ -161,8 +162,8 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
       author_name: authorName, content, mentions: mentionedIds, color: nextColor,
       font: Number(formData.get('font') ?? 0),
       text_color: Number(formData.get('text_color') ?? 0),
+      font_size: Number(formData.get('font_size') ?? 1),
     })
-    redirect(`/${slug}/ministerios/${id}`)
   }
 
   async function deleteMessage(formData: FormData) {
@@ -171,7 +172,6 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
     if (!messageId) return
     const db = createAdminClient()
     await db.from('ministry_messages').delete().eq('id', messageId).eq('ministry_id', id)
-    redirect(`/${slug}/ministerios/${id}`)
   }
 
   const msgs: Record<string, { text: string; cls: string }> = {
@@ -196,7 +196,9 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
           messages={messages}
           members={members}
           currentUserId={user.id}
+          currentUserName={authorName}
           canDelete={canWrite}
+          nextColor={nextColor}
           postAction={postMessage}
           deleteAction={deleteMessage}
         />
