@@ -1204,14 +1204,6 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                       {item.notes && (
                         <p className="text-xs text-gray-400 mt-1 bg-gray-50 px-2 py-1 rounded">Obs: {item.notes}</p>
                       )}
-                      {item.tipo === 'pre_inscricao' && item.applicationId && (
-                        <Link
-                          href={`/${slug}/inscricoes/formulario/${item.applicationId}`}
-                          className="inline-flex items-center gap-1 text-xs text-blue-700 mt-1 bg-blue-50 border border-blue-100 px-2 py-1 rounded font-medium hover:bg-blue-100 transition-colors"
-                        >
-                          <ClipboardList className="size-3.5 inline -mt-0.5" /> Formulário preenchido — Ver respostas
-                        </Link>
-                      )}
                       {item.tipo === 'pre_inscricao_obreiro' && item.staffApplicationId && item.hasFormData && (
                         <Link
                           href={`/${slug}/inscricoes/formulario-obreiro/${item.staffApplicationId}`}
@@ -1283,21 +1275,30 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                           />
                         )}
 
-                        {/* Disponibilizar formulário — apenas pré-inscrições */}
-                        {canWrite && item.tipo === 'pre_inscricao' && item.schoolId && (
+                        {/* Disponibilizar formulário ou ver respostas — pré-inscrições */}
+                        {item.tipo === 'pre_inscricao' && item.schoolId && (
                           <div className="col-span-2">
-                            <DisponibilizarFormularioButton
-                              interestFormId={item.id}
-                              slug={slug}
-                              schoolId={item.schoolId}
-                              action={disponibilizarFormulario}
-                              emailDisabled={quota.exceeded}
-                              emailDisabledReason={
-                                quota.dailyExceeded
-                                  ? 'Limite diário de e-mails atingido (100/dia). O link ainda pode ser copiado.'
-                                  : 'Limite mensal de e-mails atingido (3.000/mês). O link ainda pode ser copiado.'
-                              }
-                            />
+                            {item.applicationId ? (
+                              <Link
+                                href={`/${slug}/inscricoes/formulario/${item.applicationId}`}
+                                className="inline-flex items-center gap-1.5 w-full justify-center text-xs text-blue-700 bg-blue-50 border border-blue-200 px-3 py-2.5 rounded-lg font-semibold hover:bg-blue-100 transition-colors"
+                              >
+                                <ClipboardList className="size-3.5" /> Formulário preenchido — Ver respostas
+                              </Link>
+                            ) : canWrite ? (
+                              <DisponibilizarFormularioButton
+                                interestFormId={item.id}
+                                slug={slug}
+                                schoolId={item.schoolId}
+                                action={disponibilizarFormulario}
+                                emailDisabled={quota.exceeded}
+                                emailDisabledReason={
+                                  quota.dailyExceeded
+                                    ? 'Limite diário de e-mails atingido (100/dia). O link ainda pode ser copiado.'
+                                    : 'Limite mensal de e-mails atingido (3.000/mês). O link ainda pode ser copiado.'
+                                }
+                              />
+                            ) : null}
                           </div>
                         )}
 
