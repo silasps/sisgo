@@ -1249,7 +1249,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                           </a>
                         )}
                         {/* Formulário recebido externamente — quando ainda não tem application */}
-                        {item.tipo === 'pre_inscricao' && !item.applicationId && (
+                        {canWrite && item.tipo === 'pre_inscricao' && !item.applicationId && (
                           <div className="col-span-2">
                             <MarcarRecebidoExternoButton
                               interestFormId={item.id}
@@ -1325,7 +1325,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                         <div className="col-span-2 h-px bg-gray-100" />
 
                         {/* Status */}
-                        {item.status === 'pendente' && item.tipo !== 'pre_inscricao_obreiro' && (
+                        {canWrite && item.status === 'pendente' && item.tipo !== 'pre_inscricao_obreiro' && (
                           <form action={updateStatus}>
                             <input type="hidden" name="id" value={item.id} />
                             <input type="hidden" name="tipo" value={item.tipo} />
@@ -1335,7 +1335,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                             </button>
                           </form>
                         )}
-                        {(item.status === 'pendente' || item.status === 'em_contato' || item.status === 'formulario_enviado' || item.status === 'em_analise') && item.tipo !== 'obreiro' && item.tipo !== 'pre_inscricao_obreiro' && (
+                        {canWrite && (item.status === 'pendente' || item.status === 'em_contato' || item.status === 'formulario_enviado' || item.status === 'em_analise') && item.tipo !== 'obreiro' && item.tipo !== 'pre_inscricao_obreiro' && (
                           <form action={aprovar} className="col-span-2 space-y-1.5">
                             <input type="hidden" name="id" value={item.id} />
                             <input type="hidden" name="tipo" value={item.tipo} />
@@ -1361,7 +1361,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                             </button>
                           </form>
                         )}
-                        {item.tipo === 'aluno' && item.status === 'pendente' && (
+                        {canWrite && item.tipo === 'aluno' && item.status === 'pendente' && (
                           <form action={updateStatus}>
                             <input type="hidden" name="id" value={item.id} />
                             <input type="hidden" name="tipo" value={item.tipo} />
@@ -1371,7 +1371,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                             </button>
                           </form>
                         )}
-                        {item.tipo === 'obreiro' && item.status !== 'em_analise' && (
+                        {canWrite && item.tipo === 'obreiro' && item.status !== 'em_analise' && (
                           <form action={encaminharObreiroDh} className="col-span-2">
                             <input type="hidden" name="id" value={item.id} />
                             <button type="submit" className="w-full text-xs px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg transition-colors font-semibold">
@@ -1408,9 +1408,11 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                             </button>
                           </form>
                         )}
-                        <div className="col-span-2 sm:col-span-1">
-                          <RecusarModal id={item.id} tipo={item.tipo} action={recusar} />
-                        </div>
+                        {canWrite && (
+                          <div className="col-span-2 sm:col-span-1">
+                            <RecusarModal id={item.id} tipo={item.tipo} action={recusar} />
+                          </div>
+                        )}
                       </div>
                     )}
 
