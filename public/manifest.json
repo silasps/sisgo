@@ -4,8 +4,8 @@
   "description": "Sistema de Gestão de Bases Missionárias JOCUM",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#15343B",
-  "theme_color": "#15343B",
+  "background_color": "#1D6B67",
+  "theme_color": "#1D6B67",
   "orientation": "portrait-primary",
   "icons": [
     {
