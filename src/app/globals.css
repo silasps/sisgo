@@ -42,6 +42,22 @@
   .skeleton {
     @apply bg-gray-200 rounded animate-pulse;
   }
+  /* Spinner inline para botões com ação pendente */
+  .btn-spinner {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    vertical-align: middle;
+    flex-shrink: 0;
+  }
+  /* Cursor e opacidade globais para elementos disabled/pending */
+  button:disabled, [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
   /* shimmer effect — estilo Google/YouTube */
   .shimmer {
     background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%);
@@ -67,6 +83,10 @@
 @keyframes shimmer {
   0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 @keyframes page-enter {

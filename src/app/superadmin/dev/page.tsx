@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import { FeedbackCard } from './FeedbackCard'
+import { DevBoard } from './DevBoard'
 import { Lightbulb, Settings, CheckCircle2, Trash2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -14,11 +14,11 @@ type Feedback = {
   status: Status
 }
 
-const COLUMNS: { status: Status; label: string; icon: LucideIcon; headerColor: string; emptyMsg: string }[] = [
-  { status: 'novo',         label: 'Novos',         icon: Lightbulb,    headerColor: 'border-blue-400 bg-blue-50',    emptyMsg: 'Nenhuma sugestão nova' },
-  { status: 'em_andamento', label: 'Em andamento',  icon: Settings,     headerColor: 'border-amber-400 bg-amber-50',  emptyMsg: 'Nada em andamento' },
-  { status: 'feito',        label: 'Feitos',         icon: CheckCircle2, headerColor: 'border-green-400 bg-green-50',  emptyMsg: 'Nada concluído ainda' },
-  { status: 'descartado',   label: 'Descartados',   icon: Trash2,       headerColor: 'border-gray-300 bg-gray-50',   emptyMsg: 'Nada descartado' },
+const COLUMNS: { status: Status; label: string; icon: LucideIcon; headerColor: string }[] = [
+  { status: 'novo',         label: 'Novos',        icon: Lightbulb,    headerColor: 'border-blue-400 bg-blue-50' },
+  { status: 'em_andamento', label: 'Em andamento', icon: Settings,     headerColor: 'border-amber-400 bg-amber-50' },
+  { status: 'feito',        label: 'Feitos',        icon: CheckCircle2, headerColor: 'border-green-400 bg-green-50' },
+  { status: 'descartado',   label: 'Descartados',  icon: Trash2,       headerColor: 'border-gray-300 bg-gray-50' },
 ]
 
 export default async function DevPage() {
@@ -45,15 +45,13 @@ export default async function DevPage() {
   }
 
   const feedbacks = (data ?? []) as Feedback[]
+  const total = feedbacks.length
   const grouped = Object.fromEntries(
     COLUMNS.map(c => [c.status, feedbacks.filter(f => (f.status ?? 'novo') === c.status)])
   ) as Record<Status, Feedback[]>
 
-  const total = feedbacks.length
-
   return (
     <main className="p-4 md:p-6 space-y-6 min-h-full">
-
       {/* Header */}
       <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
@@ -62,7 +60,6 @@ export default async function DevPage() {
             {total === 0 ? 'Nenhuma sugestão ainda' : `${total} sugestão${total !== 1 ? 's' : ''} no total`}
           </p>
         </div>
-        {/* Contadores rápidos */}
         {total > 0 && (
           <div className="flex gap-2 flex-wrap">
             {COLUMNS.map(c => (
@@ -81,32 +78,7 @@ export default async function DevPage() {
           <p className="text-gray-400 text-xs mt-1">O botão aparece em todas as páginas do sistema.</p>
         </div>
       ) : (
-        /* Kanban — 4 colunas no desktop, empilhado no mobile */
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 animate-stagger">
-          {COLUMNS.map(col => (
-            <div key={col.status} className="flex flex-col gap-3">
-              {/* Cabeçalho da coluna */}
-              <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-l-4 ${col.headerColor}`}>
-                <col.icon className="size-4" />
-                <span className="font-bold text-sm text-gray-800">{col.label}</span>
-                <span className="ml-auto text-xs font-bold text-gray-500 bg-white px-2 py-0.5 rounded-full shadow-sm">
-                  {grouped[col.status].length}
-                </span>
-              </div>
-
-              {/* Cards */}
-              {grouped[col.status].length === 0 ? (
-                <div className="border-2 border-dashed border-gray-200 rounded-xl px-4 py-8 text-center">
-                  <p className="text-xs text-gray-400">{col.emptyMsg}</p>
-                </div>
-              ) : (
-                grouped[col.status].map(item => (
-                  <FeedbackCard key={item.id} item={item} />
-                ))
-              )}
-            </div>
-          ))}
-        </div>
+        <DevBoard initialItems={feedbacks} />
       )}
     </main>
   )

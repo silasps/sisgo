@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { BiometricLock } from '@/components/BiometricLock'
+import { NavigationProgress } from '@/components/NavigationProgress'
 
 export const metadata: Metadata = {
   title: 'SISGO',
@@ -29,6 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
       </head>
       <body>
+        <NavigationProgress />
         {children}
         <BiometricLock />
       </body>
