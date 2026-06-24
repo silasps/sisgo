@@ -7,6 +7,8 @@ import {
   requestTransfer, respondTransferAsDestination, confirmTransferAsDH, cancelTransfer,
 } from '../actions'
 import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
+import { Suspense } from 'react'
+import { ScrollHighlight } from '@/components/ui/ScrollHighlight'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 
 type Props = {
@@ -230,6 +232,8 @@ export default async function EquipePage({ params, searchParams }: Props) {
   const INPUT = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400'
 
   return (
+    <>
+    <Suspense><ScrollHighlight /></Suspense>
     <main className="p-4 md:p-6 space-y-4 max-w-3xl overflow-y-auto flex-1">
       {msgInfo && (
         <div className={`border rounded-lg px-4 py-3 text-sm ${msgInfo.cls}`}>{msgInfo.text}</div>
@@ -383,7 +387,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
               const pName = (req.people as { full_name: string } | null)?.full_name
               const rName = (req.ministry_roles as { name: string } | null)?.name
               return (
-                <li key={req.id} className="border border-gray-100 rounded-lg p-3 space-y-2">
+                <li key={req.id} id={`item-${req.id}`} className="border border-gray-100 rounded-lg p-3 space-y-2 scroll-mt-20">
                   <div className="flex justify-between gap-2 text-sm">
                     <div className="min-w-0">
                       <p className="font-medium text-gray-800">{REQUEST_LABELS[req.request_type] ?? req.request_type}</p>
@@ -496,5 +500,6 @@ export default async function EquipePage({ params, searchParams }: Props) {
         )
       })()}
     </main>
+    </>
   )
 }

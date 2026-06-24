@@ -10,6 +10,7 @@ import { getEmailQuota } from '@/lib/email/getEmailQuota'
 import { getRolePreview } from '@/lib/role-preview'
 import { SearchBar } from '@/components/ui/SearchBar'
 import { Suspense } from 'react'
+import { ScrollHighlight } from '@/components/ui/ScrollHighlight'
 import { SCHOOL_APPLICATION_TYPES } from '@/lib/schools'
 import { ClipboardList, Mail, MessageCircle } from 'lucide-react'
 import { ServirLinkCard } from './ServirLinkCard'
@@ -1120,6 +1121,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         }
       />
 
+      <Suspense><ScrollHighlight /></Suspense>
       <main className="p-4 md:p-6 space-y-4">
 
         {/* Tabs */}
@@ -1173,7 +1175,8 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
 
               return (
                 <div key={`${item.tipo}-${item.id}`}
-                  className={`bg-white rounded-xl border border-l-4 p-4 transition-opacity ${finalizado ? 'opacity-60' : ''} ${urgencyBorderColor(item.diasAberto)}`}
+                  id={`item-${item.id}`}
+                  className={`bg-white rounded-xl border border-l-4 p-4 transition-opacity scroll-mt-20 ${finalizado ? 'opacity-60' : ''} ${urgencyBorderColor(item.diasAberto)}`}
                 >
                   <div className="flex flex-col sm:flex-row sm:items-start gap-3">
                     <div className="flex-1 min-w-0">

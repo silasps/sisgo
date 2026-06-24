@@ -2,13 +2,13 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/Header'
 import { AnimatedDonutChart } from '@/components/ui/AnimatedDonutChart'
-import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { updateServiceStatus, cancelRequest } from '../ministerios/[id]/actions'
 import { confirmMealPayment, rejectMealPayment, requestMealPaymentProof } from '../cozinha/actions'
 import { getRolePreview } from '@/lib/role-preview'
 import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
 import { ServiceRequestsPanel } from './ServiceRequestsPanel'
+import { PendentesCardList } from './PendentesCardList'
 import { SearchBar } from '@/components/ui/SearchBar'
 import { Suspense } from 'react'
 
@@ -30,6 +30,11 @@ type PendenteItem = {
   linkDestino: string
   overflow: boolean
   overflowEscola?: string
+  email?: string | null
+  phone?: string | null
+  turma?: string | null
+  mensagem?: string | null
+  ministryName?: string | null
 }
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -173,14 +178,15 @@ export default async function PendentesPage({ params, searchParams }: Props) {
   if (isManagement || isLiderEted) {
     const sbAdmin = createAdminClient()
     type InterestRaw = {
-      id: string; full_name: string; status: string; created_at: string
+      id: string; full_name: string; email: string | null; phone: string | null
+      message: string | null; status: string; created_at: string
       schools: { id: string; name: string } | null
       school_classes: { name: string } | null
     }
 
     const { data: interests } = await sbAdmin
       .from('school_interest_forms')
-      .select('id, full_name, status, created_at, schools(id, name), school_classes(name)')
+      .select('id, full_name, email, phone, message, status, created_at, schools(id, name), school_classes(name)')
       .eq('organization_id', orgId)
       .not('status', 'in', '("convertido","descartado")')
       .order('created_at', { ascending: true })
@@ -205,6 +211,8 @@ export default async function PendentesPage({ params, searchParams }: Props) {
         status: r.status, statusLabel: statusInfo.label, statusColor: statusInfo.color,
         criadoEm: r.created_at, diasAberto: dias, linkDestino: `/${slug}/inscricoes`,
         overflowEscola: isOverflow ? (escola?.name ?? undefined) : undefined,
+        email: r.email, phone: r.phone, mensagem: r.message,
+        turma: turma?.name ?? null,
       })
     }
   }
@@ -1094,55 +1102,8 @@ export default async function PendentesPage({ params, searchParams }: Props) {
                   <SearchBar placeholder="Buscar por nome…" className="w-full sm:w-72" />
                 </Suspense>
 
-                {/* Cards principais */}
-                <div className="space-y-2">
-                  {filteredItems.map(item => {
-                    const urgency = urgencyBadge(item.diasAberto)
-                    return (
-                      <Link
-                        key={`${item.categoria}-${item.id}`}
-                        href={item.linkDestino}
-                        className={`group flex items-center gap-3 bg-white rounded-xl border px-4 py-3.5 shadow-sm transition-all duration-150 hover:shadow-md hover:-translate-y-0.5 ${item.overflow ? 'border-orange-200 bg-orange-50/30' : 'border-gray-200'}`}
-                      >
-                        {/* Urgência */}
-                        <span className={`flex-shrink-0 inline-flex items-center justify-center min-w-[2.5rem] px-2 py-0.5 rounded-full text-xs font-bold tabular-nums ${urgency.color}`}>
-                          {urgency.label}
-                        </span>
-
-                        {/* Info */}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-gray-900 group-hover:text-brand-600 truncate transition-colors">
-                            {item.nome}
-                          </p>
-                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
-                            <span className="text-xs text-gray-400">{item.categoria}</span>
-                            {item.escola && (
-                              <>
-                                <span className="text-gray-300 text-xs">·</span>
-                                <span className="text-xs text-gray-400 truncate">{item.escola}</span>
-                              </>
-                            )}
-                            {item.overflow && (
-                              <span className="text-xs text-orange-600 font-medium">
-                                · Sem resposta há {item.diasAberto}d
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Status + seta */}
-                        <div className="flex-shrink-0 flex items-center gap-2">
-                          <span className={`hidden sm:inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${item.statusColor}`}>
-                            {item.statusLabel}
-                          </span>
-                          <span className="text-xs font-semibold text-brand-500 group-hover:text-brand-700 transition-colors">
-                            Abrir →
-                          </span>
-                        </div>
-                      </Link>
-                    )
-                  })}
-                </div>
+                {/* Cards principais (client component com modal) */}
+                <PendentesCardList items={filteredItems} />
               </>
             )}
 

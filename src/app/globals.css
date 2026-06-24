@@ -124,8 +124,23 @@
 .animate-stagger > *:nth-child(12) { animation-delay: 480ms; }
 .animate-stagger > *:nth-child(n+13) { animation-delay: 500ms; }
 
+@keyframes highlight-pulse {
+  0%   { background-color: transparent; }
+  15%  { background-color: rgb(254 249 195 / 0.7); }
+  30%  { background-color: transparent; }
+  45%  { background-color: rgb(254 249 195 / 0.5); }
+  60%  { background-color: transparent; }
+  75%  { background-color: rgb(254 249 195 / 0.3); }
+  100% { background-color: transparent; }
+}
+
+.highlight-pulse {
+  animation: highlight-pulse 2.5s ease-out;
+  border-color: rgb(250 204 21) !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .page-transition, .animate-stagger > * {
+  .page-transition, .animate-stagger > *, .highlight-pulse {
     animation: none;
   }
 }
