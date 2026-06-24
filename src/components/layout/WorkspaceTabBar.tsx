@@ -3,22 +3,23 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
-type Tab = { href: string; label: string }
+type Tab = { href: string; label: string; alsoMatches?: string[] }
 
 export function WorkspaceTabBar({ tabs }: { tabs: Tab[] }) {
   const pathname = usePathname()
 
-  function isActive(href: string) {
-    if (href === tabs[0]?.href) {
-      return pathname === href || pathname === href + '/'
+  function isActive(tab: Tab) {
+    if (tab.href === tabs[0]?.href) {
+      return pathname === tab.href || pathname === tab.href + '/'
     }
-    return pathname.startsWith(href)
+    if (pathname.startsWith(tab.href)) return true
+    return tab.alsoMatches?.some(p => pathname.startsWith(p)) ?? false
   }
 
   return (
     <nav className="flex gap-1 overflow-x-auto border-b border-gray-200 bg-white px-4 md:px-6 scrollbar-none">
       {tabs.map(tab => {
-        const active = isActive(tab.href)
+        const active = isActive(tab)
         return (
           <Link
             key={tab.href}

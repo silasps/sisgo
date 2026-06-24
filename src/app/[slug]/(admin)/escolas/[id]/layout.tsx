@@ -80,7 +80,7 @@ export default async function EscolaWorkspaceLayout({ children, params }: Props)
   const tabs = [
     { href: base, label: 'Geral' },
     { href: `${base}/equipe`, label: 'Equipe' },
-    ...(canConfigure ? [{ href: `${base}/configuracoes`, label: 'Configurações' }] : []),
+    ...(canConfigure ? [{ href: `${base}/configuracoes`, label: 'Configurações', alsoMatches: [`${base}/turmas`, `${base}/formulario`] }] : []),
   ]
 
   return (
