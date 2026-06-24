@@ -2,10 +2,10 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import { redirect, notFound } from 'next/navigation'
-import { updateMinistry, assignLeader, removeLeader, createServiceRequest } from './actions'
+import { updateMinistry, assignLeader, removeLeader } from './actions'
 import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
-import { Users, CalendarDays, ClipboardList, ArrowRight } from 'lucide-react'
+import { Users, ClipboardList, ArrowRight } from 'lucide-react'
 
 type Props = {
   params: Promise<{ slug: string; id: string }>
@@ -26,11 +26,10 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
   if (!user || !org) notFound()
   const orgId = org.id
 
-  const { role, preview } = await getCurrentOrganizationRole(supabase, user.id, orgId)
+  const { role } = await getCurrentOrganizationRole(supabase, user.id, orgId)
   const isManagement = isManagementRole(role)
   const canWrite = isOperationalManager(role)
   const isLiderMinisterio = role === 'lider_ministerio'
-  const isObreiroMinisterio = role === 'obreiro_ministerio'
 
   const { data: ministry } = await supabase
     .from('ministries')
@@ -40,10 +39,9 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
     .single()
   if (!ministry) notFound()
 
-  const [{ count: memberCount }, { count: pendingCount }, { count: upcomingEvents }] = await Promise.all([
+  const [{ count: memberCount }, { count: pendingCount }] = await Promise.all([
     supabase.from('ministry_members').select('*', { count: 'exact', head: true }).eq('ministry_id', id).eq('active', true),
     supabase.from('ministry_pending_requests').select('*', { count: 'exact', head: true }).eq('ministry_id', id).eq('status', 'pendente'),
-    sbAdmin.from('ministry_calendar_events').select('*', { count: 'exact', head: true }).eq('ministry_id', id).gte('starts_at', new Date().toISOString()),
   ])
 
   let leaderEmail: string | null = null
@@ -108,25 +106,10 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
     redirect(`/${slug}/ministerios/${id}`)
   }
 
-  const handleServiceRequest = async (formData: FormData) => {
-    'use server'
-    const subject = (formData.get('subject') as string).trim()
-    if (!subject) return
-    await createServiceRequest(
-      orgId, user.id, role,
-      formData.get('target_department') as string,
-      formData.get('request_type') as string,
-      subject,
-      (formData.get('description') as string) || null,
-    )
-    redirect(`/${slug}/ministerios/${id}?msg=servico_enviado`)
-  }
-
   const msgs: Record<string, { text: string; cls: string }> = {
     criado:           { text: 'Ministério criado com sucesso.', cls: 'bg-green-50 border-green-200 text-green-700' },
     atualizado:       { text: 'Informações atualizadas.', cls: 'bg-green-50 border-green-200 text-green-700' },
     lider_atribuido:  { text: 'Líder atribuído com sucesso.', cls: 'bg-green-50 border-green-200 text-green-700' },
-    servico_enviado:  { text: 'Solicitação de serviço enviada.', cls: 'bg-blue-50 border-blue-200 text-blue-700' },
   }
   const msgInfo = msg ? msgs[msg] : null
 
@@ -142,7 +125,7 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
       )}
 
       {/* Stats cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <Link href={`${base}/equipe`} className="group bg-white rounded-xl border border-gray-200 p-4 transition-all hover:shadow-md hover:-translate-y-0.5">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-brand-50 p-2"><Users size={18} className="text-brand-600" /></div>
@@ -161,18 +144,9 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
             </div>
           </div>
         </Link>
-        <Link href={`${base}/calendario`} className="group bg-white rounded-xl border border-gray-200 p-4 transition-all hover:shadow-md hover:-translate-y-0.5">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-violet-50 p-2"><CalendarDays size={18} className="text-violet-600" /></div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{upcomingEvents ?? 0}</p>
-              <p className="text-xs text-gray-500">Eventos futuros</p>
-            </div>
-          </div>
-        </Link>
       </div>
 
-      {/* Info card (editable for admin/dh, read-only for lider_base/líder/obreiro) */}
+      {/* Info card */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         {canWrite ? (
           <>
@@ -208,7 +182,7 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
         )}
       </div>
 
-      {/* Leader assignment (DH only) */}
+      {/* Leader assignment */}
       {isManagement && (
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <h2 className="text-sm font-semibold text-gray-700 mb-3">Líder do Ministério</h2>
@@ -244,85 +218,17 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
         </div>
       )}
 
-      {/* Quick links */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Link
-          href={`${base}/equipe`}
-          className="group bg-white rounded-xl border border-gray-200 p-4 transition-all hover:shadow-md hover:-translate-y-0.5"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold text-gray-900 group-hover:text-brand-600 transition-colors">Equipe</p>
-              <p className="text-xs text-gray-500 mt-0.5">Gerenciar membros, solicitações e transferências</p>
-            </div>
-            <ArrowRight size={16} className="text-gray-400 group-hover:text-brand-500 transition-colors" />
-          </div>
-        </Link>
-        <Link
-          href={`${base}/calendario`}
-          className="group bg-white rounded-xl border border-gray-200 p-4 transition-all hover:shadow-md hover:-translate-y-0.5"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold text-gray-900 group-hover:text-brand-600 transition-colors">Calendário</p>
-              <p className="text-xs text-gray-500 mt-0.5">Eventos, reuniões e devocionais do ministério</p>
-            </div>
-            <ArrowRight size={16} className="text-gray-400 group-hover:text-brand-500 transition-colors" />
-          </div>
-        </Link>
-      </div>
-
-      {/* Reservas (líder) */}
-      {isLiderMinisterio && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-1">Reservas</h2>
-          <p className="text-xs text-gray-400 mb-3">Solicite espaços para atividades do ministério ou quartos para convidados.</p>
-          <Link href={`/${slug}/reservas`} className="block text-center w-full px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
-            Solicitar / Ver Reservas →
-          </Link>
+      {/* Quick link to equipe */}
+      <Link
+        href={`${base}/equipe`}
+        className="group flex items-center justify-between bg-white rounded-xl border border-gray-200 p-4 transition-all hover:shadow-md hover:-translate-y-0.5"
+      >
+        <div>
+          <p className="text-sm font-semibold text-gray-900 group-hover:text-brand-600 transition-colors">Equipe</p>
+          <p className="text-xs text-gray-500 mt-0.5">Gerenciar membros, solicitações e transferências</p>
         </div>
-      )}
-
-      {/* Service request form (líder) */}
-      {isLiderMinisterio && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-1">Nova Solicitação de Serviço</h2>
-          <p className="text-xs text-gray-400 mb-3">Para outros departamentos da base (hospitalidade, DH, secretaria, etc.)</p>
-          <form action={handleServiceRequest} className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Destino</label>
-                <select name="target_department" required className={INPUT}>
-                  <option value="hospitalidade">Hospitalidade</option>
-                  <option value="dh">DH</option>
-                  <option value="secretaria">Secretaria</option>
-                  <option value="outro">Outro</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Tipo</label>
-                <select name="request_type" required className={INPUT}>
-                  <option value="convidar_professor">Convidar professor</option>
-                  <option value="hospedagem">Hospedagem</option>
-                  <option value="logistica">Logística</option>
-                  <option value="outro">Outro</option>
-                </select>
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Assunto</label>
-              <input name="subject" required placeholder="Resumo da solicitação..." className={INPUT} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Descrição</label>
-              <textarea name="description" rows={3} placeholder="Detalhes..." className={`${INPUT} resize-none`} />
-            </div>
-            <button type="submit" className="w-full px-4 py-2 text-sm font-medium rounded-lg bg-brand-500 hover:bg-brand-600 text-white transition-colors">
-              Enviar Solicitação
-            </button>
-          </form>
-        </div>
-      )}
+        <ArrowRight size={16} className="text-gray-400 group-hover:text-brand-500 transition-colors" />
+      </Link>
     </main>
   )
 }
