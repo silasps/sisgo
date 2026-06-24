@@ -177,16 +177,28 @@ export default async function BaseDashboard({ params }: Props) {
   }
 
   if (isLiderMinisterio || isObreiroMinisterio) {
+    const sbAdmin = createAdminClient()
     const ministryId = preview?.ministryId
       ?? (isLiderMinisterio
         ? (await supabase.from('ministry_leaders').select('ministry_id').eq('user_id', user?.id ?? '').single()).data?.ministry_id
         : null)
 
-    const [{ count: pendingRequests }, { count: myReservations }, { data: ministry }] = await Promise.all([
-      ministryId
+    const obreiroMinistryId = isObreiroMinisterio && !ministryId
+      ? await (async () => {
+          const { data: sp } = await sbAdmin.from('staff_profiles').select('person_id').eq('organization_id', orgId).eq('user_id', user?.id ?? '').single()
+          if (!sp?.person_id) return null
+          const { data: mm } = await sbAdmin.from('ministry_members').select('ministry_id').eq('person_id', sp.person_id).eq('active', true).limit(1).single()
+          return mm?.ministry_id ?? null
+        })()
+      : null
+
+    const resolvedMinistryId = ministryId ?? obreiroMinistryId
+
+    const [{ count: pendingRequests }, { count: myReservations }, { data: ministry }, { count: memberCount }, { count: upcomingEvents }] = await Promise.all([
+      resolvedMinistryId
         ? supabase.from('ministry_pending_requests')
           .select('*', { count: 'exact', head: true })
-          .eq('ministry_id', ministryId)
+          .eq('ministry_id', resolvedMinistryId)
           .eq('status', 'pendente')
         : supabase.from('service_requests')
           .select('*', { count: 'exact', head: true })
@@ -197,23 +209,47 @@ export default async function BaseDashboard({ params }: Props) {
         .select('*', { count: 'exact', head: true })
         .eq('organization_id', orgId)
         .eq('requested_by', user?.id ?? ''),
-      ministryId
-        ? supabase.from('ministries').select('name').eq('id', ministryId).single()
+      resolvedMinistryId
+        ? supabase.from('ministries').select('id, name').eq('id', resolvedMinistryId).single()
         : Promise.resolve({ data: null }),
+      resolvedMinistryId
+        ? supabase.from('ministry_members').select('*', { count: 'exact', head: true }).eq('ministry_id', resolvedMinistryId).eq('active', true)
+        : Promise.resolve({ count: 0 }),
+      resolvedMinistryId
+        ? sbAdmin.from('ministry_calendar_events').select('*', { count: 'exact', head: true }).eq('ministry_id', resolvedMinistryId).gte('starts_at', new Date().toISOString())
+        : Promise.resolve({ count: 0 }),
     ])
+
+    const ministryBase = resolvedMinistryId ? `/${slug}/ministerios/${resolvedMinistryId}` : `/${slug}/ministerios`
 
     return (
       <>
         <Header title="Dashboard" />
         <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 animate-stagger">
-            <StatCard label={isLiderMinisterio ? 'Pedidos ao DH' : 'Minhas solicitações'} value={pendingRequests ?? 0} icon={AlertTriangle} href={`/${slug}/ministerios`} color="pink" />
+          {ministry?.name && (
+            <p className="text-sm text-gray-500">Ministério: <span className="font-semibold text-gray-900">{ministry.name}</span></p>
+          )}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 animate-stagger">
+            <StatCard label="Membros" value={memberCount ?? 0} icon={Users} href={`${ministryBase}/equipe`} color="teal" />
+            <StatCard label={isLiderMinisterio ? 'Pendências' : 'Solicitações'} value={pendingRequests ?? 0} icon={AlertTriangle} href={`${ministryBase}/equipe`} color="pink" />
+            <StatCard label="Eventos futuros" value={upcomingEvents ?? 0} icon={CalendarDays} href={`${ministryBase}/calendario`} color="blue" />
             <StatCard label="Reservas" value={myReservations ?? 0} icon={Home} href={`/${slug}/reservas`} color="orange" />
           </div>
 
-          <SectionCard title={isLiderMinisterio ? 'Administração do ministério' : 'Minha atuação'} href={`/${slug}/ministerios`} linkLabel="Ver ministério">
-            <EmptyState icon={Music} label={ministry?.name ? `Escopo: ${ministry.name}` : 'Acesso restrito às solicitações da sua atuação'} />
-          </SectionCard>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Link href={ministryBase} className="group bg-white rounded-xl border border-gray-200 p-4 transition-all hover:shadow-md hover:-translate-y-0.5">
+              <p className="text-sm font-semibold text-gray-900 group-hover:text-brand-600 transition-colors">Geral</p>
+              <p className="text-xs text-gray-500 mt-0.5">Visão geral do ministério</p>
+            </Link>
+            <Link href={`${ministryBase}/equipe`} className="group bg-white rounded-xl border border-gray-200 p-4 transition-all hover:shadow-md hover:-translate-y-0.5">
+              <p className="text-sm font-semibold text-gray-900 group-hover:text-brand-600 transition-colors">Equipe</p>
+              <p className="text-xs text-gray-500 mt-0.5">Membros e solicitações</p>
+            </Link>
+            <Link href={`${ministryBase}/calendario`} className="group bg-white rounded-xl border border-gray-200 p-4 transition-all hover:shadow-md hover:-translate-y-0.5">
+              <p className="text-sm font-semibold text-gray-900 group-hover:text-brand-600 transition-colors">Calendário</p>
+              <p className="text-xs text-gray-500 mt-0.5">Reuniões e devocionais</p>
+            </Link>
+          </div>
         </main>
       </>
     )

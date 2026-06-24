@@ -7,6 +7,7 @@ import {
   CalendarWorkspace,
   type CalendarEvent,
   type SchoolOption,
+  type MinistryOption,
 } from './CalendarWorkspace'
 
 type Props = {
@@ -39,6 +40,8 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
   const { role, preview } = await getCurrentOrganizationRole(supabase, user.id, orgId)
   const canManageBase = role === 'superadmin' || role === 'admin_base' || role === 'lider_base'
   const canManageSchool = role === 'lider_eted'
+  const canManageMinistry = role === 'lider_ministerio'
+  const isObreiroMinisterio = role === 'obreiro_ministerio'
   const canAddPrivateNote = true
 
   const leaderSchoolIds = canManageSchool
@@ -53,6 +56,19 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
     : []
   const scopedSchoolIds = canManageSchool ? leaderSchoolIds : role === 'aluno' ? studentSchoolIds : []
   const shouldScopeSchools = canManageSchool || role === 'aluno'
+
+  const leaderMinistryIds = canManageMinistry
+    ? preview?.ministryId
+      ? [preview.ministryId]
+      : ((await admin.from('ministry_leaders').select('ministry_id').eq('organization_id', orgId).eq('user_id', userId)).data ?? []).map(row => row.ministry_id as string)
+    : []
+  const obreiroMinistryIds = isObreiroMinisterio
+    ? preview?.ministryId
+      ? [preview.ministryId]
+      : await getObreiroMinistryIds(admin, orgId, userId)
+    : []
+  const scopedMinistryIds = canManageMinistry ? leaderMinistryIds : isObreiroMinisterio ? obreiroMinistryIds : []
+  const shouldScopeMinistries = canManageMinistry || isObreiroMinisterio
 
   const start = `${year}-01-01`
   const end = `${year}-12-31`
@@ -89,9 +105,23 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
     classRowsQuery = classRowsQuery.in('schools.id', ids)
   }
 
-  const [{ data: baseRows }, { data: schoolRows }, { data: noteRows }, { data: classRows }, { data: schoolOptionsRows }] = await Promise.all([
+  let ministryEventsQuery = admin
+    .from('ministry_calendar_events')
+    .select('id, title, description, event_type, starts_at, ends_at, ministry_id, ministries(name)')
+    .eq('organization_id', orgId)
+    .gte('starts_at', startAt)
+    .lte('starts_at', endAt)
+    .order('starts_at', { ascending: true })
+
+  if (shouldScopeMinistries) {
+    const mIds = scopedMinistryIds.length > 0 ? scopedMinistryIds : ['no-match']
+    ministryEventsQuery = ministryEventsQuery.in('ministry_id', mIds)
+  }
+
+  const [{ data: baseRows }, { data: schoolRows }, { data: ministryRows }, { data: noteRows }, { data: classRows }, { data: schoolOptionsRows }, { data: ministryOptionsRows }] = await Promise.all([
     baseEventsQuery,
     schoolEventsQuery,
+    ministryEventsQuery,
     admin
       .from('personal_calendar_notes')
       .select('id, title, notes, starts_at, ends_at')
@@ -106,6 +136,11 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
       : leaderSchoolIds.length > 0
         ? admin.from('schools').select('id, name').eq('organization_id', orgId).in('id', leaderSchoolIds).order('name')
         : Promise.resolve({ data: [] as SchoolOption[] }),
+    canManageBase
+      ? admin.from('ministries').select('id, name').eq('organization_id', orgId).eq('active', true).order('name')
+      : leaderMinistryIds.length > 0
+        ? admin.from('ministries').select('id, name').eq('organization_id', orgId).in('id', leaderMinistryIds).order('name')
+        : Promise.resolve({ data: [] as MinistryOption[] }),
   ])
 
   const baseEvents: CalendarEvent[] = ((baseRows ?? []) as Array<{
@@ -145,6 +180,30 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
     source: 'manual',
     school_id: event.school_id,
     school_name: event.schools?.name ?? null,
+  }))
+
+  const ministryEvents: CalendarEvent[] = ((ministryRows ?? []) as unknown as Array<{
+    id: string
+    title: string
+    description: string | null
+    event_type: 'reuniao' | 'devocional' | 'evento' | 'outro'
+    starts_at: string
+    ends_at: string | null
+    ministry_id: string
+    ministries: { name: string } | null
+  }>).map(event => ({
+    id: event.id,
+    title: event.title,
+    description: event.description,
+    event_type: event.event_type,
+    starts_on: isoToCalendarDateKey(event.starts_at),
+    starts_at: event.starts_at,
+    ends_on: event.ends_at ? isoToCalendarDateKey(event.ends_at) : null,
+    ends_at: event.ends_at,
+    layer: 'ministerio',
+    source: 'manual',
+    ministry_id: event.ministry_id,
+    ministry_name: event.ministries?.name ?? null,
   }))
 
   const personalNotes: CalendarEvent[] = ((noteRows ?? []) as Array<{
@@ -187,10 +246,11 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
       school_name: row.schools?.name ?? null,
     }))
 
-  const events = [...baseEvents, ...schoolEvents, ...personalNotes, ...holidayEvents(year), ...classEvents]
+  const events = [...baseEvents, ...schoolEvents, ...ministryEvents, ...personalNotes, ...holidayEvents(year), ...classEvents]
     .sort((a, b) => sortKey(a).localeCompare(sortKey(b)) || a.title.localeCompare(b.title))
 
   const schoolOptions = (schoolOptionsRows ?? []) as SchoolOption[]
+  const ministryOptions = (ministryOptionsRows ?? []) as MinistryOption[]
 
   async function createBaseEvent(formData: FormData) {
     'use server'
@@ -238,6 +298,31 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
     redirect(`/${slug}/calendario?ano=${year}`)
   }
 
+  async function createMinistryEvent(formData: FormData) {
+    'use server'
+    if (!canManageBase && !canManageMinistry) return
+    const db = createAdminClient()
+    const title = (formData.get('title') as string).trim()
+    const ministryId = formData.get('ministry_id') as string
+    const startsAt = formData.get('starts_at') as string
+    const endsAt = formData.get('ends_at') as string
+    const allowedMinistryIds = canManageBase ? null : leaderMinistryIds
+    if (!title || !ministryId || !startsAt) return
+    if (allowedMinistryIds && !allowedMinistryIds.includes(ministryId)) return
+
+    await db.from('ministry_calendar_events').insert({
+      organization_id: orgId,
+      ministry_id: ministryId,
+      title,
+      description: ((formData.get('description') as string | null)?.trim() || null),
+      event_type: (formData.get('event_type') as string) || 'reuniao',
+      starts_at: localDateTimeToIso(startsAt),
+      ends_at: endsAt ? localDateTimeToIso(endsAt) : null,
+      created_by: userId,
+    })
+    redirect(`/${slug}/calendario?ano=${year}`)
+  }
+
   async function createPersonalNote(formData: FormData) {
     'use server'
     if (!canAddPrivateNote) return
@@ -271,6 +356,12 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
     if (layer === 'escola' && (canManageBase || canManageSchool)) {
       let query = db.from('school_calendar_events').delete().eq('organization_id', orgId).eq('id', eventId)
       if (!canManageBase) query = query.in('school_id', leaderSchoolIds.length > 0 ? leaderSchoolIds : ['no-match'])
+      await query
+    }
+
+    if (layer === 'ministerio' && (canManageBase || canManageMinistry)) {
+      let query = db.from('ministry_calendar_events').delete().eq('organization_id', orgId).eq('id', eventId)
+      if (!canManageBase) query = query.in('ministry_id', leaderMinistryIds.length > 0 ? leaderMinistryIds : ['no-match'])
       await query
     }
 
@@ -330,6 +421,30 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
       await query
     }
 
+    if (layer === 'ministerio' && (canManageBase || canManageMinistry)) {
+      const ministryId = formData.get('ministry_id') as string
+      const startsAt = formData.get('starts_at') as string
+      const endsAt = formData.get('ends_at') as string
+      const allowedMinistryIds = canManageBase ? null : leaderMinistryIds
+      if (!ministryId || !startsAt) return
+      if (allowedMinistryIds && !allowedMinistryIds.includes(ministryId)) return
+
+      let query = db
+        .from('ministry_calendar_events')
+        .update({
+          ministry_id: ministryId,
+          title,
+          description: ((formData.get('description') as string | null)?.trim() || null),
+          event_type: (formData.get('event_type') as string) || 'reuniao',
+          starts_at: localDateTimeToIso(startsAt),
+          ends_at: endsAt ? localDateTimeToIso(endsAt) : null,
+        })
+        .eq('organization_id', orgId)
+        .eq('id', eventId)
+      if (!canManageBase) query = query.in('ministry_id', leaderMinistryIds.length > 0 ? leaderMinistryIds : ['no-match'])
+      await query
+    }
+
     if (layer === 'pessoal' && canAddPrivateNote) {
       const startsAt = formData.get('starts_at') as string
       const endsAt = formData.get('ends_at') as string
@@ -359,8 +474,9 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
         slug={slug}
         events={events}
         schoolOptions={schoolOptions}
-        permissions={{ canManageBase, canManageSchool, canAddPrivateNote }}
-        actions={{ createBaseEvent, createSchoolEvent, createPersonalNote, updateEvent, deleteEvent }}
+        ministryOptions={ministryOptions}
+        permissions={{ canManageBase, canManageSchool, canManageMinistry, canAddPrivateNote }}
+        actions={{ createBaseEvent, createSchoolEvent, createMinistryEvent, createPersonalNote, updateEvent, deleteEvent }}
       />
     </>
   )
@@ -452,6 +568,29 @@ async function getStudentSchoolIds(
   }
 
   return [...schoolIds]
+}
+
+async function getObreiroMinistryIds(
+  db: ReturnType<typeof createAdminClient>,
+  organizationId: string,
+  userId: string,
+) {
+  const { data: staffProfile } = await db
+    .from('staff_profiles')
+    .select('person_id')
+    .eq('organization_id', organizationId)
+    .eq('user_id', userId)
+    .single()
+
+  if (!staffProfile?.person_id) return []
+
+  const { data: memberships } = await db
+    .from('ministry_members')
+    .select('ministry_id')
+    .eq('person_id', staffProfile.person_id)
+    .eq('active', true)
+
+  return (memberships ?? []).map(row => row.ministry_id as string)
 }
 
 function localDateTimeToIso(value: string) {

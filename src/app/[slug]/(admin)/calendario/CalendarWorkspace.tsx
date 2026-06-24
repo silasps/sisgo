@@ -4,8 +4,8 @@ import Link from 'next/link'
 import { AlertTriangle, CalendarDays, CalendarPlus, CalendarRange, ChevronLeft, ChevronRight, Clock, LayoutList, Plus, Save, Trash2, X } from 'lucide-react'
 import { useCallback, useMemo, useRef, useState, useTransition } from 'react'
 
-export type CalendarLayer = 'base' | 'escola' | 'pessoal' | 'auto'
-export type CalendarEventType = 'evento' | 'feriado' | 'trimestre' | 'escola' | 'aula' | 'tema' | 'nota' | 'outro'
+export type CalendarLayer = 'base' | 'escola' | 'ministerio' | 'pessoal' | 'auto'
+export type CalendarEventType = 'evento' | 'feriado' | 'trimestre' | 'escola' | 'aula' | 'tema' | 'nota' | 'reuniao' | 'devocional' | 'outro'
 
 export type CalendarEvent = {
   id: string
@@ -20,9 +20,12 @@ export type CalendarEvent = {
   source: 'manual' | 'auto'
   school_id?: string | null
   school_name?: string | null
+  ministry_id?: string | null
+  ministry_name?: string | null
 }
 
 export type SchoolOption = { id: string; name: string }
+export type MinistryOption = { id: string; name: string }
 
 type Action = (formData: FormData) => void | Promise<void>
 
@@ -31,14 +34,17 @@ type Props = {
   slug: string
   events: CalendarEvent[]
   schoolOptions: SchoolOption[]
+  ministryOptions?: MinistryOption[]
   permissions: {
     canManageBase: boolean
     canManageSchool: boolean
+    canManageMinistry: boolean
     canAddPrivateNote: boolean
   }
   actions: {
     createBaseEvent: Action
     createSchoolEvent: Action
+    createMinistryEvent?: Action
     createPersonalNote: Action
     updateEvent: Action
     deleteEvent: Action
@@ -47,7 +53,7 @@ type Props = {
 
 type ModalState =
   | { open: false }
-  | { open: true; mode: 'create'; layer: 'base' | 'escola' | 'pessoal'; date: string }
+  | { open: true; mode: 'create'; layer: 'base' | 'escola' | 'ministerio' | 'pessoal'; date: string }
   | { open: true; mode: 'edit'; event: CalendarEvent }
 
 type ViewMode = 'month' | 'week' | 'day'
@@ -57,21 +63,24 @@ const WEEKDAYS_NARROW = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S']
 const WEEKDAYS_FULL   = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 
 const EVENT_STYLE: Record<CalendarEventType, string> = {
-  evento:    'bg-brand-50 text-brand-700 border-brand-100',
-  feriado:   'bg-red-50 text-red-700 border-red-100',
-  trimestre: 'bg-blue-50 text-blue-700 border-blue-100',
-  escola:    'bg-emerald-50 text-emerald-700 border-emerald-100',
-  aula:      'bg-indigo-50 text-indigo-700 border-indigo-100',
-  tema:      'bg-cyan-50 text-cyan-700 border-cyan-100',
-  nota:      'bg-amber-50 text-amber-800 border-amber-100',
-  outro:     'bg-gray-100 text-gray-600 border-gray-200',
+  evento:     'bg-brand-50 text-brand-700 border-brand-100',
+  feriado:    'bg-red-50 text-red-700 border-red-100',
+  trimestre:  'bg-blue-50 text-blue-700 border-blue-100',
+  escola:     'bg-emerald-50 text-emerald-700 border-emerald-100',
+  aula:       'bg-indigo-50 text-indigo-700 border-indigo-100',
+  tema:       'bg-cyan-50 text-cyan-700 border-cyan-100',
+  nota:       'bg-amber-50 text-amber-800 border-amber-100',
+  reuniao:    'bg-violet-50 text-violet-700 border-violet-100',
+  devocional: 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-100',
+  outro:      'bg-gray-100 text-gray-600 border-gray-200',
 }
 
 const LAYER_LABEL: Record<CalendarLayer, string> = {
-  base:    'Base',
-  escola:  'ETED',
-  pessoal: 'Privado',
-  auto:    'Auto',
+  base:       'Base',
+  escola:     'ETED',
+  ministerio: 'Ministério',
+  pessoal:    'Privado',
+  auto:       'Auto',
 }
 
 const INPUT_CLASS = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400'
@@ -81,7 +90,7 @@ const CALENDAR_TIME_ZONE = 'America/Sao_Paulo'
 
 // ─── Main ──────────────────────────────────────────────────────────────────────
 
-export function CalendarWorkspace({ year, slug, events, schoolOptions, permissions, actions }: Props) {
+export function CalendarWorkspace({ year, slug, events, schoolOptions, ministryOptions = [], permissions, actions }: Props) {
   const today = toDateKeyFromDate(new Date())
   const initialDate = today.startsWith(`${year}-`) ? today : `${year}-01-01`
   const [selectedDate, setSelectedDate] = useState(initialDate)
@@ -100,8 +109,8 @@ export function CalendarWorkspace({ year, slug, events, schoolOptions, permissio
     return map
   }, [events])
 
-  const canCreate = permissions.canManageBase || permissions.canManageSchool || permissions.canAddPrivateNote
-  const defaultLayer: 'base' | 'escola' | 'pessoal' = permissions.canManageBase ? 'base' : permissions.canManageSchool ? 'escola' : 'pessoal'
+  const canCreate = permissions.canManageBase || permissions.canManageSchool || permissions.canManageMinistry || permissions.canAddPrivateNote
+  const defaultLayer: 'base' | 'escola' | 'ministerio' | 'pessoal' = permissions.canManageBase ? 'base' : permissions.canManageSchool ? 'escola' : permissions.canManageMinistry ? 'ministerio' : 'pessoal'
   const weekDays = getFullWeek(selectedDate)
 
   function openCreate(date?: string) {
@@ -153,10 +162,11 @@ export function CalendarWorkspace({ year, slug, events, schoolOptions, permissio
         <div className="flex flex-wrap items-center gap-2">
           {view === 'month' && (
             <div className="hidden flex-wrap gap-1.5 text-xs sm:flex">
-              <Legend label="Base"    type="evento" />
-              <Legend label="ETED"    type="aula" />
-              <Legend label="Privado" type="nota" />
-              <Legend label="Feriado" type="feriado" />
+              <Legend label="Base"       type="evento" />
+              <Legend label="ETED"       type="aula" />
+              <Legend label="Ministério" type="reuniao" />
+              <Legend label="Privado"    type="nota" />
+              <Legend label="Feriado"    type="feriado" />
             </div>
           )}
           {canCreate && (
@@ -223,6 +233,7 @@ export function CalendarWorkspace({ year, slug, events, schoolOptions, permissio
         <EventModal
           modal={modal}
           schoolOptions={schoolOptions}
+          ministryOptions={ministryOptions}
           permissions={permissions}
           actions={actions}
           onClose={() => setModal({ open: false })}
@@ -975,19 +986,20 @@ function DayEventCard({
 // ─── EventModal ────────────────────────────────────────────────────────────────
 
 function EventModal({
-  modal, schoolOptions, permissions, actions, onClose, onChangeLayer,
+  modal, schoolOptions, ministryOptions = [], permissions, actions, onClose, onChangeLayer,
 }: {
   modal: Extract<ModalState, { open: true }>
-  schoolOptions: SchoolOption[]; permissions: Props['permissions']
+  schoolOptions: SchoolOption[]; ministryOptions?: MinistryOption[]; permissions: Props['permissions']
   actions: Props['actions']
-  onClose: () => void; onChangeLayer: (l: 'base' | 'escola' | 'pessoal') => void
+  onClose: () => void; onChangeLayer: (l: 'base' | 'escola' | 'ministerio' | 'pessoal') => void
 }) {
   const isCreate = modal.mode === 'create'
-  const currentLayer = isCreate ? modal.layer : modal.event.layer as 'base' | 'escola' | 'pessoal'
+  const currentLayer = isCreate ? modal.layer : modal.event.layer as 'base' | 'escola' | 'ministerio' | 'pessoal'
 
-  const availableLayers: Array<{ key: 'base' | 'escola' | 'pessoal'; label: string }> = [
+  const availableLayers: Array<{ key: 'base' | 'escola' | 'ministerio' | 'pessoal'; label: string }> = [
     ...(permissions.canManageBase ? [{ key: 'base' as const, label: 'Base' }] : []),
     ...(permissions.canManageSchool || permissions.canManageBase ? [{ key: 'escola' as const, label: 'ETED' }] : []),
+    ...(permissions.canManageMinistry || permissions.canManageBase ? [{ key: 'ministerio' as const, label: 'Ministério' }] : []),
     { key: 'pessoal' as const, label: 'Privado' },
   ]
 
@@ -1076,6 +1088,33 @@ function EventModal({
             </form>
           )}
 
+          {isCreate && currentLayer === 'ministerio' && (permissions.canManageBase || permissions.canManageMinistry) && actions.createMinistryEvent && (
+            <form action={actions.createMinistryEvent} className="space-y-3">
+              <FieldInput name="title" placeholder="Reunião, devocional ou atividade" required />
+              {ministryOptions.length > 0 && (
+                <FieldSelect name="ministry_id" options={ministryOptions.map(m => ({ value: m.id, label: m.name }))} />
+              )}
+              <FieldSelect name="event_type" defaultValue="reuniao" options={[
+                { value: 'reuniao',    label: 'Reunião' },
+                { value: 'devocional', label: 'Devocional' },
+                { value: 'evento',     label: 'Evento' },
+                { value: 'outro',      label: 'Outro' },
+              ]} />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="mb-1 block text-xs text-gray-500">Início</label>
+                  <input name="starts_at" type="datetime-local" required defaultValue={`${modal.date}T09:00`} className={INPUT_CLASS} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-gray-500">Fim</label>
+                  <input name="ends_at" type="datetime-local" defaultValue={`${modal.date}T10:00`} className={INPUT_CLASS} />
+                </div>
+              </div>
+              <FieldInput name="description" placeholder="Observação (opcional)" />
+              <SubmitButton label="Adicionar" />
+            </form>
+          )}
+
           {isCreate && currentLayer === 'pessoal' && (
             <form action={actions.createPersonalNote} className="space-y-3">
               <FieldInput name="title" placeholder="Título da anotação" required />
@@ -1098,6 +1137,7 @@ function EventModal({
             <EditEventForm
               event={modal.event}
               schools={schoolOptions}
+              ministries={ministryOptions}
               updateAction={actions.updateEvent}
               deleteAction={actions.deleteEvent}
             />
@@ -1110,8 +1150,8 @@ function EventModal({
 
 // ─── EditEventForm ─────────────────────────────────────────────────────────────
 
-function EditEventForm({ event, schools, updateAction, deleteAction }: {
-  event: CalendarEvent; schools: SchoolOption[]; updateAction: Action; deleteAction: Action
+function EditEventForm({ event, schools, ministries = [], updateAction, deleteAction }: {
+  event: CalendarEvent; schools: SchoolOption[]; ministries?: MinistryOption[]; updateAction: Action; deleteAction: Action
 }) {
   const formId = `calendar-edit-${event.layer}-${event.id}`
   const deleteBtn = (
@@ -1181,6 +1221,33 @@ function EditEventForm({ event, schools, updateAction, deleteAction }: {
     )
   }
 
+  if (event.layer === 'ministerio') {
+    return (
+      <div className="space-y-3">
+        <form id={formId} action={updateAction} className="space-y-3">
+          <input type="hidden" name="event_id" value={event.id} />
+          <input type="hidden" name="layer"    value={event.layer} />
+          <FieldInput name="title" required defaultValue={event.title} placeholder="Título" />
+          {ministries.length > 0 && (
+            <FieldSelect name="ministry_id" defaultValue={event.ministry_id ?? ''} options={ministries.map(m => ({ value: m.id, label: m.name }))} />
+          )}
+          <FieldSelect name="event_type" defaultValue={event.event_type} options={[
+            { value: 'reuniao',    label: 'Reunião' },
+            { value: 'devocional', label: 'Devocional' },
+            { value: 'evento',     label: 'Evento' },
+            { value: 'outro',      label: 'Outro' },
+          ]} />
+          <div className="grid grid-cols-2 gap-2">
+            <input name="starts_at" type="datetime-local" required defaultValue={event.starts_at ? isoToLocalInput(event.starts_at) : ''} className={INPUT_CLASS} />
+            <input name="ends_at"   type="datetime-local"         defaultValue={event.ends_at   ? isoToLocalInput(event.ends_at)   : ''} className={INPUT_CLASS} />
+          </div>
+          <FieldInput name="description" defaultValue={event.description ?? ''} placeholder="Observação" />
+        </form>
+        {actionsRow}
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-3">
       <form id={formId} action={updateAction} className="space-y-3">
@@ -1232,9 +1299,10 @@ function Legend({ label, type }: { label: string; type: CalendarEventType }) {
 
 function canEdit(event: CalendarEvent, permissions: Props['permissions']) {
   if (event.source !== 'manual') return false
-  if (event.layer === 'base')    return permissions.canManageBase
-  if (event.layer === 'escola')  return permissions.canManageBase || permissions.canManageSchool
-  if (event.layer === 'pessoal') return permissions.canAddPrivateNote
+  if (event.layer === 'base')       return permissions.canManageBase
+  if (event.layer === 'escola')     return permissions.canManageBase || permissions.canManageSchool
+  if (event.layer === 'ministerio') return permissions.canManageBase || permissions.canManageMinistry
+  if (event.layer === 'pessoal')    return permissions.canAddPrivateNote
   return false
 }
 
