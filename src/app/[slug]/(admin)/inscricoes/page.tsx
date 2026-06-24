@@ -1093,17 +1093,19 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         title="Inscrições"
         actions={
           <div className="flex items-center gap-2">
-            <NovaPreInscricaoButton
-              slug={slug}
-              criarAction={criarPreInscricaoManual}
-              openClasses={openClasses.map(c => ({
-                id: c.id,
-                school_id: c.school_id,
-                name: c.name,
-                starts_at: c.starts_at,
-                schoolName: c.schools?.name ?? null,
-              }))}
-            />
+            {canWrite && (
+              <NovaPreInscricaoButton
+                slug={slug}
+                criarAction={criarPreInscricaoManual}
+                openClasses={openClasses.map(c => ({
+                  id: c.id,
+                  school_id: c.school_id,
+                  name: c.name,
+                  starts_at: c.starts_at,
+                  schoolName: c.schools?.name ?? null,
+                }))}
+              />
+            )}
             <Link
               href={`/${slug}/inscricoes?tab=${tab}&ver=${ver === 'todas' ? 'ativas' : 'todas'}`}
               className="px-3 py-2 text-xs font-medium text-gray-500 hover:text-gray-800 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap"
@@ -1270,7 +1272,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                         )}
 
                         {/* Editar pré-inscrição */}
-                        {item.tipo === 'pre_inscricao' && (
+                        {canWrite && item.tipo === 'pre_inscricao' && (
                           <EditarPreInscricaoButton
                             item={{ id: item.id, full_name: item.nome, email: item.email, phone: item.phone, message: item.mensagem, classId: item.classId }}
                             openClasses={openClasses.map(c => ({ id: c.id, school_id: c.school_id, name: c.name, starts_at: c.starts_at, schoolName: c.schools?.name ?? null }))}
@@ -1279,7 +1281,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                         )}
 
                         {/* Disponibilizar formulário — apenas pré-inscrições */}
-                        {item.tipo === 'pre_inscricao' && item.schoolId && (
+                        {canWrite && item.tipo === 'pre_inscricao' && item.schoolId && (
                           <div className="col-span-2">
                             <DisponibilizarFormularioButton
                               interestFormId={item.id}
@@ -1297,7 +1299,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                         )}
 
                         {/* Disponibilizar formulário — pré-inscrição de obreiro */}
-                        {item.tipo === 'pre_inscricao_obreiro' && !item.staffApplicationId && (
+                        {canWrite && item.tipo === 'pre_inscricao_obreiro' && !item.staffApplicationId && (
                           <div className="col-span-2">
                             <DisponibilizarFormularioButton
                               interestFormId={item.id}
