@@ -278,7 +278,7 @@ export function ToggleActiveForm({
 export function ObreiroCard({
   orgUserId, userId, currentRoleId, currentRoleName, currentArea, currentRoleTitle,
   roles, schools, ministries, slug, orgId, fullName, email, active, isCurrentUser,
-  accumulatedRoleLabels = [], currentExtraRoles = [], viewerIsDH = false,
+  accumulatedRoleLabels = [], currentExtraRoles = [], viewerIsDH = false, readOnly = false,
 }: {
   orgUserId: string; userId: string; currentRoleId: string; currentRoleName: string
   currentArea?: string | null; currentRoleTitle?: string | null
@@ -287,6 +287,7 @@ export function ObreiroCard({
   accumulatedRoleLabels?: string[]
   currentExtraRoles?: string[]
   viewerIsDH?: boolean
+  readOnly?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [scope, setScope] = useState(scopeForRole(currentRoleName, currentArea))
@@ -344,20 +345,22 @@ export function ObreiroCard({
       </button>
 
       {/* Rodapé */}
-      <div className="flex items-center gap-2 border-t border-gray-100 bg-gray-50/60 px-4 py-2.5">
-        <button
-          type="button"
-          onClick={() => setOpen(v => !v)}
-          className="flex flex-1 items-center justify-between gap-1 rounded-lg px-2 py-1 text-xs font-medium text-brand-600 transition-colors hover:bg-brand-50"
-        >
-          <span>{open ? 'Fechar edição' : 'Editar função'}</span>
-          <ChevronDown size={13} className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
-        </button>
-        <ToggleActiveForm orgUserId={orgUserId} active={active} slug={slug} disabled={isCurrentUser} />
-      </div>
+      {!readOnly && (
+        <div className="flex items-center gap-2 border-t border-gray-100 bg-gray-50/60 px-4 py-2.5">
+          <button
+            type="button"
+            onClick={() => setOpen(v => !v)}
+            className="flex flex-1 items-center justify-between gap-1 rounded-lg px-2 py-1 text-xs font-medium text-brand-600 transition-colors hover:bg-brand-50"
+          >
+            <span>{open ? 'Fechar edição' : 'Editar função'}</span>
+            <ChevronDown size={13} className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+          </button>
+          <ToggleActiveForm orgUserId={orgUserId} active={active} slug={slug} disabled={isCurrentUser} />
+        </div>
+      )}
 
       {/* Formulário expandível */}
-      {open && (
+      {open && !readOnly && (
         <>
           <form action={changeRole} className="border-t border-gray-100 p-4 space-y-3 bg-white">
             <input type="hidden" name="org_user_id" value={orgUserId} />

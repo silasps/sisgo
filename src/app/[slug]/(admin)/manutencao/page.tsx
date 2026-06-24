@@ -4,7 +4,7 @@ import { Header } from '@/components/layout/Header'
 import { getRolePreview } from '@/lib/role-preview'
 import { notFound, redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
-import { isManagementRole, MANUTENCAO_ROLES, userHasAnyRole } from '@/lib/auth/permissions'
+import { isManagementRole, isOperationalManager, MANUTENCAO_ROLES, userHasAnyRole } from '@/lib/auth/permissions'
 import { SolicitacoesHub, type DeptInfo, type RequestItem } from './SolicitacoesHub'
 
 type Props = {
@@ -48,13 +48,14 @@ export default async function SolicitacoesPage({ params, searchParams }: Props) 
   const allRoles = [role, ...accRoles]
 
   const isManagement = isManagementRole(role)
+  const canWrite = isOperationalManager(role)
   const isHospitalidade = allRoles.includes('hospitalidade')
   const isManutencao = allRoles.includes('manutencao')
   const isSecretaria = allRoles.includes('secretaria')
   const isDeptRole = isHospitalidade || isManutencao || isSecretaria
 
   const resolverDepts = new Set<string>()
-  if (isManagement) {
+  if (canWrite) {
     ;['hospitalidade', 'manutencao', 'secretaria', 'dh', 'outro'].forEach(d => resolverDepts.add(d))
   } else {
     if (isHospitalidade) resolverDepts.add('hospitalidade')
@@ -124,7 +125,7 @@ export default async function SolicitacoesPage({ params, searchParams }: Props) 
     id,
     openCount: openCounts.get(id) ?? 0,
     canResolve: resolverDepts.has(id),
-    canRedirect: isManagement,
+    canRedirect: canWrite,
     showEstoqueLink: id === 'manutencao' && userHasAnyRole(allRoles, MANUTENCAO_ROLES),
     slug,
   }))

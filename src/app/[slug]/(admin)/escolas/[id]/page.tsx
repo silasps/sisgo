@@ -13,7 +13,7 @@ import {
 import { DeleteTurmaButton } from './DeleteTurmaButton'
 import { EmbedCodeBox } from '@/components/ui/EmbedCodeBox'
 
-import { isManagementRole } from '@/lib/auth/permissions'
+import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
 import { SCHOOL_TYPES } from '@/lib/schools'
 import { CheckCircle2, AlertTriangle, Settings } from 'lucide-react'
 
@@ -70,6 +70,7 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
     .single()
   const role          = (orgUser?.roles as unknown as { name: string } | null)?.name ?? ''
   const isManagement  = isManagementRole(role)
+  const canWrite      = isOperationalManager(role)
   const isLiderEted   = role === 'lider_eted'
   const isObreiroEted = role === 'obreiro_eted'
 
@@ -124,9 +125,9 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
     .from('people').select('id, full_name').eq('organization_id', org.id).order('full_name')
   const availablePeople = (allPeople ?? []).filter(p => !staffPersonIds.has(p.id))
 
-  // Solicitações pendentes (DH vê para aprovar)
+  // Solicitações pendentes (DH/admin vê para aprovar — lider_base só visualiza)
   let pendingObreiroRequests: ObreiroReqRow[] = []
-  if (isManagement) {
+  if (canWrite) {
     const { data } = await supabase
       .from('school_pending_requests')
       .select('id, role, notes, status, requested_by, person_id, created_at, review_notes, people(full_name)')

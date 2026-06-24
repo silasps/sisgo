@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { isManagementRole } from '@/lib/auth/permissions'
+import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { Music } from 'lucide-react'
 
@@ -24,6 +24,7 @@ export default async function MinistriosPage({ params }: Props) {
     ? await getCurrentOrganizationRole(supabase, user.id, orgId)
     : { role: '', preview: null }
   const isManagement = isManagementRole(role)
+  const canWrite = isOperationalManager(role)
 
   // Usuário vinculado a ministério → redireciona diretamente para o seu ministério
   if (role === 'lider_ministerio' && user) {
@@ -113,7 +114,7 @@ export default async function MinistriosPage({ params }: Props) {
       <Header
         title="Ministérios"
         actions={
-          isManagement ? (
+          canWrite ? (
             <Link
               href={`/${slug}/ministerios/nova`}
               className="px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 transition-colors"
@@ -128,7 +129,7 @@ export default async function MinistriosPage({ params }: Props) {
           <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
             <Music className="size-8 mx-auto mb-3 text-gray-300" />
             <p className="text-gray-400 text-sm">Nenhum ministério cadastrado ainda.</p>
-            {isManagement && (
+            {canWrite && (
               <Link
                 href={`/${slug}/ministerios/nova`}
                 className="mt-4 inline-block px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 transition-colors"

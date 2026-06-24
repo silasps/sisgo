@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { redirect, notFound } from 'next/navigation'
 import { createMinistry } from '../[id]/actions'
 import { MinistryNameField } from './MinistryNameField'
-import { isManagementRole } from '@/lib/auth/permissions'
+import { isOperationalManager } from '@/lib/auth/permissions'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 
 type Props = { params: Promise<{ slug: string }> }
@@ -21,7 +21,7 @@ export default async function NovoMinisterioPage({ params }: Props) {
   const { role } = user
     ? await getCurrentOrganizationRole(supabase, user.id, orgId)
     : { role: '' }
-  if (!isManagementRole(role)) notFound()
+  if (!isOperationalManager(role)) notFound()
 
   const handleCreate = async (formData: FormData) => {
     'use server'

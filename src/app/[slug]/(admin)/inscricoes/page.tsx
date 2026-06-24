@@ -135,6 +135,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
   const userRole = preview?.role ?? realRole
   const isEtedLeader = userRole === 'lider_eted'
   const isManagement = ['superadmin', 'admin_base', 'lider_base', 'dh'].includes(userRole)
+  const canWrite = ['superadmin', 'admin_base', 'dh'].includes(userRole)
 
   let allowedSchoolIds: string[] | null = null
   if (isEtedLeader) {
@@ -1378,7 +1379,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                             </button>
                           </form>
                         )}
-                        {item.tipo === 'obreiro' && item.status === 'em_analise' && isManagement && item.personId && (
+                        {item.tipo === 'obreiro' && item.status === 'em_analise' && canWrite && item.personId && (
                           <form action={finalizarObreiro} className="col-span-2 space-y-1.5 rounded-lg border border-amber-100 bg-amber-50 p-2">
                             <input type="hidden" name="id" value={item.id} />
                             <input type="hidden" name="org_id" value={orgId} />

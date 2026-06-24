@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import { redirect, notFound } from 'next/navigation'
 import { updateMinistry, assignLeader, removeLeader, createServiceRequest } from './actions'
-import { isManagementRole } from '@/lib/auth/permissions'
+import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { Users, CalendarDays, ClipboardList, ArrowRight } from 'lucide-react'
 
@@ -28,6 +28,7 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
 
   const { role, preview } = await getCurrentOrganizationRole(supabase, user.id, orgId)
   const isManagement = isManagementRole(role)
+  const canWrite = isOperationalManager(role)
   const isLiderMinisterio = role === 'lider_ministerio'
   const isObreiroMinisterio = role === 'obreiro_ministerio'
 
@@ -171,9 +172,9 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
         </Link>
       </div>
 
-      {/* Info card (read-only for líder/obreiro, editable for DH) */}
+      {/* Info card (editable for admin/dh, read-only for lider_base/líder/obreiro) */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
-        {isManagement ? (
+        {canWrite ? (
           <>
             <h2 className="text-sm font-semibold text-gray-700 mb-4">Informações</h2>
             <form action={handleUpdate} className="space-y-3">

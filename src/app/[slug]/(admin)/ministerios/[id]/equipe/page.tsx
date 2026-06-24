@@ -6,7 +6,7 @@ import {
   submitMemberRequest, cancelRequest,
   requestTransfer, respondTransferAsDestination, confirmTransferAsDH, cancelTransfer,
 } from '../actions'
-import { isManagementRole } from '@/lib/auth/permissions'
+import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 
 type Props = {
@@ -40,6 +40,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
 
   const { role } = await getCurrentOrganizationRole(supabase, user.id, orgId)
   const isManagement = isManagementRole(role)
+  const canWrite = isOperationalManager(role)
   const isLiderMinisterio = role === 'lider_ministerio'
   const isObreiroMinisterio = role === 'obreiro_ministerio'
 
@@ -253,7 +254,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
                     )}
                   </div>
                   {/* DH: remove direto */}
-                  {isManagement && (
+                  {canWrite && (
                     <form action={handleRemoveMember} className="flex-shrink-0">
                       <input type="hidden" name="member_id" value={m.id} />
                       <button type="submit" className="text-xs text-red-400 hover:text-red-600 transition-colors">Remover</button>
@@ -299,7 +300,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
         )}
 
         {/* DH: add direto */}
-        {isManagement && availablePeople.length > 0 && (
+        {canWrite && availablePeople.length > 0 && (
           <details className={members.length > 0 ? 'border-t border-gray-100 pt-3' : ''}>
             <summary className="text-sm text-brand-600 cursor-pointer select-none font-medium">+ Adicionar membro</summary>
             <form action={handleAddMember} className="mt-3 flex flex-wrap gap-2">
@@ -341,7 +342,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
       </div>
 
       {/* DH: transferências para confirmar */}
-      {isManagement && (() => {
+      {canWrite && (() => {
         const dhTransfers = transfers.filter(t => t.status === 'aceito_destino')
         if (dhTransfers.length === 0) return null
         return (
@@ -371,7 +372,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
       })()}
 
       {/* DH: solicitações pendentes */}
-      {isManagement && pendingRequests.length > 0 && (
+      {canWrite && pendingRequests.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <h2 className="text-sm font-semibold text-gray-700 mb-3">
             Solicitações do Líder

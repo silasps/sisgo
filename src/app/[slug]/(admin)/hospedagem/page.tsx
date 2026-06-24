@@ -4,7 +4,7 @@ import { Header } from '@/components/layout/Header'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { notFound, redirect } from 'next/navigation'
 import { getRolePreview } from '@/lib/role-preview'
-import { isManagementRole, canSeeHospedagem } from '@/lib/auth/permissions'
+import { isManagementRole, isOperationalManager, canSeeHospedagem } from '@/lib/auth/permissions'
 import {
   createAllocation, updateAllocationStatus,
   allocateWholeRoom, checkinWholeRoom, checkoutWholeRoom,
@@ -43,6 +43,7 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
   const role     = preview?.role ?? realRole
 
   if (!isManagementRole(role) && !canSeeHospedagem(role)) notFound()
+  const canWrite = isOperationalManager(role) || role === 'hospitalidade'
 
   // ── Data ────────────────────────────────────────────────────────────────────
   const today = new Date().toISOString().split('T')[0]
@@ -311,6 +312,7 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
             <span className="font-medium text-gray-700">Antecedência de reservas:</span>
             <span>mostrar no mapa com quanto tempo antes do check-in?</span>
           </div>
+          {canWrite ? (
           <form action={handleUpdateAdvanceHours} className="flex items-center gap-2">
             <select
               name="hours"
@@ -331,6 +333,9 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
               Salvar
             </button>
           </form>
+          ) : (
+            <span className="text-xs text-gray-400">{advanceHours}h antes</span>
+          )}
         </div>
 
         {/* Bed Grid */}

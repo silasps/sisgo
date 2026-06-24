@@ -7,7 +7,7 @@ import { redirect } from 'next/navigation'
 import { updateServiceStatus, cancelRequest } from '../ministerios/[id]/actions'
 import { confirmMealPayment, rejectMealPayment, requestMealPaymentProof } from '../cozinha/actions'
 import { getRolePreview } from '@/lib/role-preview'
-import { isManagementRole } from '@/lib/auth/permissions'
+import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
 import { ServiceRequestsPanel } from './ServiceRequestsPanel'
 import { SearchBar } from '@/components/ui/SearchBar'
 import { Suspense } from 'react'
@@ -120,6 +120,7 @@ export default async function PendentesPage({ params, searchParams }: Props) {
   const role = preview?.role ?? realRole
   const isPreview = Boolean(preview)
   const isManagement       = isManagementRole(role)
+  const canWrite           = isOperationalManager(role)
   const isSecretaria       = role === 'secretaria'
   const isLiderEted        = role === 'lider_eted'
   const isLiderMinisterio  = role === 'lider_ministerio'
@@ -1146,7 +1147,7 @@ export default async function PendentesPage({ params, searchParams }: Props) {
             )}
 
             {/* ── Seção: Solicitações de Ministério (gestão) ── */}
-            {isManagement && ministryRequests.length > 0 && (
+            {canWrite && ministryRequests.length > 0 && (
               <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                 <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
                   <h3 className="text-sm font-semibold text-gray-700">

@@ -4,7 +4,7 @@ import { notFound, redirect } from 'next/navigation'
 import { createReservation, updateReservationStatus, cancelReservation, updateReservationFormSettings } from './actions'
 import { getRolePreview } from '@/lib/role-preview'
 import { ReservationFormSettingsEditor } from './ReservationFormSettingsEditor'
-import { isManagementRole } from '@/lib/auth/permissions'
+import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -121,6 +121,7 @@ export default async function ReservasPage({ params, searchParams }: Props) {
   const preview         = await getRolePreview(realRole)
   const role            = preview?.role ?? realRole
   const isManagement    = isManagementRole(role)
+  const canWrite        = isOperationalManager(role)
   const isHospitalidade = role === 'hospitalidade'
   const isLiderEted     = role === 'lider_eted'
   const isObreiroEted   = role === 'obreiro_eted'
@@ -292,7 +293,7 @@ export default async function ReservasPage({ params, searchParams }: Props) {
 
   const handleUpdateFormSettings = async (formData: FormData) => {
     'use server'
-    if (!isManagement && !isHospitalidade) notFound()
+    if (!canWrite && !isHospitalidade) return
 
     const fields = RESERVATION_FORM_FIELDS.reduce((acc, field) => {
       const label = String(formData.get(`${field.key}_label`) ?? '').trim()
@@ -359,8 +360,8 @@ export default async function ReservasPage({ params, searchParams }: Props) {
     redirect(`/${slug}/reservas`)
   }
 
-  const isReviewer = isManagement || isHospitalidade
-  const canRequest = isManagement || (!isReviewer && !!requesterId)
+  const isReviewer = canWrite || isHospitalidade
+  const canRequest = canWrite || (!isReviewer && !!requesterId)
 
   const msgInfo: Record<string, string> = {
     criada: 'Solicitação enviada. A equipe responsável será notificada.',
@@ -379,7 +380,7 @@ export default async function ReservasPage({ params, searchParams }: Props) {
           </div>
         )}
 
-        {(isManagement || isHospitalidade) && (
+        {(canWrite || isHospitalidade) && (
           <ReservationFormSettingsEditor
             action={handleUpdateFormSettings}
             fixedFields={RESERVATION_FORM_FIELDS.map(field => ({
@@ -411,14 +412,14 @@ export default async function ReservasPage({ params, searchParams }: Props) {
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
               <p className="font-medium text-gray-800 text-sm">Nova Solicitação de Reserva</p>
-              {!isManagement && requesterLabel && (
+              {!canWrite && requesterLabel && (
                 <span className="text-xs text-gray-400">({requesterLabel})</span>
               )}
             </div>
             <form action={handleCreate} className="px-5 pb-5 pt-4 space-y-3">
               <div className="grid sm:grid-cols-2 gap-3">
                 {/* Management: seleciona a entidade solicitante */}
-                {isManagement && (
+                {canWrite && (
                   <div className="sm:col-span-2">
                     <label className="block text-xs font-medium text-gray-600 mb-1">Em nome de *</label>
                     <select name="requester_ref" required

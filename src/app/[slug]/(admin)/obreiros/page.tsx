@@ -5,7 +5,7 @@ import { getRolePreview } from '@/lib/role-preview'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Suspense } from 'react'
-import { isManagementRole } from '@/lib/auth/permissions'
+import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
 import { SearchBar } from '@/components/ui/SearchBar'
 import { ObreiroCard, CreateObreiroModal } from './ObreirosClientForms'
 
@@ -178,7 +178,9 @@ export default async function ObreirosPage({ params, searchParams }: Props) {
         title={`Obreiros — ${org.name}`}
         actions={
           <div className="flex items-center gap-3">
-            <CreateObreiroModal roles={roles} schools={schools} ministries={ministries} orgId={org.id} slug={slug} />
+            {isOperationalManager(role) && (
+              <CreateObreiroModal roles={roles} schools={schools} ministries={ministries} orgId={org.id} slug={slug} />
+            )}
             <Link href={`/${slug}/pessoas?tab=obreiros`} className="text-sm text-gray-500 hover:text-gray-700">
               Ver cadastro de pessoas
             </Link>
@@ -232,6 +234,7 @@ export default async function ObreirosPage({ params, searchParams }: Props) {
                   accumulatedRoleLabels={(orgAccumulations[row.roles?.name ?? ''] ?? []).map(r => roles.find(role => role.name === r)?.label ?? r)}
                   currentExtraRoles={(row.extra_roles as string[] | null) ?? []}
                   viewerIsDH={viewerIsDH}
+                  readOnly={!isOperationalManager(role)}
                 />
               ))}
             </div>

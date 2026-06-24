@@ -29,7 +29,7 @@ export type Role =
 
 // ── Grupos de papéis ──────────────────────────────────────────────────────────
 
-/** Papéis com acesso gerencial completo à base */
+/** Papéis com visibilidade gerencial (vê todas as áreas da base) */
 export const MANAGEMENT_ROLES: readonly Role[] = [
   'superadmin',
   'admin_base',
@@ -37,11 +37,29 @@ export const MANAGEMENT_ROLES: readonly Role[] = [
   'dh',
 ]
 
-/** Papéis com acesso ao financeiro geral */
+/**
+ * Papéis com poder operacional de escrita (aprovar, criar, editar).
+ * lider_base é excluído — ele VÊ tudo mas só edita configurações,
+ * atribui líderes e gerencia o calendário da base.
+ */
+export const OPERATIONAL_ROLES: readonly Role[] = [
+  'superadmin',
+  'admin_base',
+  'dh',
+]
+
+/** Papéis com acesso ao financeiro geral (lider_base vê mas não edita) */
 export const GENERAL_FINANCE_ROLES: readonly Role[] = [
   'superadmin',
   'admin_base',
   'lider_base',
+  'secretaria',
+]
+
+/** Papéis que podem ESCREVER no financeiro */
+export const FINANCE_WRITE_ROLES: readonly Role[] = [
+  'superadmin',
+  'admin_base',
   'secretaria',
 ]
 
@@ -95,9 +113,19 @@ export function isManagementRole(role: string): boolean {
   return (MANAGEMENT_ROLES as readonly string[]).includes(role)
 }
 
+/** Papéis com poder de escrita operacional (exclui lider_base) */
+export function isOperationalManager(role: string): boolean {
+  return (OPERATIONAL_ROLES as readonly string[]).includes(role)
+}
+
 /** Verifica se o papel tem acesso ao financeiro geral */
 export function isGeneralFinanceRole(role: string): boolean {
   return (GENERAL_FINANCE_ROLES as readonly string[]).includes(role)
+}
+
+/** Verifica se o papel pode ESCREVER no financeiro */
+export function isFinanceWriter(role: string): boolean {
+  return (FINANCE_WRITE_ROLES as readonly string[]).includes(role)
 }
 
 /** Verifica se o papel tem acesso à cozinha */
