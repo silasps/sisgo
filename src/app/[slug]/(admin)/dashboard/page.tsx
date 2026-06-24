@@ -824,6 +824,7 @@ const colorMap = {
   purple: { bg: 'bg-purple-50',  icon: 'text-purple-500', num: 'text-purple-700', label: 'text-purple-500' },
   orange: { bg: 'bg-brand-50',   icon: 'text-brand-500',  num: 'text-brand-700',  label: 'text-brand-500'  },
   pink:   { bg: 'bg-pink-50',    icon: 'text-pink-500',   num: 'text-pink-700',   label: 'text-pink-500'   },
+  teal:   { bg: 'bg-teal-50',    icon: 'text-teal-500',   num: 'text-teal-700',   label: 'text-teal-500'   },
 }
 
 function StatCard({ label, value, icon: Icon, href, color }: {
