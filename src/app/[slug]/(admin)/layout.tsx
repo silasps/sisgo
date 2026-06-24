@@ -28,7 +28,7 @@ function addPersonalSplit(items: RegularNavItem[], personalIcons = PESSOAL_ICONS
   return [...op, PESSOAL_DIVIDER, ...pers]
 }
 
-function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPending: boolean, hasReservationsPending: boolean, hasOwnCashScope: boolean, laundryEnabled: boolean): NavItem[] {
+function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPending: boolean, hasReservationsPending: boolean, hasOwnCashScope: boolean, laundryEnabled: boolean, hasMinistryMessages: boolean, hasSchoolMessages: boolean): NavItem[] {
   const allRoles = [role, ...accumulatedRoles]
   const is = (r: string) => allRoles.includes(r)
   const isManagement        = isManagementRole(role)
@@ -455,7 +455,7 @@ export default async function SlugLayout({ children, params }: Props) {
       .gte('created_at', muralSince)
     hasSchoolMessages = (count ?? 0) > 0
   }
-  const navItems = buildNav(slug, role, [...accumulatedRoles, ...extraRoles], hasPending, reservationsPending > 0, hasOwnCashScope, laundryEnabled)
+  const navItems = buildNav(slug, role, [...accumulatedRoles, ...extraRoles], hasPending, reservationsPending > 0, hasOwnCashScope, laundryEnabled, hasMinistryMessages, hasSchoolMessages)
   const bottomItems = pickBottomBarItems(navItems, role)
 
   return (
