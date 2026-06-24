@@ -147,27 +147,28 @@
   }
 }
 
-/* Sticker fold corner — triângulo clássico com ::before */
+/* Sticker fold corner — canto inferior direito */
 [class*="sticker-fold-"] {
   position: relative;
-  overflow: hidden;
 }
 [class*="sticker-fold-"]::before {
   content: "";
   position: absolute;
-  top: 0;
+  bottom: 0;
   right: 0;
+  width: 0;
+  height: 0;
   border-style: solid;
-  border-width: 0 20px 20px 0;
-  border-color: transparent;
-  box-shadow: -1px 1px 2px rgba(0,0,0,0.05);
+  border-width: 20px 20px 0 0;
+  filter: drop-shadow(-2px -1px 2px rgba(0,0,0,0.12));
+  z-index: 1;
 }
-.sticker-fold-yellow::before  { border-color: #d4a017 #f3f4f6 transparent transparent; border-right-color: var(--sticker-page-bg, #f3f4f6); }
-.sticker-fold-blue::before    { border-color: #7ba3c9 #f3f4f6 transparent transparent; border-right-color: var(--sticker-page-bg, #f3f4f6); }
-.sticker-fold-green::before   { border-color: #6db680 #f3f4f6 transparent transparent; border-right-color: var(--sticker-page-bg, #f3f4f6); }
-.sticker-fold-pink::before    { border-color: #d4879c #f3f4f6 transparent transparent; border-right-color: var(--sticker-page-bg, #f3f4f6); }
-.sticker-fold-purple::before  { border-color: #a78cc4 #f3f4f6 transparent transparent; border-right-color: var(--sticker-page-bg, #f3f4f6); }
-.sticker-fold-orange::before  { border-color: #d4944a #f3f4f6 transparent transparent; border-right-color: var(--sticker-page-bg, #f3f4f6); }
+.sticker-fold-yellow::before  { border-color: transparent var(--sticker-page-bg, #f3f4f6) transparent transparent; border-top-color: #c9960f; }
+.sticker-fold-blue::before    { border-color: transparent var(--sticker-page-bg, #f3f4f6) transparent transparent; border-top-color: #6b96be; }
+.sticker-fold-green::before   { border-color: transparent var(--sticker-page-bg, #f3f4f6) transparent transparent; border-top-color: #5da872; }
+.sticker-fold-pink::before    { border-color: transparent var(--sticker-page-bg, #f3f4f6) transparent transparent; border-top-color: #c87490; }
+.sticker-fold-purple::before  { border-color: transparent var(--sticker-page-bg, #f3f4f6) transparent transparent; border-top-color: #9578b8; }
+.sticker-fold-orange::before  { border-color: transparent var(--sticker-page-bg, #f3f4f6) transparent transparent; border-top-color: #c4843a; }
 
 .font-handwriting {
   font-family: 'Caveat', cursive;
