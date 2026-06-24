@@ -37,7 +37,7 @@ export default async function MuralPage({ params }: Props) {
       .select('id, author_name, author_id, content, mentions, color, font, text_color, font_size, created_at')
       .eq('ministry_id', id)
       .order('created_at', { ascending: true })
-      .limit(200),
+      .limit(30),
     sbAdmin.from('ministry_members')
       .select('person_id, people(full_name)')
       .eq('ministry_id', id)
@@ -88,6 +88,13 @@ export default async function MuralPage({ params }: Props) {
       text_color: Number(formData.get('text_color') ?? 0),
       font_size: Number(formData.get('font_size') ?? 1),
     })
+    const { data: excess } = await db.from('ministry_messages')
+      .select('id').eq('ministry_id', id)
+      .order('created_at', { ascending: false })
+      .range(30, 999)
+    if (excess?.length) {
+      await db.from('ministry_messages').delete().in('id', excess.map(e => e.id))
+    }
   }
 
   async function deleteMessage(formData: FormData) {
