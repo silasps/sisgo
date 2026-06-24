@@ -1341,32 +1341,40 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                             </button>
                           </form>
                         )}
-                        {canWrite && (item.status === 'pendente' || item.status === 'em_contato' || item.status === 'formulario_enviado' || item.status === 'em_analise') && item.tipo !== 'obreiro' && item.tipo !== 'pre_inscricao_obreiro' && (
-                          <form action={aprovar} className="col-span-2 space-y-1.5">
-                            <input type="hidden" name="id" value={item.id} />
-                            <input type="hidden" name="tipo" value={item.tipo} />
-                            <input type="hidden" name="email" value={item.email ?? ''} />
-                            <input type="hidden" name="person_id" value={item.personId ?? ''} />
-                            <input type="hidden" name="org_id" value={orgId} />
-                            <select
-                              name="class_id"
-                              defaultValue={item.classId ?? ''}
-                              required
-                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-400"
-                            >
-                              <option value="" disabled>Selecione a turma ETED</option>
-                              {openClasses.map(classOption => (
-                                <option key={classOption.id} value={classOption.id}>
-                                  {classOption.schools?.name ?? 'ETED'} · {classOption.name}
-                                  {classOption.starts_at ? ` · ${new Date(classOption.starts_at).toLocaleDateString('pt-BR')}` : ''}
-                                </option>
-                              ))}
-                            </select>
-                            <button type="submit" className="w-full text-xs px-3 py-2 bg-green-50 text-green-700 hover:bg-green-100 rounded-lg transition-colors font-semibold">
-                              ✓ Aceitar aluno
-                            </button>
-                          </form>
-                        )}
+                        {canWrite && (item.status === 'pendente' || item.status === 'em_contato' || item.status === 'formulario_enviado' || item.status === 'em_analise') && item.tipo !== 'obreiro' && item.tipo !== 'pre_inscricao_obreiro' && (() => {
+                          const formularioPreenchido = item.tipo !== 'pre_inscricao' || !!item.applicationId
+                          return (
+                            <form action={formularioPreenchido ? aprovar : undefined} className="col-span-2 space-y-1.5">
+                              <input type="hidden" name="id" value={item.id} />
+                              <input type="hidden" name="tipo" value={item.tipo} />
+                              <input type="hidden" name="email" value={item.email ?? ''} />
+                              <input type="hidden" name="person_id" value={item.personId ?? ''} />
+                              <input type="hidden" name="org_id" value={orgId} />
+                              <select
+                                name="class_id"
+                                defaultValue={item.classId ?? ''}
+                                required
+                                disabled={!formularioPreenchido}
+                                className={`w-full rounded-lg border px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400 ${formularioPreenchido ? 'border-gray-200 bg-white text-gray-700' : 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'}`}
+                              >
+                                <option value="" disabled>Selecione a turma ETED</option>
+                                {openClasses.map(classOption => (
+                                  <option key={classOption.id} value={classOption.id}>
+                                    {classOption.schools?.name ?? 'ETED'} · {classOption.name}
+                                    {classOption.starts_at ? ` · ${new Date(classOption.starts_at).toLocaleDateString('pt-BR')}` : ''}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                type="submit"
+                                disabled={!formularioPreenchido}
+                                className={`w-full text-xs px-3 py-2 rounded-lg font-semibold transition-colors ${formularioPreenchido ? 'bg-green-50 text-green-700 hover:bg-green-100' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+                              >
+                                {formularioPreenchido ? '✓ Aceitar aluno' : '✓ Aceitar aluno (aguardando formulário)'}
+                              </button>
+                            </form>
+                          )
+                        })()}
                         {canWrite && item.tipo === 'aluno' && item.status === 'pendente' && (
                           <form action={updateStatus}>
                             <input type="hidden" name="id" value={item.id} />
