@@ -57,9 +57,9 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
     { href: `/${slug}/pessoas`,      label: 'Pessoas',          icon: 'pessoas',       show: true },
     { href: `/${slug}/presenca`,     label: 'Presença',         icon: 'presenca',      show: isManagement || is('secretaria') || is('hospitalidade') || isCozinha || is('lider_eted') || isObreiroEted || isLiderMinisterio || isObreiroMinisterio },
     { href: `/${slug}/obreiros`,     label: 'Obreiros',         icon: 'obreiros',      show: isManagement },
-    { href: `/${slug}/escolas`,      label: 'Escolas',          icon: 'escolas',       show: isManagement || is('lider_eted') || isObreiroEted },
+    { href: `/${slug}/escolas`,      label: 'Escolas',          icon: 'escolas',       show: isManagement || is('lider_eted') || isObreiroEted, alert: hasSchoolMessages },
     { href: `/${slug}/inscricoes`,   label: 'Inscrições',       icon: 'inscricoes',    show: isManagement || is('lider_eted') },
-    { href: `/${slug}/ministerios`,  label: 'Ministérios',      icon: 'ministerios',   show: isManagement || isLiderMinisterio || isObreiroMinisterio },
+    { href: `/${slug}/ministerios`,  label: 'Ministérios',      icon: 'ministerios',   show: isManagement || isLiderMinisterio || isObreiroMinisterio, alert: hasMinistryMessages },
     { href: `/${slug}/reservas`,     label: 'Reservas',         icon: 'reservas',      show: canSeeReservas, alert: hasReservationsPending },
     { href: `/${slug}/hospedagem`,   label: 'Hospedagem',       icon: 'hospedagem',    show: canSeeHospedagem },
     { href: `/${slug}/hospedagem/quartos`, label: 'Quartos',    icon: 'quartos',       show: canSeeHospedagem },
@@ -432,6 +432,29 @@ export default async function SlugLayout({ children, params }: Props) {
     : [{ data: [] }, { data: [] }]
 
   const laundryEnabled = (org as { laundry_enabled?: boolean }).laundry_enabled ?? false
+
+  // ── Mensagens novas no mural (últimas 24h, não do próprio usuário) ─────────
+  const muralSince = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  let hasMinistryMessages = false
+  let hasSchoolMessages = false
+
+  if (isLiderMinisterio || allRoles.includes('obreiro_ministerio')) {
+    const { count } = await sbAdmin.from('ministry_messages')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', org.id)
+      .neq('author_id', user.id)
+      .gte('created_at', muralSince)
+    hasMinistryMessages = (count ?? 0) > 0
+  }
+
+  if (allRoles.includes('lider_eted') || allRoles.includes('obreiro_eted')) {
+    const { count } = await sbAdmin.from('school_messages')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', org.id)
+      .neq('author_id', user.id)
+      .gte('created_at', muralSince)
+    hasSchoolMessages = (count ?? 0) > 0
+  }
   const navItems = buildNav(slug, role, [...accumulatedRoles, ...extraRoles], hasPending, reservationsPending > 0, hasOwnCashScope, laundryEnabled)
   const bottomItems = pickBottomBarItems(navItems, role)
 
