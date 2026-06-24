@@ -23,12 +23,12 @@ type Member = {
 }
 
 const STICKER_COLORS = [
-  { bg: 'bg-yellow-100', border: 'border-yellow-200', shadow: 'shadow-yellow-100/50', fold: 'bg-yellow-200/80' },
-  { bg: 'bg-blue-100', border: 'border-blue-200', shadow: 'shadow-blue-100/50', fold: 'bg-blue-200/80' },
-  { bg: 'bg-green-100', border: 'border-green-200', shadow: 'shadow-green-100/50', fold: 'bg-green-200/80' },
-  { bg: 'bg-pink-100', border: 'border-pink-200', shadow: 'shadow-pink-100/50', fold: 'bg-pink-200/80' },
-  { bg: 'bg-purple-100', border: 'border-purple-200', shadow: 'shadow-purple-100/50', fold: 'bg-purple-200/80' },
-  { bg: 'bg-orange-100', border: 'border-orange-200', shadow: 'shadow-orange-100/50', fold: 'bg-orange-200/80' },
+  { bg: 'bg-yellow-100', border: 'border-yellow-200', shadow: 'shadow-yellow-100/50', fold: 'sticker-fold-yellow' },
+  { bg: 'bg-blue-100', border: 'border-blue-200', shadow: 'shadow-blue-100/50', fold: 'sticker-fold-blue' },
+  { bg: 'bg-green-100', border: 'border-green-200', shadow: 'shadow-green-100/50', fold: 'sticker-fold-green' },
+  { bg: 'bg-pink-100', border: 'border-pink-200', shadow: 'shadow-pink-100/50', fold: 'sticker-fold-pink' },
+  { bg: 'bg-purple-100', border: 'border-purple-200', shadow: 'shadow-purple-100/50', fold: 'sticker-fold-purple' },
+  { bg: 'bg-orange-100', border: 'border-orange-200', shadow: 'shadow-orange-100/50', fold: 'sticker-fold-orange' },
 ]
 
 const ROTATIONS = [
@@ -242,13 +242,8 @@ export function MuralClient({ messages: serverMessages, members, currentUserId, 
               return (
                 <div
                   key={msg.id}
-                  className={`relative ${c.bg} ${c.border} border rounded-lg pl-4 pr-6 py-3 shadow-sm ${c.shadow} ${rot} transition-all duration-200 hover:rotate-0 hover:shadow-md group ${isTemp ? 'opacity-70' : ''}`}
+                  className={`relative ${c.bg} ${c.border} border rounded-lg pl-4 pr-6 py-3 shadow-sm ${c.shadow} ${rot} ${c.fold} transition-all duration-200 hover:rotate-0 hover:shadow-md group ${isTemp ? 'opacity-70' : ''}`}
                 >
-                  {/* Dobrinha no canto */}
-                  <div className="absolute top-0 right-0 w-5 h-5 overflow-hidden">
-                    <div className={`absolute -top-0.5 -right-0.5 w-7 h-7 ${c.fold} rotate-45 origin-bottom-left shadow-sm`} />
-                  </div>
-
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 mb-1.5">
