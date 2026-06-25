@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { ICON_MAP } from './Sidebar'
@@ -26,31 +26,69 @@ export function BottomNav({
   overflowItems: NavItem[]
 }) {
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [dragY, setDragY] = useState(0)
+  const [isDragging, setIsDragging] = useState(false)
+  const touchStartY = useRef(0)
+  const sheetRef = useRef<HTMLDivElement>(null)
   const pathname = usePathname()
 
   useEffect(() => {
     setSheetOpen(false)
   }, [pathname])
 
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY
+    setIsDragging(true)
+    setDragY(0)
+  }, [])
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!isDragging) return
+    const deltaY = e.touches[0].clientY - touchStartY.current
+    if (deltaY > 0) {
+      setDragY(deltaY)
+    }
+  }, [isDragging])
+
+  const handleTouchEnd = useCallback(() => {
+    setIsDragging(false)
+    if (dragY > 80) {
+      setSheetOpen(false)
+    }
+    setDragY(0)
+  }, [dragY])
+
   return (
     <>
       {/* Overlay */}
       {sheetOpen && (
         <div
-          className="fixed inset-0 z-30 bg-black/30 md:hidden"
+          className="fixed inset-0 z-30 bg-black/30 md:hidden transition-opacity duration-300"
+          style={{ opacity: isDragging ? Math.max(0, 1 - dragY / 200) : 1 }}
           onClick={() => setSheetOpen(false)}
         />
       )}
 
       {/* Bottom Sheet */}
       <div
-        className={`fixed inset-x-0 bottom-0 z-30 md:hidden transition-transform duration-300 ease-out ${
+        ref={sheetRef}
+        className={`fixed inset-x-0 bottom-0 z-30 md:hidden ${
           sheetOpen ? 'translate-y-0' : 'translate-y-full'
         }`}
+        style={{
+          transform: sheetOpen
+            ? `translateY(${dragY}px)`
+            : 'translateY(100%)',
+          transition: isDragging ? 'none' : 'transform 0.3s ease-out',
+        }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       >
         <div className="bg-white rounded-t-2xl shadow-xl max-h-[50vh] overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))]">
-          <div className="sticky top-0 bg-white rounded-t-2xl pt-3 pb-2">
-            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto" />
+          {/* Drag handle */}
+          <div className="sticky top-0 bg-white rounded-t-2xl pt-3 pb-2 cursor-grab active:cursor-grabbing">
+            <div className="w-10 h-1.5 bg-gray-300 rounded-full mx-auto" />
           </div>
 
           <nav className="px-3 pb-2 space-y-0.5">

@@ -831,7 +831,38 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     revalidatePath(`/${slug}/inscricoes`)
   }
 
+  async function encaminharParaEscola(formData: FormData) {
+    'use server'
+    const { createAdminClient: adm } = await import('@/lib/supabase/admin')
+    const db = adm()
+    const interestId = formData.get('interest_id') as string
+    const schoolId = formData.get('school_id') as string
+    if (!interestId || !schoolId) return
+    await db.from('school_interest_forms').update({ school_id: schoolId }).eq('id', interestId)
+    const { redirect: redir } = await import('next/navigation')
+    redir(`/${slug}/inscricoes?flash_success=${encodeURIComponent('Inscrição encaminhada para a escola.')}`)
+  }
+
+  async function encaminharParaMinisterio(formData: FormData) {
+    'use server'
+    const { createAdminClient: adm } = await import('@/lib/supabase/admin')
+    const db = adm()
+    const interestId = formData.get('interest_id') as string
+    const ministryId = formData.get('ministry_id') as string
+    if (!interestId || !ministryId) return
+    await db.from('staff_interest_forms').update({ ministry_id: ministryId }).eq('id', interestId)
+    const { redirect: redir } = await import('next/navigation')
+    redir(`/${slug}/inscricoes?tab=obreiro&flash_success=${encodeURIComponent('Inscrição encaminhada para o ministério.')}`)
+  }
+
   // ── Queries ────────────────────────────────────────────────────────────────
+
+  const [{ data: allSchoolsRaw }, { data: allMinistriesRaw }] = await Promise.all([
+    sb.from('schools').select('id, name').eq('organization_id', orgId).eq('active', true).order('name'),
+    sb.from('ministries').select('id, name').eq('organization_id', orgId).eq('active', true).order('name'),
+  ])
+  const allSchools = (allSchoolsRaw ?? []) as Array<{ id: string; name: string }>
+  const allMinistries = (allMinistriesRaw ?? []) as Array<{ id: string; name: string }>
 
   const items: InscricaoItem[] = []
   const historico: HistoricoItem[] = []
@@ -1065,7 +1096,16 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     }
   }
 
-  const filtered = (ver === 'todas' ? items : items.filter(i => !isFinalizado(i.status)))
+  // Lider ETED não vê inscrições sem escola definida (sem preferência → só DH vê)
+  const schoolFiltered = isEtedLeader
+    ? items.filter(i => {
+        if (i.tipo === 'pre_inscricao' && !i.schoolId) return false
+        if (i.tipo === 'pre_inscricao' && allowedSchoolIds && !allowedSchoolIds.includes(i.schoolId!)) return false
+        return true
+      })
+    : items
+
+  const filtered = (ver === 'todas' ? schoolFiltered : schoolFiltered.filter(i => !isFinalizado(i.status)))
     .filter(i => !q || i.nome.toLowerCase().includes(q.toLowerCase()) || (i.email ?? '').toLowerCase().includes(q.toLowerCase()))
   filtered.sort((a, b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime())
   const quota = await getEmailQuota()
@@ -1191,11 +1231,15 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                           {item.email}{item.email && item.phone ? ' · ' : ''}{item.phone}
                         </p>
                       )}
-                      {(item.escola || item.turma) && (
+                      {(item.escola || item.turma) ? (
                         <p className="text-xs text-gray-400 mt-0.5">
                           {item.escola}{item.turma ? ` · ${item.turma}` : ''}
                         </p>
-                      )}
+                      ) : (item.tipo === 'pre_inscricao' && !item.schoolId) || (item.tipo === 'pre_inscricao_obreiro' && !item.ministryId) ? (
+                        <p className="text-xs text-blue-600 font-medium mt-0.5 bg-blue-50 inline-block px-1.5 py-0.5 rounded">
+                          Sem preferência — aguardando encaminhamento
+                        </p>
+                      ) : null}
                       {item.mensagem && (
                         <p className="text-xs text-gray-500 mt-1.5 italic border-l-2 border-gray-200 pl-2 line-clamp-2">
                           &ldquo;{item.mensagem}&rdquo;
@@ -1329,6 +1373,34 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                         )}
 
                         <div className="col-span-2 h-px bg-gray-100" />
+
+                        {/* Encaminhar — DH atribui escola/ministério quando "sem preferência" */}
+                        {canWrite && item.tipo === 'pre_inscricao' && !item.schoolId && (
+                          <form action={encaminharParaEscola} className="col-span-2 space-y-1.5 rounded-lg border border-blue-100 bg-blue-50 p-2.5">
+                            <input type="hidden" name="interest_id" value={item.id} />
+                            <p className="text-xs font-semibold text-blue-800">Sem preferência de escola</p>
+                            <select name="school_id" required className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300">
+                              <option value="" disabled>Encaminhar para qual escola?</option>
+                              {allSchools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                            </select>
+                            <button type="submit" className="w-full text-xs px-3 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors font-semibold">
+                              Encaminhar para escola
+                            </button>
+                          </form>
+                        )}
+                        {canWrite && item.tipo === 'pre_inscricao_obreiro' && !item.ministryId && (
+                          <form action={encaminharParaMinisterio} className="col-span-2 space-y-1.5 rounded-lg border border-violet-100 bg-violet-50 p-2.5">
+                            <input type="hidden" name="interest_id" value={item.id} />
+                            <p className="text-xs font-semibold text-violet-800">Sem preferência de ministério</p>
+                            <select name="ministry_id" required className="w-full rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-violet-300">
+                              <option value="" disabled>Encaminhar para qual ministério?</option>
+                              {allMinistries.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                            </select>
+                            <button type="submit" className="w-full text-xs px-3 py-2 bg-violet-600 text-white hover:bg-violet-700 rounded-lg transition-colors font-semibold">
+                              Encaminhar para ministério
+                            </button>
+                          </form>
+                        )}
 
                         {/* Status */}
                         {canWrite && item.status === 'pendente' && item.tipo !== 'pre_inscricao_obreiro' && (

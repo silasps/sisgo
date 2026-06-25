@@ -1,8 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import type { Database } from '@/types/database'
 import { schoolTypeGroup, schoolTypeShortLabel } from '@/lib/schools'
+import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 
 type Props = { params: Promise<{ slug: string }> }
 type School = Database['public']['Tables']['schools']['Row']
@@ -11,8 +13,27 @@ export default async function EscolasPage({ params }: Props) {
   const { slug } = await params
   const supabase = await createClient()
 
+  const { data: { user } } = await supabase.auth.getUser()
   const { data: org } = await supabase.from('organizations').select('id').eq('slug', slug).single()
-  const { data } = await supabase.from('schools').select('*').eq('organization_id', org?.id ?? '').order('name')
+  const orgId = org?.id ?? ''
+
+  if (user && orgId) {
+    const { role, preview } = await getCurrentOrganizationRole(supabase, user.id, orgId)
+    if (role === 'lider_eted') {
+      const schoolId = preview?.schoolId
+        ?? (await supabase.from('school_leaders').select('school_id').eq('user_id', user.id).limit(1).single()).data?.school_id
+      if (schoolId) redirect(`/${slug}/escolas/${schoolId}`)
+    }
+    if (role === 'obreiro_eted') {
+      const { data: sp } = await supabase.from('staff_profiles').select('person_id').eq('organization_id', orgId).eq('user_id', user.id).single()
+      if (sp?.person_id) {
+        const { data: staff } = await supabase.from('school_staff').select('school_id').eq('person_id', sp.person_id).eq('active', true).limit(1).single()
+        if (staff?.school_id) redirect(`/${slug}/escolas/${staff.school_id}`)
+      }
+    }
+  }
+
+  const { data } = await supabase.from('schools').select('*').eq('organization_id', orgId).order('name')
   const escolas = (data ?? []) as School[]
   const eteds = escolas.filter(e => schoolTypeGroup((e as unknown as { school_type: string | null }).school_type) === 'eted')
   const secondLevelSchools = escolas.filter(e => schoolTypeGroup((e as unknown as { school_type: string | null }).school_type) === 'second_level')

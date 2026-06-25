@@ -18,8 +18,7 @@ export default async function NovaEscolaPage({ params }: Props) {
     const { data: escola } = await sb.from('schools').insert({
       organization_id: org.id,
       name: formData.get('name') as string,
-      school_type: formData.get('school_type') as string,
-      is_public: false,
+      type: formData.get('school_type') as string,
       active: true,
     }).select('id').single()
 
