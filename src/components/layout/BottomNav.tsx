@@ -72,26 +72,26 @@ export function BottomNav({
       {/* Bottom Sheet */}
       <div
         ref={sheetRef}
-        className={`fixed inset-x-0 bottom-0 z-30 md:hidden ${
-          sheetOpen ? 'translate-y-0' : 'translate-y-full'
-        }`}
+        className={`fixed inset-x-0 bottom-0 z-30 md:hidden`}
         style={{
           transform: sheetOpen
             ? `translateY(${dragY}px)`
             : 'translateY(100%)',
           transition: isDragging ? 'none' : 'transform 0.3s ease-out',
         }}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
       >
-        <div className="bg-white rounded-t-2xl shadow-xl max-h-[50vh] overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))]">
-          {/* Drag handle */}
-          <div className="sticky top-0 bg-white rounded-t-2xl pt-3 pb-2 cursor-grab active:cursor-grabbing">
+        <div className="bg-white rounded-t-2xl shadow-xl max-h-[50vh] flex flex-col pb-[calc(5rem+env(safe-area-inset-bottom))]">
+          {/* Drag handle — zona de arraste */}
+          <div
+            className="shrink-0 bg-white rounded-t-2xl pt-3 pb-3 cursor-grab active:cursor-grabbing touch-none"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+          >
             <div className="w-10 h-1.5 bg-gray-300 rounded-full mx-auto" />
           </div>
 
-          <nav className="px-3 pb-2 space-y-0.5">
+          <nav className="px-3 pb-2 space-y-0.5 overflow-y-auto flex-1">
             {overflowItems.map((item, idx) => {
               if ('divider' in item) {
                 return (
