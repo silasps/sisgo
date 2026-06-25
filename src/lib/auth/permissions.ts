@@ -68,7 +68,6 @@ export const KITCHEN_ROLES: readonly Role[] = [
   'superadmin',
   'admin_base',
   'lider_base',
-  'dh',
   'secretaria',
   'cozinha',
 ]
@@ -78,7 +77,6 @@ export const MANUTENCAO_ROLES: readonly Role[] = [
   'superadmin',
   'admin_base',
   'lider_base',
-  'dh',
   'manutencao',
 ]
 
@@ -87,7 +85,6 @@ export const HOSPEDAGEM_ROLES: readonly Role[] = [
   'superadmin',
   'admin_base',
   'lider_base',
-  'dh',
   'hospitalidade',
 ]
 
