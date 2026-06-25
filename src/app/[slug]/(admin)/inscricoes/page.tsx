@@ -5,7 +5,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { RecusarModal } from './RecusarModal'
 import { DisponibilizarFormularioButton } from './DisponibilizarFormularioButton'
-import { NovaPreInscricaoButton, EditarPreInscricaoButton, MarcarRecebidoExternoButton, LinksReferenciaAdminButton } from './InscricoesModals'
+import { NovaPreInscricaoButton, NovaPreInscricaoObreiroButton, EditarPreInscricaoButton, MarcarRecebidoExternoButton, LinksReferenciaAdminButton } from './InscricoesModals'
 import { getEmailQuota } from '@/lib/email/getEmailQuota'
 import { getRolePreview } from '@/lib/role-preview'
 import { SearchBar } from '@/components/ui/SearchBar'
@@ -1162,6 +1162,13 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                   starts_at: c.starts_at,
                   schoolName: c.schools?.name ?? null,
                 }))}
+              />
+            )}
+            {canWriteObreiro && (
+              <NovaPreInscricaoObreiroButton
+                slug={slug}
+                criarAction={criarPreInscricaoObreiroManual}
+                ministries={allMinistries}
               />
             )}
             <Link

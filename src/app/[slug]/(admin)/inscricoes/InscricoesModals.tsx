@@ -9,6 +9,7 @@ import { Link as LinkIcon, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 
 type ClassOption = { id: string; school_id: string; name: string; starts_at: string | null; schoolName: string | null }
+type MinistryOption = { id: string; name: string }
 type CriarAction = (fd: FormData) => Promise<void>
 type EditarAction = (fd: FormData) => Promise<void>
 
@@ -96,6 +97,96 @@ export function NovaPreInscricaoButton({
             </button>
             <button type="submit" disabled={loading}
               className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-brand-500 hover:bg-brand-600 disabled:opacity-60 rounded-lg transition-colors">
+              {loading ? 'Criando…' : 'Criar pré-inscrição'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+    </>
+  )
+}
+
+// ── Nova pré-inscrição de obreiro ─────────────────────────────────────────
+
+export function NovaPreInscricaoObreiroButton({
+  ministries, criarAction, slug,
+}: {
+  ministries: MinistryOption[]
+  criarAction: CriarAction
+  slug: string
+}) {
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setLoading(true)
+    const fd = new FormData(e.currentTarget)
+    await criarAction(fd)
+    setLoading(false)
+    setOpen(false)
+    toast.success('Pré-inscrição de obreiro criada')
+    router.refresh()
+  }
+
+  return (
+    <>
+      <button onClick={() => setOpen(true)}
+        className="px-3 py-2 text-xs font-semibold text-white bg-violet-500 hover:bg-violet-600 rounded-lg transition-colors whitespace-nowrap">
+        + Obreiro
+      </button>
+
+      <Modal open={open} onClose={() => setOpen(false)} title="Nova pré-inscrição de obreiro"
+        subtitle="Somente nome obrigatório — restante é opcional">
+        <form onSubmit={handleSubmit} className="space-y-4 p-5">
+          <input type="hidden" name="slug" value={slug} />
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Nome completo *</label>
+            <input name="full_name" required placeholder="Nome do candidato"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">E-mail</label>
+              <input name="email" type="email" placeholder="email@exemplo.com"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Telefone / WhatsApp</label>
+              <input name="phone" type="tel" placeholder="+55 41 99999-0000"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            </div>
+          </div>
+
+          {ministries.length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Ministério de interesse</label>
+              <select name="ministry_id"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+                <option value="">Sem preferência</option>
+                {ministries.map(m => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Observação / mensagem</label>
+            <textarea name="message" rows={3} placeholder="Contexto, indicação, observações..."
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 resize-none" />
+          </div>
+
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={() => setOpen(false)}
+              className="flex-1 px-4 py-2.5 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+              Cancelar
+            </button>
+            <button type="submit" disabled={loading}
+              className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-violet-500 hover:bg-violet-600 disabled:opacity-60 rounded-lg transition-colors">
               {loading ? 'Criando…' : 'Criar pré-inscrição'}
             </button>
           </div>
