@@ -298,6 +298,102 @@ export function EditarPreInscricaoButton({
   )
 }
 
+// ── Editar pré-inscrição de obreiro ───────────────────────────────────────
+
+type PreInscricaoObreiro = {
+  id: string; full_name: string; email: string | null; phone: string | null
+  message: string | null; ministryId: string | null
+}
+
+export function EditarPreInscricaoObreiroButton({
+  item, ministries, editarAction,
+}: {
+  item: PreInscricaoObreiro
+  ministries: MinistryOption[]
+  editarAction: EditarAction
+}) {
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setLoading(true)
+    const fd = new FormData(e.currentTarget)
+    await editarAction(fd)
+    setLoading(false)
+    setOpen(false)
+    toast.success('Pré-inscrição atualizada')
+    router.refresh()
+  }
+
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)}
+        title="Editar pré-inscrição"
+        className="text-xs px-2.5 py-1.5 text-gray-500 hover:text-violet-600 hover:bg-violet-50 border border-gray-200 rounded-lg transition-colors">
+        Editar
+      </button>
+
+      <Modal open={open} onClose={() => setOpen(false)} title="Editar pré-inscrição de obreiro"
+        subtitle={item.full_name}>
+        <form onSubmit={handleSubmit} className="space-y-4 p-5">
+          <input type="hidden" name="id" value={item.id} />
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Nome completo *</label>
+            <input name="full_name" required defaultValue={item.full_name}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">E-mail</label>
+              <input name="email" type="email" defaultValue={item.email ?? ''}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Telefone</label>
+              <input name="phone" type="tel" defaultValue={item.phone ?? ''}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            </div>
+          </div>
+
+          {ministries.length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Ministério de interesse</label>
+              <select name="ministry_id" defaultValue={item.ministryId ?? ''}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+                <option value="">Sem preferência</option>
+                {ministries.map(m => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Observação / mensagem</label>
+            <textarea name="message" rows={3} defaultValue={item.message ?? ''}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 resize-none" />
+          </div>
+
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={() => setOpen(false)}
+              className="flex-1 px-4 py-2.5 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+              Cancelar
+            </button>
+            <button type="submit" disabled={loading}
+              className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-violet-500 hover:bg-violet-600 disabled:opacity-60 rounded-lg transition-colors">
+              {loading ? 'Salvando…' : 'Salvar alterações'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+    </>
+  )
+}
+
 // ── Formulário recebido por outro meio ────────────────────────────────────
 
 type ExternoAction = (fd: FormData) => Promise<void>

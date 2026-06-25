@@ -5,7 +5,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { RecusarModal } from './RecusarModal'
 import { DisponibilizarFormularioButton } from './DisponibilizarFormularioButton'
-import { NovaPreInscricaoButton, NovaPreInscricaoObreiroButton, EditarPreInscricaoButton, MarcarRecebidoExternoButton, LinksReferenciaAdminButton } from './InscricoesModals'
+import { NovaPreInscricaoButton, NovaPreInscricaoObreiroButton, EditarPreInscricaoButton, EditarPreInscricaoObreiroButton, MarcarRecebidoExternoButton, LinksReferenciaAdminButton } from './InscricoesModals'
 import { getEmailQuota } from '@/lib/email/getEmailQuota'
 import { getRolePreview } from '@/lib/role-preview'
 import { SearchBar } from '@/components/ui/SearchBar'
@@ -669,6 +669,22 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     revalidatePath(`/${slug}/inscricoes`)
   }
 
+  async function editarPreInscricaoObreiro(formData: FormData) {
+    'use server'
+    const { createAdminClient: adm } = await import('@/lib/supabase/admin')
+    const { revalidatePath } = await import('next/cache')
+    const db = adm()
+    const id = formData.get('id') as string
+    await db.from('staff_interest_forms').update({
+      full_name: (formData.get('full_name') as string).trim(),
+      email: (formData.get('email') as string)?.trim() || null,
+      phone: (formData.get('phone') as string)?.trim() || null,
+      message: (formData.get('message') as string)?.trim() || null,
+      ministry_id: (formData.get('ministry_id') as string) || null,
+    }).eq('id', id)
+    revalidatePath(`/${slug}/inscricoes`)
+  }
+
   async function marcarRecebidoExternamente(formData: FormData) {
     'use server'
     const { createAdminClient: adm } = await import('@/lib/supabase/admin')
@@ -724,6 +740,52 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     }
 
     await db.from('school_interest_forms')
+      .update({ status: 'em_analise' })
+      .eq('id', interestFormId)
+
+    revalidatePath(`/${slug}/inscricoes`)
+  }
+
+  async function marcarRecebidoExternamenteObreiro(formData: FormData) {
+    'use server'
+    const { createAdminClient: adm } = await import('@/lib/supabase/admin')
+    const { revalidatePath } = await import('next/cache')
+    const { createClient } = await import('@/lib/supabase/server')
+    const db = adm()
+    const authClient = await createClient()
+    const { data: { user: currentUser } } = await authClient.auth.getUser()
+
+    const interestFormId = formData.get('interest_form_id') as string
+    const { data: form } = await db
+      .from('staff_interest_forms')
+      .select('id, organization_id, ministry_id')
+      .eq('id', interestFormId)
+      .single()
+    if (!form) return
+
+    const { data: existing } = await db
+      .from('staff_applications')
+      .select('id, status')
+      .eq('interest_form_id', interestFormId)
+      .maybeSingle()
+
+    if (existing) {
+      if (['rascunho', 'enviado'].includes(existing.status)) {
+        await db.from('staff_applications').update({ status: 'em_analise' }).eq('id', existing.id)
+      }
+    } else {
+      await db.from('staff_applications').insert({
+        organization_id: form.organization_id,
+        ministry_id: form.ministry_id,
+        interest_form_id: form.id,
+        status: 'em_analise',
+        form_data: { source: 'externo' },
+        applied_at: new Date().toISOString(),
+        reviewed_by: currentUser?.id ?? null,
+      })
+    }
+
+    await db.from('staff_interest_forms')
       .update({ status: 'em_analise' })
       .eq('id', interestFormId)
 
@@ -1322,6 +1384,14 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                             />
                           </div>
                         )}
+                        {canWriteObreiro && item.tipo === 'pre_inscricao_obreiro' && !item.staffApplicationId && !item.hasFormData && (
+                          <div className="col-span-2">
+                            <MarcarRecebidoExternoButton
+                              interestFormId={item.id}
+                              externoAction={marcarRecebidoExternamenteObreiro}
+                            />
+                          </div>
+                        )}
 
                         {/* Links de recomendação — quando já tem application (digital ou externo) */}
                         {item.tipo === 'pre_inscricao' && item.applicationId && (
@@ -1340,6 +1410,13 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                             item={{ id: item.id, full_name: item.nome, email: item.email, phone: item.phone, message: item.mensagem, classId: item.classId }}
                             openClasses={openClasses.map(c => ({ id: c.id, school_id: c.school_id, name: c.name, starts_at: c.starts_at, schoolName: c.schools?.name ?? null }))}
                             editarAction={editarPreInscricao}
+                          />
+                        )}
+                        {canWriteObreiro && item.tipo === 'pre_inscricao_obreiro' && (
+                          <EditarPreInscricaoObreiroButton
+                            item={{ id: item.id, full_name: item.nome, email: item.email, phone: item.phone, message: item.mensagem, ministryId: item.ministryId ?? null }}
+                            ministries={allMinistries}
+                            editarAction={editarPreInscricaoObreiro}
                           />
                         )}
 
@@ -1427,7 +1504,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                         )}
 
                         {/* Status */}
-                        {canWrite && item.status === 'pendente' && item.tipo !== 'pre_inscricao_obreiro' && (
+                        {((item.tipo === 'pre_inscricao_obreiro' ? canWriteObreiro : canWrite)) && item.status === 'pendente' && (
                           <form action={updateStatus}>
                             <input type="hidden" name="id" value={item.id} />
                             <input type="hidden" name="tipo" value={item.tipo} />
@@ -1518,7 +1595,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                             </button>
                           </form>
                         )}
-                        {canWrite && (
+                        {((item.tipo === 'pre_inscricao_obreiro' || item.tipo === 'obreiro') ? canWriteObreiro : canWrite) && (
                           <div className="col-span-2 sm:col-span-1">
                             <RecusarModal id={item.id} tipo={item.tipo} action={recusar} />
                           </div>
