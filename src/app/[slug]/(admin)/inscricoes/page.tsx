@@ -135,8 +135,16 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
   const preview = await getRolePreview(realRole)
   const userRole = preview?.role ?? realRole
   const isEtedLeader = userRole === 'lider_eted'
+  const isLiderMinisterio = userRole === 'lider_ministerio'
   const isManagement = ['superadmin', 'admin_base', 'lider_base', 'dh'].includes(userRole)
   const canWrite = ['superadmin', 'admin_base', 'dh'].includes(userRole)
+  const canWriteObreiro = canWrite || isLiderMinisterio
+
+  let leaderMinistryId: string | null = null
+  if (isLiderMinisterio) {
+    leaderMinistryId = preview?.ministryId
+      ?? (await supabase.from('ministry_leaders').select('ministry_id').eq('user_id', user?.id ?? '').limit(1).single()).data?.ministry_id ?? null
+  }
 
   let allowedSchoolIds: string[] | null = null
   if (isEtedLeader) {
@@ -1096,16 +1104,25 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     }
   }
 
-  // Lider ETED não vê inscrições sem escola definida (sem preferência → só DH vê)
-  const schoolFiltered = isEtedLeader
+  // Lider ETED: só vê inscrições das suas escolas (não sem preferência)
+  // Lider Ministério: só vê inscrições de obreiro do seu ministério
+  const roleFiltered = isEtedLeader
     ? items.filter(i => {
         if (i.tipo === 'pre_inscricao' && !i.schoolId) return false
         if (i.tipo === 'pre_inscricao' && allowedSchoolIds && !allowedSchoolIds.includes(i.schoolId!)) return false
+        if (i.tipo === 'pre_inscricao_obreiro' || i.tipo === 'obreiro') return false
+        return true
+      })
+    : isLiderMinisterio && leaderMinistryId
+    ? items.filter(i => {
+        if (i.tipo === 'pre_inscricao' || i.tipo === 'aluno') return false
+        if ((i.tipo === 'pre_inscricao_obreiro' || i.tipo === 'obreiro') && i.ministryId && i.ministryId !== leaderMinistryId) return false
+        if (i.tipo === 'pre_inscricao_obreiro' && !i.ministryId) return false
         return true
       })
     : items
 
-  const filtered = (ver === 'todas' ? schoolFiltered : schoolFiltered.filter(i => !isFinalizado(i.status)))
+  const filtered = (ver === 'todas' ? roleFiltered : roleFiltered.filter(i => !isFinalizado(i.status)))
     .filter(i => !q || i.nome.toLowerCase().includes(q.toLowerCase()) || (i.email ?? '').toLowerCase().includes(q.toLowerCase()))
   filtered.sort((a, b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime())
   const quota = await getEmailQuota()
@@ -1347,7 +1364,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                         )}
 
                         {/* Disponibilizar formulário — pré-inscrição de obreiro */}
-                        {canWrite && item.tipo === 'pre_inscricao_obreiro' && !item.staffApplicationId && (
+                        {canWriteObreiro && item.tipo === 'pre_inscricao_obreiro' && !item.staffApplicationId && (
                           <div className="col-span-2">
                             <DisponibilizarFormularioButton
                               interestFormId={item.id}
@@ -1457,7 +1474,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                             </button>
                           </form>
                         )}
-                        {canWrite && item.tipo === 'obreiro' && item.status !== 'em_analise' && (
+                        {canWriteObreiro && item.tipo === 'obreiro' && item.status !== 'em_analise' && (
                           <form action={encaminharObreiroDh} className="col-span-2">
                             <input type="hidden" name="id" value={item.id} />
                             <button type="submit" className="w-full text-xs px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg transition-colors font-semibold">

@@ -19,6 +19,7 @@ const TABS = [
   { key: 'alunos',      label: 'Alunos' },
   { key: 'voluntarios', label: 'Voluntários' },
   { key: 'associados',  label: 'Associados' },
+  { key: 'visitantes',  label: 'Visitantes' },
 ]
 
 const OBREIRO_STATUS_COLORS: Record<string, string> = {
@@ -536,6 +537,28 @@ export default async function PessoasPage({ params, searchParams }: Props) {
         col2: new Date(r.started_at).toLocaleDateString('pt-BR'),
         col2Label: 'Desde',
         badge: { label: tab === 'voluntarios' ? 'Voluntário' : 'Associado', color: 'bg-indigo-50 text-indigo-700' },
+      }))
+  }
+
+  if (tab === 'visitantes') {
+    type StatusRaw = { id: string; person_id: string; status: string; started_at: string; ended_at: string | null; people: { id: string; full_name: string } | null }
+    const { data } = await supabase
+      .from('person_status_history')
+      .select('id, person_id, status, started_at, ended_at, people(id, full_name)')
+      .eq('status', 'visitante')
+      .order('started_at', { ascending: false })
+      .limit(100)
+    rows = ((data ?? []) as unknown as StatusRaw[])
+      .filter(r => r.people != null)
+      .map(r => ({
+        id: r.id,
+        nome: r.people?.full_name ?? '—',
+        detalhe: null,
+        col2: new Date(r.started_at).toLocaleDateString('pt-BR'),
+        col2Label: 'Visita em',
+        badge: r.ended_at
+          ? { label: 'Encerrada', color: 'bg-gray-100 text-gray-500' }
+          : { label: 'Ativo', color: 'bg-green-50 text-green-700' },
       }))
   }
 

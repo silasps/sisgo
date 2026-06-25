@@ -293,6 +293,119 @@ export default async function BaseDashboard({ params }: Props) {
     )
   }
 
+  if (userRole === 'dh') {
+    const sbDH = createAdminClient()
+    const threeDaysAgo = new Date(Date.now() - 3 * 86_400_000).toISOString()
+
+    const [
+      { count: pendingStudentInterests },
+      { count: pendingStaffInterests },
+      { count: formsAwaiting },
+      { count: staffFormsAwaiting },
+      { count: refsAwaiting },
+      { count: staffToFinalize },
+      { count: urgentNoResponse },
+      { count: upcomingVisitors },
+    ] = await Promise.all([
+      sbDH.from('school_interest_forms')
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', orgId)
+        .not('status', 'in', '("convertido","descartado")'),
+      sbDH.from('staff_interest_forms')
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', orgId)
+        .not('status', 'in', '("convertido","descartado")'),
+      sbDH.from('school_interest_forms')
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', orgId)
+        .eq('status', 'formulario_enviado'),
+      sbDH.from('staff_interest_forms')
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', orgId)
+        .eq('status', 'formulario_enviado'),
+      sbDH.from('reference_forms')
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', orgId)
+        .eq('status', 'pendente'),
+      sbDH.from('staff_applications')
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', orgId)
+        .eq('status', 'em_analise'),
+      sbDH.from('school_interest_forms')
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', orgId)
+        .eq('status', 'pendente')
+        .lt('created_at', threeDaysAgo),
+      sbDH.from('reservations')
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', orgId)
+        .eq('status', 'aprovada')
+        .gte('starts_at', today),
+    ])
+
+    const totalPipeline = (pendingStudentInterests ?? 0) + (pendingStaffInterests ?? 0)
+    const totalForms = (formsAwaiting ?? 0) + (staffFormsAwaiting ?? 0)
+
+    return (
+      <>
+        <Header title="Dashboard" />
+        <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
+          <p className="text-sm text-gray-500">Departamento Humano — <span className="font-semibold text-gray-900">Gestão de Pessoas</span></p>
+
+          {/* Pipeline principal */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 animate-stagger">
+            <StatCard label="Inscrições ativas" value={totalPipeline} icon={Users} href={`/${slug}/inscricoes`} color="blue" />
+            <StatCard label="Aguardando formulário" value={totalForms} icon={ClipboardList} href={`/${slug}/inscricoes`} color="orange" />
+            <StatCard label="Obreiros p/ finalizar" value={staffToFinalize ?? 0} icon={Briefcase} href={`/${slug}/inscricoes?tab=obreiro`} color="purple" />
+            <StatCard label="Referências pendentes" value={refsAwaiting ?? 0} icon={MessageSquare} href={`/${slug}/inscricoes`} color="pink" />
+          </div>
+
+          {/* Alertas */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {(urgentNoResponse ?? 0) > 0 && (
+              <Link href={`/${slug}/inscricoes`} className="group flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl p-4 transition-all hover:shadow-md hover:-translate-y-0.5">
+                <AlertTriangle size={20} className="text-red-500 shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-red-800">{urgentNoResponse} inscrição(ões) sem resposta há +3 dias</p>
+                  <p className="text-xs text-red-600 mt-0.5">Verificar e dar andamento</p>
+                </div>
+              </Link>
+            )}
+            {(upcomingVisitors ?? 0) > 0 && (
+              <Link href={`/${slug}/reservas`} className="group flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl p-4 transition-all hover:shadow-md hover:-translate-y-0.5">
+                <BedDouble size={20} className="text-blue-500 shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-blue-800">{upcomingVisitors} chegada(s) prevista(s)</p>
+                  <p className="text-xs text-blue-600 mt-0.5">Reservas aprovadas a partir de hoje</p>
+                </div>
+              </Link>
+            )}
+          </div>
+
+          {/* Quick links */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Link href={`/${slug}/inscricoes`} className="group bg-white rounded-xl border border-gray-200 p-4 text-center transition-all hover:shadow-md hover:-translate-y-0.5">
+              <GraduationCap size={20} className="text-brand-500 mx-auto mb-1.5" />
+              <p className="text-xs font-semibold text-gray-700 group-hover:text-brand-600">Inscrições</p>
+            </Link>
+            <Link href={`/${slug}/obreiros`} className="group bg-white rounded-xl border border-gray-200 p-4 text-center transition-all hover:shadow-md hover:-translate-y-0.5">
+              <Briefcase size={20} className="text-brand-500 mx-auto mb-1.5" />
+              <p className="text-xs font-semibold text-gray-700 group-hover:text-brand-600">Obreiros</p>
+            </Link>
+            <Link href={`/${slug}/pessoas`} className="group bg-white rounded-xl border border-gray-200 p-4 text-center transition-all hover:shadow-md hover:-translate-y-0.5">
+              <Users size={20} className="text-brand-500 mx-auto mb-1.5" />
+              <p className="text-xs font-semibold text-gray-700 group-hover:text-brand-600">Pessoas</p>
+            </Link>
+            <Link href={`/${slug}/presenca`} className="group bg-white rounded-xl border border-gray-200 p-4 text-center transition-all hover:shadow-md hover:-translate-y-0.5">
+              <CheckCircle2 size={20} className="text-brand-500 mx-auto mb-1.5" />
+              <p className="text-xs font-semibold text-gray-700 group-hover:text-brand-600">Presença</p>
+            </Link>
+          </div>
+        </main>
+      </>
+    )
+  }
+
   if (isEtedLeader) {
     const scopedSchoolIds = etedSchoolIds.length > 0 ? etedSchoolIds : ['no-match']
     const sbAdminScoped = createAdminClient()
