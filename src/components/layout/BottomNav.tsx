@@ -97,7 +97,7 @@ export function BottomNav({
                 return (
                   <div key={`div-${idx}`} className="pt-2 pb-1 mx-1">
                     <div className="border-t border-dark-800 mb-2" />
-                    <span className="px-2 text-[10px] font-semibold uppercase tracking-widest text-dark-500 select-none">
+                    <span className="px-2 text-[10px] font-semibold uppercase tracking-widest text-gray-600 select-none">
                       {item.label}
                     </span>
                   </div>
@@ -113,12 +113,12 @@ export function BottomNav({
                   href={item.href}
                   className={`relative flex items-center gap-3 px-4 py-3.5 rounded-xl text-base transition-colors ${
                     active
-                      ? 'bg-brand-500/20 text-brand-400 font-medium'
-                      : 'text-dark-200 active:bg-dark-800'
+                      ? 'bg-brand-500 text-white font-medium'
+                      : 'text-gray-400 hover:bg-brand-500/10 hover:text-white active:bg-brand-500/10'
                   }`}
                 >
                   {item.alert && !active && (
-                    <span className="absolute inset-0 rounded-xl bg-red-500/10" />
+                    <span className="absolute inset-0 rounded-xl bg-red-500/30 animate-pulse" />
                   )}
                   {Icon && (
                     <Icon size={20} className="relative shrink-0" aria-hidden />
