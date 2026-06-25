@@ -19,19 +19,10 @@ type NavItem =
   | { href: string; label: string; icon: string; alert?: boolean }
   | { divider: true; label: string }
 
-const tabBarStyles: Record<Platform, string> = {
-  ios: 'border-t border-black/[0.06]',
-  android: [
-    'bg-white',
-    'shadow-[0_-1px_3px_rgba(0,0,0,0.08),0_-2px_8px_rgba(0,0,0,0.04)]',
-  ].join(' '),
-  web: 'bg-white border-t border-gray-200',
-}
-
-const iosGlassStyle: React.CSSProperties = {
-  background: 'rgba(249, 249, 249, 0.88)',
-  backdropFilter: 'saturate(180%) blur(20px)',
-  WebkitBackdropFilter: 'saturate(180%) blur(20px)',
+const tabBarExtra: Record<Platform, string> = {
+  ios: '',
+  android: 'shadow-[0_-1px_3px_rgba(0,0,0,0.08),0_-2px_8px_rgba(0,0,0,0.04)]',
+  web: '',
 }
 
 const tabActiveStyles: Record<Platform, string> = {
@@ -187,9 +178,9 @@ export function BottomNav({
       </div>
 
       {/* Tab Bar — fixed overlay so content scrolls behind (glass effect) */}
+      {/* Glass/opaque styling comes from .bottom-nav-bar in globals.css via @supports */}
       <nav
-        className={`fixed bottom-0 inset-x-0 z-40 md:hidden pb-[env(safe-area-inset-bottom)] ${tabBarStyles[platform]}`}
-        style={platform === 'ios' ? iosGlassStyle : undefined}
+        className={`bottom-nav-bar fixed bottom-0 inset-x-0 z-40 md:hidden pb-[env(safe-area-inset-bottom)] ${tabBarExtra[platform]}`}
       >
         <div
           className={`flex items-stretch ${platform === 'android' ? 'h-20' : 'h-16'}`}

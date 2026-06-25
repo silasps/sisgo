@@ -181,6 +181,25 @@
   padding-bottom: max(0.625rem, env(safe-area-inset-bottom));
 }
 
+/* ── Platform-adaptive bottom nav ── */
+/* Default: opaque white (web / Android) */
+.bottom-nav-bar {
+  background: #ffffff;
+  border-top: 1px solid rgb(229 231 235);
+}
+/* iOS glass — -webkit-touch-callout is WebKit-exclusive (iOS + macOS Safari) */
+/* pointer:coarse filters out macOS Safari with mouse */
+@supports (-webkit-touch-callout: none) {
+  @media (pointer: coarse) {
+    .bottom-nav-bar {
+      background: rgba(249, 249, 249, 0.88);
+      -webkit-backdrop-filter: saturate(180%) blur(20px);
+      backdrop-filter: saturate(180%) blur(20px);
+      border-top: 0.5px solid rgba(0, 0, 0, 0.06);
+    }
+  }
+}
+
 @media print {
   aside, nav, .shrink-0, button[type="submit"], form[method="get"],
   [data-no-print] { display: none !important; }
