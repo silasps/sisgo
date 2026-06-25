@@ -107,10 +107,9 @@ export function MuralClient({ messages: serverMessages, members, currentUserId, 
   const [fontSize, setFontSize] = useState(1)
   const [showMentions, setShowMentions] = useState(false)
   const [mentionFilter, setMentionFilter] = useState('')
-  const [showFontPicker, setShowFontPicker] = useState(false)
-  const [showColorPicker, setShowColorPicker] = useState(false)
-  const [showSizePicker, setShowSizePicker] = useState(false)
+  const [showToolbar, setShowToolbar] = useState(false)
   const [colorCounter, setColorCounter] = useState(nextColor)
+  const [expandedMsg, setExpandedMsg] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -184,7 +183,7 @@ export function MuralClient({ messages: serverMessages, members, currentUserId, 
     setLocalMessages(prev => [...prev, optimisticMsg])
     setColorCounter(c => (c + 1) % STICKER_COLORS.length)
     setText('')
-    closePickers()
+    setShowToolbar(false)
 
     const fd = new FormData()
     fd.set('content', content)
@@ -199,6 +198,7 @@ export function MuralClient({ messages: serverMessages, members, currentUserId, 
 
   function handleDelete(messageId: string) {
     setLocalMessages(prev => prev.filter(m => m.id !== messageId))
+    setExpandedMsg(null)
     const fd = new FormData()
     fd.set('message_id', messageId)
     startTransition(async () => {
@@ -213,16 +213,10 @@ export function MuralClient({ messages: serverMessages, members, currentUserId, 
     }
   }, [text])
 
-  function closePickers() {
-    setShowFontPicker(false)
-    setShowColorPicker(false)
-    setShowSizePicker(false)
-  }
-
   return (
     <div className="flex flex-col flex-1 min-h-0">
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-6 space-y-3">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 md:p-6 space-y-2.5 md:space-y-3">
         {localMessages.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-4xl mb-3">📌</p>
@@ -230,7 +224,7 @@ export function MuralClient({ messages: serverMessages, members, currentUserId, 
             <p className="text-xs text-gray-300 mt-1">Escreva algo para a equipe!</p>
           </div>
         ) : (
-          <div className="max-w-2xl mx-auto space-y-3">
+          <div className="max-w-2xl mx-auto space-y-2.5 md:space-y-3">
             {localMessages.map((msg, i) => {
               const c = STICKER_COLORS[msg.color % STICKER_COLORS.length]
               const rot = ROTATIONS[i % ROTATIONS.length]
@@ -239,16 +233,18 @@ export function MuralClient({ messages: serverMessages, members, currentUserId, 
               const fontClass = FONTS[msg.font % FONTS.length].class
               const colorClass = TEXT_COLORS[msg.text_color % TEXT_COLORS.length].class
               const isTemp = msg.id.startsWith('temp-')
+              const isExpanded = expandedMsg === msg.id
               return (
                 <div
                   key={msg.id}
-                  className={`relative ${c.bg} ${c.border} border rounded-lg pl-4 pr-6 py-3 shadow-sm ${c.shadow} ${rot} ${c.fold} transition-all duration-200 hover:rotate-0 hover:shadow-md group ${isTemp ? 'opacity-70' : ''}`}
+                  className={`relative ${c.bg} ${c.border} border rounded-lg px-3.5 md:pl-4 md:pr-6 py-2.5 md:py-3 shadow-sm ${c.shadow} ${rot} ${c.fold} transition-all duration-200 hover:rotate-0 hover:shadow-md group ${isTemp ? 'opacity-70' : ''}`}
+                  onClick={() => canRemove && !isTemp && setExpandedMsg(isExpanded ? null : msg.id)}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className="text-xs font-bold text-gray-700">{msg.author_name}</span>
-                        <span className="text-[10px] text-gray-400">{timeAgo(msg.created_at)}</span>
+                      <div className="flex items-center gap-1.5 md:gap-2 mb-1 md:mb-1.5">
+                        <span className="text-[11px] md:text-xs font-bold text-gray-700 truncate">{msg.author_name}</span>
+                        <span className="text-[10px] text-gray-400 shrink-0">{timeAgo(msg.created_at)}</span>
                       </div>
                       <p className={`${colorClass} ${fontClass} ${FONT_SIZES[msg.font_size % FONT_SIZES.length].class} whitespace-pre-line leading-relaxed`}>
                         {renderContent(msg.content, members)}
@@ -257,10 +253,10 @@ export function MuralClient({ messages: serverMessages, members, currentUserId, 
                     {canRemove && !isTemp && (
                       <button
                         type="button"
-                        onClick={() => handleDelete(msg.id)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 p-1 rounded text-gray-400 hover:text-red-500 hover:bg-white/50"
+                        onClick={e => { e.stopPropagation(); handleDelete(msg.id) }}
+                        className={`shrink-0 p-1.5 rounded text-gray-400 hover:text-red-500 hover:bg-white/50 transition-all ${isExpanded ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                       >
-                        <Trash2 size={13} />
+                        <Trash2 size={14} />
                       </button>
                     )}
                   </div>
@@ -272,17 +268,17 @@ export function MuralClient({ messages: serverMessages, members, currentUserId, 
       </div>
 
       {/* Composer */}
-      <div className="border-t border-gray-200 bg-white px-4 py-3 md:px-6">
+      <div className="border-t border-gray-200 bg-white px-3 py-2.5 md:px-6 md:py-3 safe-area-bottom">
         <div className="max-w-2xl mx-auto relative">
           {/* Mention autocomplete */}
           {showMentions && filteredMembers.length > 0 && (
             <div className="absolute bottom-full mb-1 left-0 right-0 bg-white rounded-lg border border-gray-200 shadow-lg max-h-40 overflow-y-auto z-10">
-              {filteredMembers.slice(0, 8).map(m => (
+              {filteredMembers.slice(0, 6).map(m => (
                 <button
                   key={m.person_id}
                   type="button"
                   onClick={() => insertMention(m.name)}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-brand-50 transition-colors truncate"
+                  className="w-full text-left px-3 py-2.5 text-sm hover:bg-brand-50 transition-colors truncate active:bg-brand-100"
                 >
                   <span className="text-brand-600 font-medium">@</span>{m.name}
                 </button>
@@ -290,109 +286,89 @@ export function MuralClient({ messages: serverMessages, members, currentUserId, 
             </div>
           )}
 
-          {/* Font picker */}
-          {showFontPicker && (
-            <div className="absolute bottom-full mb-1 left-0 bg-white rounded-lg border border-gray-200 shadow-lg z-10 p-1">
-              {FONTS.map((f, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => { setFont(i); setShowFontPicker(false) }}
-                  className={`flex items-center gap-2 w-full text-left px-3 py-2 text-sm rounded-md transition-colors ${font === i ? 'bg-brand-50 text-brand-700' : 'hover:bg-gray-50'}`}
-                >
-                  <span className={`${f.class} text-base w-6 text-center`}>{f.label}</span>
-                  <span className="text-xs text-gray-500">{f.name}</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Color picker */}
-          {showColorPicker && (
-            <div className="absolute bottom-full mb-1 left-10 bg-white rounded-lg border border-gray-200 shadow-lg z-10 p-2">
-              <div className="flex gap-1.5">
-                {TEXT_COLORS.map((tc, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => { setTextColor(i); setShowColorPicker(false) }}
-                    title={tc.name}
-                    className={`w-7 h-7 rounded-full ${tc.swatch} transition-all ${textColor === i ? 'ring-2 ring-brand-400 ring-offset-2 scale-110' : 'hover:scale-110'}`}
-                  />
-                ))}
+          {/* Formatting toolbar (toggle) */}
+          {showToolbar && (
+            <div className="absolute bottom-full mb-1 left-0 right-0 bg-white rounded-xl border border-gray-200 shadow-lg z-10 p-3">
+              <div className="space-y-3">
+                {/* Fonte */}
+                <div>
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Fonte</p>
+                  <div className="flex gap-1">
+                    {FONTS.map((f, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setFont(i)}
+                        className={`flex-1 px-2 py-2 text-xs rounded-lg transition-colors text-center ${font === i ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-200' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
+                      >
+                        <span className={`${f.class} block text-sm`}>{f.label}</span>
+                        <span className="block text-[10px] mt-0.5">{f.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* Tamanho */}
+                <div>
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Tamanho</p>
+                  <div className="flex gap-1">
+                    {FONT_SIZES.map((s, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setFontSize(i)}
+                        className={`flex-1 px-2 py-2 text-xs rounded-lg transition-colors text-center ${fontSize === i ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-200' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
+                      >
+                        <span className="block font-bold">{s.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* Cor */}
+                <div>
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Cor</p>
+                  <div className="flex gap-2">
+                    {TEXT_COLORS.map((tc, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setTextColor(i)}
+                        title={tc.name}
+                        className={`w-8 h-8 rounded-full ${tc.swatch} transition-all ${textColor === i ? 'ring-2 ring-brand-400 ring-offset-2 scale-110' : 'hover:scale-110'}`}
+                      />
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           )}
 
-          {/* Size picker */}
-          {showSizePicker && (
-            <div className="absolute bottom-full mb-1 left-20 bg-white rounded-lg border border-gray-200 shadow-lg z-10 p-1">
-              {FONT_SIZES.map((s, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => { setFontSize(i); setShowSizePicker(false) }}
-                  className={`flex items-center gap-2 w-full text-left px-3 py-2 rounded-md transition-colors ${fontSize === i ? 'bg-brand-50 text-brand-700' : 'hover:bg-gray-50'}`}
-                >
-                  <span className={`${s.class} font-bold w-6 text-center`}>{s.label}</span>
-                  <span className="text-xs text-gray-500">{s.name}</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Toolbar */}
-          <div className="flex items-center gap-1 mb-1.5">
-            <button
-              type="button"
-              onClick={() => { setShowFontPicker(v => !v); setShowColorPicker(false); setShowSizePicker(false) }}
-              title="Fonte"
-              className={`p-1.5 rounded-lg transition-colors ${showFontPicker ? 'bg-brand-50 text-brand-600' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
-            >
-              <Type size={15} />
-            </button>
-            <button
-              type="button"
-              onClick={() => { setShowColorPicker(v => !v); setShowFontPicker(false); setShowSizePicker(false) }}
-              title="Cor do texto"
-              className={`p-1.5 rounded-lg transition-colors ${showColorPicker ? 'bg-brand-50 text-brand-600' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
-            >
-              <Palette size={15} />
-            </button>
-            <button
-              type="button"
-              onClick={() => { setShowSizePicker(v => !v); setShowFontPicker(false); setShowColorPicker(false) }}
-              title="Tamanho"
-              className={`p-1.5 rounded-lg transition-colors ${showSizePicker ? 'bg-brand-50 text-brand-600' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
-            >
-              <ALargeSmall size={15} />
-            </button>
-            <div className="flex items-center gap-1.5 ml-1 text-[10px] text-gray-400">
-              <span className={`${FONTS[font].class}`}>{FONTS[font].name}</span>
-              <span>·</span>
-              <span>{FONT_SIZES[fontSize].name}</span>
-              <span className={`inline-block w-2.5 h-2.5 rounded-full ${TEXT_COLORS[textColor].swatch}`} />
-            </div>
-          </div>
-
-          {/* Input */}
+          {/* Input row */}
           <div className="flex items-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowToolbar(v => !v)}
+              title="Formatação"
+              className={`shrink-0 p-2.5 rounded-xl transition-colors ${showToolbar ? 'bg-brand-50 text-brand-600' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
+            >
+              <Type size={18} />
+            </button>
             <div className="flex-1 relative">
               <textarea
                 ref={textareaRef}
                 value={text}
                 onChange={e => handleInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Escreva no mural... use @ para mencionar"
+                onFocus={() => setShowToolbar(false)}
+                placeholder="Escreva no mural..."
                 rows={1}
-                className={`w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:bg-white transition-colors ${FONTS[font].class} ${TEXT_COLORS[textColor].class} ${FONT_SIZES[fontSize].class}`}
+                className={`w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:bg-white transition-colors ${FONTS[font].class} ${TEXT_COLORS[textColor].class} ${FONT_SIZES[fontSize].class}`}
               />
             </div>
             <button
               type="button"
               onClick={handleSubmit}
               disabled={!text.trim() || isPending}
-              className="shrink-0 rounded-xl bg-brand-500 p-2.5 text-white transition-colors hover:bg-brand-600 disabled:bg-gray-200 disabled:text-gray-400"
+              className="shrink-0 rounded-xl bg-brand-500 p-2.5 text-white transition-colors hover:bg-brand-600 disabled:bg-gray-200 disabled:text-gray-400 active:bg-brand-700"
             >
               <Send size={18} />
             </button>

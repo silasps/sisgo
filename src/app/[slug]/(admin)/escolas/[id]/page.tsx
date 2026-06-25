@@ -117,49 +117,41 @@ export default async function EscolaOverviewPage({ params }: Props) {
 
   return (
     <main className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
-      {/* Coluna principal — Mural */}
-      <div className="flex-1 flex flex-col min-h-0 min-w-0">
-        <MuralClient
-          messages={messages}
-          members={members}
-          currentUserId={user.id}
-          currentUserName={authorName}
-          canDelete={canWrite}
-          nextColor={nextColor}
-          postAction={postMessage}
-          deleteAction={deleteMessage}
-        />
-      </div>
-
-      {/* Sidebar direita — stats + info */}
-      <aside className="w-full lg:w-80 shrink-0 border-t lg:border-t-0 lg:border-l border-gray-200 bg-gray-50/50 overflow-y-auto p-4 space-y-3">
+      {/* Sidebar — mobile: faixa horizontal no topo / desktop: coluna direita */}
+      <aside className="order-first lg:order-last w-full lg:w-72 shrink-0 border-b lg:border-b-0 lg:border-l border-gray-200 bg-gray-50/50 overflow-y-auto p-3 lg:p-4 space-y-2 lg:space-y-3">
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-2">
-          <Link href={`${base}/equipe`} className="group bg-white rounded-xl border border-gray-200 p-3 transition-all hover:shadow-md hover:-translate-y-0.5">
-            <div className="text-center">
-              <Users size={14} className="text-brand-600 mx-auto mb-1" />
-              <p className="text-lg font-bold text-gray-900 leading-none">{staffCount ?? 0}</p>
-              <p className="text-[10px] text-gray-500">Obreiros</p>
+        <div className="flex lg:grid lg:grid-cols-3 gap-2">
+          <Link href={`${base}/equipe`} className="flex-1 group bg-white rounded-xl border border-gray-200 p-2.5 lg:p-3 transition-all hover:shadow-md hover:-translate-y-0.5">
+            <div className="flex lg:flex-col items-center gap-2 lg:gap-0 lg:text-center">
+              <Users size={14} className="text-brand-600 lg:mb-1" />
+              <div>
+                <p className="text-base lg:text-lg font-bold text-gray-900 leading-none">{staffCount ?? 0}</p>
+                <p className="text-[10px] text-gray-500">Obreiros</p>
+              </div>
             </div>
           </Link>
-          <Link href={`${base}/configuracoes`} className="group bg-white rounded-xl border border-gray-200 p-3 transition-all hover:shadow-md hover:-translate-y-0.5">
-            <div className="text-center">
-              <BookOpen size={14} className="text-indigo-600 mx-auto mb-1" />
-              <p className="text-lg font-bold text-gray-900 leading-none">{classCount ?? 0}</p>
-              <p className="text-[10px] text-gray-500">Turmas</p>
+          <Link href={`${base}/configuracoes`} className="flex-1 group bg-white rounded-xl border border-gray-200 p-2.5 lg:p-3 transition-all hover:shadow-md hover:-translate-y-0.5">
+            <div className="flex lg:flex-col items-center gap-2 lg:gap-0 lg:text-center">
+              <BookOpen size={14} className="text-indigo-600 lg:mb-1" />
+              <div>
+                <p className="text-base lg:text-lg font-bold text-gray-900 leading-none">{classCount ?? 0}</p>
+                <p className="text-[10px] text-gray-500">Turmas</p>
+              </div>
             </div>
           </Link>
-          <Link href={`${base}/equipe`} className="group bg-white rounded-xl border border-gray-200 p-3 transition-all hover:shadow-md hover:-translate-y-0.5">
-            <div className="text-center">
-              <ClipboardList size={14} className="text-amber-600 mx-auto mb-1" />
-              <p className="text-lg font-bold text-gray-900 leading-none">{pendingCount ?? 0}</p>
-              <p className="text-[10px] text-gray-500">Pendências</p>
+          <Link href={`${base}/equipe`} className="flex-1 group bg-white rounded-xl border border-gray-200 p-2.5 lg:p-3 transition-all hover:shadow-md hover:-translate-y-0.5">
+            <div className="flex lg:flex-col items-center gap-2 lg:gap-0 lg:text-center">
+              <ClipboardList size={14} className="text-amber-600 lg:mb-1" />
+              <div>
+                <p className="text-base lg:text-lg font-bold text-gray-900 leading-none">{pendingCount ?? 0}</p>
+                <p className="text-[10px] text-gray-500">Pendências</p>
+              </div>
             </div>
           </Link>
         </div>
 
-        {/* Info */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
+        {/* Info — hidden on mobile */}
+        <div className="hidden lg:block bg-white rounded-xl border border-gray-200 p-4">
           <div className="flex items-start justify-between gap-2">
             <h3 className="text-sm font-semibold text-gray-900">{escola.name}</h3>
             <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${escola.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
@@ -172,6 +164,20 @@ export default async function EscolaOverviewPage({ params }: Props) {
           )}
         </div>
       </aside>
+
+      {/* Coluna principal — Mural */}
+      <div className="flex-1 flex flex-col min-h-0 min-w-0 order-last lg:order-first">
+        <MuralClient
+          messages={messages}
+          members={members}
+          currentUserId={user.id}
+          currentUserName={authorName}
+          canDelete={canWrite}
+          nextColor={nextColor}
+          postAction={postMessage}
+          deleteAction={deleteMessage}
+        />
+      </div>
     </main>
   )
 }

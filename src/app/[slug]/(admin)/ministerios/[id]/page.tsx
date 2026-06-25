@@ -192,51 +192,32 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
 
   return (
     <main className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
-      {/* Coluna principal — Mural */}
-      <div className="flex-1 flex flex-col min-h-0 min-w-0">
-        {msgInfo && (
-          <div className={`border rounded-lg px-4 py-3 text-sm mx-4 mt-4 md:mx-6 md:mt-6 ${msgInfo.cls}`}>
-            {msgInfo.text}
-          </div>
-        )}
-        <MuralClient
-          messages={messages}
-          members={members}
-          currentUserId={user.id}
-          currentUserName={authorName}
-          canDelete={canWrite}
-          nextColor={nextColor}
-          postAction={postMessage}
-          deleteAction={deleteMessage}
-        />
-      </div>
-
-      {/* Sidebar direita — stats + info + líder */}
-      <aside className="w-full lg:w-80 shrink-0 border-t lg:border-t-0 lg:border-l border-gray-200 bg-gray-50/50 overflow-y-auto p-4 space-y-3">
+      {/* Sidebar — mobile: faixa horizontal no topo / desktop: coluna direita */}
+      <aside className="order-first lg:order-last w-full lg:w-72 shrink-0 border-b lg:border-b-0 lg:border-l border-gray-200 bg-gray-50/50 overflow-y-auto p-3 lg:p-4 space-y-2 lg:space-y-3">
         {/* Stats */}
-        <div className="grid grid-cols-2 gap-2">
-          <Link href={`${base}/equipe`} className="group bg-white rounded-xl border border-gray-200 p-3 transition-all hover:shadow-md hover:-translate-y-0.5">
+        <div className="flex lg:grid lg:grid-cols-2 gap-2">
+          <Link href={`${base}/equipe`} className="flex-1 group bg-white rounded-xl border border-gray-200 p-2.5 lg:p-3 transition-all hover:shadow-md hover:-translate-y-0.5">
             <div className="flex items-center gap-2">
               <div className="rounded-lg bg-brand-50 p-1.5"><Users size={14} className="text-brand-600" /></div>
               <div>
-                <p className="text-lg font-bold text-gray-900 leading-none">{memberCount ?? 0}</p>
+                <p className="text-base lg:text-lg font-bold text-gray-900 leading-none">{memberCount ?? 0}</p>
                 <p className="text-[10px] text-gray-500">Membros</p>
               </div>
             </div>
           </Link>
-          <Link href={`${base}/equipe`} className="group bg-white rounded-xl border border-gray-200 p-3 transition-all hover:shadow-md hover:-translate-y-0.5">
+          <Link href={`${base}/equipe`} className="flex-1 group bg-white rounded-xl border border-gray-200 p-2.5 lg:p-3 transition-all hover:shadow-md hover:-translate-y-0.5">
             <div className="flex items-center gap-2">
               <div className="rounded-lg bg-amber-50 p-1.5"><ClipboardList size={14} className="text-amber-600" /></div>
               <div>
-                <p className="text-lg font-bold text-gray-900 leading-none">{pendingCount ?? 0}</p>
+                <p className="text-base lg:text-lg font-bold text-gray-900 leading-none">{pendingCount ?? 0}</p>
                 <p className="text-[10px] text-gray-500">Pendências</p>
               </div>
             </div>
           </Link>
         </div>
 
-        {/* Info */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
+        {/* Info — hidden on mobile, shown on desktop */}
+        <div className="hidden lg:block bg-white rounded-xl border border-gray-200 p-4">
           {canWrite ? (
             <>
               <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Informações</h3>
@@ -265,9 +246,9 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
           )}
         </div>
 
-        {/* Líder */}
+        {/* Líder — hidden on mobile */}
         {isManagement && (
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="hidden lg:block bg-white rounded-xl border border-gray-200 p-4">
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Líder</h3>
             {leaderEmail ? (
               <div>
@@ -300,6 +281,25 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
           </div>
         )}
       </aside>
+
+      {/* Coluna principal — Mural */}
+      <div className="flex-1 flex flex-col min-h-0 min-w-0 order-last lg:order-first">
+        {msgInfo && (
+          <div className={`border rounded-lg px-4 py-3 text-sm mx-3 mt-3 md:mx-6 md:mt-6 ${msgInfo.cls}`}>
+            {msgInfo.text}
+          </div>
+        )}
+        <MuralClient
+          messages={messages}
+          members={members}
+          currentUserId={user.id}
+          currentUserName={authorName}
+          canDelete={canWrite}
+          nextColor={nextColor}
+          postAction={postMessage}
+          deleteAction={deleteMessage}
+        />
+      </div>
     </main>
   )
 }

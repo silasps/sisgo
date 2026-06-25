@@ -177,6 +177,10 @@
   font-family: 'Dancing Script', cursive;
 }
 
+.safe-area-bottom {
+  padding-bottom: max(0.625rem, env(safe-area-inset-bottom));
+}
+
 @media print {
   aside, nav, .shrink-0, button[type="submit"], form[method="get"],
   [data-no-print] { display: none !important; }
