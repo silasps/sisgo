@@ -184,9 +184,9 @@ export function BottomNav({
         </div>
       </div>
 
-      {/* Tab Bar — adaptive per platform */}
+      {/* Tab Bar — fixed overlay so content scrolls behind (glass effect) */}
       <nav
-        className={`relative shrink-0 z-40 md:hidden pb-[env(safe-area-inset-bottom)] ${tabBarStyles[platform]}`}
+        className={`fixed bottom-0 inset-x-0 z-40 md:hidden pb-[env(safe-area-inset-bottom)] ${tabBarStyles[platform]}`}
       >
         <div
           className={`flex items-stretch ${platform === 'android' ? 'h-20' : 'h-16'}`}

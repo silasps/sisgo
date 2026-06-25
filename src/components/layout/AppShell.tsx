@@ -48,7 +48,7 @@ export function AppShell({
           onClose={() => setOpen(false)}
         />
 
-        <div className="flex-1 md:ml-60 flex flex-col overflow-auto scroll-smooth min-w-0">
+        <div className={`flex-1 md:ml-60 flex flex-col overflow-auto scroll-smooth min-w-0 ${bottomBarItems ? 'pb-20 md:pb-0' : ''}`}>
           {children}
         </div>
       </div>
