@@ -80,15 +80,15 @@ export function BottomNav({
           transition: isDragging ? 'none' : 'transform 0.3s ease-out',
         }}
       >
-        <div className="bg-white rounded-t-2xl shadow-xl max-h-[50vh] flex flex-col pb-[calc(5rem+env(safe-area-inset-bottom))]">
+        <div className="bg-dark-950 rounded-t-2xl shadow-xl max-h-[50vh] flex flex-col pb-[calc(5rem+env(safe-area-inset-bottom))]">
           {/* Drag handle — zona de arraste */}
           <div
-            className="shrink-0 bg-white rounded-t-2xl pt-3 pb-3 cursor-grab active:cursor-grabbing touch-none"
+            className="shrink-0 bg-dark-950 rounded-t-2xl pt-3 pb-3 cursor-grab active:cursor-grabbing touch-none"
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
           >
-            <div className="w-10 h-1.5 bg-gray-300 rounded-full mx-auto" />
+            <div className="w-10 h-1.5 bg-dark-700 rounded-full mx-auto" />
           </div>
 
           <nav className="px-3 pb-2 space-y-0.5 overflow-y-auto flex-1">
@@ -96,8 +96,8 @@ export function BottomNav({
               if ('divider' in item) {
                 return (
                   <div key={`div-${idx}`} className="pt-2 pb-1 mx-1">
-                    <div className="border-t border-gray-200 mb-2" />
-                    <span className="px-2 text-[10px] font-semibold uppercase tracking-widest text-gray-400 select-none">
+                    <div className="border-t border-dark-800 mb-2" />
+                    <span className="px-2 text-[10px] font-semibold uppercase tracking-widest text-dark-500 select-none">
                       {item.label}
                     </span>
                   </div>
@@ -113,8 +113,8 @@ export function BottomNav({
                   href={item.href}
                   className={`relative flex items-center gap-3 px-4 py-3.5 rounded-xl text-base transition-colors ${
                     active
-                      ? 'bg-brand-50 text-brand-600 font-medium'
-                      : 'text-gray-700 active:bg-gray-100'
+                      ? 'bg-brand-500/20 text-brand-400 font-medium'
+                      : 'text-dark-200 active:bg-dark-800'
                   }`}
                 >
                   {item.alert && !active && (
