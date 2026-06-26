@@ -11,7 +11,8 @@ type SchoolLink = {
 type EmbedTab = 'iframe' | 'modal'
 
 function buildEmbedSnippet(embedUrl: string, slug: string) {
-  return `<div style="min-width:320px;max-width:720px;margin:0 auto;width:100%">
+  return `<style>html{scroll-behavior:smooth}</style>
+<div id="inscricao" style="min-width:320px;max-width:720px;margin:0 auto;width:100%">
   <iframe
     src="${embedUrl}"
     id="sisgo-form-${slug}"
@@ -187,7 +188,7 @@ export function InscricaoLinkCard({ orgSlug, schools }: { orgSlug: string; schoo
                 <div className="px-3 py-2 border-t border-gray-100 bg-gray-50">
                   <p className="text-xs text-gray-400">
                     {embedTab === 'iframe'
-                      ? 'Cole este código no HTML do seu site. O iframe se redimensiona automaticamente.'
+                      ? 'Cole no HTML do seu site. Use href="#inscricao" nos botões para scroll suave até o formulário.'
                       : 'Cole o <script> uma vez no site e use o <a> no lugar do botão do Google Forms.'}
                   </p>
                 </div>

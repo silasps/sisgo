@@ -14,7 +14,8 @@ export function EmbedCodeBox({ embedPath }: { embedPath: string }) {
   }, [embedPath])
 
   const iframeSnippet = embedUrl
-    ? `<div style="min-width:320px;max-width:720px;margin:0 auto;width:100%">
+    ? `<style>html{scroll-behavior:smooth}</style>
+<div id="inscricao" style="min-width:320px;max-width:720px;margin:0 auto;width:100%">
   <iframe
     src="${embedUrl}"
     id="sisgo-form"
@@ -123,7 +124,7 @@ window.addEventListener('message', function(e) {
       <div className="px-4 py-2.5 border-t border-gray-100 bg-white">
         <p className="text-xs text-gray-400">
           {tab === 'iframe'
-            ? 'Cole este código no HTML do seu site onde deseja exibir o formulário. O iframe se redimensiona automaticamente.'
+            ? 'Cole no HTML do seu site. Use href="#inscricao" nos botões para scroll suave até o formulário.'
             : 'Cole o <script> uma vez no site e use o <a> no lugar do botão do Google Forms.'}
         </p>
       </div>
