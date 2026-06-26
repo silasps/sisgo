@@ -12,7 +12,7 @@ type EmbedTab = 'iframe' | 'modal'
 
 function buildEmbedSnippet(embedUrl: string, slug: string) {
   return `<style>html{scroll-behavior:smooth}</style>
-<div id="inscricao" style="min-width:320px;max-width:720px;margin:0 auto;width:100%">
+<div id="inscricao" style="min-width:320px;max-width:900px;margin:0 auto;width:100%">
   <iframe
     src="${embedUrl}"
     id="sisgo-form-${slug}"
@@ -40,7 +40,7 @@ function buildModalSnippet(embedUrl: string) {
       cl=d.createElement('button'),fr=d.createElement('iframe');
   ov.id='sisgo-overlay';
   ov.style.cssText='display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.55);z-index:99999;justify-content:center;align-items:center;padding:16px;box-sizing:border-box;';
-  ct.style.cssText='background:#fff;border-radius:16px;width:100%;max-width:680px;max-height:92vh;overflow-y:auto;position:relative;box-shadow:0 25px 50px -12px rgba(0,0,0,.25);-webkit-overflow-scrolling:touch;';
+  ct.style.cssText='background:#fff;border-radius:16px;width:100%;max-width:900px;max-height:92vh;overflow-y:auto;position:relative;box-shadow:0 25px 50px -12px rgba(0,0,0,.25);-webkit-overflow-scrolling:touch;';
   cl.innerHTML='&times;';
   cl.setAttribute('aria-label','Fechar');
   cl.style.cssText='position:sticky;top:0;float:right;font-size:28px;line-height:1;background:rgba(255,255,255,.9);border:none;cursor:pointer;color:#666;z-index:1;padding:8px 14px;border-radius:0 16px 0 8px;';

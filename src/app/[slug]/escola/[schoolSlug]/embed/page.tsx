@@ -45,7 +45,7 @@ export default async function SchoolEmbedPage({ params, searchParams }: Props) {
   return (
     <div className="min-h-screen bg-white">
       <IframeResizer>
-        <div className="px-4 py-8 max-w-2xl mx-auto">
+        <div className="px-4 py-8 max-w-3xl mx-auto">
           <div className="mb-6 text-center">
             <p className="text-xs font-bold uppercase tracking-widest text-brand-500 mb-1">Pré-inscrição</p>
             <h1 className="text-2xl font-black text-gray-900">{school.name}</h1>
