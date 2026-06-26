@@ -14,6 +14,7 @@ import { ScrollHighlight } from '@/components/ui/ScrollHighlight'
 import { SCHOOL_APPLICATION_TYPES } from '@/lib/schools'
 import { ClipboardList, Mail, MessageCircle } from 'lucide-react'
 import { ServirLinkCard } from './ServirLinkCard'
+import { InscricaoLinkCard } from './InscricaoLinkCard'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -927,12 +928,14 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
 
   // ── Queries ────────────────────────────────────────────────────────────────
 
-  const [{ data: allSchoolsRaw }, { data: allMinistriesRaw }] = await Promise.all([
+  const [{ data: allSchoolsRaw }, { data: allMinistriesRaw }, { data: publicSchoolsRaw }] = await Promise.all([
     sb.from('schools').select('id, name').eq('organization_id', orgId).eq('active', true).order('name'),
     sb.from('ministries').select('id, name').eq('organization_id', orgId).eq('active', true).order('name'),
+    sb.from('schools').select('id, name, slug').eq('organization_id', orgId).eq('active', true).eq('is_public', true).in('school_type', [...SCHOOL_APPLICATION_TYPES]).order('name'),
   ])
   const allSchools = (allSchoolsRaw ?? []) as Array<{ id: string; name: string }>
   const allMinistries = (allMinistriesRaw ?? []) as Array<{ id: string; name: string }>
+  const publicSchools = (publicSchoolsRaw ?? []).filter((s: { slug: string | null }) => s.slug) as Array<{ id: string; name: string; slug: string }>
 
   const items: InscricaoItem[] = []
   const historico: HistoricoItem[] = []
@@ -1279,6 +1282,17 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         <Suspense>
           <SearchBar placeholder="Buscar por nome ou e-mail…" className="w-full sm:w-80" />
         </Suspense>
+
+        {/* Card com link do formulário de pré-inscrição — visível na tab Pré-inscrições */}
+        {(tab === 'todas' || tab === 'pre_inscricao') && publicSchools.length > 0 && (
+          <InscricaoLinkCard
+            orgSlug={slug}
+            schools={(allowedSchoolIds
+              ? publicSchools.filter(s => allowedSchoolIds.includes(s.id))
+              : publicSchools
+            ).map(s => ({ slug: s.slug, name: s.name }))}
+          />
+        )}
 
         {/* Card com link da página /servir — visível na tab Obreiros */}
         {tab === 'obreiro' && <ServirLinkCard slug={slug} />}
