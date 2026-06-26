@@ -187,6 +187,7 @@ export function MuralClient({ messages: serverMessages, members, currentUserId, 
 
     const fd = new FormData()
     fd.set('content', content)
+    fd.set('color', String(colorCounter))
     fd.set('font', String(font))
     fd.set('text_color', String(textColor))
     fd.set('font_size', String(fontSize))

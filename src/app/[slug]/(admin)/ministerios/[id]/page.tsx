@@ -169,7 +169,8 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
     const db = createAdminClient()
     await db.from('ministry_messages').insert({
       organization_id: orgId, ministry_id: id, author_id: user.id,
-      author_name: authorName, content, mentions: mentionedIds, color: nextColor,
+      author_name: authorName, content, mentions: mentionedIds,
+      color: Number(formData.get('color') ?? nextColor),
       font: Number(formData.get('font') ?? 0),
       text_color: Number(formData.get('text_color') ?? 0),
       font_size: Number(formData.get('font_size') ?? 1),

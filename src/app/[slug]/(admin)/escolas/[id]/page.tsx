@@ -101,7 +101,7 @@ export default async function EscolaOverviewPage({ params }: Props) {
     await db.from('school_messages').insert({
       organization_id: orgId, school_id: id, author_id: user.id,
       author_name: authorName, content, mentions: mentionedIds,
-      color: nextColor,
+      color: Number(formData.get('color') ?? nextColor),
       font: Number(formData.get('font') ?? 0),
       text_color: Number(formData.get('text_color') ?? 0),
       font_size: Number(formData.get('font_size') ?? 1),
