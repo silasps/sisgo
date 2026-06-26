@@ -59,7 +59,7 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
     { href: `/${slug}/obreiros`,     label: 'Obreiros',         icon: 'obreiros',      show: isManagement },
     { href: `/${slug}/escolas`,      label: 'Escolas',          icon: 'escolas',       show: isManagement || is('lider_eted') || isObreiroEted, alert: hasSchoolMessages },
     { href: `/${slug}/inscricoes`,   label: 'Inscrições',       icon: 'inscricoes',    show: isManagement || is('lider_eted') || isLiderMinisterio },
-    { href: `/${slug}/ministerios`,  label: 'Ministérios',      icon: 'ministerios',   show: isManagement || isLiderMinisterio || isObreiroMinisterio, alert: hasMinistryMessages },
+    { href: `/${slug}/ministerios`,  label: 'Ministérios',      icon: 'ministerios',   show: isManagement || isLiderMinisterio || isObreiroMinisterio || isHospitalidade || isCozinha || isManutencao || is('secretaria'), alert: hasMinistryMessages },
     { href: `/${slug}/reservas`,     label: 'Reservas',         icon: 'reservas',      show: canSeeReservas, alert: hasReservationsPending },
     { href: `/${slug}/hospedagem`,   label: 'Hospedagem',       icon: 'hospedagem',    show: canSeeHospedagem },
     { href: `/${slug}/hospedagem/quartos`, label: 'Quartos',    icon: 'quartos',       show: canSeeHospedagem },
@@ -78,15 +78,15 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
   ]
 
   if (isHospitalidade) {
-    return addPersonalSplit(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/pessoas', '/reservas', '/hospedagem', '/hospedagem/quartos', '/hospedagem/agenda', '/hospedagem/lavanderia', '/manutencao', '/refeicoes', '/minhas-contas')).map(toItem))
+    return addPersonalSplit(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/pessoas', '/reservas', '/hospedagem', '/hospedagem/quartos', '/hospedagem/agenda', '/hospedagem/lavanderia', '/ministerios', '/manutencao', '/refeicoes', '/minhas-contas')).map(toItem))
   }
 
   if (isCozinha) {
-    return addPersonalSplit(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/cozinha', '/cozinha/estoque', '/cozinha/receitas', '/manutencao', '/refeicoes', '/minhas-contas')).map(toItem))
+    return addPersonalSplit(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/cozinha', '/cozinha/estoque', '/cozinha/receitas', '/ministerios', '/manutencao', '/refeicoes', '/minhas-contas')).map(toItem))
   }
 
   if (isManutencao) {
-    return addPersonalSplit(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/manutencao', '/manutencao/estoque', '/refeicoes', '/minhas-contas')).map(toItem))
+    return addPersonalSplit(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/manutencao', '/manutencao/estoque', '/ministerios', '/refeicoes', '/minhas-contas')).map(toItem))
   }
 
   if (isObreiroMinisterio) {
@@ -225,7 +225,39 @@ export default async function SlugLayout({ children, params }: Props) {
   const roleAccumulations = (org.role_accumulations as Record<string, string[]> | null) ?? {}
   const accumulatedRoles: string[] = roleAccumulations[role] ?? []
   const extraRoles: string[] = (currentOrgRow?.extra_roles as string[] | null) ?? []
-  const allRoles = [role, ...accumulatedRoles, ...extraRoles]
+
+  const { data: staffProfileForLinked } = await sbAdmin
+    .from('staff_profiles')
+    .select('person_id')
+    .eq('organization_id', org.id)
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  const personIdForLinked = staffProfileForLinked?.person_id
+
+  const [{ data: leaderLinkedData }, { data: memberLinkedData }] = await Promise.all([
+    sbAdmin
+      .from('ministry_leaders')
+      .select('ministry_id, ministries(linked_role)')
+      .eq('user_id', user.id)
+      .eq('organization_id', org.id),
+    personIdForLinked
+      ? sbAdmin
+        .from('ministry_members')
+        .select('ministry_id, ministries(linked_role)')
+        .eq('person_id', personIdForLinked)
+        .eq('active', true)
+      : Promise.resolve({ data: [] as Array<{ ministry_id: string; ministries: { linked_role: string | null } | null }> }),
+  ])
+
+  const linkedRoles = [
+    ...(leaderLinkedData ?? []),
+    ...(memberLinkedData ?? []),
+  ]
+    .map(r => (r.ministries as { linked_role: string | null } | null)?.linked_role)
+    .filter((r): r is string => !!r)
+
+  const allRoles = [role, ...accumulatedRoles, ...extraRoles, ...linkedRoles]
 
   if (realRole !== 'superadmin' && !currentOrgRow && !canSuperviseCurrentOrg) redirect('/login')
 
@@ -438,7 +470,7 @@ export default async function SlugLayout({ children, params }: Props) {
   let hasMinistryMessages = false
   let hasSchoolMessages = false
 
-  if (isLiderMinisterio || allRoles.includes('obreiro_ministerio')) {
+  if (isLiderMinisterio || allRoles.includes('obreiro_ministerio') || linkedRoles.length > 0) {
     const { count } = await sbAdmin.from('ministry_messages')
       .select('*', { count: 'exact', head: true })
       .eq('organization_id', org.id)
@@ -455,7 +487,7 @@ export default async function SlugLayout({ children, params }: Props) {
       .gte('created_at', muralSince)
     hasSchoolMessages = (count ?? 0) > 0
   }
-  const navItems = buildNav(slug, role, [...accumulatedRoles, ...extraRoles], hasPending, reservationsPending > 0, hasOwnCashScope, laundryEnabled, hasMinistryMessages, hasSchoolMessages)
+  const navItems = buildNav(slug, role, [...accumulatedRoles, ...extraRoles, ...linkedRoles], hasPending, reservationsPending > 0, hasOwnCashScope, laundryEnabled, hasMinistryMessages, hasSchoolMessages)
   const bottomItems = pickBottomBarItems(navItems, role)
 
   return (

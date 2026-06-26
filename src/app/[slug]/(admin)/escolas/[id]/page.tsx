@@ -25,7 +25,17 @@ export default async function EscolaOverviewPage({ params }: Props) {
 
   const { role } = await getCurrentOrganizationRole(supabase, user.id, orgId)
   const isManagement = isManagementRole(role)
-  const canWrite = isOperationalManager(role)
+  let canWrite = isOperationalManager(role)
+
+  if (!canWrite && role === 'lider_eted') {
+    const { data: leaderLink } = await supabase
+      .from('school_leaders')
+      .select('id')
+      .eq('school_id', id)
+      .eq('user_id', user.id)
+      .maybeSingle()
+    if (leaderLink) canWrite = true
+  }
 
   const { data: escola } = await supabase
     .from('schools')

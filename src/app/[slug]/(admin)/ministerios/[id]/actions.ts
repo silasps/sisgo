@@ -3,11 +3,11 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 
 // ── DH: cria ministério ──────────────────────────────────────────────────────
-export async function createMinistry(orgId: string, name: string, description: string | null) {
+export async function createMinistry(orgId: string, name: string, description: string | null, linkedRole?: string | null) {
   const sb = createAdminClient()
   const { data, error } = await sb
     .from('ministries')
-    .insert({ organization_id: orgId, name, description })
+    .insert({ organization_id: orgId, name, description, linked_role: linkedRole || null })
     .select('id')
     .single()
   if (error || !data) throw new Error(error?.message ?? 'Erro ao criar ministério')

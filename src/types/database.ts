@@ -135,8 +135,8 @@ export type Database = {
         Relationships: []
       }
       ministries: {
-        Row: { id: string; organization_id: string; name: string; description: string | null; active: boolean; created_at: string; updated_at: string }
-        Insert: { organization_id: string; name: string; description?: string | null; active?: boolean }
+        Row: { id: string; organization_id: string; name: string; description: string | null; active: boolean; linked_role: string | null; created_at: string; updated_at: string }
+        Insert: { organization_id: string; name: string; description?: string | null; active?: boolean; linked_role?: string | null }
         Update: Partial<Database['public']['Tables']['ministries']['Insert']>
         Relationships: [Rel<'ministries_organization_id_fkey', ['organization_id'], false, 'organizations', ['id']>]
       }

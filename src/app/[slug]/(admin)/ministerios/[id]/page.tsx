@@ -29,11 +29,21 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
 
   const { role } = await getCurrentOrganizationRole(supabase, user.id, orgId)
   const isManagement = isManagementRole(role)
-  const canWrite = isOperationalManager(role)
+  let canWrite = isOperationalManager(role)
+
+  if (!canWrite && role === 'lider_ministerio') {
+    const { data: leaderLink } = await supabase
+      .from('ministry_leaders')
+      .select('id')
+      .eq('ministry_id', id)
+      .eq('user_id', user.id)
+      .maybeSingle()
+    if (leaderLink) canWrite = true
+  }
 
   const { data: ministry } = await supabase
     .from('ministries')
-    .select('id, name, description, active')
+    .select('id, name, description, active, linked_role')
     .eq('id', id)
     .eq('organization_id', orgId)
     .single()
@@ -221,6 +231,9 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
           {canWrite ? (
             <>
               <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Informações</h3>
+              {ministry.linked_role && (
+                <p className="text-[10px] text-indigo-600 font-medium mb-2 bg-indigo-50 inline-block px-1.5 py-0.5 rounded capitalize">Função: {ministry.linked_role}</p>
+              )}
               <form action={handleUpdate} className="space-y-2">
                 <input name="name" defaultValue={ministry.name} required className={`${INPUT} text-xs`} />
                 <textarea name="description" rows={2} defaultValue={ministry.description ?? ''} placeholder="Descrição..." className={`${INPUT} text-xs resize-none`} />
@@ -241,6 +254,9 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
                   {ministry.active ? 'Ativo' : 'Inativo'}
                 </span>
               </div>
+              {ministry.linked_role && (
+                <p className="text-[10px] text-indigo-600 font-medium mt-1 bg-indigo-50 inline-block px-1.5 py-0.5 rounded capitalize">Função: {ministry.linked_role}</p>
+              )}
               {ministry.description && <p className="text-xs text-gray-500 mt-1">{ministry.description}</p>}
             </>
           )}

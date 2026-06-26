@@ -159,6 +159,14 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     allowedSchoolIds = leaderSchools?.map(row => row.school_id) ?? []
   }
 
+  const canWriteEted = isEtedLeader && (allowedSchoolIds?.length ?? 0) > 0
+
+  const canWriteItem = (item: InscricaoItem) => {
+    if (canWrite) return true
+    if (canWriteEted && item.schoolId && allowedSchoolIds!.includes(item.schoolId)) return true
+    return false
+  }
+
   let openClassesQuery = sb
     .from('school_classes')
     .select('id, school_id, name, starts_at, schools!inner(name, organization_id, school_type)')
@@ -1216,7 +1224,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         title="Inscrições"
         actions={
           <div className="flex items-center gap-2">
-            {canWrite && (
+            {(canWrite || canWriteEted) && (
               <NovaPreInscricaoButton
                 slug={slug}
                 criarAction={criarPreInscricaoManual}
@@ -1390,7 +1398,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                           </a>
                         )}
                         {/* Formulário recebido externamente — quando ainda não tem application */}
-                        {canWrite && item.tipo === 'pre_inscricao' && !item.applicationId && (
+                        {canWriteItem(item) && item.tipo === 'pre_inscricao' && !item.applicationId && (
                           <div className="col-span-2">
                             <MarcarRecebidoExternoButton
                               interestFormId={item.id}
@@ -1419,7 +1427,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                         )}
 
                         {/* Editar pré-inscrição */}
-                        {canWrite && item.tipo === 'pre_inscricao' && (
+                        {canWriteItem(item) && item.tipo === 'pre_inscricao' && (
                           <EditarPreInscricaoButton
                             item={{ id: item.id, full_name: item.nome, email: item.email, phone: item.phone, message: item.mensagem, classId: item.classId }}
                             openClasses={openClasses.map(c => ({ id: c.id, school_id: c.school_id, name: c.name, starts_at: c.starts_at, schoolName: c.schools?.name ?? null }))}
@@ -1444,7 +1452,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                               >
                                 <ClipboardList className="size-3.5" /> Formulário preenchido — Ver respostas
                               </Link>
-                            ) : canWrite ? (
+                            ) : canWriteItem(item) ? (
                               <DisponibilizarFormularioButton
                                 interestFormId={item.id}
                                 slug={slug}
@@ -1518,7 +1526,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                         )}
 
                         {/* Status */}
-                        {((item.tipo === 'pre_inscricao_obreiro' ? canWriteObreiro : canWrite)) && item.status === 'pendente' && (
+                        {((item.tipo === 'pre_inscricao_obreiro' ? canWriteObreiro : canWriteItem(item))) && item.status === 'pendente' && (
                           <form action={updateStatus}>
                             <input type="hidden" name="id" value={item.id} />
                             <input type="hidden" name="tipo" value={item.tipo} />
@@ -1528,7 +1536,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                             </button>
                           </form>
                         )}
-                        {canWrite && (item.status === 'pendente' || item.status === 'em_contato' || item.status === 'formulario_enviado' || item.status === 'em_analise') && item.tipo !== 'obreiro' && item.tipo !== 'pre_inscricao_obreiro' && (() => {
+                        {canWriteItem(item) && (item.status === 'pendente' || item.status === 'em_contato' || item.status === 'formulario_enviado' || item.status === 'em_analise') && item.tipo !== 'obreiro' && item.tipo !== 'pre_inscricao_obreiro' && (() => {
                           const formularioPreenchido = item.tipo !== 'pre_inscricao' || !!item.applicationId
                           return (
                             <form action={formularioPreenchido ? aprovar : undefined} className="col-span-2 space-y-1.5">
@@ -1562,7 +1570,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                             </form>
                           )
                         })()}
-                        {canWrite && item.tipo === 'aluno' && item.status === 'pendente' && (
+                        {canWriteItem(item) && item.tipo === 'aluno' && item.status === 'pendente' && (
                           <form action={updateStatus}>
                             <input type="hidden" name="id" value={item.id} />
                             <input type="hidden" name="tipo" value={item.tipo} />
@@ -1609,7 +1617,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                             </button>
                           </form>
                         )}
-                        {((item.tipo === 'pre_inscricao_obreiro' || item.tipo === 'obreiro') ? canWriteObreiro : canWrite) && (
+                        {((item.tipo === 'pre_inscricao_obreiro' || item.tipo === 'obreiro') ? canWriteObreiro : canWriteItem(item)) && (
                           <div className="col-span-2 sm:col-span-1">
                             <RecusarModal id={item.id} tipo={item.tipo} action={recusar} />
                           </div>

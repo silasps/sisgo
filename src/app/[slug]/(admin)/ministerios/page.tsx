@@ -92,18 +92,46 @@ export default async function MinistriosPage({ params }: Props) {
     )
   }
 
+  const DEPT_ROLES = ['hospitalidade', 'secretaria', 'cozinha', 'manutencao']
+  if (DEPT_ROLES.includes(role) && user) {
+    const { data: linkedMinistry } = await supabase
+      .from('ministries')
+      .select('id')
+      .eq('organization_id', orgId)
+      .eq('linked_role', role)
+      .maybeSingle()
+
+    if (linkedMinistry?.id) {
+      redirect(`/${slug}/ministerios/${linkedMinistry.id}`)
+    }
+
+    return (
+      <>
+        <Header title="Ministérios" />
+        <main className="p-4 md:p-6">
+          <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
+            <Music className="size-8 mx-auto mb-3 text-gray-300" />
+            <p className="text-gray-500 text-sm">Nenhum ministério vinculado à sua função ainda.</p>
+            <p className="text-gray-400 text-xs mt-1">Entre em contato com o DH da sua base.</p>
+          </div>
+        </main>
+      </>
+    )
+  }
+
   type MinistryRaw = {
     id: string
     name: string
     description: string | null
     active: boolean
+    linked_role: string | null
     ministry_members: Array<{ id: string; active: boolean }>
     ministry_leaders: Array<{ user_id: string }>
   }
 
   const { data } = await supabase
     .from('ministries')
-    .select('id, name, description, active, ministry_members(id, active), ministry_leaders(user_id)')
+    .select('id, name, description, active, linked_role, ministry_members(id, active), ministry_leaders(user_id)')
     .eq('organization_id', orgId)
     .order('name')
 
@@ -150,7 +178,12 @@ export default async function MinistriosPage({ params }: Props) {
                   className="group flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-5 cursor-pointer transition-all duration-200 hover:border-brand-300 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm"
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <p className="font-semibold text-gray-900 leading-snug group-hover:text-brand-600 transition-colors">{m.name}</p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="font-semibold text-gray-900 leading-snug group-hover:text-brand-600 transition-colors">{m.name}</p>
+                      {m.linked_role && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-medium capitalize">{m.linked_role}</span>
+                      )}
+                    </div>
                     <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${m.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                       {m.active ? 'Ativo' : 'Inativo'}
                     </span>
