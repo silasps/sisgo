@@ -96,10 +96,25 @@ export function CalendarWorkspace({ year, slug, events, schoolOptions, ministryO
   const [selectedDate, setSelectedDate] = useState(initialDate)
   const [view, setView]   = useState<ViewMode>('month')
   const [modal, setModal] = useState<ModalState>({ open: false })
+  const [layerFilter, setLayerFilter] = useState<CalendarLayer | null>(null)
+
+  const presentLayers = useMemo(() => {
+    const layers = new Set<CalendarLayer>()
+    for (const e of events) layers.add(e.layer)
+    return layers
+  }, [events])
+
+  const hasFeriado = useMemo(() => events.some(e => e.event_type === 'feriado'), [events])
+
+  const filteredEvents = useMemo(() => {
+    if (!layerFilter) return events
+    if (layerFilter === 'auto') return events.filter(e => e.event_type === 'feriado')
+    return events.filter(e => e.layer === layerFilter)
+  }, [events, layerFilter])
 
   const eventsByDay = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>()
-    for (const event of events) {
+    for (const event of filteredEvents) {
       for (const day of eventDateKeys(event)) {
         const list = map.get(day) ?? []
         list.push(event)
@@ -107,7 +122,7 @@ export function CalendarWorkspace({ year, slug, events, schoolOptions, ministryO
       }
     }
     return map
-  }, [events])
+  }, [filteredEvents])
 
   const canCreate = permissions.canManageBase || permissions.canManageSchool || permissions.canManageMinistry || permissions.canAddPrivateNote
   const defaultLayer: 'base' | 'escola' | 'ministerio' | 'pessoal' = permissions.canManageBase ? 'base' : permissions.canManageSchool ? 'escola' : permissions.canManageMinistry ? 'ministerio' : 'pessoal'
@@ -162,11 +177,11 @@ export function CalendarWorkspace({ year, slug, events, schoolOptions, ministryO
         <div className="flex flex-wrap items-center gap-2">
           {view === 'month' && (
             <div className="hidden flex-wrap gap-1.5 text-xs sm:flex">
-              <Legend label="Base"       type="evento" />
-              <Legend label="ETED"       type="aula" />
-              <Legend label="Ministério" type="reuniao" />
-              <Legend label="Privado"    type="nota" />
-              <Legend label="Feriado"    type="feriado" />
+              {presentLayers.has('base')       && <Legend label="Base"       type="evento"  active={layerFilter === 'base'}       onClick={() => setLayerFilter(f => f === 'base' ? null : 'base')} />}
+              {presentLayers.has('escola')     && <Legend label="ETED"       type="aula"    active={layerFilter === 'escola'}     onClick={() => setLayerFilter(f => f === 'escola' ? null : 'escola')} />}
+              {presentLayers.has('ministerio') && <Legend label="Ministério" type="reuniao" active={layerFilter === 'ministerio'} onClick={() => setLayerFilter(f => f === 'ministerio' ? null : 'ministerio')} />}
+              {presentLayers.has('pessoal')    && <Legend label="Privado"    type="nota"    active={layerFilter === 'pessoal'}    onClick={() => setLayerFilter(f => f === 'pessoal' ? null : 'pessoal')} />}
+              {hasFeriado                      && <Legend label="Feriado"    type="feriado" active={layerFilter === 'auto'}       onClick={() => setLayerFilter(f => f === 'auto' ? null : 'auto')} />}
             </div>
           )}
           {canCreate && (
@@ -1291,8 +1306,16 @@ function SubmitButton({ label, small = false, form }: { label: string; small?: b
   )
 }
 
-function Legend({ label, type }: { label: string; type: CalendarEventType }) {
-  return <span className={`rounded-full border px-2 py-1 ${EVENT_STYLE[type]}`}>{label}</span>
+function Legend({ label, type, active, onClick }: { label: string; type: CalendarEventType; active?: boolean; onClick?: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-full border px-2 py-1 transition-all ${EVENT_STYLE[type]} ${active ? 'ring-2 ring-offset-1 ring-gray-400 font-bold' : 'opacity-80 hover:opacity-100'}`}
+    >
+      {label}
+    </button>
+  )
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
