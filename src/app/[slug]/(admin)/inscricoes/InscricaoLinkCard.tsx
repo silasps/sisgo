@@ -8,9 +8,68 @@ type SchoolLink = {
   name: string
 }
 
+type EmbedTab = 'iframe' | 'modal'
+
+function buildEmbedSnippet(embedUrl: string, slug: string) {
+  return `<div style="min-width:320px;max-width:720px;margin:0 auto;width:100%">
+  <iframe
+    src="${embedUrl}"
+    id="sisgo-form-${slug}"
+    width="100%"
+    height="600"
+    style="border:none;display:block;min-width:320px;"
+    loading="lazy"
+  ></iframe>
+</div>
+<script>
+window.addEventListener('message', function(e) {
+  if (e.data && e.data.type === 'sisgo-height') {
+    var el = document.getElementById('sisgo-form-${slug}');
+    if (el) el.style.height = e.data.height + 'px';
+  }
+});
+</script>`
+}
+
+function buildModalSnippet(embedUrl: string) {
+  return `<!-- Cole este script UMA VEZ no seu site (antes de </body>) -->
+<script>
+(function(){
+  var d=document,ov=d.createElement('div'),ct=d.createElement('div'),
+      cl=d.createElement('button'),fr=d.createElement('iframe');
+  ov.id='sisgo-overlay';
+  ov.style.cssText='display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.55);z-index:99999;justify-content:center;align-items:center;padding:16px;box-sizing:border-box;';
+  ct.style.cssText='background:#fff;border-radius:16px;width:100%;max-width:680px;max-height:92vh;overflow-y:auto;position:relative;box-shadow:0 25px 50px -12px rgba(0,0,0,.25);-webkit-overflow-scrolling:touch;';
+  cl.innerHTML='&times;';
+  cl.setAttribute('aria-label','Fechar');
+  cl.style.cssText='position:sticky;top:0;float:right;font-size:28px;line-height:1;background:rgba(255,255,255,.9);border:none;cursor:pointer;color:#666;z-index:1;padding:8px 14px;border-radius:0 16px 0 8px;';
+  fr.style.cssText='width:100%;min-height:500px;border:none;display:block;border-radius:0 0 16px 16px;';
+  fr.setAttribute('loading','lazy');
+  ct.appendChild(cl);ct.appendChild(fr);ov.appendChild(ct);
+  function close(){ov.style.display='none';fr.src='about:blank';d.body.style.overflow='';}
+  cl.onclick=close;
+  ov.onclick=function(e){if(e.target===ov)close();};
+  d.addEventListener('keydown',function(e){if(e.key==='Escape'&&ov.style.display==='flex')close();});
+  window.addEventListener('message',function(e){
+    if(e.data&&e.data.type==='sisgo-height')fr.style.height=e.data.height+'px';
+  });
+  d.body.appendChild(ov);
+  window.sisgoModal=function(url){
+    fr.src=url||'${embedUrl}';
+    ov.style.display='flex';
+    d.body.style.overflow='hidden';
+  };
+})();
+</script>
+
+<!-- Substitua o link do seu botão por isto: -->
+<a href="${embedUrl}" onclick="event.preventDefault();sisgoModal()">Inscreva-se</a>`
+}
+
 export function InscricaoLinkCard({ orgSlug, schools }: { orgSlug: string; schools: SchoolLink[] }) {
   const [copied, setCopied] = useState<string | null>(null)
   const [expandedEmbed, setExpandedEmbed] = useState<string | null>(null)
+  const [embedTab, setEmbedTab] = useState<EmbedTab>('iframe')
   const [origin, setOrigin] = useState('')
 
   useEffect(() => {
@@ -37,24 +96,14 @@ export function InscricaoLinkCard({ orgSlug, schools }: { orgSlug: string; schoo
       {schools.map(school => {
         const publicUrl = `${origin}/${orgSlug}/escola/${school.slug}/inscricao`
         const embedUrl = `${origin}/${orgSlug}/escola/${school.slug}/embed`
-        const embedSnippet = `<iframe
-  src="${embedUrl}"
-  id="sisgo-form-${school.slug}"
-  width="100%"
-  height="600"
-  style="border:none;display:block;"
-  loading="lazy"
-></iframe>
-<script>
-window.addEventListener('message', function(e) {
-  if (e.data && e.data.type === 'sisgo-height') {
-    document.getElementById('sisgo-form-${school.slug}').height = e.data.height;
-  }
-});
-</script>`
+        const embedSnippet = buildEmbedSnippet(embedUrl, school.slug)
+        const modalSnippet = buildModalSnippet(embedUrl)
         const isExpanded = expandedEmbed === school.slug
         const linkKey = `link-${school.slug}`
         const embedKey = `embed-${school.slug}`
+        const modalKey = `modal-${school.slug}`
+        const activeSnippet = embedTab === 'iframe' ? embedSnippet : modalSnippet
+        const activeKey = embedTab === 'iframe' ? embedKey : modalKey
 
         return (
           <div key={school.slug} className="space-y-2">
@@ -97,24 +146,49 @@ window.addEventListener('message', function(e) {
             {isExpanded && (
               <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
                 <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 bg-gray-50">
-                  <p className="text-xs font-semibold text-gray-600">Embed (iframe)</p>
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setEmbedTab('iframe')}
+                      className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-colors ${
+                        embedTab === 'iframe'
+                          ? 'bg-indigo-100 text-indigo-700'
+                          : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      Embed (iframe)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEmbedTab('modal')}
+                      className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-colors ${
+                        embedTab === 'modal'
+                          ? 'bg-indigo-100 text-indigo-700'
+                          : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      Botão + Modal
+                    </button>
+                  </div>
                   <button
-                    onClick={() => copyText(embedSnippet, embedKey)}
+                    onClick={() => copyText(activeSnippet, activeKey)}
                     className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-colors ${
-                      copied === embedKey
+                      copied === activeKey
                         ? 'bg-green-100 text-green-700'
                         : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
                     }`}
                   >
-                    {copied === embedKey ? '✓ Copiado!' : 'Copiar'}
+                    {copied === activeKey ? '✓ Copiado!' : 'Copiar'}
                   </button>
                 </div>
                 <pre className="p-3 text-xs text-gray-500 overflow-x-auto whitespace-pre font-mono leading-relaxed select-all">
-                  {origin ? embedSnippet : 'Carregando…'}
+                  {origin ? activeSnippet : 'Carregando…'}
                 </pre>
                 <div className="px-3 py-2 border-t border-gray-100 bg-gray-50">
                   <p className="text-xs text-gray-400">
-                    Cole este código no HTML do seu site. O iframe se redimensiona automaticamente.
+                    {embedTab === 'iframe'
+                      ? 'Cole este código no HTML do seu site. O iframe se redimensiona automaticamente.'
+                      : 'Cole o <script> uma vez no site e use o <a> no lugar do botão do Google Forms.'}
                   </p>
                 </div>
               </div>
