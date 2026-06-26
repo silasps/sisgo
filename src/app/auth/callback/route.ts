@@ -1,18 +1,19 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { getSupabaseCookieOptions } from '@/lib/supabase/cookie-options'
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
 
   if (code) {
-    // Captura os cookies que o Supabase quer definir para aplicar no redirect
     const cookiesToSet: Array<{ name: string; value: string; options?: Record<string, unknown> }> = []
 
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
+        cookieOptions: getSupabaseCookieOptions(request.nextUrl.hostname),
         cookies: {
           getAll() {
             return request.cookies.getAll()

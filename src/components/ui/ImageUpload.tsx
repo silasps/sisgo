@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
+import { createClient } from '@/lib/supabase/client'
 
 type Props = {
   name: string
@@ -52,10 +52,7 @@ export function ImageUpload({ name, defaultUrl, label = 'Imagem', bucket = 'scho
       const webpBlob = await convertToWebP(file)
       const fileName = `${folder}/${Date.now()}.webp`
 
-      const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      )
+      const supabase = createClient()
 
       const { error: uploadError } = await supabase.storage
         .from(bucket)
