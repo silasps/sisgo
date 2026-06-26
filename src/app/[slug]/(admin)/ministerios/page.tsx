@@ -2,9 +2,10 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
+import { isManagementRole } from '@/lib/auth/permissions'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
-import { Music } from 'lucide-react'
+import { createMinistry } from './[id]/actions'
+import { Music, Plus } from 'lucide-react'
 
 type Props = { params: Promise<{ slug: string }> }
 
@@ -24,7 +25,7 @@ export default async function MinistriosPage({ params }: Props) {
     ? await getCurrentOrganizationRole(supabase, user.id, orgId)
     : { role: '', preview: null }
   const isManagement = isManagementRole(role)
-  const canWrite = isOperationalManager(role)
+  const canWrite = isManagement
 
   // Usuário vinculado a ministério → redireciona diretamente para o seu ministério
   if (role === 'lider_ministerio' && user) {
@@ -137,6 +138,28 @@ export default async function MinistriosPage({ params }: Props) {
 
   const ministerios = (data ?? []) as unknown as MinistryRaw[]
 
+  const PRECONFIGURED = [
+    { role: 'hospitalidade', name: 'Hospitalidade', description: 'Recepção, hospedagem e acolhimento' },
+    { role: 'secretaria', name: 'Secretaria', description: 'Administração e finanças' },
+    { role: 'dh', name: 'DH', description: 'Desenvolvimento humano e gestão de pessoas' },
+    { role: 'cozinha', name: 'Cozinha', description: 'Alimentação e refeições' },
+    { role: 'manutencao', name: 'Manutenção', description: 'Manutenção e infraestrutura' },
+  ]
+  const usedLinkedRoles = new Set(ministerios.map(m => m.linked_role).filter(Boolean))
+  const availableFunctions = canWrite
+    ? PRECONFIGURED.filter(p => !usedLinkedRoles.has(p.role))
+    : []
+
+  const quickCreate = async (formData: FormData) => {
+    'use server'
+    const linkedRole = formData.get('linked_role') as string
+    const name = formData.get('name') as string
+    const description = formData.get('description') as string | null
+    if (!linkedRole || !name) return
+    const id = await createMinistry(orgId, name, description, linkedRole)
+    redirect(`/${slug}/ministerios/${id}?msg=criado`)
+  }
+
   return (
     <>
       <Header
@@ -152,8 +175,30 @@ export default async function MinistriosPage({ params }: Props) {
           ) : undefined
         }
       />
-      <main className="p-4 md:p-6">
-        {!ministerios.length ? (
+      <main className="p-4 md:p-6 space-y-6">
+        {availableFunctions.length > 0 && (
+          <div>
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Funções disponíveis</h2>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {availableFunctions.map(fn => (
+                <form key={fn.role} action={quickCreate} className="flex items-center gap-3 rounded-xl border border-dashed border-gray-300 bg-gray-50/50 p-4 transition-colors hover:border-brand-300 hover:bg-brand-50/30">
+                  <input type="hidden" name="linked_role" value={fn.role} />
+                  <input type="hidden" name="name" value={fn.name} />
+                  <input type="hidden" name="description" value={fn.description} />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-700 text-sm">{fn.name}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{fn.description}</p>
+                  </div>
+                  <button type="submit" className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-brand-600 bg-white border border-brand-200 rounded-lg px-3 py-2 hover:bg-brand-50 transition-colors">
+                    <Plus size={14} /> Criar
+                  </button>
+                </form>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!ministerios.length && !availableFunctions.length && (
           <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
             <Music className="size-8 mx-auto mb-3 text-gray-300" />
             <p className="text-gray-400 text-sm">Nenhum ministério cadastrado ainda.</p>
@@ -166,7 +211,9 @@ export default async function MinistriosPage({ params }: Props) {
               </Link>
             )}
           </div>
-        ) : (
+        )}
+
+        {ministerios.length > 0 && (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {ministerios.map(m => {
               const memberCount = m.ministry_members.filter(mm => mm.active).length
