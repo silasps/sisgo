@@ -4,7 +4,7 @@ export default function Loading() {
   return (
     <>
       <SkHeader />
-      <div className="p-6">
+      <div className="p-4 md:p-6">
         <SkStatCards n={4} />
       </div>
     </>

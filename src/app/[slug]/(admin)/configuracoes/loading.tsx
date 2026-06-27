@@ -4,7 +4,7 @@ export default function Loading() {
   return (
     <>
       <SkHeader />
-      <div className="p-6 max-w-lg space-y-4">
+      <div className="p-4 md:p-6 max-w-lg space-y-4">
         {[1, 2].map(i => (
           <div key={i} className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
             <Sk className="h-5 w-28" />
