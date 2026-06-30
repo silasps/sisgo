@@ -65,7 +65,7 @@ export function AusenciaModal({
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-16"
+          className="fixed inset-0 md:left-60 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-16"
           onClick={() => setOpen(false)}
         >
           <div

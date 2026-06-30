@@ -59,7 +59,7 @@ export function ReferenceModal({ tipo, data, status, slug, applicationId }: Prop
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          className="fixed inset-0 md:left-60 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
           onClick={() => setOpen(false)}
         >
           <div

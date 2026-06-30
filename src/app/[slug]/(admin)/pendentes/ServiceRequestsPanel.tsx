@@ -103,7 +103,7 @@ export function ServiceRequestsPanel({ requests, title, handleStatusUpdate }: Pr
       {/* Modal */}
       {selected && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+          className="fixed inset-0 md:left-60 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
           onClick={() => setSelected(null)}
         >
           <div
