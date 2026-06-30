@@ -7,6 +7,7 @@ import { accentCssVars } from '@/lib/accent-colors'
 const NAV: { href: string; label: string; icon: string }[] = [
   { href: '/superadmin', label: 'Visão Geral', icon: 'dashboard' },
   { href: '/superadmin/bases', label: 'Bases', icon: 'bases' },
+  { href: '/superadmin/usuarios', label: 'Usuários', icon: 'pessoas' },
   { href: '/superadmin/supervisao', label: 'Supervisão', icon: 'supervisao' },
   { href: '/superadmin/inscricoes', label: 'Inscrições', icon: 'inscricoes' },
   { href: '/superadmin/configuracoes', label: 'Configurações', icon: 'configuracoes' },
@@ -37,11 +38,17 @@ export default async function SuperAdminLayout({ children }: { children: React.R
   const accentKey = map['superadmin_accent_color'] ?? 'laranja'
   const logoUrl = map['superadmin_logo_url'] ?? undefined
 
+  const currentUser = {
+    email: user.email ?? '',
+    name: (user.user_metadata?.full_name as string | undefined) ?? undefined,
+    badge: 'Super Admin',
+  }
+
   return (
     <div className="flex flex-col h-dvh">
       <style>{`:root{${accentCssVars(accentKey)}}`}</style>
       <div className="shrink-0 h-[env(safe-area-inset-top)] bg-white" />
-      <AppShell items={NAV} subtitle="Super Admin" logoUrl={logoUrl} sisgoLogo className="flex flex-1 min-h-0 overflow-hidden">
+      <AppShell items={NAV} subtitle="Super Admin" logoUrl={logoUrl} sisgoLogo user={currentUser} className="flex flex-1 min-h-0 overflow-hidden">
         {children}
       </AppShell>
     </div>

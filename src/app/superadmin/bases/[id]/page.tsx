@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/Header'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { User, Briefcase, GraduationCap, BookOpen, Music } from 'lucide-react'
 
@@ -33,6 +34,29 @@ export default async function BaseDetailPage({ params }: Props) {
     supabase.from('organization_users').select('*', { count: 'exact', head: true }).eq('organization_id', id).eq('active', true),
   ])
 
+  async function toggleActive() {
+    'use server'
+    const admin = createAdminClient()
+    await admin.from('organizations').update({ active: !base.active, updated_at: new Date().toISOString() }).eq('id', orgId)
+    redirect(`/superadmin/bases/${orgId}`)
+  }
+
+  async function updateBase(formData: FormData) {
+    'use server'
+    const admin = createAdminClient()
+    await admin.from('organizations').update({
+      name:    String(formData.get('name') ?? '').trim() || base.name,
+      city:    String(formData.get('city') ?? '').trim() || null,
+      state:   String(formData.get('state') ?? '').trim() || null,
+      country: String(formData.get('country') ?? '').trim() || 'BR',
+      email:   String(formData.get('email') ?? '').trim() || null,
+      phone:   String(formData.get('phone') ?? '').trim() || null,
+      website: String(formData.get('website') ?? '').trim() || null,
+      updated_at: new Date().toISOString(),
+    }).eq('id', orgId)
+    redirect(`/superadmin/bases/${orgId}`)
+  }
+
   return (
     <>
       <Header
@@ -56,7 +80,7 @@ export default async function BaseDetailPage({ params }: Props) {
       />
       <main className="p-4 md:p-6 space-y-6 max-w-4xl">
 
-        {/* Status banner */}
+        {/* Status banner + toggle */}
         <div className={`rounded-xl px-5 py-3 flex items-center gap-3 ${
           base.active ? 'bg-green-50 border border-green-200' : 'bg-gray-50 border border-gray-200'
         }`}>
@@ -64,23 +88,61 @@ export default async function BaseDetailPage({ params }: Props) {
           <span className={`text-sm font-medium ${base.active ? 'text-green-700' : 'text-gray-600'}`}>
             {base.active ? 'Base ativa' : 'Base inativa'}
           </span>
-          <span className="text-sm text-gray-400 ml-auto">
+          <span className="text-sm text-gray-400 ml-auto hidden sm:block">
             Criada em {new Date(base.created_at).toLocaleDateString('pt-BR')}
           </span>
+          <form action={toggleActive}>
+            <button
+              type="submit"
+              className={`text-xs px-3 py-1.5 rounded-lg font-semibold transition-colors whitespace-nowrap ${
+                base.active
+                  ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200'
+                  : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
+              }`}
+            >
+              {base.active ? 'Desativar base' : 'Ativar base'}
+            </button>
+          </form>
         </div>
 
-        {/* Dados */}
+        {/* Editar informações */}
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="font-semibold text-gray-900 mb-4">Informações</h2>
-          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 text-sm">
-            <Info label="Slug" value={base.slug} />
-            <Info label="País" value={base.country} />
-            <Info label="Cidade" value={base.city} />
-            <Info label="Estado" value={base.state} />
-            <Info label="E-mail" value={base.email} />
-            <Info label="Telefone" value={base.phone} />
-            <Info label="Website" value={base.website} />
-          </dl>
+          <h2 className="font-semibold text-gray-900 mb-5">Informações</h2>
+          <form action={updateBase} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <EditField label="Nome" name="name" defaultValue={base.name} required />
+              <div>
+                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1.5">Slug</label>
+                <input
+                  readOnly
+                  value={base.slug}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-400 bg-gray-50 font-mono cursor-not-allowed"
+                />
+                <p className="text-[11px] text-gray-400 mt-1">O slug não pode ser alterado — ele faz parte da URL da base.</p>
+              </div>
+              <EditField label="Cidade" name="city" defaultValue={base.city ?? ''} />
+              <EditField label="Estado" name="state" defaultValue={base.state ?? ''} />
+              <EditField label="País" name="country" defaultValue={base.country ?? 'BR'} />
+              <EditField label="E-mail" name="email" type="email" defaultValue={base.email ?? ''} />
+              <EditField label="Telefone" name="phone" defaultValue={base.phone ?? ''} />
+              <EditField label="Website" name="website" type="url" defaultValue={base.website ?? ''} />
+            </div>
+            <div className="pt-2 flex items-center gap-3">
+              <button
+                type="submit"
+                className="px-5 py-2 bg-brand-500 text-white text-sm font-semibold rounded-lg hover:bg-brand-600 transition-colors"
+              >
+                Salvar alterações
+              </button>
+              <Link
+                href={`/${base.slug}/dashboard`}
+                className="text-sm text-brand-500 hover:text-brand-600 font-medium"
+                target="_blank"
+              >
+                Acessar base →
+              </Link>
+            </div>
+          </form>
         </div>
 
         {/* Estatísticas */}
@@ -101,11 +163,23 @@ export default async function BaseDetailPage({ params }: Props) {
   )
 }
 
-function Info({ label, value }: { label: string; value: string | null | undefined }) {
+function EditField({ label, name, defaultValue, type = 'text', required }: {
+  label: string
+  name: string
+  defaultValue: string
+  type?: string
+  required?: boolean
+}) {
   return (
     <div>
-      <dt className="text-gray-400 text-xs uppercase tracking-wide mb-0.5">{label}</dt>
-      <dd className="font-medium text-gray-900">{value ?? '—'}</dd>
+      <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1.5">{label}</label>
+      <input
+        type={type}
+        name={name}
+        defaultValue={defaultValue}
+        required={required}
+        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+      />
     </div>
   )
 }

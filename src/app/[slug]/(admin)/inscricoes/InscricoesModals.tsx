@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Modal } from '@/components/ui/Modal'
+import { InternationalPhoneField } from '@/components/ui/InternationalPhoneField'
 import { gerarLinkReferencia } from '@/app/[slug]/formulario/[token]/actions'
 import { gerarLinkReferenciaObreiro } from '@/app/[slug]/formulario-obreiro/[token]/actions'
 import { Link as LinkIcon, RefreshCw } from 'lucide-react'
@@ -55,18 +56,13 @@ export function NovaPreInscricaoButton({
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">E-mail</label>
-              <input name="email" type="email" placeholder="email@exemplo.com"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Telefone / WhatsApp</label>
-              <input name="phone" type="tel" placeholder="+55 41 99999-0000"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-            </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">E-mail</label>
+            <input name="email" type="email" placeholder="email@exemplo.com"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
           </div>
+
+          <InternationalPhoneField phoneName="phone" />
 
           {openClasses.length > 0 && (
             <div>
@@ -148,18 +144,13 @@ export function NovaPreInscricaoObreiroButton({
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">E-mail</label>
-              <input name="email" type="email" placeholder="email@exemplo.com"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Telefone / WhatsApp</label>
-              <input name="phone" type="tel" placeholder="+55 41 99999-0000"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
-            </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">E-mail</label>
+            <input name="email" type="email" placeholder="email@exemplo.com"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
           </div>
+
+          <InternationalPhoneField phoneName="phone" accentRing="ring-violet-400" />
 
           {ministries.length > 0 && (
             <div>
@@ -248,18 +239,13 @@ export function EditarPreInscricaoButton({
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">E-mail</label>
-              <input name="email" type="email" defaultValue={item.email ?? ''}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Telefone</label>
-              <input name="phone" type="tel" defaultValue={item.phone ?? ''}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-            </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">E-mail</label>
+            <input name="email" type="email" defaultValue={item.email ?? ''}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
           </div>
+
+          <InternationalPhoneField phoneName="phone" defaultPhone={item.phone} />
 
           {openClasses.length > 0 && (
             <div>
@@ -346,18 +332,13 @@ export function EditarPreInscricaoObreiroButton({
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">E-mail</label>
-              <input name="email" type="email" defaultValue={item.email ?? ''}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Telefone</label>
-              <input name="phone" type="tel" defaultValue={item.phone ?? ''}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
-            </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">E-mail</label>
+            <input name="email" type="email" defaultValue={item.email ?? ''}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
           </div>
+
+          <InternationalPhoneField phoneName="phone" defaultPhone={item.phone} accentRing="ring-violet-400" />
 
           {ministries.length > 0 && (
             <div>

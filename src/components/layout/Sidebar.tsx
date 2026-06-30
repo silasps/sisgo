@@ -21,6 +21,7 @@ type SidebarProps = {
   sisgoLogo?: boolean
   isOpen?: boolean
   onClose?: () => void
+  user?: { name?: string; email: string; badge?: string }
 }
 
 export const ICON_MAP: Record<string, LucideIcon> = {
@@ -59,7 +60,7 @@ function NavIcon({ name, className }: { name: string; className?: string }) {
   return <Icon size={16} className={className} aria-hidden />
 }
 
-export function Sidebar({ items, subtitle, logoUrl, sisgoLogo = false, isOpen = false, onClose }: SidebarProps) {
+export function Sidebar({ items, subtitle, logoUrl, sisgoLogo = false, isOpen = false, onClose, user }: SidebarProps) {
   const pathname = usePathname()
 
   return (
@@ -141,6 +142,22 @@ export function Sidebar({ items, subtitle, logoUrl, sisgoLogo = false, isOpen = 
         })}
       </nav>
 
+      {user && (
+        <div className="px-3 pt-3 pb-1 border-t border-dark-800">
+          <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-dark-800/50">
+            <div className="w-7 h-7 rounded-full bg-brand-500/20 border border-brand-500/30 flex items-center justify-center text-brand-400 text-xs font-bold flex-shrink-0 uppercase">
+              {(user.name ?? user.email).charAt(0)}
+            </div>
+            <div className="min-w-0 flex-1">
+              {user.name && <p className="text-xs font-medium text-gray-200 truncate">{user.name}</p>}
+              <p className="text-[11px] text-gray-500 truncate">{user.email}</p>
+            </div>
+          </div>
+          {user.badge && (
+            <p className="mt-1.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-brand-400">{user.badge}</p>
+          )}
+        </div>
+      )}
       <LogoutButton />
     </aside>
   )

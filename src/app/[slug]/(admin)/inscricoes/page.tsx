@@ -3,22 +3,23 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import { ClipboardList, Mail, MessageCircle } from 'lucide-react'
+import { NovaPreInscricaoButton, NovaPreInscricaoObreiroButton, EditarPreInscricaoButton, EditarPreInscricaoObreiroButton, MarcarRecebidoExternoButton, LinksReferenciaAdminButton } from './InscricoesModals'
 import { RecusarModal } from './RecusarModal'
 import { DisponibilizarFormularioButton } from './DisponibilizarFormularioButton'
-import { NovaPreInscricaoButton, NovaPreInscricaoObreiroButton, EditarPreInscricaoButton, EditarPreInscricaoObreiroButton, MarcarRecebidoExternoButton, LinksReferenciaAdminButton } from './InscricoesModals'
 import { getEmailQuota } from '@/lib/email/getEmailQuota'
 import { getRolePreview } from '@/lib/role-preview'
-import { SearchBar } from '@/components/ui/SearchBar'
 import { Suspense } from 'react'
 import { ScrollHighlight } from '@/components/ui/ScrollHighlight'
 import { SCHOOL_APPLICATION_TYPES } from '@/lib/schools'
-import { ClipboardList, Mail, MessageCircle } from 'lucide-react'
 import { ServirLinkCard } from './ServirLinkCard'
 import { InscricaoLinkCard } from './InscricaoLinkCard'
+import { InscricoesList } from './InscricoesList'
+import { SearchBar } from '@/components/ui/SearchBar'
 
 type Props = {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ tab?: string; ver?: string; q?: string }>
+  searchParams: Promise<{ tab?: string; ver?: string; q?: string; flash_success?: string }>
 }
 
 type InscricaoItem = {
@@ -64,27 +65,30 @@ const TIPO_TABS = [
   { key: 'obreiro',       label: 'Obreiros' },
 ]
 
-const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  pendente:           { label: 'Pendente',      color: 'bg-yellow-100 text-yellow-700' },
-  formulario_enviado: { label: 'Form. enviado', color: 'bg-blue-100 text-blue-700' },
-  em_contato:         { label: 'Em contato',   color: 'bg-purple-100 text-purple-700' },
-  em_analise:         { label: 'Em análise',   color: 'bg-blue-100 text-blue-700' },
-  convertido:         { label: 'Convertido',   color: 'bg-green-100 text-green-700' },
-  aprovado:           { label: 'Aprovado',     color: 'bg-green-100 text-green-700' },
-  reprovado:          { label: 'Reprovado',    color: 'bg-red-100 text-red-700' },
-  descartado:         { label: 'Recusado',     color: 'bg-gray-100 text-gray-500' },
-  cancelado:          { label: 'Cancelado',    color: 'bg-gray-100 text-gray-500' },
-}
-
 function daysAgo(dateStr: string) {
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24))
 }
+const isFinalizado = (s: string) => ['convertido','aprovado','descartado','reprovado','cancelado'].includes(s)
+
+const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
+  pendente:           { label: 'Pendente',      color: 'bg-yellow-100 text-yellow-700' },
+  formulario_enviado: { label: 'Form. enviado', color: 'bg-blue-100 text-blue-700' },
+  em_contato:         { label: 'Em contato',    color: 'bg-purple-100 text-purple-700' },
+  em_analise:         { label: 'Em análise',    color: 'bg-blue-100 text-blue-700' },
+  convertido:         { label: 'Convertido',    color: 'bg-green-100 text-green-700' },
+  aprovado:           { label: 'Aprovado',      color: 'bg-green-100 text-green-700' },
+  reprovado:          { label: 'Reprovado',     color: 'bg-red-100 text-red-700' },
+  descartado:         { label: 'Recusado',      color: 'bg-gray-100 text-gray-500' },
+  cancelado:          { label: 'Cancelado',     color: 'bg-gray-100 text-gray-500' },
+}
+
 function urgencyBorderColor(dias: number) {
   if (dias <= 1) return 'border-l-green-400'
   if (dias === 2) return 'border-l-yellow-400'
   if (dias === 3) return 'border-l-orange-400'
   return 'border-l-red-500'
 }
+
 function urgencyBadge(dias: number) {
   if (dias === 0) return { label: 'Hoje', color: 'bg-green-100 text-green-700' }
   if (dias === 1) return { label: '1d',   color: 'bg-green-100 text-green-700' }
@@ -92,7 +96,6 @@ function urgencyBadge(dias: number) {
   if (dias === 3) return { label: '3d',   color: 'bg-orange-100 text-orange-700' }
   return { label: `${dias}d`, color: 'bg-red-100 text-red-700' }
 }
-const isFinalizado = (s: string) => ['convertido','aprovado','descartado','reprovado','cancelado'].includes(s)
 
 function getUserDisplayName(user: { email?: string; user_metadata?: Record<string, unknown> } | null | undefined) {
   const metadata = user?.user_metadata ?? {}
@@ -1195,9 +1198,14 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       })
     : items
 
-  const filtered = (ver === 'todas' ? roleFiltered : roleFiltered.filter(i => !isFinalizado(i.status)))
-    .filter(i => !q || i.nome.toLowerCase().includes(q.toLowerCase()) || (i.email ?? '').toLowerCase().includes(q.toLowerCase()))
-  filtered.sort((a, b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime())
+  const listItems = (ver === 'todas' ? roleFiltered : roleFiltered.filter(i => !isFinalizado(i.status)))
+  listItems.sort((a, b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime())
+  const filtered = q
+    ? listItems.filter(i => {
+        const term = q.toLowerCase()
+        return i.nome?.toLowerCase().includes(term) || i.email?.toLowerCase().includes(term)
+      })
+    : listItems
   const quota = await getEmailQuota()
 
   const reviewerIds = [...new Set(historico.map(item => item.recusadoPorId).filter((id): id is string => Boolean(id)))]
@@ -1287,10 +1295,6 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           })}
         </div>
 
-        <Suspense>
-          <SearchBar placeholder="Buscar por nome ou e-mail…" className="w-full sm:w-80" />
-        </Suspense>
-
         {/* Card com link do formulário de pré-inscrição — visível na tab Pré-inscrições */}
         {(tab === 'todas' || tab === 'pre_inscricao') && publicSchools.length > 0 && (
           <InscricaoLinkCard
@@ -1305,26 +1309,46 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         {/* Card com link da página /servir — visível na tab Obreiros */}
         {tab === 'obreiro' && <ServirLinkCard slug={slug} />}
 
-        {/* Lista */}
-        {!filtered.length ? (
-          <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
-            <ClipboardList className="size-8 mx-auto mb-3 text-gray-300" />
-            <p className="text-gray-400 text-sm">
-              {q ? `Nenhum resultado para "${q}".` : ver === 'ativas' ? 'Nenhuma inscrição ativa.' : 'Nenhuma inscrição encontrada.'}
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {filtered.map(item => {
-              const statusInfo = STATUS_CONFIG[item.status] ?? { label: item.status, color: 'bg-gray-100 text-gray-500' }
-              const urgency    = urgencyBadge(item.diasAberto)
-              const finalizado = isFinalizado(item.status)
-              const whatsapp   = item.phone ? `https://wa.me/${item.phone.replace(/\D/g, '')}` : null
-
+        <InscricoesList
+          items={listItems}
+          historico={historicoTab}
+          slug={slug}
+          orgId={orgId}
+          ver={ver}
+          openClasses={openClasses.map(c => ({
+            id: c.id,
+            school_id: c.school_id,
+            name: c.name,
+            starts_at: c.starts_at,
+            schoolName: c.schools?.name ?? null,
+          }))}
+          allSchools={allSchools}
+          allMinistries={allMinistries}
+          canWrite={canWrite}
+          canWriteEted={canWriteEted}
+          canWriteObreiro={canWriteObreiro}
+          allowedSchoolIds={allowedSchoolIds}
+          quota={quota}
+          initialQuery={q ?? ''}
+          updateStatus={updateStatus}
+          recusar={recusar}
+          aprovar={aprovar}
+          encaminharObreiroDh={encaminharObreiroDh}
+          finalizarObreiro={finalizarObreiro}
+          disponibilizarFormulario={disponibilizarFormulario}
+          disponibilizarFormularioObreiro={disponibilizarFormularioObreiro}
+          editarPreInscricao={editarPreInscricao}
+          editarPreInscricaoObreiro={editarPreInscricaoObreiro}
+          marcarRecebidoExternamente={marcarRecebidoExternamente}
+          marcarRecebidoExternamenteObreiro={marcarRecebidoExternamenteObreiro}
+          encaminharParaEscola={encaminharParaEscola}
+          encaminharParaMinisterio={encaminharParaMinisterio}
+        />
+        {false && (
+          <div>
+            {[].map(item => {
               return (
-                <div key={`${item.tipo}-${item.id}`}
-                  id={`item-${item.id}`}
-                  className={`bg-white rounded-xl border border-l-4 p-4 transition-opacity scroll-mt-20 ${finalizado ? 'opacity-60' : ''} ${urgencyBorderColor(item.diasAberto)}`}
+                <div key={String(item)}
                 >
                   <div className="flex flex-col sm:flex-row sm:items-start gap-3">
                     <div className="flex-1 min-w-0">

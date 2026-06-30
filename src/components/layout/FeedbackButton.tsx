@@ -80,7 +80,7 @@ export function FeedbackButton() {
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-3 sm:p-6 bg-black/40 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
           onClick={handleClose}
         >
           <div

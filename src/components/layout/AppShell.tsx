@@ -17,6 +17,7 @@ export function AppShell({
   sisgoLogo,
   className,
   children,
+  user,
 }: {
   items: NavItem[]
   bottomBarItems?: BottomBarItem[]
@@ -26,6 +27,7 @@ export function AppShell({
   sisgoLogo?: boolean
   className?: string
   children: React.ReactNode
+  user?: { name?: string; email: string; badge?: string }
 }) {
   const [open, setOpen] = useState(false)
 
@@ -46,6 +48,7 @@ export function AppShell({
           sisgoLogo={sisgoLogo}
           isOpen={open}
           onClose={() => setOpen(false)}
+          user={user}
         />
 
         <div className={`flex-1 md:ml-60 flex flex-col overflow-auto scroll-smooth min-w-0 ${bottomBarItems ? 'pb-20 md:pb-0' : ''}`}>

@@ -26,6 +26,7 @@ function LoginPageInner() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
+  const [checkingAuth, setCheckingAuth] = useState(false)
 
   useEffect(() => {
     if (!isNativePlatform()) return
@@ -81,11 +82,25 @@ function LoginPageInner() {
     let active = true
 
     async function redirectAuthenticatedUser() {
-      const { data: { user } } = await createClient().auth.getUser()
-      if (!active || !user) return
+      if (localStorage.getItem('sisgo_has_session')) {
+        setCheckingAuth(true)
+      }
 
+      const { data: { user } } = await createClient().auth.getUser()
+      if (!active) return
+
+      if (!user) {
+        localStorage.removeItem('sisgo_has_session')
+        setCheckingAuth(false)
+        return
+      }
+
+      setCheckingAuth(true)
       const result = await getLoginRedirect()
-      if (!active || result.error || !result.redirectTo) return
+      if (!active || result.error || !result.redirectTo) {
+        setCheckingAuth(false)
+        return
+      }
       localStorage.setItem('sisgo_has_session', '1')
       window.location.replace(result.redirectTo)
     }
@@ -157,6 +172,18 @@ function LoginPageInner() {
       : 'Conta criada! Aguarde um administrador vincular sua conta a uma base.'
     setSuccess(msg)
     setLoading(false)
+  }
+
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-dark-950 gap-4">
+        <svg className="animate-spin h-8 w-8 text-brand-400" viewBox="0 0 24 24" fill="none">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+        </svg>
+        <p className="text-sm text-zinc-400">Entrando...</p>
+      </div>
+    )
   }
 
   return (

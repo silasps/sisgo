@@ -1,6 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef, useEffect } from 'react'
+import { ChevronDown } from 'lucide-react'
 import { PHONE_COUNTRIES } from '@/lib/i18n/phoneCountries'
 
 function digitsOnly(value: string) {
@@ -69,6 +70,101 @@ export function normalizeInternationalPhone(countryIso: string, phone: string) {
   return `${country.code}${localDigits}`
 }
 
+function CountryDropdown({
+  value,
+  onChange,
+  accentRing = 'ring-brand-400',
+}: {
+  value: string
+  onChange: (iso: string) => void
+  accentRing?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const wrapperRef = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
+  const selected = useMemo(() => findCountryByIso(value), [value])
+
+  const filtered = useMemo(
+    () =>
+      PHONE_COUNTRIES.filter(
+        c =>
+          c.name.toLowerCase().includes(search.toLowerCase()) ||
+          c.code.includes(search) ||
+          c.iso.toLowerCase().includes(search.toLowerCase()),
+      ),
+    [search],
+  )
+
+  useEffect(() => {
+    if (!open) return
+    setTimeout(() => searchRef.current?.focus(), 0)
+    function handleClick(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false)
+        setSearch('')
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
+
+  return (
+    <div ref={wrapperRef} className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className={`flex items-center gap-1.5 h-full w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:${accentRing} hover:border-gray-400 transition-colors`}
+      >
+        <span className="text-base leading-none">{selected.flag}</span>
+        <span className="font-medium text-gray-700 tabular-nums">{selected.code}</span>
+        <ChevronDown className="size-3.5 text-gray-400 ml-0.5 shrink-0" />
+      </button>
+
+      {open && (
+        <div className="absolute z-50 top-full left-0 mt-1 w-64 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
+          <div className="p-2 border-b border-gray-100">
+            <input
+              ref={searchRef}
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Buscar país..."
+              className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-400"
+            />
+          </div>
+          <div className="overflow-y-auto max-h-52">
+            {filtered.length === 0 ? (
+              <p className="text-xs text-gray-400 text-center py-4">Nenhum país encontrado</p>
+            ) : (
+              filtered.map(c => (
+                <button
+                  key={`${c.iso}-${c.code}`}
+                  type="button"
+                  onClick={() => {
+                    onChange(c.iso)
+                    setOpen(false)
+                    setSearch('')
+                  }}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors ${
+                    c.iso === value
+                      ? 'bg-brand-50 text-brand-700 font-medium'
+                      : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <span className="text-base leading-none">{c.flag}</span>
+                  <span className="flex-1 truncate">{c.name}</span>
+                  <span className="text-gray-400 text-xs tabular-nums shrink-0">{c.code}</span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function InternationalPhoneField({
   phoneName,
   countryName,
@@ -77,6 +173,7 @@ export function InternationalPhoneField({
   defaultPhone = '',
   required = false,
   className = '',
+  accentRing = 'ring-brand-400',
 }: {
   phoneName: string
   countryName?: string
@@ -85,6 +182,7 @@ export function InternationalPhoneField({
   defaultPhone?: string | null
   required?: boolean
   className?: string
+  accentRing?: string
 }) {
   const detectedCountry = findCountryByPhone(defaultPhone)
   const initialCountry = detectedCountry?.iso ?? findCountryByIso(defaultCountryIso).iso
@@ -93,43 +191,41 @@ export function InternationalPhoneField({
   const normalized = normalizeInternationalPhone(countryIso, phone)
   const selected = useMemo(() => findCountryByIso(countryIso), [countryIso])
 
+  function handleCountryChange(iso: string) {
+    setCountryIso(iso)
+    setPhone(formatLocalPhone(iso, phone))
+  }
+
+  const placeholder =
+    selected.iso === 'BR'
+      ? '(41) 99999-9999'
+      : selected.iso === 'PT'
+        ? '912 345 678'
+        : selected.code === '+1'
+          ? '(212) 555-1234'
+          : 'somente números'
+
   return (
-    <div className={`grid gap-2 sm:grid-cols-[6.75rem_minmax(0,1fr)] ${className}`}>
-      <label className="min-w-0">
-        <span className="mb-1 block text-xs font-medium text-gray-600">País</span>
-        <select
-          name={countryName}
-          value={countryIso}
-          onChange={event => {
-            const next = event.target.value
-            setCountryIso(next)
-            setPhone(formatLocalPhone(next, phone))
-          }}
-          className="w-full rounded-lg border border-gray-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-        >
-          {PHONE_COUNTRIES.map(country => (
-            <option key={`${country.iso}-${country.code}`} value={country.iso}>
-              {country.iso} {country.code}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="min-w-0">
-        <span className="mb-1 block text-xs font-medium text-gray-600">
-          {label}{required && <span className="text-red-500 ml-0.5">*</span>}
-        </span>
+    <div className={`space-y-1 ${className}`}>
+      <span className="block text-xs font-medium text-gray-600">
+        {label}
+        {required && <span className="text-red-500 ml-0.5">*</span>}
+      </span>
+      <div className="flex gap-2">
+        <CountryDropdown value={countryIso} onChange={handleCountryChange} accentRing={accentRing} />
         <input
           value={phone}
-          onChange={event => setPhone(formatLocalPhone(countryIso, event.target.value))}
+          onChange={e => setPhone(formatLocalPhone(countryIso, e.target.value))}
           inputMode="numeric"
           required={required}
           pattern={phonePattern(countryIso)}
-          placeholder={selected.iso === 'BR' ? '(41) 99999-9999' : selected.iso === 'PT' ? '912 345 678' : selected.code === '+1' ? '(212) 555-1234' : 'somente números'}
+          placeholder={placeholder}
           title="Informe o telefone conforme o país selecionado."
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+          className={`flex-1 min-w-0 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:${accentRing}`}
         />
-        <input type="hidden" name={phoneName} value={normalized} />
-      </label>
+      </div>
+      {countryName && <input type="hidden" name={countryName} value={countryIso} />}
+      <input type="hidden" name={phoneName} value={normalized} />
     </div>
   )
 }
