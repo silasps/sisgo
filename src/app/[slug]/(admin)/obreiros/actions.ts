@@ -3,6 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { triggerSiteRevalidation } from '@/lib/revalidate-webhook'
 
 const BLOCKED_ROLE_NAMES = ['superadmin', 'admin_base', 'lider_base']
 const REQUIRED_STAFF_ROLES: Record<string, { label: string; description: string }> = {
@@ -212,12 +213,40 @@ export async function toggleActive(formData: FormData) {
   const orgUserId = formData.get('org_user_id') as string
   const active = formData.get('active') === 'true'
   const slug = formData.get('slug') as string
+  const sentAsMissionary = formData.get('sent_as_missionary') === 'on'
+  const sentTo = (formData.get('sent_to') as string | null)?.trim() || null
 
   const admin = createAdminClient()
   await admin
     .from('organization_users')
     .update({ active: !active, updated_at: new Date().toISOString() })
     .eq('id', orgUserId)
+
+  // Desligamento (active → inativo): registra se a pessoa foi enviada como
+  // missionária, pra alimentar a estatística pública "missionários enviados".
+  if (active) {
+    const { data: orgUser } = await admin
+      .from('organization_users')
+      .select('organization_id, user_id')
+      .eq('id', orgUserId)
+      .single()
+
+    if (orgUser?.user_id && orgUser.organization_id) {
+      await admin
+        .from('staff_profiles')
+        .update({
+          active: false,
+          left_at: new Date().toISOString().slice(0, 10),
+          sent_as_missionary: sentAsMissionary,
+          sent_to: sentTo,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('organization_id', orgUser.organization_id)
+        .eq('user_id', orgUser.user_id)
+
+      if (sentAsMissionary) await triggerSiteRevalidation(orgUser.organization_id, 'stats')
+    }
+  }
 
   redirect(`/${slug}/obreiros`)
 }

@@ -44,6 +44,13 @@ export async function updateLogoUrl(orgId: string, slug: string, logoUrl: string
   revalidatePath(`/${slug}/configuracoes`)
 }
 
+export async function updateIdCardEnabled(orgId: string, slug: string, formData: FormData) {
+  const admin = await verifyAccess(orgId)
+  if (!admin) return
+  await admin.from('organizations').update({ id_card_enabled: formData.get('id_card_enabled') === 'on' }).eq('id', orgId)
+  revalidatePath(`/${slug}/configuracoes`)
+}
+
 const ACCUMULABLE_PAIRS: [string, string][] = [
   ['dh', 'secretaria'], ['dh', 'hospitalidade'], ['dh', 'cozinha'],
   ['secretaria', 'hospitalidade'], ['secretaria', 'cozinha'],

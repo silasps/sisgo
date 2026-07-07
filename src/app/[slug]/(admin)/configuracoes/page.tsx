@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { notFound, redirect } from 'next/navigation'
 import { BrandingForm } from './BrandingForm'
-import { updateAreaCashScopes, updateRoleAccumulations } from './actions'
+import { updateAreaCashScopes, updateRoleAccumulations, updateIdCardEnabled } from './actions'
 import { asLooseClient } from '@/lib/supabase/loose-client'
 import { schoolTypeShortLabel } from '@/lib/schools'
 
@@ -34,7 +34,7 @@ export default async function ConfiguracoesPage({ params }: Props) {
 
   const { data: org } = await supabase
     .from('organizations')
-    .select('id, name, slug, email, city, state, logo_url, accent_color, role_accumulations')
+    .select('id, name, slug, email, city, state, logo_url, accent_color, role_accumulations, id_card_enabled')
     .eq('slug', slug)
     .single()
 
@@ -103,6 +103,30 @@ export default async function ConfiguracoesPage({ params }: Props) {
             <p className="text-sm font-semibold text-white uppercase tracking-widest mb-1">Identidade Visual</p>
             <p className="text-xs text-gray-500">Apenas o líder da base pode personalizar a logo e a cor de destaque.</p>
           </div>
+        )}
+
+        {canBrand && (
+          <Section title="Carteirinha digital">
+            <form action={updateIdCardEnabled.bind(null, org.id, slug)} className="space-y-4">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="id_card_enabled"
+                  defaultChecked={(org as { id_card_enabled?: boolean }).id_card_enabled ?? false}
+                  className="mt-1 h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-400"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-gray-900">Ativar carteirinha para esta base</span>
+                  <span className="block text-xs text-gray-400 mt-0.5">
+                    Libera a geração de carteirinha digital (com QR de verificação) e a versão imprimível para alunos e obreiros no perfil de cada pessoa.
+                  </span>
+                </span>
+              </label>
+              <button className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800">
+                Salvar
+              </button>
+            </form>
+          </Section>
         )}
 
         {canConfigureCashScopes && (

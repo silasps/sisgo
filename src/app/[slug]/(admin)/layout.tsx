@@ -19,7 +19,7 @@ type DividerNavItem  = { divider: true; label: string }
 type NavItem = RegularNavItem | DividerNavItem
 
 const PESSOAL_DIVIDER: DividerNavItem = { divider: true, label: 'Pessoal' }
-const PESSOAL_ICONS   = new Set(['refeicoes', 'contas'])
+const PESSOAL_ICONS   = new Set(['refeicoes', 'contas', 'carteirinha'])
 
 function addPersonalSplit(items: RegularNavItem[], personalIcons = PESSOAL_ICONS): NavItem[] {
   const op   = items.filter(i => !personalIcons.has(i.icon))
@@ -28,7 +28,7 @@ function addPersonalSplit(items: RegularNavItem[], personalIcons = PESSOAL_ICONS
   return [...op, PESSOAL_DIVIDER, ...pers]
 }
 
-function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPending: boolean, hasReservationsPending: boolean, hasOwnCashScope: boolean, laundryEnabled: boolean, hasMinistryMessages: boolean, hasSchoolMessages: boolean): NavItem[] {
+function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPending: boolean, hasReservationsPending: boolean, hasOwnCashScope: boolean, laundryEnabled: boolean, hasMinistryMessages: boolean, hasSchoolMessages: boolean, idCardEnabled: boolean): NavItem[] {
   const allRoles = [role, ...accumulatedRoles]
   const is = (r: string) => allRoles.includes(r)
   const isManagement        = isManagementRole(role)
@@ -74,33 +74,36 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
     { href: `/${slug}/manutencao/estoque`, label: 'Est. Manutenção', icon: 'estoque',  show: canSeeManutencao },
     { href: `/${slug}/financeiro`,   label: 'Financeiro',       icon: 'financeiro',    show: canSeeGeneralFinance },
     { href: `/${slug}/minhas-contas`, label: 'Minhas Contas',   icon: 'contas',        show: true },
+    { href: `/${slug}/minha-carteirinha`, label: 'Minha Carteirinha', icon: 'carteirinha', show: idCardEnabled },
     { href: `/${slug}/configuracoes`, label: 'Configurações',   icon: 'configuracoes', show: isManagement },
   ]
 
+  const dropDisabledCard = (items: AllItem[]) => items.filter(i => i.icon !== 'carteirinha' || idCardEnabled)
+
   if (isHospitalidade) {
-    return addPersonalSplit(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/pessoas', '/reservas', '/hospedagem', '/hospedagem/quartos', '/hospedagem/agenda', '/hospedagem/lavanderia', '/ministerios', '/manutencao', '/refeicoes', '/minhas-contas')).map(toItem))
+    return addPersonalSplit(dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/pessoas', '/reservas', '/hospedagem', '/hospedagem/quartos', '/hospedagem/agenda', '/hospedagem/lavanderia', '/ministerios', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-carteirinha'))).map(toItem))
   }
 
   if (isCozinha) {
-    return addPersonalSplit(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/cozinha', '/cozinha/estoque', '/cozinha/receitas', '/ministerios', '/manutencao', '/refeicoes', '/minhas-contas')).map(toItem))
+    return addPersonalSplit(dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/cozinha', '/cozinha/estoque', '/cozinha/receitas', '/ministerios', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-carteirinha'))).map(toItem))
   }
 
   if (isManutencao) {
-    return addPersonalSplit(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/manutencao', '/manutencao/estoque', '/ministerios', '/refeicoes', '/minhas-contas')).map(toItem))
+    return addPersonalSplit(dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/manutencao', '/manutencao/estoque', '/ministerios', '/refeicoes', '/minhas-contas', '/minha-carteirinha'))).map(toItem))
   }
 
   if (isObreiroMinisterio) {
-    return addPersonalSplit(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/ministerios', '/reservas', '/manutencao', '/refeicoes', '/minhas-contas')).map(toItem))
+    return addPersonalSplit(dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/ministerios', '/reservas', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-carteirinha'))).map(toItem))
   }
 
   if (isObreiroEted) {
-    return addPersonalSplit(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/escolas', '/reservas', '/manutencao', '/refeicoes', '/minhas-contas')).map(toItem))
+    return addPersonalSplit(dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/escolas', '/reservas', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-carteirinha'))).map(toItem))
   }
 
   if (isAluno || isAssociado) {
     return addPersonalSplit(
-      all.filter(pick('/dashboard', '/calendario', '/pendentes', '/reservas', '/manutencao', '/refeicoes', '/minhas-contas')).map(toItem),
-      new Set(['reservas', 'refeicoes', 'contas']),
+      dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/reservas', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-carteirinha'))).map(toItem),
+      new Set(['reservas', 'refeicoes', 'contas', 'carteirinha']),
     )
   }
 
@@ -183,7 +186,7 @@ export default async function SlugLayout({ children, params }: Props) {
 
   const { data: org } = await supabase
     .from('organizations')
-    .select('id, name, active, logo_url, accent_color, department_assignments, role_accumulations, laundry_enabled')
+    .select('id, name, active, logo_url, accent_color, department_assignments, role_accumulations, laundry_enabled, id_card_enabled')
     .eq('slug', slug)
     .single()
 
@@ -487,7 +490,8 @@ export default async function SlugLayout({ children, params }: Props) {
       .gte('created_at', muralSince)
     hasSchoolMessages = (count ?? 0) > 0
   }
-  const navItems = buildNav(slug, role, [...accumulatedRoles, ...extraRoles, ...linkedRoles], hasPending, reservationsPending > 0, hasOwnCashScope, laundryEnabled, hasMinistryMessages, hasSchoolMessages)
+  const idCardEnabled = (org as { id_card_enabled?: boolean }).id_card_enabled ?? false
+  const navItems = buildNav(slug, role, [...accumulatedRoles, ...extraRoles, ...linkedRoles], hasPending, reservationsPending > 0, hasOwnCashScope, laundryEnabled, hasMinistryMessages, hasSchoolMessages, idCardEnabled)
   const bottomItems = pickBottomBarItems(navItems, role)
 
   return (

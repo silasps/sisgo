@@ -8,7 +8,7 @@ import {
   ClipboardList, Music2, BedDouble, UtensilsCrossed, Landmark,
   ChefHat, Package, DollarSign, Receipt, Settings, LogOut,
   UserCheck, CalendarDays, Wrench, Building2, Eye, Code2, Inbox, CookingPot,
-  Hotel, DoorOpen, WashingMachine,
+  Hotel, DoorOpen, WashingMachine, IdCard,
   type LucideIcon,
 } from 'lucide-react'
 import { SisgoLogo } from './Logo'
@@ -48,6 +48,7 @@ export const ICON_MAP: Record<string, LucideIcon> = {
   solicitacoes:   Inbox,
   financeiro:     DollarSign,
   contas:         Receipt,
+  carteirinha:    IdCard,
   configuracoes:  Settings,
   bases:          Building2,
   supervisao:     Eye,

@@ -6,7 +6,7 @@ import { getSupabaseCookieOptions } from './cookie-options'
 const RESERVED = new Set(['login', 'cadastro', 'auth', 'superadmin', 'supervisor', 'api', '_next', 'images', 'favicon.ico'])
 
 // Sub-paths públicos dentro de /{slug}/ (sem auth)
-const PUBLIC_SUBPATHS = ['escola', 'inscricao', 'candidato', 'formulario', 'referencia', 'verificar-email']
+const PUBLIC_SUBPATHS = ['escola', 'inscricao', 'candidato', 'formulario', 'referencia', 'verificar-email', 'carteirinha']
 
 function isPublicSlugRoute(pathname: string): boolean {
   const parts = pathname.split('/').filter(Boolean)

@@ -14,6 +14,7 @@ import { EmbedCodeBox } from '@/components/ui/EmbedCodeBox'
 
 import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
 import { SCHOOL_TYPES } from '@/lib/schools'
+import { triggerSiteRevalidation } from '@/lib/revalidate-webhook'
 import { CheckCircle2, AlertTriangle, Settings } from 'lucide-react'
 
 type Props = {
@@ -232,6 +233,7 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
       is_public: formData.get('is_public') === 'on',
       active: formData.get('active') === 'on',
     }).eq('id', id)
+    await triggerSiteRevalidation(org!.id, 'schools')
     redirect(`/${slug}/escolas/${id}?msg=atualizado`)
   }
 
@@ -290,6 +292,7 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
       active: true,
     }).select('id').single()
     if (error || !newClass) redirect(`/${slug}/escolas/${id}`)
+    await triggerSiteRevalidation(org!.id, 'events')
     redirect(`/${slug}/escolas/${id}/turmas/${newClass.id}`)
   }
 
@@ -360,12 +363,14 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
       formData.get('class_id') as string,
       formData.get('active') === 'true',
     )
+    await triggerSiteRevalidation(org.id, 'events')
     redirect(`/${slug}/escolas/${id}`)
   }
 
   const handleDeleteTurma = async (formData: FormData) => {
     'use server'
     await deleteTurma(formData.get('class_id') as string)
+    await triggerSiteRevalidation(org.id, 'events')
     redirect(`/${slug}/escolas/${id}`)
   }
 

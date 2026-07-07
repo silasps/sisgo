@@ -1,9 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
-import { Header } from '@/components/layout/Header'
 import { notFound, redirect } from 'next/navigation'
-import Link from 'next/link'
-import { Heart, Phone, AlertCircle, ChevronLeft } from 'lucide-react'
+import { Heart, Phone, AlertCircle } from 'lucide-react'
 import { MANAGEMENT_ROLES } from '@/lib/auth/permissions'
 import { getRolePreview } from '@/lib/role-preview'
 
@@ -129,29 +127,7 @@ export default async function SaudePage({ params }: Props) {
   const hasAnyData = Object.values(health).some(Boolean)
 
   return (
-    <>
-      <Header
-        title={person.full_name}
-        actions={
-          <Link
-            href={`/${slug}/pessoas?tab=alunos`}
-            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
-          >
-            <ChevronLeft size={16} />
-            Voltar
-          </Link>
-        }
-      />
-      <main className="p-4 md:p-6 space-y-4 max-w-xl">
-
-        <div className="flex items-center gap-2 text-xs text-gray-400">
-          <Link href={`/${slug}/pessoas`} className="hover:text-brand-500">Pessoas</Link>
-          <span>/</span>
-          <span>{person.full_name}</span>
-          <span>/</span>
-          <span className="text-gray-600 font-medium">Saúde</span>
-        </div>
-
+    <main className="p-4 md:p-6 space-y-4 max-w-xl">
         {!hasAnyData ? (
           <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
             <Heart size={32} className="text-gray-200 mx-auto mb-3" />
@@ -192,7 +168,6 @@ export default async function SaudePage({ params }: Props) {
         <p className="text-xs text-gray-400 text-center">
           Dados coletados no formulário de inscrição. Acesso restrito a gestores.
         </p>
-      </main>
-    </>
+    </main>
   )
 }

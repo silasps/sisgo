@@ -364,10 +364,10 @@ export default async function PessoasPage({ params, searchParams }: Props) {
   }
 
   if (tab === 'obreiros') {
-    type ObreiroRaw = { id: string; role_title: string | null; area: string | null; active: boolean; user_id?: string | null; people: { full_name: string } | null }
+    type ObreiroRaw = { id: string; role_title: string | null; area: string | null; active: boolean; user_id?: string | null; people: { id: string; full_name: string } | null }
     const result = await supabase
       .from('staff_profiles')
-      .select('id, role_title, area, active, user_id, people(full_name)')
+      .select('id, role_title, area, active, user_id, people(id, full_name)')
       .eq('organization_id', orgId)
       .order('created_at', { ascending: false })
 
@@ -375,7 +375,7 @@ export default async function PessoasPage({ params, searchParams }: Props) {
     if (result.error) {
       const fallback = await supabase
         .from('staff_profiles')
-        .select('id, role_title, area, active, people(full_name)')
+        .select('id, role_title, area, active, people(id, full_name)')
         .eq('organization_id', orgId)
         .order('created_at', { ascending: false })
       staffProfiles = (fallback.data ?? []) as unknown as ObreiroRaw[]
@@ -383,6 +383,7 @@ export default async function PessoasPage({ params, searchParams }: Props) {
 
     rows = staffProfiles.map(s => ({
       id: s.id,
+      personId: s.people?.id,
       nome: s.people?.full_name ?? '—',
       detalhe: s.area ?? null,
       meta: s.user_id ? null : 'Obreiro sem cadastro',
@@ -693,7 +694,7 @@ export default async function PessoasPage({ params, searchParams }: Props) {
                       <th className="text-left px-4 py-3 font-medium text-gray-600">Nome</th>
                       <th className="hidden md:table-cell text-left px-4 py-3 font-medium text-gray-600">{col2Label}</th>
                       <th className="hidden md:table-cell text-left px-4 py-3 font-medium text-gray-600">{badgeLabel}</th>
-                      {tab === 'alunos' && <th className="hidden md:table-cell px-4 py-3" />}
+                      {(tab === 'alunos' || tab === 'obreiros') && <th className="hidden md:table-cell px-4 py-3" />}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -753,13 +754,13 @@ export default async function PessoasPage({ params, searchParams }: Props) {
                             </span>
                           ) : '—'}
                         </td>
-                        {tab === 'alunos' && r.personId && (
+                        {(tab === 'alunos' || tab === 'obreiros') && r.personId && (
                           <td className="hidden md:table-cell px-4 py-3 text-right">
                             <Link
-                              href={`/${slug}/pessoas/${r.personId}/saude`}
+                              href={`/${slug}/pessoas/${r.personId}`}
                               className="text-xs text-brand-500 hover:text-brand-700 font-medium hover:underline transition-colors"
                             >
-                              Ver saúde →
+                              Ver perfil →
                             </Link>
                           </td>
                         )}

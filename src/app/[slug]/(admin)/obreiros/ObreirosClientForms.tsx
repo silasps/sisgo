@@ -255,8 +255,47 @@ export function ToggleActiveForm({
   slug: string
   disabled: boolean
 }) {
+  const [showDesligamento, setShowDesligamento] = useState(false)
+
+  // Reativar não precisa de confirmação extra — some direto.
+  if (active && showDesligamento) {
+    return (
+      <form action={toggleActive} className="flex flex-col gap-1.5 rounded-lg border border-red-100 bg-red-50/60 p-2">
+        <input type="hidden" name="org_user_id" value={orgUserId} />
+        <input type="hidden" name="active" value={String(active)} />
+        <input type="hidden" name="slug" value={slug} />
+        <label className="flex items-center gap-1.5 text-xs text-gray-700">
+          <input type="checkbox" name="sent_as_missionary" />
+          Foi enviado(a) como missionário(a)?
+        </label>
+        <input
+          type="text"
+          name="sent_to"
+          placeholder="Enviado para onde? (opcional)"
+          className="rounded-md border border-gray-200 px-2 py-1 text-xs"
+        />
+        <div className="flex items-center gap-2">
+          <button type="submit" className="rounded-lg bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700">
+            Confirmar desligamento
+          </button>
+          <button type="button" onClick={() => setShowDesligamento(false)} className="text-xs text-gray-500 hover:text-gray-700">
+            Cancelar
+          </button>
+        </div>
+      </form>
+    )
+  }
+
   return (
-    <form action={toggleActive}>
+    <form
+      action={active ? undefined : toggleActive}
+      onSubmit={(e) => {
+        if (active) {
+          e.preventDefault()
+          setShowDesligamento(true)
+        }
+      }}
+    >
       <input type="hidden" name="org_user_id" value={orgUserId} />
       <input type="hidden" name="active" value={String(active)} />
       <input type="hidden" name="slug" value={slug} />

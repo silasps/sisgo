@@ -18,8 +18,9 @@ export type Database = {
           logo_url: string | null; active: boolean; created_at: string; updated_at: string
           accent_color: string | null
           department_assignments: Record<string, string> | null
+          id_card_enabled: boolean
         }
-        Insert: { name: string; slug: string; country?: string; city?: string | null; state?: string | null; phone?: string | null; email?: string | null; website?: string | null; logo_url?: string | null; active?: boolean; accent_color?: string | null; department_assignments?: Record<string, string> | null }
+        Insert: { name: string; slug: string; country?: string; city?: string | null; state?: string | null; phone?: string | null; email?: string | null; website?: string | null; logo_url?: string | null; active?: boolean; accent_color?: string | null; department_assignments?: Record<string, string> | null; id_card_enabled?: boolean }
         Update: Partial<Database['public']['Tables']['organizations']['Insert']>
         Relationships: []
       }
@@ -80,10 +81,35 @@ export type Database = {
         Relationships: [Rel<'staff_applications_interest_form_id_fkey', ['interest_form_id'], false, 'staff_interest_forms', ['id']>]
       }
       staff_profiles: {
-        Row: { id: string; organization_id: string; person_id: string; user_id: string | null; role_title: string | null; area: string | null; joined_at: string | null; left_at: string | null; active: boolean; created_at: string; updated_at: string }
-        Insert: { organization_id: string; person_id: string; user_id?: string | null; role_title?: string | null; area?: string | null; joined_at?: string | null; left_at?: string | null; active?: boolean }
+        Row: {
+          id: string; organization_id: string; person_id: string; user_id: string | null; role_title: string | null; area: string | null; joined_at: string | null; left_at: string | null; active: boolean; created_at: string; updated_at: string
+          // added by migration 085_public_api
+          sent_as_missionary: boolean; sent_to: string | null
+        }
+        Insert: { organization_id: string; person_id: string; user_id?: string | null; role_title?: string | null; area?: string | null; joined_at?: string | null; left_at?: string | null; active?: boolean; sent_as_missionary?: boolean; sent_to?: string | null }
         Update: Partial<Database['public']['Tables']['staff_profiles']['Insert']>
         Relationships: [Rel<'staff_profiles_person_id_fkey', ['person_id'], false, 'people', ['id']>]
+      }
+      person_public_tokens: {
+        Row: { id: string; person_id: string; organization_id: string; token: string; revoked_at: string | null; access_count: number; last_accessed_at: string | null; created_at: string; created_by: string | null }
+        Insert: { person_id: string; organization_id: string; token?: string; revoked_at?: string | null; created_by?: string | null }
+        Update: Partial<Database['public']['Tables']['person_public_tokens']['Insert']>
+        Relationships: [
+          Rel<'person_public_tokens_person_id_fkey', ['person_id'], false, 'people', ['id']>,
+          Rel<'person_public_tokens_organization_id_fkey', ['organization_id'], false, 'organizations', ['id']>
+        ]
+      }
+      organization_api_tokens: {
+        Row: { id: string; organization_id: string; site_name: string; token: string; allowed_origin: string | null; revalidate_webhook_url: string | null; revalidate_secret: string | null; revoked_at: string | null; created_at: string; updated_at: string }
+        Insert: { organization_id: string; site_name: string; token?: string; allowed_origin?: string | null; revalidate_webhook_url?: string | null; revalidate_secret?: string | null; revoked_at?: string | null }
+        Update: Partial<Database['public']['Tables']['organization_api_tokens']['Insert']>
+        Relationships: [Rel<'organization_api_tokens_organization_id_fkey', ['organization_id'], false, 'organizations', ['id']>]
+      }
+      organization_stats_overrides: {
+        Row: { id: string; organization_id: string; key: string; label: string; value: string; updated_by: string | null; updated_at: string }
+        Insert: { organization_id: string; key: string; label: string; value: string; updated_by?: string | null }
+        Update: Partial<Database['public']['Tables']['organization_stats_overrides']['Insert']>
+        Relationships: [Rel<'organization_stats_overrides_organization_id_fkey', ['organization_id'], false, 'organizations', ['id']>]
       }
       student_applications: {
         Row: { id: string; organization_id: string; person_id: string; school_id: string | null; class_id: string | null; status: string; applied_at: string; reviewed_at: string | null; reviewed_by: string | null; notes: string | null }
