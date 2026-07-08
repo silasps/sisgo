@@ -51,11 +51,13 @@ export default async function StandaloneRegistrationPage({ params, searchParams 
 
   const { data: org } = await supabase
     .from('organizations')
-    .select('id, name')
+    .select('id, name, student_communication_languages')
     .eq('slug', slug)
     .eq('active', true)
     .single()
   if (!org) notFound()
+
+  const communicationLanguages = (org.student_communication_languages ?? []) as string[]
 
   const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(schoolSlug)
   const query = supabase
@@ -101,6 +103,7 @@ export default async function StandaloneRegistrationPage({ params, searchParams 
               classes={(classes ?? [])
                 .filter(c => c.online_applications)
                 .map(c => ({ id: c.id, name: c.name, year: c.year, semester: c.semester }))}
+              communicationLanguages={communicationLanguages}
               initialLang={langParam}
             />
           </div>

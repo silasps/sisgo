@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { submitPreRegistration } from './actions'
-import { PHONE_COUNTRIES, LANGUAGES } from '@/lib/i18n/phoneCountries'
+import { PHONE_COUNTRIES, LANGUAGES, guessLanguageCode } from '@/lib/i18n/phoneCountries'
 import { PartyPopper } from 'lucide-react'
 import { LangSwitcher } from '@/components/ui/LangSwitcher'
 import { getFormDict, normalizeLang } from '@/lib/i18n/forms'
@@ -14,11 +14,13 @@ export function RegistrationForm({
   slug,
   schoolSlug,
   classes,
+  communicationLanguages = [],
   initialLang,
 }: {
   slug: string
   schoolSlug: string
   classes: ClassOption[]
+  communicationLanguages?: string[]
   initialLang?: string
 }) {
   const [lang, setLang] = useState<Lang>(normalizeLang(initialLang))
@@ -28,6 +30,13 @@ export function RegistrationForm({
   const [errorMsg, setErrorMsg] = useState('')
   const [phoneCountry, setPhoneCountry] = useState('+55')
   const [phoneDisplay, setPhoneDisplay] = useState('')
+  const [nativeLanguage, setNativeLanguage] = useState('')
+
+  useEffect(() => {
+    if (typeof navigator === 'undefined') return
+    const guess = guessLanguageCode(navigator.languages ?? [navigator.language])
+    if (guess) setNativeLanguage(guess)
+  }, [])
 
   function applyPhoneMask(raw: string, dialCode: string): string {
     const d = raw.replace(/\D/g, '')
@@ -62,6 +71,7 @@ export function RegistrationForm({
       phone,
       phoneCountry: rawPhone ? phoneCountry : null,
       language: data.get('language') as string || null,
+      communicationLanguage: data.get('communicationLanguage') as string || null,
       message: data.get('message') as string || null,
     })
 
@@ -70,6 +80,7 @@ export function RegistrationForm({
       form.reset()
       setPhoneCountry('+55')
       setPhoneDisplay('')
+      setNativeLanguage('')
     } else {
       setStatus('error')
       setErrorMsg(result.error ?? d.registration.error_fallback)
@@ -125,7 +136,8 @@ export function RegistrationForm({
         <select
           name="language"
           required
-          defaultValue=""
+          value={nativeLanguage}
+          onChange={e => setNativeLanguage(e.target.value)}
           className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent text-gray-900"
         >
           <option value="" disabled>{d.registration.language_ph}</option>
@@ -136,6 +148,26 @@ export function RegistrationForm({
           ))}
         </select>
       </div>
+
+      {communicationLanguages.length > 0 && (
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">
+            {d.registration.communication_language}
+          </label>
+          <select
+            name="communicationLanguage"
+            defaultValue=""
+            className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent text-gray-900"
+          >
+            <option value="" disabled>{d.registration.communication_language_ph}</option>
+            {LANGUAGES.filter(l => communicationLanguages.includes(l.code)).map(l => (
+              <option key={l.code} value={l.code}>
+                {l.label}{l.nativeLabel !== l.label ? ` — ${l.nativeLabel}` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Telefone / WhatsApp */}
       <div>

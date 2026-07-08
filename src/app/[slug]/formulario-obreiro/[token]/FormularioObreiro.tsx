@@ -608,6 +608,7 @@ function S8Legal({ data }: { data?: Record<string, string> }) {
           {[
             { name: 'decl_verdadeiro', text: 'Declaro que todas as informações prestadas neste formulário são verdadeiras.' },
             { name: 'decl_compromisso', text: 'Comprometo-me a respeitar as regras e valores da base durante o período de serviço.' },
+            { name: 'decl_sem_condenacao_menor', text: 'Declaro não possuir condenação, processo em andamento ou histórico de conduta inadequada envolvendo crianças ou adolescentes.' },
           ].map(decl => (
             <label key={decl.name} className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 cursor-pointer hover:border-amber-200">
               <input type="checkbox" name={decl.name} value="sim"
@@ -712,6 +713,15 @@ function S10DocumentosAceite({ isBrazilian, estadoCivil }: { isBrazilian: boolea
           <input type="checkbox" name="maior_18" value="sim" required
             className="mt-0.5 accent-amber-600 flex-shrink-0" />
           <span className="text-sm text-gray-700">Declaro que sou maior de 18 anos.</span>
+        </label>
+        <label className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 cursor-pointer hover:border-amber-200">
+          <input type="checkbox" name="decl_ciencia_verificacao" value="sim" required
+            className="mt-0.5 accent-amber-600 flex-shrink-0" />
+          <span className="text-sm text-gray-700">
+            Estou ciente de que meus dados poderão ser objeto de verificação de antecedentes,
+            incluindo consulta a certidões e referências, como parte do processo de proteção
+            de crianças e adolescentes da organização.
+          </span>
         </label>
       </div>
     </div>

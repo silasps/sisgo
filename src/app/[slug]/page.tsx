@@ -52,6 +52,7 @@ export default async function PublicBasePage({ params, searchParams }: Props) {
         <span className="font-bold text-base sm:text-lg truncate">{org.name}</span>
         <nav className="flex items-center gap-3 sm:gap-6 text-sm flex-shrink-0">
           <a href={`/${slug}#escolas`} className="hidden sm:inline hover:text-brand-400">Escolas</a>
+          <a href={`/${slug}/servir`} className="hidden sm:inline hover:text-brand-400">Servir</a>
           <a href={`/${slug}#escolas`} className="bg-brand-500 hover:bg-brand-600 px-3 sm:px-4 py-2 rounded-lg font-semibold transition-colors text-xs sm:text-sm whitespace-nowrap">
             Ver escolas
           </a>

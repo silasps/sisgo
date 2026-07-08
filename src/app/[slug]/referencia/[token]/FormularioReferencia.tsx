@@ -14,6 +14,7 @@ type Props = {
   candidatoNome: string
   escolaNome: string
   initialLang?: string
+  isStaff?: boolean
 }
 
 function Field({ label, name, placeholder, required, type = 'text' }: {
@@ -44,21 +45,45 @@ function TextArea({ label, name, placeholder, required, rows = 4 }: {
   )
 }
 
-function Select({ label, name, required, options, selectPlaceholder }: {
+function Select({ label, name, required, options, selectPlaceholder, onChange }: {
   label: string; name: string; required?: boolean
   options: { value: string; label: string }[]
   selectPlaceholder: string
+  onChange?: (e: React.ChangeEvent<HTMLSelectElement>) => void
 }) {
   return (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-1">
         {label}{required && <span className="text-red-500 ml-0.5">*</span>}
       </label>
-      <select name={name} defaultValue="" required={required}
+      <select name={name} defaultValue="" required={required} onChange={onChange}
         className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-gray-50">
         <option value="" disabled>{selectPlaceholder}</option>
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
+    </div>
+  )
+}
+
+function CondutaMenoresField({ candidatoNome, d, selectPh }: {
+  candidatoNome: string
+  d: ReturnType<typeof getFormDict>
+  selectPh: string
+}) {
+  const [preocupa, setPreocupa] = useState(false)
+  return (
+    <div className="sm:col-span-2 border-t pt-4 mt-2">
+      <Select
+        label={t(d.ref.conduta_menores_q, { name: candidatoNome })}
+        name="conduta_menores" required selectPlaceholder={selectPh}
+        options={[{ value: 'sem_preocupacao', label: d.opts.no }, { value: 'tem_preocupacao', label: d.opts.yes }]}
+        onChange={(e) => setPreocupa(e.target.value === 'tem_preocupacao')}
+      />
+      {preocupa && (
+        <div className="mt-3">
+          <TextArea label={d.ref.conduta_menores_detalhe} name="conduta_menores_detalhe" required rows={3} />
+        </div>
+      )}
     </div>
   )
 }
@@ -68,10 +93,11 @@ function InlineWithName({ template, name }: { template: string; name: string }) 
   return <><strong>{name}</strong>{after ?? before}</>
 }
 
-function FormPastor({ candidatoNome, d, selectPh }: {
+function FormPastor({ candidatoNome, d, selectPh, isStaff }: {
   candidatoNome: string
   d: ReturnType<typeof getFormDict>
   selectPh: string
+  isStaff?: boolean
 }) {
   return (
     <div className="space-y-5">
@@ -138,6 +164,8 @@ function FormPastor({ candidatoNome, d, selectPh }: {
             ]} />
         </div>
 
+        {isStaff && <CondutaMenoresField candidatoNome={candidatoNome} d={d} selectPh={selectPh} />}
+
         <div className="sm:col-span-2 border-t pt-4 mt-2">
           <label className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 cursor-pointer hover:border-indigo-200">
             <input type="checkbox" name="decl_verdadeiro" value="sim" required
@@ -150,10 +178,11 @@ function FormPastor({ candidatoNome, d, selectPh }: {
   )
 }
 
-function FormAmigo({ candidatoNome, d, selectPh }: {
+function FormAmigo({ candidatoNome, d, selectPh, isStaff }: {
   candidatoNome: string
   d: ReturnType<typeof getFormDict>
   selectPh: string
+  isStaff?: boolean
 }) {
   return (
     <div className="space-y-5">
@@ -217,6 +246,8 @@ function FormAmigo({ candidatoNome, d, selectPh }: {
             placeholder={d.ref.amigo_observacoes_ph} />
         </div>
 
+        {isStaff && <CondutaMenoresField candidatoNome={candidatoNome} d={d} selectPh={selectPh} />}
+
         <div className="sm:col-span-2 border-t pt-4 mt-2">
           <label className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 cursor-pointer hover:border-indigo-200">
             <input type="checkbox" name="decl_verdadeiro" value="sim" required
@@ -229,7 +260,7 @@ function FormAmigo({ candidatoNome, d, selectPh }: {
   )
 }
 
-export function FormularioReferencia({ token, tipo, candidatoNome, escolaNome, initialLang }: Props) {
+export function FormularioReferencia({ token, tipo, candidatoNome, escolaNome, initialLang, isStaff }: Props) {
   const [lang, setLang] = useState<Lang>(normalizeLang(initialLang))
   const d = getFormDict(lang)
 
@@ -287,8 +318,8 @@ export function FormularioReferencia({ token, tipo, candidatoNome, escolaNome, i
       </div>
 
       {tipo === 'pastor'
-        ? <FormPastor candidatoNome={candidatoNome} d={d} selectPh={selectPh} />
-        : <FormAmigo candidatoNome={candidatoNome} d={d} selectPh={selectPh} />
+        ? <FormPastor candidatoNome={candidatoNome} d={d} selectPh={selectPh} isStaff={isStaff} />
+        : <FormAmigo candidatoNome={candidatoNome} d={d} selectPh={selectPh} isStaff={isStaff} />
       }
 
       {error && (

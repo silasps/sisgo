@@ -11,8 +11,37 @@ import { toast } from 'sonner'
 
 type ClassOption = { id: string; school_id: string; name: string; starts_at: string | null; schoolName: string | null }
 type MinistryOption = { id: string; name: string }
+type SchoolOption = { id: string; name: string }
 type CriarAction = (fd: FormData) => Promise<void>
 type EditarAction = (fd: FormData) => Promise<void>
+
+function DestinationSelect({ ministries, schools, defaultValue, className }: {
+  ministries: MinistryOption[]
+  schools: SchoolOption[]
+  defaultValue?: string
+  className: string
+}) {
+  if (ministries.length === 0 && schools.length === 0) return null
+  return (
+    <select name="destination" defaultValue={defaultValue ?? ''} className={className}>
+      <option value="">Sem preferência</option>
+      {ministries.length > 0 && (
+        <optgroup label="Ministérios">
+          {ministries.map(m => (
+            <option key={m.id} value={`ministry:${m.id}`}>{m.name}</option>
+          ))}
+        </optgroup>
+      )}
+      {schools.length > 0 && (
+        <optgroup label="Escolas">
+          {schools.map(s => (
+            <option key={s.id} value={`school:${s.id}`}>{s.name}</option>
+          ))}
+        </optgroup>
+      )}
+    </select>
+  )
+}
 
 // ── Nova pré-inscrição manual ──────────────────────────────────────────────
 
@@ -105,9 +134,10 @@ export function NovaPreInscricaoButton({
 // ── Nova pré-inscrição de obreiro ─────────────────────────────────────────
 
 export function NovaPreInscricaoObreiroButton({
-  ministries, criarAction, slug,
+  ministries, schools, criarAction, slug,
 }: {
   ministries: MinistryOption[]
+  schools: SchoolOption[]
   criarAction: CriarAction
   slug: string
 }) {
@@ -152,16 +182,14 @@ export function NovaPreInscricaoObreiroButton({
 
           <InternationalPhoneField phoneName="phone" accentRing="ring-violet-400" />
 
-          {ministries.length > 0 && (
+          {(ministries.length > 0 || schools.length > 0) && (
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Ministério de interesse</label>
-              <select name="ministry_id"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
-                <option value="">Sem preferência</option>
-                {ministries.map(m => (
-                  <option key={m.id} value={m.id}>{m.name}</option>
-                ))}
-              </select>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Ministério ou escola de interesse</label>
+              <DestinationSelect
+                ministries={ministries}
+                schools={schools}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+              />
             </div>
           )}
 
@@ -288,14 +316,15 @@ export function EditarPreInscricaoButton({
 
 type PreInscricaoObreiro = {
   id: string; full_name: string; email: string | null; phone: string | null
-  message: string | null; ministryId: string | null
+  message: string | null; ministryId: string | null; schoolId: string | null
 }
 
 export function EditarPreInscricaoObreiroButton({
-  item, ministries, editarAction,
+  item, ministries, schools, editarAction,
 }: {
   item: PreInscricaoObreiro
   ministries: MinistryOption[]
+  schools: SchoolOption[]
   editarAction: EditarAction
 }) {
   const router = useRouter()
@@ -340,16 +369,15 @@ export function EditarPreInscricaoObreiroButton({
 
           <InternationalPhoneField phoneName="phone" defaultPhone={item.phone} accentRing="ring-violet-400" />
 
-          {ministries.length > 0 && (
+          {(ministries.length > 0 || schools.length > 0) && (
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Ministério de interesse</label>
-              <select name="ministry_id" defaultValue={item.ministryId ?? ''}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
-                <option value="">Sem preferência</option>
-                {ministries.map(m => (
-                  <option key={m.id} value={m.id}>{m.name}</option>
-                ))}
-              </select>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Ministério ou escola de interesse</label>
+              <DestinationSelect
+                ministries={ministries}
+                schools={schools}
+                defaultValue={item.ministryId ? `ministry:${item.ministryId}` : item.schoolId ? `school:${item.schoolId}` : ''}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+              />
             </div>
           )}
 

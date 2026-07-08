@@ -42,6 +42,12 @@ const EVENT_LABELS: Record<string, { title: string; bodyFn: (p: NotificationEven
       ? 'Nova solicitação de ministério'
       : `Solicitação ${statusLabel(p.new_status)}`,
   },
+  background_check_concern: {
+    title: 'Alerta de antecedentes',
+    bodyFn: (p) => p.new_status === 'reprovado'
+      ? 'Verificação de antecedentes reprovada — requer atenção do DH'
+      : 'Verificação de antecedentes sinalizada como preocupante — requer atenção do DH',
+  },
   service_request: {
     title: 'Solicitação de serviço',
     bodyFn: (p) => p.operation === 'INSERT'

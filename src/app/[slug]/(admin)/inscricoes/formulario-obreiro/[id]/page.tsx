@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getRolePreview } from '@/lib/role-preview'
 import { Pencil } from 'lucide-react'
+import BackgroundChecksSection from './BackgroundChecksSection'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
@@ -210,12 +211,13 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
   const userRole = preview?.role ?? realRole
   const allowed = ['superadmin', 'admin_base', 'lider_base', 'dh', 'lider_eted', 'lider_ministerio'].includes(userRole)
   if (!allowed) notFound()
+  const canManageChecks = ['superadmin', 'admin_base', 'lider_base', 'dh'].includes(userRole)
 
   const { data: app } = await sb
     .from('staff_applications')
     .select(`
       id, status, form_data, applied_at,
-      organization_id, ministry_id,
+      organization_id, ministry_id, person_id,
       people(full_name),
       ministries(name),
       staff_interest_forms(full_name, email, phone)
@@ -240,6 +242,12 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
 
   const pastorRef = refs?.find(r => r.type === 'pastor')
   const amigoRef = refs?.find(r => r.type === 'amigo')
+
+  const { data: backgroundChecks } = await sb
+    .from('background_checks')
+    .select('id, check_type, country, status, issued_at, expires_at, notes, flagged_concern')
+    .eq('staff_application_id', id)
+    .order('created_at', { ascending: true })
 
   const sectionData = Object.entries(formData)
     .filter(([k]) => k.startsWith('s'))
@@ -309,6 +317,11 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
                 </span>
                 {pastorRef.status === 'enviado' && pastorRef.form_data && (
                   <div className="mt-2 space-y-1">
+                    {(pastorRef.form_data as Record<string, string>).conduta_menores === 'tem_preocupacao' && (
+                      <p className="text-xs font-semibold text-red-700 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5">
+                        ⚠ Referência sinalizou preocupação sobre conduta com menores
+                      </p>
+                    )}
                     {Object.entries(pastorRef.form_data as Record<string, string>).map(([k, v]) => (
                       <FieldRow key={k} label={k.replace(/_/g, ' ')} value={v} />
                     ))}
@@ -324,6 +337,11 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
                 </span>
                 {amigoRef.status === 'enviado' && amigoRef.form_data && (
                   <div className="mt-2 space-y-1">
+                    {(amigoRef.form_data as Record<string, string>).conduta_menores === 'tem_preocupacao' && (
+                      <p className="text-xs font-semibold text-red-700 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5">
+                        ⚠ Referência sinalizou preocupação sobre conduta com menores
+                      </p>
+                    )}
                     {Object.entries(amigoRef.form_data as Record<string, string>).map(([k, v]) => (
                       <FieldRow key={k} label={k.replace(/_/g, ' ')} value={v} />
                     ))}
@@ -333,6 +351,18 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
             )}
           </SectionCard>
         )}
+
+        {/* Verificação de antecedentes */}
+        <SectionCard title="Verificação de Antecedentes">
+          <BackgroundChecksSection
+            checks={backgroundChecks ?? []}
+            organizationId={app.organization_id}
+            slug={slug}
+            staffApplicationId={id}
+            personId={app.person_id}
+            readOnly={!canManageChecks}
+          />
+        </SectionCard>
       </main>
     </>
   )

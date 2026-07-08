@@ -1,23 +1,41 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { submitStaffPreRegistration } from './actions'
-import { PHONE_COUNTRIES, LANGUAGES } from '@/lib/i18n/phoneCountries'
+import { PHONE_COUNTRIES, LANGUAGES, formatPhoneByDialCode, guessLanguageCode } from '@/lib/i18n/phoneCountries'
 import { PartyPopper } from 'lucide-react'
 import { LangSwitcher } from '@/components/ui/LangSwitcher'
 import { getFormDict, normalizeLang } from '@/lib/i18n/forms'
 import type { Lang } from '@/lib/i18n/forms'
 
 type MinistryOption = { id: string; name: string }
+type SchoolOption = { id: string; name: string }
+
+const PHONE_PLACEHOLDERS: Record<string, string> = {
+  '+55': '(41) 99999-9999',
+  '+1': '(212) 555-1234',
+  '+351': '912 345 678',
+  '+54': '11 1234-5678',
+  '+34': '612 345 678',
+  '+44': '7911 123456',
+}
 
 export function StaffRegistrationForm({
   slug,
   ministries,
+  schools = [],
+  communicationLanguages = [],
   initialLang,
+  lockedMinistryId,
+  lockedMinistryName,
 }: {
   slug: string
   ministries: MinistryOption[]
+  schools?: SchoolOption[]
+  communicationLanguages?: string[]
   initialLang?: string
+  lockedMinistryId?: string
+  lockedMinistryName?: string
 }) {
   const [lang, setLang] = useState<Lang>(normalizeLang(initialLang))
   const d = getFormDict(lang)
@@ -26,38 +44,46 @@ export function StaffRegistrationForm({
   const [errorMsg, setErrorMsg] = useState('')
   const [phoneCountry, setPhoneCountry] = useState('+55')
   const [phoneDisplay, setPhoneDisplay] = useState('')
+  const [nativeLanguage, setNativeLanguage] = useState('')
 
-  function applyPhoneMask(raw: string, dialCode: string): string {
-    const digits = raw.replace(/\D/g, '')
-    if (dialCode === '+55') {
-      const local = digits.slice(0, 11)
-      if (local.length <= 2) return local ? `(${local}` : ''
-      if (local.length <= 6) return `(${local.slice(0, 2)}) ${local.slice(2)}`
-      if (local.length <= 10) return `(${local.slice(0, 2)}) ${local.slice(2, 6)}-${local.slice(6)}`
-      return `(${local.slice(0, 2)}) ${local.slice(2, 7)}-${local.slice(7)}`
-    }
-    return digits.slice(0, 15)
-  }
+  useEffect(() => {
+    if (typeof navigator === 'undefined') return
+    const guess = guessLanguageCode(navigator.languages ?? [navigator.language])
+    if (guess) setNativeLanguage(guess)
+  }, [])
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    setStatus('loading')
     setErrorMsg('')
 
     const form = e.currentTarget
     const data = new FormData(form)
 
+    const email = ((data.get('email') as string) || '').trim()
     const rawPhone = (data.get('phone_number') as string)?.trim()
     const phone = rawPhone ? `${phoneCountry}${rawPhone.replace(/\D/g, '')}` : null
 
+    if (!email && !phone) {
+      setStatus('error')
+      setErrorMsg(t.contact_required)
+      return
+    }
+
+    setStatus('loading')
+
+    const destination = lockedMinistryId ? `ministry:${lockedMinistryId}` : (data.get('destination') as string) || ''
+    const [destType, destId] = destination.includes(':') ? destination.split(':') : [null, null]
+
     const result = await submitStaffPreRegistration({
       slug,
-      ministryId: (data.get('ministryId') as string) || null,
+      ministryId: destType === 'ministry' ? destId : null,
+      schoolId: destType === 'school' ? destId : null,
       fullName: data.get('fullName') as string,
-      email: data.get('email') as string,
+      email: email || null,
       phone,
       phoneCountry: rawPhone ? phoneCountry : null,
       language: (data.get('language') as string) || null,
+      communicationLanguage: (data.get('communicationLanguage') as string) || null,
       message: (data.get('message') as string) || null,
     })
 
@@ -66,6 +92,7 @@ export function StaffRegistrationForm({
       form.reset()
       setPhoneCountry('+55')
       setPhoneDisplay('')
+      setNativeLanguage('')
     } else {
       setStatus('error')
       setErrorMsg(result.error ?? d.registration.error_fallback)
@@ -82,7 +109,8 @@ export function StaffRegistrationForm({
       email: 'E-mail',
       email_ph: 'seu@email.com',
       phone: 'Telefone / WhatsApp',
-      phone_optional: '(opcional)',
+      contact_hint: 'Informe pelo menos um: e-mail ou telefone/WhatsApp.',
+      contact_required: 'Informe pelo menos um contato: e-mail ou telefone/WhatsApp.',
       ministry: 'Ministério de interesse',
       ministry_ph: 'Nenhuma preferência',
       message: 'Mensagem',
@@ -103,7 +131,8 @@ export function StaffRegistrationForm({
       email: 'Email',
       email_ph: 'your@email.com',
       phone: 'Phone / WhatsApp',
-      phone_optional: '(optional)',
+      contact_hint: 'Provide at least one: email or phone/WhatsApp.',
+      contact_required: 'Please provide at least one contact: email or phone/WhatsApp.',
       ministry: 'Ministry of interest',
       ministry_ph: 'No preference',
       message: 'Message',
@@ -124,7 +153,8 @@ export function StaffRegistrationForm({
       email: 'Correo electrónico',
       email_ph: 'tu@email.com',
       phone: 'Teléfono / WhatsApp',
-      phone_optional: '(opcional)',
+      contact_hint: 'Indica al menos uno: correo electrónico o teléfono/WhatsApp.',
+      contact_required: 'Indica al menos un contacto: correo electrónico o teléfono/WhatsApp.',
       ministry: 'Ministerio de interés',
       ministry_ph: 'Sin preferencia',
       message: 'Mensaje',
@@ -167,14 +197,14 @@ export function StaffRegistrationForm({
       </div>
 
       <div>
-        <label className="block text-sm font-semibold text-gray-700 mb-2">{t.email} *</label>
+        <label className="block text-sm font-semibold text-gray-700 mb-2">{t.email}</label>
         <input
           name="email"
           type="email"
-          required
           placeholder={t.email_ph}
           className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent text-gray-900 placeholder-gray-400"
         />
+        <p className="text-xs text-gray-400 mt-1.5">{t.contact_hint}</p>
       </div>
 
       <div>
@@ -184,7 +214,8 @@ export function StaffRegistrationForm({
         <select
           name="language"
           required
-          defaultValue=""
+          value={nativeLanguage}
+          onChange={e => setNativeLanguage(e.target.value)}
           className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent text-gray-900"
         >
           <option value="" disabled>{d.registration.language_ph}</option>
@@ -196,18 +227,35 @@ export function StaffRegistrationForm({
         </select>
       </div>
 
+      {communicationLanguages.length > 0 && (
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">
+            {d.registration.communication_language}
+          </label>
+          <select
+            name="communicationLanguage"
+            defaultValue=""
+            className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent text-gray-900"
+          >
+            <option value="" disabled>{d.registration.communication_language_ph}</option>
+            {LANGUAGES.filter(l => communicationLanguages.includes(l.code)).map(l => (
+              <option key={l.code} value={l.code}>
+                {l.label}{l.nativeLabel !== l.label ? ` — ${l.nativeLabel}` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <div>
-        <label className="block text-sm font-semibold text-gray-700 mb-2">
-          {t.phone}
-          <span className="ml-1 text-xs font-normal text-gray-400">{t.phone_optional}</span>
-        </label>
+        <label className="block text-sm font-semibold text-gray-700 mb-2">{t.phone}</label>
         <div className="flex gap-2">
           <div className="flex-shrink-0">
             <select
               value={phoneCountry}
               onChange={e => {
                 setPhoneCountry(e.target.value)
-                setPhoneDisplay(applyPhoneMask(phoneDisplay, e.target.value))
+                setPhoneDisplay(formatPhoneByDialCode(e.target.value, phoneDisplay))
               }}
               className="h-full px-2 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent text-gray-900 text-sm min-w-[110px]"
               aria-label="Código do país"
@@ -224,8 +272,8 @@ export function StaffRegistrationForm({
             type="tel"
             inputMode="numeric"
             value={phoneDisplay}
-            onChange={e => setPhoneDisplay(applyPhoneMask(e.target.value, phoneCountry))}
-            placeholder={phoneCountry === '+55' ? '(41) 99999-9999' : 'somente números'}
+            onChange={e => setPhoneDisplay(formatPhoneByDialCode(phoneCountry, e.target.value))}
+            placeholder={PHONE_PLACEHOLDERS[phoneCountry] ?? 'somente números'}
             className="flex-1 px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent text-gray-900 placeholder-gray-400"
           />
         </div>
@@ -235,17 +283,35 @@ export function StaffRegistrationForm({
         </p>
       </div>
 
-      {ministries.length > 0 && (
+      {lockedMinistryId ? (
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">{t.ministry}</label>
+          <p className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-gray-900">
+            {lockedMinistryName}
+          </p>
+        </div>
+      ) : (ministries.length > 0 || schools.length > 0) && (
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-2">{t.ministry}</label>
           <select
-            name="ministryId"
+            name="destination"
             className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent text-gray-900"
           >
             <option value="">{t.ministry_ph}</option>
-            {ministries.map(m => (
-              <option key={m.id} value={m.id}>{m.name}</option>
-            ))}
+            {ministries.length > 0 && (
+              <optgroup label="Ministérios">
+                {ministries.map(m => (
+                  <option key={m.id} value={`ministry:${m.id}`}>{m.name}</option>
+                ))}
+              </optgroup>
+            )}
+            {schools.length > 0 && (
+              <optgroup label="Escolas">
+                {schools.map(s => (
+                  <option key={s.id} value={`school:${s.id}`}>{s.name}</option>
+                ))}
+              </optgroup>
+            )}
           </select>
         </div>
       )}

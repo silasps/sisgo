@@ -393,6 +393,8 @@ export interface FormDict {
     amigo_observacoes: string
     amigo_observacoes_ph: string
     amigo_decl: string
+    conduta_menores_q: string  // {name} placeholder
+    conduta_menores_detalhe: string
     // Common
     submit: string
     submitting: string
@@ -408,6 +410,8 @@ export interface FormDict {
     email_ph: string
     language: string
     language_ph: string
+    communication_language: string
+    communication_language_ph: string
     phone: string
     phone_optional: string
     class_interest: string

@@ -94,6 +94,59 @@ export const PHONE_COUNTRIES: PhoneCountry[] = [
   { code: '+82',  flag: '🇰🇷', name: 'Coreia do Sul',        iso: 'KR' },
 ]
 
+/** Aplica máscara de telefone de acordo com o código de discagem do país. */
+export function formatPhoneByDialCode(dialCode: string, raw: string): string {
+  const digits = raw.replace(/\D/g, '')
+
+  if (dialCode === '+55') {
+    const local = digits.slice(0, 11)
+    if (local.length <= 2) return local ? `(${local}` : ''
+    if (local.length <= 6) return `(${local.slice(0, 2)}) ${local.slice(2)}`
+    if (local.length <= 10) return `(${local.slice(0, 2)}) ${local.slice(2, 6)}-${local.slice(6)}`
+    return `(${local.slice(0, 2)}) ${local.slice(2, 7)}-${local.slice(7)}`
+  }
+
+  if (dialCode === '+1') {
+    const local = digits.slice(0, 10)
+    if (local.length <= 3) return local ? `(${local}` : ''
+    if (local.length <= 6) return `(${local.slice(0, 3)}) ${local.slice(3)}`
+    return `(${local.slice(0, 3)}) ${local.slice(3, 6)}-${local.slice(6)}`
+  }
+
+  if (dialCode === '+351') {
+    const local = digits.slice(0, 9)
+    if (local.length <= 3) return local
+    if (local.length <= 6) return `${local.slice(0, 3)} ${local.slice(3)}`
+    return `${local.slice(0, 3)} ${local.slice(3, 6)} ${local.slice(6)}`
+  }
+
+  if (dialCode === '+54') {
+    // Argentina: 2/3 dígitos de área + 6/7 dígitos de linha
+    const local = digits.slice(0, 10)
+    if (local.length <= 3) return local
+    if (local.length <= 6) return `${local.slice(0, 3)} ${local.slice(3)}`
+    return `${local.slice(0, 3)} ${local.slice(3, 6)}-${local.slice(6)}`
+  }
+
+  if (dialCode === '+34') {
+    // Espanha: 3+3+3
+    const local = digits.slice(0, 9)
+    if (local.length <= 3) return local
+    if (local.length <= 6) return `${local.slice(0, 3)} ${local.slice(3)}`
+    return `${local.slice(0, 3)} ${local.slice(3, 6)} ${local.slice(6)}`
+  }
+
+  if (dialCode === '+44') {
+    // Reino Unido: 4+6
+    const local = digits.slice(0, 10)
+    if (local.length <= 4) return local
+    return `${local.slice(0, 4)} ${local.slice(4)}`
+  }
+
+  // Demais países: apenas dígitos, limitado a um tamanho razoável
+  return digits.slice(0, 15)
+}
+
 export type Language = {
   code: string
   label: string   // displayed in the form
@@ -127,3 +180,24 @@ export const LANGUAGES: Language[] = [
   { code: 'af',    label: 'Africâner',             nativeLabel: 'Afrikaans' },
   { code: 'other', label: 'Outro idioma',          nativeLabel: 'Other' },
 ]
+
+/**
+ * Tenta adivinhar o código de LANGUAGES mais próximo a partir dos idiomas
+ * do navegador (ex.: navigator.languages). Usado só como sugestão inicial
+ * do campo "língua materna" — o visitante pode sempre trocar.
+ */
+export function guessLanguageCode(browserLangs: readonly string[]): string {
+  for (const raw of browserLangs) {
+    const lower = raw.toLowerCase()
+    const exact = LANGUAGES.find(l => l.code.toLowerCase() === lower)
+    if (exact) return exact.code
+
+    const base = lower.split('-')[0]
+    if (base === 'pt') return 'pt-BR'
+    if (base === 'zh') return 'zh-CN'
+
+    const partial = LANGUAGES.find(l => l.code.toLowerCase().split('-')[0] === base)
+    if (partial) return partial.code
+  }
+  return ''
+}

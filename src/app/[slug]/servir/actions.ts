@@ -5,28 +5,32 @@ import { createAdminClient } from '@/lib/supabase/admin'
 type StaffPreRegistrationInput = {
   slug: string
   ministryId: string | null
+  schoolId: string | null
   fullName: string
-  email: string
+  email: string | null
   phone: string | null
   phoneCountry: string | null
   language: string | null
+  communicationLanguage: string | null
   message: string | null
 }
 
 export async function submitStaffPreRegistration(
   input: StaffPreRegistrationInput,
 ): Promise<{ success: boolean; error?: string }> {
-  if (!input.fullName?.trim() || !input.email?.trim()) {
-    return { success: false, error: 'Nome e e-mail são obrigatórios.' }
+  const phone = input.phone?.trim() || null
+
+  if (!input.fullName?.trim() || (!input.email?.trim() && !phone)) {
+    return { success: false, error: 'Nome e ao menos um contato (e-mail ou telefone) são obrigatórios.' }
   }
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  if (!emailRegex.test(input.email)) {
+  if (input.email?.trim() && !emailRegex.test(input.email.trim())) {
     return { success: false, error: 'E-mail inválido.' }
   }
 
   const sb = createAdminClient()
-  const email = input.email.trim().toLowerCase()
+  const email = input.email?.trim() ? input.email.trim().toLowerCase() : null
 
   const { data: org } = await sb
     .from('organizations')
@@ -48,15 +52,40 @@ export async function submitStaffPreRegistration(
     if (!ministry) return { success: false, error: 'Ministério não encontrado.' }
   }
 
+  if (input.schoolId) {
+    const { data: school } = await sb
+      .from('schools')
+      .select('id')
+      .eq('id', input.schoolId)
+      .eq('organization_id', org.id)
+      .eq('active', true)
+      .single()
+    if (!school) return { success: false, error: 'Escola não encontrada.' }
+  }
+
   let personId: string | null = null
 
-  const { data: existingPerson } = await sb
-    .from('people')
-    .select('id, person_contacts!inner(type, value)')
-    .eq('organization_id', org.id)
-    .eq('person_contacts.type', 'email')
-    .eq('person_contacts.value', email)
-    .maybeSingle()
+  let existingPerson: { id: string } | null = null
+  if (email) {
+    const { data } = await sb
+      .from('people')
+      .select('id, person_contacts!inner(type, value)')
+      .eq('organization_id', org.id)
+      .eq('person_contacts.type', 'email')
+      .eq('person_contacts.value', email)
+      .maybeSingle()
+    existingPerson = data
+  }
+  if (!existingPerson && phone) {
+    const { data } = await sb
+      .from('people')
+      .select('id, person_contacts!inner(type, value)')
+      .eq('organization_id', org.id)
+      .eq('person_contacts.type', 'phone')
+      .eq('person_contacts.value', phone)
+      .maybeSingle()
+    existingPerson = data
+  }
 
   if (existingPerson) {
     personId = existingPerson.id
@@ -81,24 +110,23 @@ export async function submitStaffPreRegistration(
       personId = newPerson.id
     }
 
-    const contacts: { person_id: string; type: string; value: string; is_primary: boolean }[] = [
-      { person_id: personId!, type: 'email', value: email, is_primary: true },
-    ]
-    if (input.phone?.trim()) {
-      contacts.push({ person_id: personId!, type: 'phone', value: input.phone.trim(), is_primary: false })
-    }
-    await sb.from('person_contacts').insert(contacts)
+    const contacts: { person_id: string; type: string; value: string; is_primary: boolean }[] = []
+    if (email) contacts.push({ person_id: personId!, type: 'email', value: email, is_primary: true })
+    if (phone) contacts.push({ person_id: personId!, type: 'phone', value: phone, is_primary: !email })
+    if (contacts.length > 0) await sb.from('person_contacts').insert(contacts)
   }
 
   const payload: Record<string, unknown> = {
     organization_id: org.id,
     full_name: input.fullName.trim(),
     email,
-    phone: input.phone?.trim() || null,
+    phone,
     phone_country: input.phoneCountry || null,
     language: input.language || null,
+    communication_language: input.communicationLanguage || null,
     message: input.message?.trim() || null,
     ministry_id: input.ministryId || null,
+    school_id: input.schoolId || null,
     person_id: personId,
     status: 'pendente',
   }

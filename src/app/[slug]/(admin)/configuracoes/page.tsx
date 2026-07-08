@@ -2,9 +2,11 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { notFound, redirect } from 'next/navigation'
 import { BrandingForm } from './BrandingForm'
-import { updateAreaCashScopes, updateRoleAccumulations, updateIdCardEnabled } from './actions'
+import { ConfigForm } from './ConfigForm'
+import { updateAreaCashScopes, updateRoleAccumulations, updateIdCardEnabled, updateStaffCommunicationLanguages, updateStudentCommunicationLanguages } from './actions'
 import { asLooseClient } from '@/lib/supabase/loose-client'
 import { schoolTypeShortLabel } from '@/lib/schools'
+import { LANGUAGES } from '@/lib/i18n/phoneCountries'
 
 type Props = { params: Promise<{ slug: string }> }
 
@@ -34,7 +36,7 @@ export default async function ConfiguracoesPage({ params }: Props) {
 
   const { data: org } = await supabase
     .from('organizations')
-    .select('id, name, slug, email, city, state, logo_url, accent_color, role_accumulations, id_card_enabled')
+    .select('id, name, slug, email, city, state, logo_url, accent_color, role_accumulations, id_card_enabled, staff_communication_languages, student_communication_languages')
     .eq('slug', slug)
     .single()
 
@@ -55,6 +57,8 @@ export default async function ConfiguracoesPage({ params }: Props) {
   const canConfigureCashScopes = CASH_SCOPE_ROLES.includes(roleName)
   const canConfigureAccumulations = ACCUMULATION_ROLES.includes(roleName)
   const currentAccumulations = (org?.role_accumulations as Record<string, string[]> | null) ?? {}
+  const currentStaffLanguages = ((org?.staff_communication_languages as string[] | null) ?? [])
+  const currentStudentLanguages = ((org?.student_communication_languages as string[] | null) ?? [])
 
   const [{ data: schools }, { data: ministries }, { data: cashScopes }] = canConfigureCashScopes
     ? await Promise.all([
@@ -107,7 +111,7 @@ export default async function ConfiguracoesPage({ params }: Props) {
 
         {canBrand && (
           <Section title="Carteirinha digital">
-            <form action={updateIdCardEnabled.bind(null, org.id, slug)} className="space-y-4">
+            <ConfigForm action={updateIdCardEnabled.bind(null, org.id, slug)} buttonLabel="Salvar" className="space-y-4">
               <label className="flex items-start gap-3 cursor-pointer">
                 <input
                   type="checkbox"
@@ -122,16 +126,13 @@ export default async function ConfiguracoesPage({ params }: Props) {
                   </span>
                 </span>
               </label>
-              <button className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800">
-                Salvar
-              </button>
-            </form>
+            </ConfigForm>
           </Section>
         )}
 
         {canConfigureCashScopes && (
           <Section title="Caixas próprios por área">
-            <form action={updateAreaCashScopes.bind(null, org.id, slug)} className="space-y-5">
+            <ConfigForm action={updateAreaCashScopes.bind(null, org.id, slug)} buttonLabel="Salvar caixas próprios" className="space-y-5">
               <p className="text-sm text-gray-500">
                 Ative caixa próprio para uma escola ou ministério quando aquela área deve controlar entradas e saídas separadas do caixa geral da base.
                 Para escolas, a configuração é feita por escola cadastrada, não por turma.
@@ -174,11 +175,7 @@ export default async function ConfiguracoesPage({ params }: Props) {
                   </div>
                 </div>
               </div>
-
-              <button className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800">
-                Salvar caixas próprios
-              </button>
-            </form>
+            </ConfigForm>
           </Section>
         )}
 
@@ -188,7 +185,7 @@ export default async function ConfiguracoesPage({ params }: Props) {
             <p className="text-sm text-gray-500 mb-5">
               Configure quais funções adicionais uma pessoa cobre nesta base. O acúmulo vale para todos com aquela função.
             </p>
-            <form action={updateRoleAccumulations.bind(null, org.id, slug)} className="space-y-5">
+            <ConfigForm action={updateRoleAccumulations.bind(null, org.id, slug)} buttonLabel="Salvar acúmulo de funções" className="space-y-5">
               {ACCUMULATION_OPTIONS.map(option => (
                 <div key={option.role} className="rounded-lg border border-gray-100 bg-gray-50 p-4">
                   <p className="text-sm font-semibold text-gray-800 mb-3">
@@ -209,10 +206,59 @@ export default async function ConfiguracoesPage({ params }: Props) {
                   </div>
                 </div>
               ))}
-              <button className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800">
-                Salvar acúmulo de funções
-              </button>
-            </form>
+            </ConfigForm>
+          </div>
+        )}
+
+        {canConfigureAccumulations && (
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <h2 className="font-semibold text-gray-900 mb-1">Idiomas de atendimento — Obreiros</h2>
+            <p className="text-sm text-gray-500 mb-5">
+              Marque os idiomas em que a base consegue atender candidatos a obreiro. Essas opções aparecem
+              no formulário público de pré-inscrição (/servir).
+            </p>
+            <ConfigForm action={updateStaffCommunicationLanguages.bind(null, org.id, slug)} buttonLabel="Salvar idiomas — Obreiros" className="space-y-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {LANGUAGES.map(l => (
+                  <label key={l.code} className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 hover:border-brand-300 hover:bg-brand-50/40">
+                    <input
+                      type="checkbox"
+                      name="languages"
+                      value={l.code}
+                      defaultChecked={currentStaffLanguages.includes(l.code)}
+                      className="h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-400"
+                    />
+                    <span className="text-sm text-gray-700">{l.label}</span>
+                  </label>
+                ))}
+              </div>
+            </ConfigForm>
+          </div>
+        )}
+
+        {canConfigureAccumulations && (
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <h2 className="font-semibold text-gray-900 mb-1">Idiomas de atendimento — Alunos</h2>
+            <p className="text-sm text-gray-500 mb-5">
+              Marque os idiomas em que a base consegue atender candidatos a aluno. Essas opções aparecem no
+              formulário público de pré-inscrição de cada escola.
+            </p>
+            <ConfigForm action={updateStudentCommunicationLanguages.bind(null, org.id, slug)} buttonLabel="Salvar idiomas — Alunos" className="space-y-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {LANGUAGES.map(l => (
+                  <label key={l.code} className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 hover:border-brand-300 hover:bg-brand-50/40">
+                    <input
+                      type="checkbox"
+                      name="languages"
+                      value={l.code}
+                      defaultChecked={currentStudentLanguages.includes(l.code)}
+                      className="h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-400"
+                    />
+                    <span className="text-sm text-gray-700">{l.label}</span>
+                  </label>
+                ))}
+              </div>
+            </ConfigForm>
           </div>
         )}
 

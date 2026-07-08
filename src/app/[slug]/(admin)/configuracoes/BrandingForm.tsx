@@ -21,13 +21,17 @@ export function BrandingForm({ orgId, orgSlug, orgName, currentLogoUrl, currentA
   const [selectedColor, setSelectedColor] = useState(currentAccentColor)
   const [logoPreview, setLogoPreview] = useState(currentLogoUrl)
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'error'>('idle')
+  const [colorSaved, setColorSaved] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   function handleColorChange(colorKey: AccentColorKey) {
     setSelectedColor(colorKey)
+    setColorSaved(false)
     startTransition(async () => {
       await updateAccentColor(orgId, orgSlug, colorKey)
       router.refresh()
+      setColorSaved(true)
+      setTimeout(() => setColorSaved(false), 2500)
     })
   }
 
@@ -152,6 +156,11 @@ export function BrandingForm({ orgId, orgSlug, orgName, currentLogoUrl, currentA
               )
             })}
           </div>
+          {(isPending || colorSaved) && (
+            <p className="mt-3 text-xs font-medium text-gray-400">
+              {isPending ? 'Salvando…' : <span className="text-green-500">✓ Salvo</span>}
+            </p>
+          )}
         </div>
       </section>
 

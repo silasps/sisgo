@@ -43,7 +43,7 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
 
   const { data: ministry } = await supabase
     .from('ministries')
-    .select('id, name, description, active, linked_role')
+    .select('id, name, description, active, linked_role, slug, subtitle, hero_image_url, is_public')
     .eq('id', id)
     .eq('organization_id', orgId)
     .single()
@@ -130,6 +130,10 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
       name: (formData.get('name') as string).trim(),
       description: (formData.get('description') as string).trim() || null,
       active: formData.get('active') === 'on',
+      slug: (formData.get('slug') as string)?.trim() || null,
+      subtitle: (formData.get('subtitle') as string)?.trim() || null,
+      hero_image_url: (formData.get('hero_image_url') as string)?.trim() || null,
+      is_public: formData.get('is_public') === 'on',
     })
     redirect(`/${slug}/ministerios/${id}?msg=atualizado`)
   }
@@ -242,6 +246,28 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
                   <input type="checkbox" name="active" defaultChecked={ministry.active} className="rounded border-gray-300 text-brand-500 h-3.5 w-3.5" />
                   <span className="text-xs text-gray-600">Ativo</span>
                 </label>
+
+                <div className="border-t border-gray-100 pt-2 mt-2 space-y-2">
+                  <h4 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Página pública</h4>
+                  <input name="slug" defaultValue={ministry.slug ?? ''} placeholder="Slug (URL pública)" className={`${INPUT} text-xs`} />
+                  <input name="subtitle" defaultValue={ministry.subtitle ?? ''} placeholder="Subtítulo" className={`${INPUT} text-xs`} />
+                  <input name="hero_image_url" defaultValue={ministry.hero_image_url ?? ''} placeholder="URL da imagem hero" className={`${INPUT} text-xs`} />
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" name="is_public" defaultChecked={ministry.is_public} className="rounded border-gray-300 text-brand-500 h-3.5 w-3.5" />
+                    <span className="text-xs text-gray-600">Página pública ativa</span>
+                  </label>
+                  {ministry.is_public && ministry.slug && (
+                    <a
+                      href={`/${slug}/servir/${ministry.slug}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-[10px] text-brand-600 hover:text-brand-700 truncate"
+                    >
+                      Ver página pública →
+                    </a>
+                  )}
+                </div>
+
                 <button type="submit" className="w-full px-3 py-1.5 text-xs font-medium rounded-lg bg-brand-500 hover:bg-brand-600 text-white transition-colors">
                   Salvar
                 </button>

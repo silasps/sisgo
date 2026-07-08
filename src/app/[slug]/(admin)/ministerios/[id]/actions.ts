@@ -21,7 +21,10 @@ export async function createMinistry(orgId: string, name: string, description: s
 // ── DH: atualiza info do ministério ──────────────────────────────────────────
 export async function updateMinistry(
   id: string,
-  data: { name?: string; description?: string | null; active?: boolean }
+  data: {
+    name?: string; description?: string | null; active?: boolean
+    slug?: string | null; subtitle?: string | null; hero_image_url?: string | null; is_public?: boolean
+  }
 ) {
   const sb = createAdminClient()
   await sb

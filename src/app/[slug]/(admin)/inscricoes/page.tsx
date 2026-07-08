@@ -14,6 +14,7 @@ import { ScrollHighlight } from '@/components/ui/ScrollHighlight'
 import { SCHOOL_APPLICATION_TYPES } from '@/lib/schools'
 import { ServirLinkCard } from './ServirLinkCard'
 import { InscricaoLinkCard } from './InscricaoLinkCard'
+import { MinistryLinkCard } from './MinistryLinkCard'
 import { InscricoesList } from './InscricoesList'
 import { SearchBar } from '@/components/ui/SearchBar'
 
@@ -45,7 +46,10 @@ type InscricaoItem = {
   applicationId?: string | null
   staffApplicationId?: string | null
   hasFormData?: boolean
+  bgCheckSummary?: BgCheckSummary | null
 }
+
+type BgCheckSummary = { total: number; pendentes: number; reprovados: number; flagged: number; expirados: number }
 
 type HistoricoItem = {
   id: string
@@ -142,7 +146,6 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
   const isLiderMinisterio = userRole === 'lider_ministerio'
   const isManagement = ['superadmin', 'admin_base', 'lider_base', 'dh'].includes(userRole)
   const canWrite = ['superadmin', 'admin_base', 'dh'].includes(userRole)
-  const canWriteObreiro = canWrite || isLiderMinisterio
 
   let leaderMinistryId: string | null = null
   if (isLiderMinisterio) {
@@ -163,6 +166,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
   }
 
   const canWriteEted = isEtedLeader && (allowedSchoolIds?.length ?? 0) > 0
+  const canWriteObreiro = canWrite || isLiderMinisterio || canWriteEted
 
   const canWriteItem = (item: InscricaoItem) => {
     if (canWrite) return true
@@ -412,6 +416,32 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       leader_accepted_at: now,
       leader_accepted_by: user.id,
     }).eq('id', id)
+
+    const { data: existingChecks } = await db
+      .from('background_checks')
+      .select('id')
+      .eq('staff_application_id', id)
+      .limit(1)
+    if (!existingChecks?.length) {
+      const { data: appRow } = await db
+        .from('staff_applications')
+        .select('organization_id, person_id, form_data')
+        .eq('id', id)
+        .single()
+      if (appRow) {
+        const s2 = (appRow.form_data as Record<string, Record<string, string>> | null)?.s2
+        const isBrasileiro = s2?.is_brasileiro !== 'nao'
+        const checkTypes = isBrasileiro
+          ? ['pf_federal', 'ssp_estadual', 'autodeclaracao_conduta', 'referencia_conduta_menores']
+          : ['police_clearance_estrangeiro', 'autodeclaracao_conduta', 'referencia_conduta_menores']
+        await db.from('background_checks').insert(checkTypes.map(check_type => ({
+          organization_id: appRow.organization_id,
+          staff_application_id: id,
+          person_id: appRow.person_id,
+          check_type,
+        })))
+      }
+    }
   }
 
   async function finalizarObreiro(formData: FormData) {
@@ -687,12 +717,15 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     const { revalidatePath } = await import('next/cache')
     const db = adm()
     const id = formData.get('id') as string
+    const destination = (formData.get('destination') as string) || ''
+    const [destType, destId] = destination.includes(':') ? destination.split(':') : [null, null]
     await db.from('staff_interest_forms').update({
       full_name: (formData.get('full_name') as string).trim(),
       email: (formData.get('email') as string)?.trim() || null,
       phone: (formData.get('phone') as string)?.trim() || null,
       message: (formData.get('message') as string)?.trim() || null,
-      ministry_id: (formData.get('ministry_id') as string) || null,
+      ministry_id: destType === 'ministry' ? destId : null,
+      school_id: destType === 'school' ? destId : null,
     }).eq('id', id)
     revalidatePath(`/${slug}/inscricoes`)
   }
@@ -770,7 +803,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     const interestFormId = formData.get('interest_form_id') as string
     const { data: form } = await db
       .from('staff_interest_forms')
-      .select('id, organization_id, ministry_id')
+      .select('id, organization_id, ministry_id, school_id')
       .eq('id', interestFormId)
       .single()
     if (!form) return
@@ -789,6 +822,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       await db.from('staff_applications').insert({
         organization_id: form.organization_id,
         ministry_id: form.ministry_id,
+        school_id: form.school_id,
         interest_form_id: form.id,
         status: 'em_analise',
         form_data: { source: 'externo' },
@@ -817,7 +851,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
 
     const { data: form } = await db
       .from('staff_interest_forms')
-      .select('id, organization_id, full_name, email, phone, language, ministry_id, person_id')
+      .select('id, organization_id, full_name, email, phone, language, ministry_id, school_id, person_id')
       .eq('id', interestFormId)
       .single()
 
@@ -838,9 +872,14 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       expiresAt = existing.token_expires_at!
     } else {
       let personId = form.person_id
-      if (!personId) {
+      if (!personId && form.email) {
         const { data: contact } = await db.from('person_contacts')
           .select('person_id').eq('type', 'email').eq('value', form.email).maybeSingle()
+        if (contact) personId = contact.person_id
+      }
+      if (!personId && !form.email && form.phone) {
+        const { data: contact } = await db.from('person_contacts')
+          .select('person_id').eq('type', 'phone').eq('value', form.phone).maybeSingle()
         if (contact) personId = contact.person_id
       }
       if (!personId) {
@@ -849,7 +888,11 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           .select('id').single()
         personId = person?.id ?? null
         if (personId) {
-          await db.from('person_contacts').insert({ person_id: personId, type: 'email', value: form.email, is_primary: true })
+          if (form.email) {
+            await db.from('person_contacts').insert({ person_id: personId, type: 'email', value: form.email, is_primary: true })
+          } else if (form.phone) {
+            await db.from('person_contacts').insert({ person_id: personId, type: 'phone', value: form.phone, is_primary: true })
+          }
         }
       }
       if (!personId) return { error: 'Não foi possível criar a pessoa.' }
@@ -861,6 +904,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           organization_id: form.organization_id,
           person_id: personId,
           ministry_id: form.ministry_id,
+          school_id: form.school_id,
           status: 'rascunho',
           form_data: {
             prefill: {
@@ -898,11 +942,13 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     const { revalidatePath } = await import('next/cache')
     const db = adm()
 
-    const ministryIdVal = (formData.get('ministry_id') as string | null) || null
+    const destination = (formData.get('destination') as string) || ''
+    const [destType, destId] = destination.includes(':') ? destination.split(':') : [null, null]
 
     await db.from('staff_interest_forms').insert({
       organization_id: orgId,
-      ministry_id: ministryIdVal,
+      ministry_id: destType === 'ministry' ? destId : null,
+      school_id: destType === 'school' ? destId : null,
       full_name: (formData.get('full_name') as string).trim(),
       email: (formData.get('email') as string)?.trim() || '',
       phone: (formData.get('phone') as string)?.trim() || null,
@@ -930,23 +976,29 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     const { createAdminClient: adm } = await import('@/lib/supabase/admin')
     const db = adm()
     const interestId = formData.get('interest_id') as string
-    const ministryId = formData.get('ministry_id') as string
-    if (!interestId || !ministryId) return
-    await db.from('staff_interest_forms').update({ ministry_id: ministryId }).eq('id', interestId)
+    const destination = (formData.get('destination') as string) || ''
+    const [destType, destId] = destination.includes(':') ? destination.split(':') : [null, null]
+    if (!interestId || !destId) return
+    await db.from('staff_interest_forms').update({
+      ministry_id: destType === 'ministry' ? destId : null,
+      school_id: destType === 'school' ? destId : null,
+    }).eq('id', interestId)
     const { redirect: redir } = await import('next/navigation')
-    redir(`/${slug}/inscricoes?tab=obreiro&flash_success=${encodeURIComponent('Inscrição encaminhada para o ministério.')}`)
+    redir(`/${slug}/inscricoes?tab=obreiro&flash_success=${encodeURIComponent('Inscrição encaminhada.')}`)
   }
 
   // ── Queries ────────────────────────────────────────────────────────────────
 
-  const [{ data: allSchoolsRaw }, { data: allMinistriesRaw }, { data: publicSchoolsRaw }] = await Promise.all([
+  const [{ data: allSchoolsRaw }, { data: allMinistriesRaw }, { data: publicSchoolsRaw }, { data: publicMinistriesRaw }] = await Promise.all([
     sb.from('schools').select('id, name').eq('organization_id', orgId).eq('active', true).order('name'),
     sb.from('ministries').select('id, name').eq('organization_id', orgId).eq('active', true).order('name'),
     sb.from('schools').select('id, name, slug').eq('organization_id', orgId).eq('active', true).eq('is_public', true).in('school_type', [...SCHOOL_APPLICATION_TYPES]).order('name'),
+    sb.from('ministries').select('id, name, slug').eq('organization_id', orgId).eq('active', true).eq('is_public', true).order('name'),
   ])
   const allSchools = (allSchoolsRaw ?? []) as Array<{ id: string; name: string }>
   const allMinistries = (allMinistriesRaw ?? []) as Array<{ id: string; name: string }>
   const publicSchools = (publicSchoolsRaw ?? []).filter((s: { slug: string | null }) => s.slug) as Array<{ id: string; name: string; slug: string }>
+  const publicMinistries = (publicMinistriesRaw ?? []).filter((m: { slug: string | null }) => m.slug) as Array<{ id: string; name: string; slug: string }>
 
   const items: InscricaoItem[] = []
   const historico: HistoricoItem[] = []
@@ -1055,25 +1107,27 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       id: string; full_name: string; email: string; phone: string | null
       message: string | null; status: string; created_at: string; responded_at: string | null
       refusal_reason: string | null; reviewed_by: string | null
-      ministry_id: string | null; person_id: string | null
+      ministry_id: string | null; school_id: string | null; person_id: string | null
       ministries: { name: string } | null
+      schools: { name: string } | null
       staff_applications: { id: string; status: string; form_data: Record<string, unknown> | null; token: string | null }[] | null
     }
     const sifResult = await sb
       .from('staff_interest_forms')
-      .select('id, full_name, email, phone, message, status, created_at, responded_at, refusal_reason, reviewed_by, ministry_id, person_id, ministries(name), staff_applications(id, status, form_data, token)')
+      .select('id, full_name, email, phone, message, status, created_at, responded_at, refusal_reason, reviewed_by, ministry_id, school_id, person_id, ministries(name), schools(name), staff_applications(id, status, form_data, token)')
       .eq('organization_id', orgId)
       .order('created_at', { ascending: false })
 
     for (const r of ((sifResult.data ?? []) as unknown as SIFRaw[])) {
       const ministry = r.ministries as { name: string } | null
+      const school = r.schools as { name: string } | null
       const appRow = (r.staff_applications ?? []).find(a => ['enviado', 'em_analise', 'aprovado'].includes(a.status))
         ?? (r.staff_applications ?? []).find(a => a.status === 'rascunho')
 
       if (isFinalizado(r.status) && r.refusal_reason) {
         historico.push({
           id: r.id, tipo: 'Pré-inscrição Obreiro', nome: r.full_name,
-          escola: ministry?.name ?? null,
+          escola: ministry?.name ?? school?.name ?? null,
           motivo: r.refusal_reason,
           recusadoPor: null,
           recusadoPorId: r.reviewed_by ?? null,
@@ -1084,7 +1138,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           id: r.id, tipo: 'pre_inscricao_obreiro', tipoLabel: 'Pré-inscrição Obreiro',
           tipoColor: 'bg-orange-50 text-orange-700',
           nome: r.full_name, email: r.email, phone: r.phone ?? null,
-          escola: ministry?.name ?? null, schoolId: null, turma: null, classId: null,
+          escola: ministry?.name ?? school?.name ?? null, schoolId: r.school_id, turma: null, classId: null,
           mensagem: r.message, status: r.status, notes: null,
           criadoEm: r.created_at, diasAberto: daysAgo(r.created_at),
           personId: r.person_id ?? null,
@@ -1097,13 +1151,14 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
 
     // Candidatos a Obreiro (staff_applications sem interest_form ou com formulário preenchido)
     type StaffRaw = {
-      id: string; ministry_id: string | null; interest_form_id: string | null; status: string; applied_at: string; reviewed_at: string | null; reviewed_by: string | null; refusal_reason: string | null; notes: string | null; form_data: Record<string, unknown> | null
+      id: string; ministry_id: string | null; school_id: string | null; interest_form_id: string | null; status: string; applied_at: string; reviewed_at: string | null; reviewed_by: string | null; refusal_reason: string | null; notes: string | null; form_data: Record<string, unknown> | null
       people: { id: string; full_name: string } | null
       ministries: { name: string } | null
+      schools: { name: string } | null
     }
     const result = await sb
       .from('staff_applications')
-      .select('id, ministry_id, interest_form_id, status, applied_at, reviewed_at, reviewed_by, refusal_reason, notes, form_data, people(id, full_name), ministries(name)')
+      .select('id, ministry_id, school_id, interest_form_id, status, applied_at, reviewed_at, reviewed_by, refusal_reason, notes, form_data, people(id, full_name), ministries(name), schools(name)')
       .eq('organization_id', orgId)
       .order('applied_at', { ascending: false })
 
@@ -1149,6 +1204,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     for (const r of (rows as StaffRaw[])) {
       const pessoa = r.people as { id: string; full_name: string } | null
       const ministry = r.ministries as { name: string } | null
+      const school = r.schools as { name: string } | null
 
       // Se veio de interest_form e está em rascunho, já aparece como pré-inscrição acima
       if (r.interest_form_id && r.status === 'rascunho') continue
@@ -1156,7 +1212,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       if (isFinalizado(r.status) && r.refusal_reason) {
         historico.push({
           id: r.id, tipo: 'Candidato a Obreiro', nome: pessoa?.full_name ?? '—',
-          escola: null,
+          escola: ministry?.name ?? school?.name ?? null,
           motivo: r.refusal_reason,
           recusadoPor: null,
           recusadoPorId: r.reviewed_by ?? null,
@@ -1167,7 +1223,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           id: r.id, tipo: 'obreiro', tipoLabel: 'Candidato a Obreiro',
           tipoColor: 'bg-amber-50 text-amber-700',
           nome: pessoa?.full_name ?? '—', email: pessoa?.id ? staffEmailsByPerson.get(pessoa.id) ?? null : null, phone: null,
-          escola: ministry?.name ?? null, schoolId: null, turma: null, classId: null, mensagem: null,
+          escola: ministry?.name ?? school?.name ?? null, schoolId: r.school_id ?? null, turma: null, classId: null, mensagem: null,
           status: r.status, notes: r.notes ?? null,
           criadoEm: r.applied_at, diasAberto: daysAgo(r.applied_at),
           personId: pessoa?.id ?? null,
@@ -1178,15 +1234,46 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         })
       }
     }
+
+    const obreiroAppIds = items
+      .filter(i => i.tipo === 'obreiro' && i.staffApplicationId)
+      .map(i => i.staffApplicationId as string)
+
+    if (obreiroAppIds.length > 0) {
+      const { data: checks } = await sb
+        .from('background_checks')
+        .select('staff_application_id, status, flagged_concern, expires_at')
+        .in('staff_application_id', obreiroAppIds)
+
+      const summaries = new Map<string, BgCheckSummary>()
+      for (const c of (checks ?? []) as Array<{ staff_application_id: string; status: string; flagged_concern: boolean; expires_at: string | null }>) {
+        const s = summaries.get(c.staff_application_id) ?? { total: 0, pendentes: 0, reprovados: 0, flagged: 0, expirados: 0 }
+        s.total += 1
+        if (['pendente', 'solicitado', 'em_analise'].includes(c.status)) s.pendentes += 1
+        if (c.status === 'reprovado') s.reprovados += 1
+        if (c.flagged_concern) s.flagged += 1
+        if (c.expires_at && new Date(c.expires_at) < new Date()) s.expirados += 1
+        summaries.set(c.staff_application_id, s)
+      }
+
+      for (const item of items) {
+        if (item.tipo === 'obreiro' && item.staffApplicationId) {
+          item.bgCheckSummary = summaries.get(item.staffApplicationId) ?? null
+        }
+      }
+    }
   }
 
-  // Lider ETED: só vê inscrições das suas escolas (não sem preferência)
+  // Lider ETED: só vê inscrições (aluno e obreiro) das suas escolas (não sem preferência)
   // Lider Ministério: só vê inscrições de obreiro do seu ministério
   const roleFiltered = isEtedLeader
     ? items.filter(i => {
         if (i.tipo === 'pre_inscricao' && !i.schoolId) return false
         if (i.tipo === 'pre_inscricao' && allowedSchoolIds && !allowedSchoolIds.includes(i.schoolId!)) return false
-        if (i.tipo === 'pre_inscricao_obreiro' || i.tipo === 'obreiro') return false
+        if ((i.tipo === 'pre_inscricao_obreiro' || i.tipo === 'obreiro')) {
+          if (!i.schoolId) return false
+          if (allowedSchoolIds && !allowedSchoolIds.includes(i.schoolId)) return false
+        }
         return true
       })
     : isLiderMinisterio && leaderMinistryId
@@ -1250,6 +1337,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                 slug={slug}
                 criarAction={criarPreInscricaoObreiroManual}
                 ministries={allMinistries}
+                schools={allSchools}
               />
             )}
             <Link
@@ -1309,6 +1397,17 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         {/* Card com link da página /servir — visível na tab Obreiros */}
         {tab === 'obreiro' && <ServirLinkCard slug={slug} />}
 
+        {/* Card com link individual por ministério — visível na tab Obreiros */}
+        {tab === 'obreiro' && publicMinistries.length > 0 && (
+          <MinistryLinkCard
+            orgSlug={slug}
+            ministries={(isLiderMinisterio && leaderMinistryId
+              ? publicMinistries.filter(m => m.id === leaderMinistryId)
+              : publicMinistries
+            ).map(m => ({ slug: m.slug, name: m.name }))}
+          />
+        )}
+
         <InscricoesList
           items={listItems}
           historico={historicoTab}
@@ -1344,318 +1443,6 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           encaminharParaEscola={encaminharParaEscola}
           encaminharParaMinisterio={encaminharParaMinisterio}
         />
-        {false && (
-          <div>
-            {[].map(item => {
-              return (
-                <div key={String(item)}
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-start gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${item.tipoColor}`}>{item.tipoLabel}</span>
-                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full tabular-nums ${urgency.color}`}>{urgency.label}</span>
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusInfo.color}`}>{statusInfo.label}</span>
-                      </div>
-                      <p className="font-semibold text-gray-900">{item.nome}</p>
-                      {(item.email || item.phone) && (
-                        <p className="text-sm text-gray-500 mt-0.5">
-                          {item.email}{item.email && item.phone ? ' · ' : ''}{item.phone}
-                        </p>
-                      )}
-                      {(item.escola || item.turma) ? (
-                        <p className="text-xs text-gray-400 mt-0.5">
-                          {item.escola}{item.turma ? ` · ${item.turma}` : ''}
-                        </p>
-                      ) : (item.tipo === 'pre_inscricao' && !item.schoolId) || (item.tipo === 'pre_inscricao_obreiro' && !item.ministryId) ? (
-                        <p className="text-xs text-blue-600 font-medium mt-0.5 bg-blue-50 inline-block px-1.5 py-0.5 rounded">
-                          Sem preferência — aguardando encaminhamento
-                        </p>
-                      ) : null}
-                      {item.mensagem && (
-                        <p className="text-xs text-gray-500 mt-1.5 italic border-l-2 border-gray-200 pl-2 line-clamp-2">
-                          &ldquo;{item.mensagem}&rdquo;
-                        </p>
-                      )}
-                      {item.notes && (
-                        <p className="text-xs text-gray-400 mt-1 bg-gray-50 px-2 py-1 rounded">Obs: {item.notes}</p>
-                      )}
-                      {item.tipo === 'pre_inscricao_obreiro' && item.staffApplicationId && item.hasFormData && (
-                        <Link
-                          href={`/${slug}/inscricoes/formulario-obreiro/${item.staffApplicationId}`}
-                          className="inline-flex items-center gap-1 text-xs text-amber-700 mt-1 bg-amber-50 border border-amber-100 px-2 py-1 rounded font-medium hover:bg-amber-100 transition-colors"
-                        >
-                          <ClipboardList className="size-3.5 inline -mt-0.5" /> Formulário preenchido — Ver respostas
-                        </Link>
-                      )}
-                      {item.tipo === 'obreiro' && item.hasFormData && item.staffApplicationId && (
-                        <Link
-                          href={`/${slug}/inscricoes/formulario-obreiro/${item.staffApplicationId}`}
-                          className="inline-flex items-center gap-1 text-xs text-amber-700 mt-1 bg-amber-50 border border-amber-100 px-2 py-1 rounded font-medium hover:bg-amber-100 transition-colors"
-                        >
-                          <ClipboardList className="size-3.5 inline -mt-0.5" /> Ver formulário preenchido
-                        </Link>
-                      )}
-                      {item.tipo === 'obreiro' && item.status === 'em_analise' && !item.hasLogin && (
-                        <p className="text-xs text-amber-700 mt-1 bg-amber-50 border border-amber-100 px-2 py-1 rounded font-medium">
-                          Obreiro sem cadastro
-                        </p>
-                      )}
-                      <p className="text-xs text-gray-300 mt-1.5">
-                        {new Date(item.criadoEm).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
-                      </p>
-                    </div>
-
-                    {!finalizado && (
-                      <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-col sm:items-end shrink-0 w-full sm:w-auto">
-                        {/* Contato */}
-                        {item.email && (
-                          <a href={`mailto:${item.email}?subject=Sua inscrição - ${item.escola ?? 'JOCUM'}&body=Olá ${item.nome},%0A%0A`}
-                            className="inline-flex items-center justify-center gap-1 text-xs px-3 py-2 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
-                            <Mail className="size-3.5 inline -mt-0.5" /> E-mail
-                          </a>
-                        )}
-                        {whatsapp && (
-                          <a href={whatsapp} target="_blank" rel="noopener noreferrer"
-                            className="inline-flex items-center justify-center gap-1 text-xs px-3 py-2 border border-green-200 text-green-700 hover:bg-green-50 rounded-lg transition-colors">
-                            <MessageCircle className="size-3.5 inline -mt-0.5" /> WhatsApp
-                          </a>
-                        )}
-                        {/* Formulário recebido externamente — quando ainda não tem application */}
-                        {canWriteItem(item) && item.tipo === 'pre_inscricao' && !item.applicationId && (
-                          <div className="col-span-2">
-                            <MarcarRecebidoExternoButton
-                              interestFormId={item.id}
-                              externoAction={marcarRecebidoExternamente}
-                            />
-                          </div>
-                        )}
-                        {canWriteObreiro && item.tipo === 'pre_inscricao_obreiro' && !item.staffApplicationId && !item.hasFormData && (
-                          <div className="col-span-2">
-                            <MarcarRecebidoExternoButton
-                              interestFormId={item.id}
-                              externoAction={marcarRecebidoExternamenteObreiro}
-                            />
-                          </div>
-                        )}
-
-                        {/* Links de recomendação — quando já tem application (digital ou externo) */}
-                        {item.tipo === 'pre_inscricao' && item.applicationId && (
-                          <div className="col-span-2">
-                            <LinksReferenciaAdminButton
-                              applicationId={item.applicationId}
-                              candidateName={item.nome}
-                              slug={slug}
-                            />
-                          </div>
-                        )}
-
-                        {/* Editar pré-inscrição */}
-                        {canWriteItem(item) && item.tipo === 'pre_inscricao' && (
-                          <EditarPreInscricaoButton
-                            item={{ id: item.id, full_name: item.nome, email: item.email, phone: item.phone, message: item.mensagem, classId: item.classId }}
-                            openClasses={openClasses.map(c => ({ id: c.id, school_id: c.school_id, name: c.name, starts_at: c.starts_at, schoolName: c.schools?.name ?? null }))}
-                            editarAction={editarPreInscricao}
-                          />
-                        )}
-                        {canWriteObreiro && item.tipo === 'pre_inscricao_obreiro' && (
-                          <EditarPreInscricaoObreiroButton
-                            item={{ id: item.id, full_name: item.nome, email: item.email, phone: item.phone, message: item.mensagem, ministryId: item.ministryId ?? null }}
-                            ministries={allMinistries}
-                            editarAction={editarPreInscricaoObreiro}
-                          />
-                        )}
-
-                        {/* Disponibilizar formulário ou ver respostas — pré-inscrições */}
-                        {item.tipo === 'pre_inscricao' && item.schoolId && (
-                          <div className="col-span-2">
-                            {item.applicationId ? (
-                              <Link
-                                href={`/${slug}/inscricoes/formulario/${item.applicationId}`}
-                                className="inline-flex items-center gap-1.5 w-full justify-center text-xs text-blue-700 bg-blue-50 border border-blue-200 px-3 py-2.5 rounded-lg font-semibold hover:bg-blue-100 transition-colors"
-                              >
-                                <ClipboardList className="size-3.5" /> Formulário preenchido — Ver respostas
-                              </Link>
-                            ) : canWriteItem(item) ? (
-                              <DisponibilizarFormularioButton
-                                interestFormId={item.id}
-                                slug={slug}
-                                schoolId={item.schoolId}
-                                action={disponibilizarFormulario}
-                                emailDisabled={quota.exceeded}
-                                emailDisabledReason={
-                                  quota.dailyExceeded
-                                    ? 'Limite diário de e-mails atingido (100/dia). O link ainda pode ser copiado.'
-                                    : 'Limite mensal de e-mails atingido (3.000/mês). O link ainda pode ser copiado.'
-                                }
-                              />
-                            ) : null}
-                          </div>
-                        )}
-
-                        {/* Disponibilizar formulário — pré-inscrição de obreiro */}
-                        {canWriteObreiro && item.tipo === 'pre_inscricao_obreiro' && !item.staffApplicationId && (
-                          <div className="col-span-2">
-                            <DisponibilizarFormularioButton
-                              interestFormId={item.id}
-                              slug={slug}
-                              schoolId="__obreiro__"
-                              action={disponibilizarFormularioObreiro}
-                              emailDisabled={false}
-                              label="Gerar formulário de obreiro"
-                            />
-                          </div>
-                        )}
-
-                        {/* Links de recomendação — obreiro com formulário enviado */}
-                        {(item.tipo === 'pre_inscricao_obreiro' || item.tipo === 'obreiro') && item.staffApplicationId && item.hasFormData && (
-                          <div className="col-span-2">
-                            <LinksReferenciaAdminButton
-                              applicationId={item.staffApplicationId}
-                              candidateName={item.nome}
-                              slug={slug}
-                              isStaff
-                            />
-                          </div>
-                        )}
-
-                        <div className="col-span-2 h-px bg-gray-100" />
-
-                        {/* Encaminhar — DH atribui escola/ministério quando "sem preferência" */}
-                        {canWrite && item.tipo === 'pre_inscricao' && !item.schoolId && (
-                          <form action={encaminharParaEscola} className="col-span-2 space-y-1.5 rounded-lg border border-blue-100 bg-blue-50 p-2.5">
-                            <input type="hidden" name="interest_id" value={item.id} />
-                            <p className="text-xs font-semibold text-blue-800">Sem preferência de escola</p>
-                            <select name="school_id" required className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300">
-                              <option value="" disabled>Encaminhar para qual escola?</option>
-                              {allSchools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                            </select>
-                            <button type="submit" className="w-full text-xs px-3 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors font-semibold">
-                              Encaminhar para escola
-                            </button>
-                          </form>
-                        )}
-                        {canWrite && item.tipo === 'pre_inscricao_obreiro' && !item.ministryId && (
-                          <form action={encaminharParaMinisterio} className="col-span-2 space-y-1.5 rounded-lg border border-violet-100 bg-violet-50 p-2.5">
-                            <input type="hidden" name="interest_id" value={item.id} />
-                            <p className="text-xs font-semibold text-violet-800">Sem preferência de ministério</p>
-                            <select name="ministry_id" required className="w-full rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-violet-300">
-                              <option value="" disabled>Encaminhar para qual ministério?</option>
-                              {allMinistries.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                            </select>
-                            <button type="submit" className="w-full text-xs px-3 py-2 bg-violet-600 text-white hover:bg-violet-700 rounded-lg transition-colors font-semibold">
-                              Encaminhar para ministério
-                            </button>
-                          </form>
-                        )}
-
-                        {/* Status */}
-                        {((item.tipo === 'pre_inscricao_obreiro' ? canWriteObreiro : canWriteItem(item))) && item.status === 'pendente' && (
-                          <form action={updateStatus}>
-                            <input type="hidden" name="id" value={item.id} />
-                            <input type="hidden" name="tipo" value={item.tipo} />
-                            <input type="hidden" name="status" value="em_contato" />
-                            <button type="submit" className="w-full text-xs px-3 py-2 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-lg transition-colors">
-                              Em contato
-                            </button>
-                          </form>
-                        )}
-                        {canWriteItem(item) && (item.status === 'pendente' || item.status === 'em_contato' || item.status === 'formulario_enviado' || item.status === 'em_analise') && item.tipo !== 'obreiro' && item.tipo !== 'pre_inscricao_obreiro' && (() => {
-                          const formularioPreenchido = item.tipo !== 'pre_inscricao' || !!item.applicationId
-                          return (
-                            <form action={formularioPreenchido ? aprovar : undefined} className="col-span-2 space-y-1.5">
-                              <input type="hidden" name="id" value={item.id} />
-                              <input type="hidden" name="tipo" value={item.tipo} />
-                              <input type="hidden" name="email" value={item.email ?? ''} />
-                              <input type="hidden" name="person_id" value={item.personId ?? ''} />
-                              <input type="hidden" name="org_id" value={orgId} />
-                              <select
-                                name="class_id"
-                                defaultValue={item.classId ?? ''}
-                                required
-                                disabled={!formularioPreenchido}
-                                className={`w-full rounded-lg border px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400 ${formularioPreenchido ? 'border-gray-200 bg-white text-gray-700' : 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'}`}
-                              >
-                                <option value="" disabled>Selecione a turma ETED</option>
-                                {openClasses.map(classOption => (
-                                  <option key={classOption.id} value={classOption.id}>
-                                    {classOption.schools?.name ?? 'ETED'} · {classOption.name}
-                                    {classOption.starts_at ? ` · ${new Date(classOption.starts_at).toLocaleDateString('pt-BR')}` : ''}
-                                  </option>
-                                ))}
-                              </select>
-                              <button
-                                type="submit"
-                                disabled={!formularioPreenchido}
-                                className={`w-full text-xs px-3 py-2 rounded-lg font-semibold transition-colors ${formularioPreenchido ? 'bg-green-50 text-green-700 hover:bg-green-100' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
-                              >
-                                {formularioPreenchido ? '✓ Aceitar aluno' : '✓ Aceitar aluno (aguardando formulário)'}
-                              </button>
-                            </form>
-                          )
-                        })()}
-                        {canWriteItem(item) && item.tipo === 'aluno' && item.status === 'pendente' && (
-                          <form action={updateStatus}>
-                            <input type="hidden" name="id" value={item.id} />
-                            <input type="hidden" name="tipo" value={item.tipo} />
-                            <input type="hidden" name="status" value="em_analise" />
-                            <button type="submit" className="w-full text-xs px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg transition-colors">
-                              Em análise
-                            </button>
-                          </form>
-                        )}
-                        {canWriteObreiro && item.tipo === 'obreiro' && item.status !== 'em_analise' && (
-                          <form action={encaminharObreiroDh} className="col-span-2">
-                            <input type="hidden" name="id" value={item.id} />
-                            <button type="submit" className="w-full text-xs px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg transition-colors font-semibold">
-                              Enviar ao DH
-                            </button>
-                          </form>
-                        )}
-                        {item.tipo === 'obreiro' && item.status === 'em_analise' && canWrite && item.personId && (
-                          <form action={finalizarObreiro} className="col-span-2 space-y-1.5 rounded-lg border border-amber-100 bg-amber-50 p-2">
-                            <input type="hidden" name="id" value={item.id} />
-                            <input type="hidden" name="org_id" value={orgId} />
-                            <input type="hidden" name="person_id" value={item.personId} />
-                            <input type="hidden" name="ministry_id" value={item.ministryId ?? ''} />
-                            <input type="hidden" name="name" value={item.nome} />
-                            <p className="text-xs font-semibold text-amber-800">Obreiro sem cadastro</p>
-                            <input
-                              name="email"
-                              type="email"
-                              defaultValue={item.email ?? ''}
-                              required
-                              placeholder="E-mail de login"
-                              className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-300"
-                            />
-                            <input
-                              name="password"
-                              type="password"
-                              required
-                              minLength={6}
-                              placeholder="Senha temporária"
-                              className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-300"
-                            />
-                            <button type="submit" className="w-full text-xs px-3 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg transition-colors font-semibold">
-                              Finalizar obreiro
-                            </button>
-                          </form>
-                        )}
-                        {((item.tipo === 'pre_inscricao_obreiro' || item.tipo === 'obreiro') ? canWriteObreiro : canWriteItem(item)) && (
-                          <div className="col-span-2 sm:col-span-1">
-                            <RecusarModal id={item.id} tipo={item.tipo} action={recusar} />
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {finalizado && <div className="shrink-0 text-xs text-gray-300 sm:text-right">concluído</div>}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
 
         {/* ── Histórico de Recusas ──────────────────────────────────────────── */}
         {historicoTab.length > 0 && (

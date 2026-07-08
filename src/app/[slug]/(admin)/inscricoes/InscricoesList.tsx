@@ -35,6 +35,7 @@ type InscricaoItem = {
   applicationId?: string | null
   staffApplicationId?: string | null
   hasFormData?: boolean
+  bgCheckSummary?: { total: number; pendentes: number; reprovados: number; flagged: number; expirados: number } | null
 }
 
 type HistoricoItem = {
@@ -196,6 +197,9 @@ export function InscricoesList({
             const urgency    = urgencyBadge(item.diasAberto)
             const finalizado = isFinalizado(item.status)
             const whatsapp   = item.phone ? `https://wa.me/${item.phone.replace(/\D/g, '')}` : null
+            const bg         = item.bgCheckSummary
+            const bgConcern  = !!bg && (bg.reprovados > 0 || bg.flagged > 0)
+            const bgPending  = !!bg && !bgConcern && bg.pendentes > 0
 
             return (
               <div
@@ -316,8 +320,9 @@ export function InscricoesList({
                       )}
                       {canWriteObreiro && item.tipo === 'pre_inscricao_obreiro' && (
                         <EditarPreInscricaoObreiroButton
-                          item={{ id: item.id, full_name: item.nome, email: item.email, phone: item.phone, message: item.mensagem, ministryId: item.ministryId ?? null }}
+                          item={{ id: item.id, full_name: item.nome, email: item.email, phone: item.phone, message: item.mensagem, ministryId: item.ministryId ?? null, schoolId: item.schoolId }}
                           ministries={allMinistries}
+                          schools={allSchools}
                           editarAction={editarPreInscricaoObreiro}
                         />
                       )}
@@ -387,16 +392,25 @@ export function InscricoesList({
                           </button>
                         </form>
                       )}
-                      {canWrite && item.tipo === 'pre_inscricao_obreiro' && !item.ministryId && (
+                      {canWrite && item.tipo === 'pre_inscricao_obreiro' && !item.ministryId && !item.schoolId && (
                         <form action={encaminharParaMinisterio} className="col-span-2 space-y-1.5 rounded-lg border border-violet-100 bg-violet-50 p-2.5">
                           <input type="hidden" name="interest_id" value={item.id} />
-                          <p className="text-xs font-semibold text-violet-800">Sem preferência de ministério</p>
-                          <select name="ministry_id" required className="w-full rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-violet-300">
-                            <option value="" disabled>Encaminhar para qual ministério?</option>
-                            {allMinistries.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                          <p className="text-xs font-semibold text-violet-800">Sem preferência de ministério/escola</p>
+                          <select name="destination" required className="w-full rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-violet-300">
+                            <option value="" disabled>Encaminhar para qual ministério ou escola?</option>
+                            {allMinistries.length > 0 && (
+                              <optgroup label="Ministérios">
+                                {allMinistries.map(m => <option key={m.id} value={`ministry:${m.id}`}>{m.name}</option>)}
+                              </optgroup>
+                            )}
+                            {allSchools.length > 0 && (
+                              <optgroup label="Escolas">
+                                {allSchools.map(s => <option key={s.id} value={`school:${s.id}`}>{s.name}</option>)}
+                              </optgroup>
+                            )}
                           </select>
                           <button type="submit" className="w-full text-xs px-3 py-2 bg-violet-600 text-white hover:bg-violet-700 rounded-lg transition-colors font-semibold">
-                            Encaminhar para ministério
+                            Encaminhar
                           </button>
                         </form>
                       )}
@@ -464,33 +478,56 @@ export function InscricoesList({
                         </form>
                       )}
                       {item.tipo === 'obreiro' && item.status === 'em_analise' && canWrite && item.personId && (
-                        <form action={finalizarObreiro} className="col-span-2 space-y-1.5 rounded-lg border border-amber-100 bg-amber-50 p-2">
-                          <input type="hidden" name="id" value={item.id} />
-                          <input type="hidden" name="org_id" value={orgId} />
-                          <input type="hidden" name="person_id" value={item.personId} />
-                          <input type="hidden" name="ministry_id" value={item.ministryId ?? ''} />
-                          <input type="hidden" name="name" value={item.nome} />
-                          <p className="text-xs font-semibold text-amber-800">Obreiro sem cadastro</p>
-                          <input
-                            name="email"
-                            type="email"
-                            defaultValue={item.email ?? ''}
-                            required
-                            placeholder="E-mail de login"
-                            className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-300"
-                          />
-                          <input
-                            name="password"
-                            type="password"
-                            required
-                            minLength={6}
-                            placeholder="Senha temporária"
-                            className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-300"
-                          />
-                          <button type="submit" className="w-full text-xs px-3 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg transition-colors font-semibold">
-                            Finalizar obreiro
-                          </button>
-                        </form>
+                        <>
+                          {bgConcern && (
+                            <div className="col-span-2 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-800">
+                              ⚠ Verificação de antecedentes reprovada ou sinalizada como preocupante — revise em{' '}
+                              {item.staffApplicationId && (
+                                <a href={`/${slug}/inscricoes/formulario-obreiro/${item.staffApplicationId}`} className="underline font-semibold">
+                                  ver formulário
+                                </a>
+                              )}{' '}antes de finalizar.
+                            </div>
+                          )}
+                          {bgPending && (
+                            <div className="col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                              Verificação de antecedentes ainda pendente ({bg!.pendentes}/{bg!.total}).
+                            </div>
+                          )}
+                          <form action={finalizarObreiro} className="col-span-2 space-y-1.5 rounded-lg border border-amber-100 bg-amber-50 p-2">
+                            <input type="hidden" name="id" value={item.id} />
+                            <input type="hidden" name="org_id" value={orgId} />
+                            <input type="hidden" name="person_id" value={item.personId} />
+                            <input type="hidden" name="ministry_id" value={item.ministryId ?? ''} />
+                            <input type="hidden" name="name" value={item.nome} />
+                            <p className="text-xs font-semibold text-amber-800">Obreiro sem cadastro</p>
+                            <input
+                              name="email"
+                              type="email"
+                              defaultValue={item.email ?? ''}
+                              required
+                              placeholder="E-mail de login"
+                              className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-300"
+                            />
+                            <input
+                              name="password"
+                              type="password"
+                              required
+                              minLength={6}
+                              placeholder="Senha temporária"
+                              className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-300"
+                            />
+                            {(bgConcern || bgPending) && (
+                              <label className="flex items-start gap-2 text-xs text-amber-800">
+                                <input type="checkbox" required className="mt-0.5" />
+                                Estou ciente do alerta de antecedentes e assumo a decisão de finalizar mesmo assim.
+                              </label>
+                            )}
+                            <button type="submit" className="w-full text-xs px-3 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg transition-colors font-semibold">
+                              Finalizar obreiro
+                            </button>
+                          </form>
+                        </>
                       )}
                       {((item.tipo === 'pre_inscricao_obreiro' || item.tipo === 'obreiro') ? canWriteObreiro : canWriteItem(item)) && (
                         <div className="col-span-2 sm:col-span-1">

@@ -11,6 +11,7 @@ type PreRegistrationInput = {
   phone: string | null          // número completo com código do país
   phoneCountry: string | null   // só o código, ex: "+55"
   language: string | null       // ex: "pt-BR", "en"
+  communicationLanguage: string | null
   message: string | null
 }
 
@@ -130,6 +131,7 @@ export async function submitPreRegistration(input: PreRegistrationInput): Promis
   // Campos que dependem de migrations — adicionados progressivamente
   if (personId) base.person_id = personId
   if (input.language) base.language = input.language
+  if (input.communicationLanguage) base.communication_language = input.communicationLanguage
   if (input.phoneCountry) base.phone_country = input.phoneCountry
 
   let { error: formError } = await sb.from('school_interest_forms').insert(base)
@@ -139,6 +141,7 @@ export async function submitPreRegistration(input: PreRegistrationInput): Promis
     const coreOnly = { ...base }
     delete coreOnly.phone_country
     delete coreOnly.language
+    delete coreOnly.communication_language
     delete coreOnly.person_id
     const result = await sb.from('school_interest_forms').insert(coreOnly)
     formError = result.error

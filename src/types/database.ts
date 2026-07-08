@@ -69,8 +69,8 @@ export type Database = {
         Relationships: [Rel<'person_status_history_person_id_fkey', ['person_id'], false, 'people', ['id']>]
       }
       staff_interest_forms: {
-        Row: { id: string; organization_id: string; ministry_id: string | null; person_id: string | null; full_name: string; email: string; phone: string | null; phone_country: string | null; language: string | null; message: string | null; status: string; refusal_reason: string | null; reviewed_by: string | null; reviewed_at: string | null; notified_at: string | null; responded_at: string | null; created_at: string; updated_at: string }
-        Insert: { organization_id: string; ministry_id?: string | null; person_id?: string | null; full_name: string; email: string; phone?: string | null; phone_country?: string | null; language?: string | null; message?: string | null; status?: string; refusal_reason?: string | null }
+        Row: { id: string; organization_id: string; ministry_id: string | null; person_id: string | null; full_name: string; email: string | null; phone: string | null; phone_country: string | null; language: string | null; message: string | null; status: string; refusal_reason: string | null; reviewed_by: string | null; reviewed_at: string | null; notified_at: string | null; responded_at: string | null; created_at: string; updated_at: string }
+        Insert: { organization_id: string; ministry_id?: string | null; person_id?: string | null; full_name: string; email?: string | null; phone?: string | null; phone_country?: string | null; language?: string | null; message?: string | null; status?: string; refusal_reason?: string | null }
         Update: Partial<Database['public']['Tables']['staff_interest_forms']['Insert']>
         Relationships: []
       }

@@ -149,3 +149,19 @@ export async function updateAreaCashScopes(orgId: string, slug: string, formData
   revalidatePath(`/${slug}/financeiro`)
   revalidatePath(`/${slug}/caixa`)
 }
+
+export async function updateStaffCommunicationLanguages(orgId: string, slug: string, formData: FormData) {
+  const admin = await verifyAccess(orgId)
+  if (!admin) return
+  const languages = formData.getAll('languages').map(String)
+  await admin.from('organizations').update({ staff_communication_languages: languages }).eq('id', orgId)
+  revalidatePath(`/${slug}/configuracoes`)
+}
+
+export async function updateStudentCommunicationLanguages(orgId: string, slug: string, formData: FormData) {
+  const admin = await verifyAccess(orgId)
+  if (!admin) return
+  const languages = formData.getAll('languages').map(String)
+  await admin.from('organizations').update({ student_communication_languages: languages }).eq('id', orgId)
+  revalidatePath(`/${slug}/configuracoes`)
+}

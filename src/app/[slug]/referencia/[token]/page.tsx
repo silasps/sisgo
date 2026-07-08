@@ -121,6 +121,7 @@ export default async function ReferenciaPage({ params, searchParams }: Props) {
             candidatoNome={candidatoNome}
             escolaNome={escolaNome}
             initialLang={langParam}
+            isStaff={isStaff}
           />
         </div>
         <p className="text-center text-xs text-gray-400 mt-6">
