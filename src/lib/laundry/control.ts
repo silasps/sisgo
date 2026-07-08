@@ -68,6 +68,54 @@ export async function controlMachineDevice(sb: AnySupabase, data: {
   if (!res || !res.ok) throw new Error(`Falha ao comunicar com o dispositivo (${model?.label ?? 'desconhecido'})`)
 }
 
+// Verifica várias máquinas de uma vez: as cloud são agrupadas por conta
+// (a API da Shelly aceita até 10 devices por chamada, limite 1 req/s).
+export async function checkMachinesOnlineBatch(sb: AnySupabase, machines: MachineConnection[]): Promise<Record<string, boolean>> {
+  const results: Record<string, boolean> = {}
+
+  const cloudMachines = machines.filter(hasCloudCreds)
+  const localMachines = machines.filter(m => !hasCloudCreds(m))
+
+  const accounts = new Map<string, { server: string; authKey: string; items: Array<{ machineId: string; deviceId: string }> }>()
+  for (const m of cloudMachines) {
+    const key = `${m.cloud_server}|${m.cloud_auth_key}`
+    if (!accounts.has(key)) accounts.set(key, { server: m.cloud_server!, authKey: m.cloud_auth_key!, items: [] })
+    accounts.get(key)!.items.push({ machineId: m.id, deviceId: m.cloud_device_id! })
+  }
+
+  const cloudCheck = Promise.all(
+    [...accounts.values()].map(async (acc) => {
+      const online = await cloudCheckOnline({ server: acc.server, authKey: acc.authKey }, acc.items.map(i => i.deviceId))
+      for (const item of acc.items) {
+        results[item.machineId] = online[normalizeDeviceId(item.deviceId)] ?? false
+      }
+    })
+  )
+
+  const deviceTypes = [...new Set(localMachines.map(m => m.device_type).filter(Boolean))] as string[]
+  const { data: models } = await sb.from('laundry_device_models')
+    .select('*')
+    .in('id', deviceTypes.length > 0 ? deviceTypes : ['_none_'])
+  const modelMap = new Map(((models ?? []) as DeviceModel[]).map(m => [m.id, m]))
+
+  const localCheck = Promise.all(
+    localMachines.map(async (m) => {
+      if (!m.device_ip) { results[m.id] = false; return }
+      const model = m.device_type ? modelMap.get(m.device_type) ?? null : null
+      const url = model ? buildUrl(model.status_url_template, m.device_ip, 0) : `http://${m.device_ip}/status`
+      try {
+        const res = await fetch(url, { signal: AbortSignal.timeout(3000) })
+        results[m.id] = res.ok
+      } catch {
+        results[m.id] = false
+      }
+    })
+  )
+
+  await Promise.all([cloudCheck, localCheck])
+  return results
+}
+
 export async function isMachineOnline(sb: AnySupabase, conn: MachineConnection): Promise<boolean> {
   if (hasCloudCreds(conn)) {
     const online = await cloudCheckOnline(

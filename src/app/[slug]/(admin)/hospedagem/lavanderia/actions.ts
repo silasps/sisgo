@@ -3,7 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { buildUrl, type DeviceModel } from '@/lib/laundry/devices'
 import { cloudCheckOnline, normalizeCloudServer, normalizeDeviceId } from '@/lib/laundry/shelly-cloud'
-import { controlMachineDevice, hasCloudCreds, type MachineConnection } from '@/lib/laundry/control'
+import { controlMachineDevice, hasCloudCreds, checkMachinesOnlineBatch, type MachineConnection } from '@/lib/laundry/control'
 
 // ── Toggle ──────────────────────────────────────────────────────────────────
 
@@ -230,51 +230,7 @@ export async function checkDeviceOnline(ip: string, deviceType: string | null): 
 
 export async function checkMachinesOnline(machines: MachineConnection[]): Promise<Record<string, boolean>> {
   const sb = createAdminClient()
-  const results: Record<string, boolean> = {}
-
-  const cloudMachines = machines.filter(hasCloudCreds)
-  const localMachines = machines.filter(m => !hasCloudCreds(m))
-
-  // Cloud: agrupa por conta (server + auth key) — a API aceita até 10 ids por chamada
-  const accounts = new Map<string, { server: string; authKey: string; items: Array<{ machineId: string; deviceId: string }> }>()
-  for (const m of cloudMachines) {
-    const key = `${m.cloud_server}|${m.cloud_auth_key}`
-    if (!accounts.has(key)) accounts.set(key, { server: m.cloud_server!, authKey: m.cloud_auth_key!, items: [] })
-    accounts.get(key)!.items.push({ machineId: m.id, deviceId: m.cloud_device_id! })
-  }
-
-  const cloudCheck = Promise.all(
-    [...accounts.values()].map(async (acc) => {
-      const online = await cloudCheckOnline({ server: acc.server, authKey: acc.authKey }, acc.items.map(i => i.deviceId))
-      for (const item of acc.items) {
-        results[item.machineId] = online[normalizeDeviceId(item.deviceId)] ?? false
-      }
-    })
-  )
-
-  // Local: consulta cada IP direto (só funciona se o servidor alcança a rede do dispositivo)
-  const deviceTypes = [...new Set(localMachines.map(m => m.device_type).filter(Boolean))] as string[]
-  const { data: models } = await sb.from('laundry_device_models')
-    .select('*')
-    .in('id', deviceTypes.length > 0 ? deviceTypes : ['_none_'])
-  const modelMap = new Map((models ?? []).map((m: DeviceModel) => [m.id, m]))
-
-  const localCheck = Promise.all(
-    localMachines.map(async (m) => {
-      if (!m.device_ip) { results[m.id] = false; return }
-      const model = m.device_type ? modelMap.get(m.device_type) ?? null : null
-      const url = model ? buildUrl(model.status_url_template, m.device_ip, 0) : `http://${m.device_ip}/status`
-      try {
-        const res = await fetch(url, { signal: AbortSignal.timeout(3000) })
-        results[m.id] = res.ok
-      } catch {
-        results[m.id] = false
-      }
-    })
-  )
-
-  await Promise.all([cloudCheck, localCheck])
-  return results
+  return checkMachinesOnlineBatch(sb, machines)
 }
 
 export async function testDeviceConnection(data: {

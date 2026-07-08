@@ -12,6 +12,7 @@ type Machine = {
   status: 'available' | 'in_use' | 'maintenance'
   online: boolean
   busyUntil: string | null
+  mine?: boolean
 }
 
 type Pricing = {
@@ -27,6 +28,10 @@ type Props = {
   machines: Machine[]
   pricing: Record<string, Pricing>
   paymentsEnabled: boolean
+  // Uso interno (usuário logado): nome fixo do pagador e layout sem header
+  // próprio (a página admin já fornece o shell).
+  payerName?: string | null
+  embedded?: boolean
 }
 
 type Checkout = {
@@ -138,6 +143,9 @@ function MachineCard({ machine, pricing, clickable, onSelect }: {
           <Clock size={14} />
           <span className="font-mono tabular-nums text-sm font-semibold">{remainingLabel(machine.busyUntil)}</span>
           <span className="text-xs text-blue-400">para terminar</span>
+          {machine.mine && (
+            <span className="ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-500 text-white">Sua lavagem</span>
+          )}
         </div>
       )}
       {offline && (
@@ -149,10 +157,11 @@ function MachineCard({ machine, pricing, clickable, onSelect }: {
 
 // ── Fluxo de pagamento (bottom sheet) ────────────────────────────────────────
 
-function CheckoutSheet({ slug, checkout, pricing, onClose, onUpdate }: {
+function CheckoutSheet({ slug, checkout, pricing, payerName, onClose, onUpdate }: {
   slug: string
   checkout: Checkout
   pricing: Pricing | undefined
+  payerName?: string | null
   onClose: () => void
   onUpdate: (patch: Partial<Checkout>) => void
 }) {
@@ -255,15 +264,22 @@ function CheckoutSheet({ slug, checkout, pricing, onClose, onUpdate }: {
                 </div>
               </div>
 
-              <div>
-                <p className="text-xs font-medium text-gray-500 mb-1.5">Seu nome (opcional)</p>
-                <input
-                  value={checkout.guestName}
-                  onChange={e => onUpdate({ guestName: e.target.value })}
-                  placeholder="Para identificar sua lavagem"
-                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-                />
-              </div>
+              {payerName ? (
+                <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-gray-50 border border-gray-200">
+                  <CheckCircle2 size={14} className="text-green-500 shrink-0" />
+                  <p className="text-xs text-gray-600">Pagando como <span className="font-semibold text-gray-900">{payerName}</span></p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-xs font-medium text-gray-500 mb-1.5">Seu nome (opcional)</p>
+                  <input
+                    value={checkout.guestName}
+                    onChange={e => onUpdate({ guestName: e.target.value })}
+                    placeholder="Para identificar sua lavagem"
+                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                  />
+                </div>
+              )}
 
               {checkout.error && (
                 <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-red-50 border border-red-200">
@@ -367,7 +383,7 @@ function CheckoutSheet({ slug, checkout, pricing, onClose, onUpdate }: {
 
 // ── Página ───────────────────────────────────────────────────────────────────
 
-export function PublicLaundry({ slug, orgName, machines, pricing, paymentsEnabled }: Props) {
+export function PublicLaundry({ slug, orgName, machines, pricing, paymentsEnabled, payerName, embedded }: Props) {
   const router = useRouter()
   const [checkout, setCheckout] = useState<Checkout | null>(null)
   const checkoutRef = useRef<Checkout | null>(null)
@@ -426,21 +442,23 @@ export function PublicLaundry({ slug, orgName, machines, pricing, paymentsEnable
   const dryers = machines.filter(m => m.type === 'dryer')
 
   return (
-    <div className="min-h-dvh bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-100 px-4 py-4 sticky top-0 z-10">
-        <div className="max-w-2xl mx-auto flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-brand-50">
-            <WashingMachine className="w-5 h-5 text-brand-500" />
+    <div className={embedded ? '' : 'min-h-dvh bg-gray-50'}>
+      {/* Header (a versão interna usa o shell do painel) */}
+      {!embedded && (
+        <header className="bg-white border-b border-gray-100 px-4 py-4 sticky top-0 z-10">
+          <div className="max-w-2xl mx-auto flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-brand-50">
+              <WashingMachine className="w-5 h-5 text-brand-500" />
+            </div>
+            <div>
+              <h1 className="text-base font-bold text-gray-900 leading-tight">Lavanderia</h1>
+              <p className="text-[11px] text-gray-400">{orgName}</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-base font-bold text-gray-900 leading-tight">Lavanderia</h1>
-            <p className="text-[11px] text-gray-400">{orgName}</p>
-          </div>
-        </div>
-      </header>
+        </header>
+      )}
 
-      <main className="max-w-2xl mx-auto px-4 py-5 space-y-6 pb-16">
+      <main className={embedded ? 'max-w-2xl space-y-6 pb-8' : 'max-w-2xl mx-auto px-4 py-5 space-y-6 pb-16'}>
         {!paymentsEnabled && (
           <div className="flex items-start gap-2 px-3.5 py-3 rounded-2xl bg-amber-50 border border-amber-200">
             <AlertTriangle size={15} className="text-amber-500 shrink-0 mt-0.5" />
@@ -497,6 +515,7 @@ export function PublicLaundry({ slug, orgName, machines, pricing, paymentsEnable
           slug={slug}
           checkout={checkout}
           pricing={pricing[checkout.machine.type]}
+          payerName={payerName}
           onClose={() => { setCheckout(null); router.refresh() }}
           onUpdate={patch => setCheckout(c => c ? { ...c, ...patch } : c)}
         />

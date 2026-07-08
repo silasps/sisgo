@@ -1,8 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
-import { checkMachinesOnline } from '@/app/[slug]/(admin)/hospedagem/lavanderia/actions'
-import { getLaundryPaymentSettings, paymentsConfigured } from '@/lib/laundry/payments'
+import { loadLaundryClientData } from '@/lib/laundry/public-data'
 import { PublicLaundry } from './PublicLaundry'
 
 type Props = {
@@ -25,88 +24,15 @@ export default async function PublicLaundryPage({ params }: Props) {
   const laundryEnabled = (org as { laundry_enabled?: boolean }).laundry_enabled ?? false
   if (!laundryEnabled) notFound()
 
-  const [{ data: machines }, { data: sessions }, { data: pricing }, paymentSettings] = await Promise.all([
-    sbAdmin.from('laundry_machines')
-      .select('id, name, type, location, status, device_ip, device_type, connection_mode, cloud_server, cloud_device_id, cloud_auth_key')
-      .eq('organization_id', org.id)
-      .neq('status', 'offline')
-      .order('name'),
-    sbAdmin.from('laundry_sessions')
-      .select('id, machine_id, duration_minutes, started_at, expected_end_at, status')
-      .eq('organization_id', org.id)
-      .eq('status', 'running'),
-    sbAdmin.from('laundry_pricing')
-      .select('machine_type, price_per_minute_cents, min_minutes, max_minutes, step_minutes')
-      .eq('organization_id', org.id)
-      .eq('active', true),
-    getLaundryPaymentSettings(sbAdmin, org.id),
-  ])
-
-  type MachineRow = {
-    id: string; name: string; type: string; location: string | null; status: string
-    device_ip: string | null; device_type: string | null
-    connection_mode: string | null; cloud_server: string | null
-    cloud_device_id: string | null; cloud_auth_key: string | null
-  }
-  type SessionRow = { id: string; machine_id: string; duration_minutes: number; started_at: string; expected_end_at: string; status: string }
-  type PricingRow = { machine_type: string; price_per_minute_cents: number; min_minutes: number; max_minutes: number; step_minutes: number }
-
-  // Auto-completar sessões expiradas
-  const now = new Date().toISOString()
-  const expiredSessions = ((sessions ?? []) as SessionRow[])
-    .filter(s => s.status === 'running' && s.expected_end_at && new Date(s.expected_end_at) <= new Date())
-  if (expiredSessions.length > 0) {
-    await Promise.all(expiredSessions.map(async (s) => {
-      await sbAdmin.from('laundry_sessions').update({ status: 'completed', actual_end_at: now }).eq('id', s.id)
-      await sbAdmin.from('laundry_machines').update({ status: 'available', updated_at: now }).eq('id', s.machine_id)
-    }))
-  }
-  const expiredIds = new Set(expiredSessions.map(s => s.id))
-  const expiredMachineIds = new Set(expiredSessions.map(s => s.machine_id))
-
-  const machinesList = ((machines ?? []) as MachineRow[]).map(m =>
-    expiredMachineIds.has(m.id) ? { ...m, status: 'available' } : m
-  )
-  const sessionsList = ((sessions ?? []) as SessionRow[]).filter(s => !expiredIds.has(s.id))
-  const pricingList = (pricing ?? []) as PricingRow[]
-
-  const onlineStatus = await checkMachinesOnline(
-    machinesList.map(m => ({
-      id: m.id, device_ip: m.device_ip, device_type: m.device_type,
-      connection_mode: m.connection_mode, cloud_server: m.cloud_server,
-      cloud_device_id: m.cloud_device_id, cloud_auth_key: m.cloud_auth_key,
-    }))
-  )
-
-  const publicMachines = machinesList.map(m => {
-    const session = sessionsList.find(s => s.machine_id === m.id)
-    return {
-      id: m.id,
-      name: m.name,
-      type: m.type as 'washer' | 'dryer',
-      location: m.location,
-      status: m.status as 'available' | 'in_use' | 'maintenance',
-      online: onlineStatus[m.id] ?? false,
-      busyUntil: session?.expected_end_at ?? null,
-    }
-  })
-
-  const publicPricing = Object.fromEntries(
-    pricingList.map(p => [p.machine_type, {
-      pricePerMinuteCents: p.price_per_minute_cents,
-      minMinutes: p.min_minutes,
-      maxMinutes: p.max_minutes,
-      stepMinutes: p.step_minutes,
-    }])
-  )
+  const data = await loadLaundryClientData(sbAdmin, org.id)
 
   return (
     <PublicLaundry
       slug={slug}
       orgName={org.name}
-      machines={publicMachines}
-      pricing={publicPricing}
-      paymentsEnabled={paymentsConfigured(paymentSettings)}
+      machines={data.machines}
+      pricing={data.pricing}
+      paymentsEnabled={data.paymentsEnabled}
     />
   )
 }

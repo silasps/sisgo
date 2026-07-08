@@ -1,7 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 import { getLaundryPaymentSettings, paymentsConfigured, createLaundrySessionCharge } from '@/lib/laundry/payments'
 import { isMachineOnline, type MachineConnection } from '@/lib/laundry/control'
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function resolveLoggedPayer(sbAdmin: any, organizationId: string): Promise<{ userId: string; personId: string | null; name: string | null } | null> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return null
+
+    const [{ data: staff }, { data: student }, { data: associado }] = await Promise.all([
+      sbAdmin.from('staff_profiles').select('person_id').eq('user_id', user.id).eq('organization_id', organizationId).maybeSingle(),
+      sbAdmin.from('student_profiles').select('person_id').eq('user_id', user.id).eq('organization_id', organizationId).maybeSingle(),
+      sbAdmin.from('associado_profiles').select('person_id').eq('user_id', user.id).eq('organization_id', organizationId).maybeSingle(),
+    ])
+    const personId: string | null = staff?.person_id ?? student?.person_id ?? associado?.person_id ?? null
+
+    let name: string | null = null
+    if (personId) {
+      const { data: person } = await sbAdmin.from('people').select('full_name').eq('id', personId).maybeSingle()
+      name = person?.full_name ?? null
+    }
+    name = name
+      ?? (user.user_metadata?.full_name as string | undefined)
+      ?? (user.user_metadata?.name as string | undefined)
+      ?? user.email?.split('@')[0]
+      ?? null
+
+    return { userId: user.id, personId, name }
+  } catch {
+    return null
+  }
+}
 
 // Cria uma cobrança PIX para liberar uma máquina — chamada pela página pública.
 export async function POST(request: NextRequest) {
@@ -80,16 +112,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Já existe um pagamento em andamento para esta máquina. Aguarde alguns minutos.' }, { status: 409 })
   }
 
+  // Usuário logado (página interna): a sessão nasce identificada — o nome
+  // aparece para a hospitalidade no painel, nunca na página pública.
+  const payer = await resolveLoggedPayer(sb, org.id)
+
   const { data: session, error: sessionError } = await sb.from('laundry_sessions').insert({
     organization_id: org.id,
     machine_id:      machineId,
-    guest_name:      guestName,
+    person_id:       payer?.personId ?? null,
+    guest_name:      payer?.name ?? guestName,
     pricing_id:      pricing.id,
     duration_minutes: durationMinutes,
     amount_paid:     amountCents,
     payment_method:  'pix',
     payment_status:  'pending',
     status:          'pending_payment',
+    created_by:      payer?.userId ?? null,
   }).select('id').single()
   if (sessionError || !session) {
     return NextResponse.json({ error: sessionError?.message ?? 'Falha ao criar a sessão.' }, { status: 500 })
