@@ -1,0 +1,174 @@
+# SISGO — Arquitetura do Sistema
+
+**Atualizado:** 8 de julho de 2026
+**Produção:** https://www.sisgomission.com (Vercel)
+
+---
+
+## 1. Visão Geral
+
+O SISGO é um sistema de gestão **multi-tenant** para bases missionárias da JOCUM e igrejas. Cada organização (base) vive sob um slug na URL (`/{slug}/...`) e tem seus próprios usuários, papéis, módulos e dados — isolados por Row Level Security no PostgreSQL.
+
+---
+
+## 2. Stack
+
+| Camada | Tecnologia |
+|---|---|
+| Framework | Next.js 15.5 (App Router, React Server Components, Server Actions) |
+| UI | React 19 · Tailwind CSS 3 · lucide-react · sonner (toasts) |
+| Linguagem | TypeScript 5 |
+| Banco / Auth / Storage | Supabase (PostgreSQL com RLS) |
+| Mobile | Capacitor 8 (Android + iOS, push nativo, biometria) |
+| Push | Firebase Admin (FCM) + tokens em `push_tokens` |
+| E-mail | Nodemailer (Brevo via SMTP — domínio pendente de verificação) |
+| Pagamentos | Asaas · Mercado Pago · PagBank (PIX) — `src/lib/payments/` |
+| IoT | Shelly Cloud Control API v2 (lavanderia) — `src/lib/laundry/` |
+| QR / Códigos | qrcode (carteirinha digital) · barcode-detector (estoque) |
+| Deploy | Vercel (deploy automático a cada push na `main`) |
+
+---
+
+## 3. Estrutura de Rotas
+
+```
+/                         → Landing; redireciona usuário logado ao painel certo
+/login, /cadastro, /auth  → Autenticação (Supabase Auth, OAuth com callback)
+/bases                    → Diretório público de bases
+/superadmin/...           → Painel global (papel superadmin)
+/supervisor/...           → Painel de supervisão de bases (supervisor_bases)
+
+/[slug]                   → Página pública da base
+/[slug]/(admin)/...       → Painel da base (requer sessão + papel na org)
+/[slug]/escola/...        → Inscrições públicas de escolas
+/[slug]/formulario*/...   → Formulários públicos (obreiros etc.)
+/[slug]/carteirinha/...   → Verificação pública da carteirinha digital
+/[slug]/lavanderia        → Painel público da lavanderia (QR code)
+/[slug]/referencia, /servir, /verificar-email → Fluxos públicos diversos
+
+/api/public/[slug]/*      → API pública JSON (info, events, schools, stats)
+                            com CORS — consumida pelo site institucional
+                            (projeto jocumat-site, repositório separado)
+/api/payments/*           → Webhooks e criação de cobranças
+/api/push/*               → Registro e processamento de push
+/api/auth/native-callback → Passthrough do OAuth nativo (deep link sisgo://)
+```
+
+### Módulos do painel `(admin)`
+
+`dashboard` · `pessoas` · `obreiros` · `alunos` · `escolas` · `inscricoes` ·
+`ministerios` (workspace com mural, equipe e calendário) · `calendario` ·
+`presenca` · `pendentes` · `financeiro` · `caixa` · `minhas-contas` ·
+`cozinha` · `refeicoes` · `reservas` · `manutencao` · `configuracoes` ·
+`minha-carteirinha` · `hospedagem` (quartos/camas, agenda, **lavanderia**)
+
+---
+
+## 4. Autenticação e Autorização
+
+- **Sessão:** Supabase Auth com cookies via `@supabase/ssr`. O `middleware.ts`
+  (→ `src/lib/supabase/middleware.ts`) valida/renova o JWT em toda requisição,
+  limpa cookies de refresh token inválido e faz o roteamento por papel
+  (superadmin → `/superadmin`, supervisor → `/supervisor`, demais → `/{slug}/pessoas`).
+- **OAuth mobile:** PKCE client-side + rota passthrough + deep link `sisgo://`
+  (nunca server action para OAuth no app nativo).
+- **Papéis (RBAC):** tabela `roles` + `organization_users` liga usuário↔org↔papel.
+  Papéis principais: `superadmin`, `supervisor_bases`, `admin_base`, `lider_base`,
+  `dh`, `hospitalidade`, `lider_eted`, entre outros. Helpers em
+  `src/lib/auth/permissions.ts` (`isManagementRole`, `canSeeHospedagem`, ...).
+- **Role preview:** administradores podem visualizar o sistema como outro papel
+  (`src/lib/role-preview.ts`).
+- **RLS:** toda tabela de negócio tem policies por organização e papel. Server
+  actions administrativas usam `createAdminClient()` (service role) após checar
+  permissão na aplicação.
+
+---
+
+## 5. Banco de Dados
+
+- **Migrations:** `supabase/migrations/NNN_nome.sql`, numeradas (001→085+),
+  aplicadas manualmente com `psql "$DATABASE_URL" -f <arquivo>` (a
+  `DATABASE_URL` está em `.env.local`). Não há CLI do Supabase configurada.
+- **Domínios principais:** pessoas/contatos, escolas e inscrições
+  (`school_interest_forms` = pré-inscrição; `school_applications` = formulário
+  completo com `form_data` jsonb), ministérios (com `linked_role`), hospedagem
+  (quartos, camas, alocações), lavanderia (`laundry_machines`,
+  `laundry_pricing`, `laundry_sessions`, `laundry_device_models`), financeiro,
+  cozinha/refeições, estoque com código de barras, calendários
+  (`base_calendar_events`, `ministry_calendar_events`), mural de mensagens,
+  push (`push_tokens`).
+- **Regra de ouro:** registros nunca são apagados — inscrições/pessoas são
+  **realocadas** ou inativadas, preservando histórico.
+
+---
+
+## 6. Módulo de Lavanderia (IoT)
+
+Autosserviço com pagamento por tempo. Cada máquina tem um relé Wi-Fi
+**Shelly 1PM** (Gen3/Gen4) que corta a energia quando o tempo pago acaba.
+
+- **Dois modos de conexão por máquina** (`laundry_machines.connection_mode`):
+  - **`cloud` (padrão em produção):** Shelly Cloud Control API v2
+    (`src/lib/laundry/shelly-cloud.ts`). O servidor na Vercel comanda o relé
+    de qualquer lugar: `POST {server}/v2/devices/api/set/switch?auth_key=...`
+    com `toggle_after` (segundos) como timer; status em lote via
+    `POST {server}/v2/devices/api/get` (até 10 devices/chamada, limite
+    1 req/s por conta — por isso o status agrupa máquinas por conta).
+    Credenciais por máquina: `cloud_server`, `cloud_device_id`,
+    `cloud_auth_key`. Atenção: a API retorna `online` como `1/0` (número).
+  - **`local`:** HTTP direto no IP (`http://{ip}/relay/0?turn=on&timer={s}`),
+    só funciona com servidor na mesma rede — usado em dev/instalações locais.
+- **Modelos de dispositivo** (`laundry_device_models`): templates de URL
+  (`{ip}`, `{seconds}`) para suportar outros relés (Tasmota etc.), com
+  instruções de instalação e nível de dificuldade.
+- **Fluxo:** admin libera (ou público via QR em `/{slug}/lavanderia`) →
+  `startMachine` liga o relé com timer e cria `laundry_sessions` → sessão
+  expira ou é parada → máquina volta a `available`. Sessões expiradas são
+  auto-completadas na renderização das páginas.
+
+---
+
+## 7. Integrações Externas
+
+| Integração | Uso | Onde |
+|---|---|---|
+| Shelly Cloud | Relés da lavanderia | `src/lib/laundry/shelly-cloud.ts` |
+| Asaas / Mercado Pago / PagBank | PIX (refeições, cobranças) | `src/lib/payments/` + `/api/payments/*` |
+| Firebase (FCM) | Push notifications no app | `src/lib/firebase/` + `/api/push/*` |
+| Brevo (SMTP) | E-mails transacionais | `src/lib/email/` (envio bloqueado até verificar o domínio centralmidiajocum.com.br) |
+| Site institucional | Consome `/api/public/[slug]/*` | projeto separado `jocumat-site` (Next 16 + Tailwind v4) |
+
+---
+
+## 8. Mobile (Capacitor)
+
+- Pastas `android/` e `ios/` geradas pelo Capacitor (`npm run cap:sync`).
+- Push nativo, splash/status bar, biometria (`@aparajita/capacitor-biometric-auth`).
+- PWA: ícones em `public/icons/`.
+- Deep link `sisgo://` para OAuth nativo.
+
+---
+
+## 9. Convenções de Desenvolvimento
+
+- **Mobile first** em toda tela e formulário.
+- **Cards clicáveis:** padrão de lift (`hover:shadow-md` + `translate-y` +
+  título colorido + "Abrir →") em qualquer card/linha navegável.
+- Server components por padrão; client components apenas onde há interação
+  (sufixo em PascalCase no mesmo diretório da página, ex. `DeviceSelect.tsx`,
+  `ConnectionFields.tsx`).
+- Server actions em `actions.ts` por módulo, ou inline (`'use server'`) na
+  própria página quando dependem do contexto dela.
+- Mensagens de feedback via query param `?msg=` renderizadas pela página.
+- Idioma do produto e do código de domínio: **português**.
+
+## 10. Scripts e Operações
+
+- `npm run dev` (Turbopack) · `npm run build` · `npm run type-check` · `npm run lint`
+- **Nunca rode `next build` com o dev server aberto** — os dois escrevem em
+  `.next/` e corrompem o cache (sintoma: erro genérico nas server actions).
+- Importação de inscrições externas (Google Forms):
+  `node scripts/import-applications/run.mjs <arquivo> --org=<slug>`
+  (ver `scripts/import-applications/README.md`; fluxo dry-run → `--confirm`).
+- Deploy: push na `main` → build automático na Vercel. O domínio apex
+  redireciona para `www` na borda da Vercel.

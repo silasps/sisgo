@@ -26,7 +26,7 @@ export default async function PublicLaundryPage({ params }: Props) {
 
   const [{ data: machines }, { data: sessions }, { data: pricing }] = await Promise.all([
     sbAdmin.from('laundry_machines')
-      .select('id, name, type, location, status, device_ip, device_type')
+      .select('id, name, type, location, status, device_ip, device_type, connection_mode, cloud_server, cloud_device_id, cloud_auth_key')
       .eq('organization_id', org.id)
       .neq('status', 'offline')
       .order('name'),
@@ -40,7 +40,12 @@ export default async function PublicLaundryPage({ params }: Props) {
       .eq('active', true),
   ])
 
-  type MachineRow = { id: string; name: string; type: string; location: string | null; status: string; device_ip: string | null; device_type: string | null }
+  type MachineRow = {
+    id: string; name: string; type: string; location: string | null; status: string
+    device_ip: string | null; device_type: string | null
+    connection_mode: string | null; cloud_server: string | null
+    cloud_device_id: string | null; cloud_auth_key: string | null
+  }
   type SessionRow = { id: string; machine_id: string; guest_name: string | null; duration_minutes: number; started_at: string; expected_end_at: string; status: string }
   type PricingRow = { machine_type: string; price_per_minute_cents: number; min_minutes: number; max_minutes: number; step_minutes: number }
 
@@ -65,7 +70,11 @@ export default async function PublicLaundryPage({ params }: Props) {
 
   // Verificar conectividade dos dispositivos
   const onlineStatus = await checkMachinesOnline(
-    machinesList.map(m => ({ id: m.id, device_ip: m.device_ip, device_type: m.device_type }))
+    machinesList.map(m => ({
+      id: m.id, device_ip: m.device_ip, device_type: m.device_type,
+      connection_mode: m.connection_mode, cloud_server: m.cloud_server,
+      cloud_device_id: m.cloud_device_id, cloud_auth_key: m.cloud_auth_key,
+    }))
   )
 
   const boardMachines = machinesList.map(m => {
