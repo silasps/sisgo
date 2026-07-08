@@ -188,9 +188,9 @@ export default async function HistoricoPage({ params, searchParams }: Props) {
                       )}
                     </p>
                     <div className="flex items-center gap-2 text-[10px] text-gray-400">
-                      <span>{new Date(session.created_at).toLocaleDateString('pt-BR')}</span>
+                      <span>{new Date(session.created_at).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</span>
                       {session.started_at && (
-                        <span>{new Date(session.started_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                        <span>{new Date(session.started_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}</span>
                       )}
                       <span className="flex items-center gap-0.5">
                         <Timer size={9} />

@@ -9,6 +9,7 @@ import { startMachine, stopMachine, createMachine, updateMachine, deleteMachine,
 import { WashingMachine, Power, PowerOff, Plus, Settings, History, Pencil, Trash2, DollarSign, Timer, Wifi, WifiOff, Cpu, Info, Cloud } from 'lucide-react'
 import { DeviceSelect } from './DeviceSelect'
 import { ConnectionFields } from './ConnectionFields'
+import { SessionCountdown } from './SessionCountdown'
 import Link from 'next/link'
 
 type Props = {
@@ -480,8 +481,8 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
                           </div>
                           <div className="flex items-center gap-1 text-[10px] text-blue-400">
                             <Timer size={10} />
-                            <span>{session.duration_minutes} min</span>
-                            <span>· até {new Date(session.expected_end_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                            <span>{session.duration_minutes} min ·</span>
+                            <SessionCountdown expectedEndAt={session.expected_end_at} />
                           </div>
                           <form action={handleStopMachine}>
                             <input type="hidden" name="session_id" value={session.id} />
