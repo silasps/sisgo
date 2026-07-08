@@ -155,14 +155,16 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
     const p = pricingMap.get(machine.type)
     const minutes = parseInt(formData.get('duration_minutes') as string)
     if (isNaN(minutes) || minutes < 1) return
-    const amount = p ? minutes * p.price_per_minute_cents : 0
+    const paymentMethod = (formData.get('payment_method') as string) || 'cash'
+    // cortesia libera a máquina sem gerar receita
+    const amount = paymentMethod === 'free' ? 0 : (p ? minutes * p.price_per_minute_cents : 0)
 
     await startMachine({
       organizationId: org.id,
       machineId,
       durationMinutes: minutes,
       amountPaid: amount,
-      paymentMethod: (formData.get('payment_method') as string) || 'cash',
+      paymentMethod,
       guestName: (formData.get('guest_name') as string)?.trim() || null,
       personId: null,
       pricingId: p?.id ?? null,
