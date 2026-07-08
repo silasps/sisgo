@@ -78,9 +78,10 @@ export async function cloudCheckOnline(
     const data: unknown = await res.json()
     const devices = Array.isArray(data) ? data : []
     for (const d of devices) {
-      const dev = d as { id?: string; online?: boolean }
+      // a API retorna online como 1/0 (número), não boolean
+      const dev = d as { id?: string; online?: boolean | number }
       if (dev.id) {
-        results[normalizeDeviceId(dev.id)] = dev.online === true
+        results[normalizeDeviceId(dev.id)] = dev.online === true || dev.online === 1
       }
     }
     return results
