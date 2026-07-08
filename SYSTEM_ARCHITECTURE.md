@@ -121,10 +121,20 @@ Autosserviço com pagamento por tempo. Cada máquina tem um relé Wi-Fi
 - **Modelos de dispositivo** (`laundry_device_models`): templates de URL
   (`{ip}`, `{seconds}`) para suportar outros relés (Tasmota etc.), com
   instruções de instalação e nível de dificuldade.
-- **Fluxo:** admin libera (ou público via QR em `/{slug}/lavanderia`) →
-  `startMachine` liga o relé com timer e cria `laundry_sessions` → sessão
-  expira ou é parada → máquina volta a `available`. Sessões expiradas são
-  auto-completadas na renderização das páginas.
+- **Fluxo admin:** hospitalidade libera no painel → `startMachine` liga o relé
+  com timer e cria `laundry_sessions` → sessão expira ou é parada → máquina
+  volta a `available`. Sessões expiradas são auto-completadas na renderização.
+- **Fluxo público com PIX** (`/{slug}/lavanderia`): qualquer pessoa escolhe a
+  máquina disponível → seleciona o tempo (preço de `laundry_pricing`) → o
+  sistema cria cobrança PIX no **Asaas** (`src/lib/laundry/payments.ts`,
+  config por org em `laundry_payment_settings`: API key, customer padrão,
+  webhook token, sandbox/produção) → QR code + copia-e-cola na tela → paga →
+  webhook `/api/payments/laundry/webhook` (ou o polling
+  `/api/payments/laundry/status`, que confere direto no Asaas — funciona sem
+  webhook) confirma, **liga a máquina** e lança receita em
+  `financial_transactions` (categoria Lavanderia). Confirmação idempotente
+  via update condicional de `payment_status` (webhook e polling podem correr
+  em paralelo). Máquinas ocupadas aparecem com countdown e não são clicáveis.
 
 ---
 
