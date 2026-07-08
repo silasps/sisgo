@@ -5,9 +5,10 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { notFound, redirect } from 'next/navigation'
 import { getRolePreview } from '@/lib/role-preview'
 import { isManagementRole, canSeeHospedagem } from '@/lib/auth/permissions'
-import { startMachine, stopMachine, createMachine, updateMachine, deleteMachine, upsertPricing, toggleLaundryEnabled, checkMachinesOnline, createDeviceModel, deleteDeviceModel, testDeviceConnection } from './actions'
-import { WashingMachine, Power, PowerOff, Plus, Settings, History, Pencil, Trash2, DollarSign, Timer, Wifi, WifiOff, Cpu, Info } from 'lucide-react'
+import { startMachine, stopMachine, createMachine, updateMachine, deleteMachine, upsertPricing, toggleLaundryEnabled, checkMachinesOnline, createDeviceModel, deleteDeviceModel, testDeviceConnection, testMachineConnection } from './actions'
+import { WashingMachine, Power, PowerOff, Plus, Settings, History, Pencil, Trash2, DollarSign, Timer, Wifi, WifiOff, Cpu, Info, Cloud } from 'lucide-react'
 import { DeviceSelect } from './DeviceSelect'
+import { ConnectionFields } from './ConnectionFields'
 import Link from 'next/link'
 
 type Props = {
@@ -66,6 +67,8 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
   type MachineRow = {
     id: string; name: string; type: string; location: string | null
     status: string; device_type: string | null; device_ip: string | null; device_auth: string | null
+    connection_mode: string | null; cloud_server: string | null
+    cloud_device_id: string | null; cloud_auth_key: string | null
     created_at: string; updated_at: string
   }
   type PricingRow = {
@@ -104,8 +107,17 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
 
   // ── Verificar conectividade dos Shellys ─────────────────────────────────────
   const onlineStatus = await checkMachinesOnline(
-    machinesList.map(m => ({ id: m.id, device_ip: m.device_ip, device_type: m.device_type }))
+    machinesList.map(m => ({
+      id: m.id, device_ip: m.device_ip, device_type: m.device_type,
+      connection_mode: m.connection_mode, cloud_server: m.cloud_server,
+      cloud_device_id: m.cloud_device_id, cloud_auth_key: m.cloud_auth_key,
+    }))
   )
+
+  const hasDevice = (m: MachineRow) =>
+    m.connection_mode === 'cloud'
+      ? !!(m.cloud_server && m.cloud_device_id && m.cloud_auth_key)
+      : !!m.device_ip
 
   // ── KPIs ────────────────────────────────────────────────────────────────────
   const totalMachines = machinesList.length
@@ -177,6 +189,10 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
       deviceType: (formData.get('device_type') as string)?.trim() || null,
       deviceIp: (formData.get('device_ip') as string)?.trim() || null,
       deviceAuth: (formData.get('device_auth') as string)?.trim() || null,
+      connectionMode: (formData.get('connection_mode') as string)?.trim() || null,
+      cloudServer: (formData.get('cloud_server') as string)?.trim() || null,
+      cloudDeviceId: (formData.get('cloud_device_id') as string)?.trim() || null,
+      cloudAuthKey: (formData.get('cloud_auth_key') as string)?.trim() || null,
     })
     redirect(`/${slug}/hospedagem/lavanderia?tab=maquinas&msg=criada`)
   }
@@ -195,6 +211,10 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
       deviceType: (formData.get('device_type') as string)?.trim() || null,
       deviceIp: (formData.get('device_ip') as string)?.trim() || null,
       deviceAuth: (formData.get('device_auth') as string)?.trim() || null,
+      connectionMode: (formData.get('connection_mode') as string)?.trim() || null,
+      cloudServer: (formData.get('cloud_server') as string)?.trim() || null,
+      cloudDeviceId: (formData.get('cloud_device_id') as string)?.trim() || null,
+      cloudAuthKey: (formData.get('cloud_auth_key') as string)?.trim() || null,
     })
     redirect(`/${slug}/hospedagem/lavanderia?tab=maquinas&msg=atualizada`)
   }
@@ -262,6 +282,15 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
     redirect(`/${slug}/hospedagem/lavanderia?tab=maquinas&msg=${result.ok ? 'conexao_ok' : 'conexao_falhou'}`)
   }
 
+  const handleTestMachine = async (formData: FormData) => {
+    'use server'
+    const result = await testMachineConnection({
+      machineId: formData.get('id') as string,
+      organizationId: org.id,
+    })
+    redirect(`/${slug}/hospedagem/lavanderia?tab=maquinas&msg=${result.ok ? 'conexao_ok' : 'conexao_falhou'}`)
+  }
+
   const msgInfo: Record<string, string> = {
     liberada:    'Máquina liberada com sucesso.',
     parada:      'Máquina parada.',
@@ -274,7 +303,7 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
     dispositivo_criado:  'Modelo de dispositivo cadastrado.',
     dispositivo_removido: 'Modelo de dispositivo removido.',
     conexao_ok:  'Conexão com o dispositivo OK!',
-    conexao_falhou: 'Falha na conexão — verifique o IP e se o dispositivo está ligado.',
+    conexao_falhou: 'Falha na conexão — verifique os dados da conexão (IP local ou Shelly Cloud) e se o dispositivo está ligado e com internet.',
   }
 
   const formatCents = (cents: number) => {
@@ -400,7 +429,8 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
                   const p = pricingMap.get(machine.type)
                   const isRunning = machine.status === 'in_use' && session
                   const isOnline = onlineStatus[machine.id] ?? false
-                  const canStart = machine.status === 'available' && machine.device_ip && isOnline
+                  const connected = hasDevice(machine)
+                  const canStart = machine.status === 'available' && connected && isOnline
 
                   return (
                     <div
@@ -419,7 +449,10 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
                           </div>
                         </div>
                         <div className="flex items-center gap-1.5">
-                          {machine.device_ip ? (
+                          {machine.connection_mode === 'cloud' && connected && (
+                            <Cloud size={12} className={isOnline ? 'text-blue-400' : 'text-gray-300'} />
+                          )}
+                          {connected ? (
                             isOnline ? (
                               <Wifi size={12} className="text-green-500" />
                             ) : (
@@ -465,7 +498,7 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
                       )}
 
                       {/* Offline warning — bloqueia pagamento */}
-                      {machine.status === 'available' && machine.device_ip && !isOnline && (
+                      {machine.status === 'available' && connected && !isOnline && (
                         <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center space-y-1">
                           <div className="flex items-center justify-center gap-1.5 text-red-500">
                             <WifiOff size={14} />
@@ -526,10 +559,10 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
                         </form>
                       )}
 
-                      {/* No IP configured */}
-                      {machine.status === 'available' && !machine.device_ip && (
+                      {/* No connection configured */}
+                      {machine.status === 'available' && !connected && (
                         <p className="text-[10px] text-amber-500 text-center">
-                          Configure o IP do Shelly para liberar remotamente
+                          Configure a conexão do dispositivo (Shelly Cloud ou IP local) para liberar remotamente
                         </p>
                       )}
                     </div>
@@ -560,8 +593,7 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
                   <label className="text-xs text-gray-500 mb-1 block">Dispositivo smart</label>
                   <DeviceSelect name="device_type" devices={deviceOptions} />
                 </div>
-                <input name="device_ip" placeholder="IP do dispositivo (ex: 192.168.1.100)" className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                <input name="device_auth" placeholder="Senha (opcional)" className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                <ConnectionFields />
                 <div className="sm:col-span-2 flex gap-2">
                   <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-brand-500 rounded-lg hover:bg-brand-600 transition-colors">
                     Cadastrar
@@ -590,7 +622,14 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    {machine.device_ip && <span className="text-[10px] text-gray-400 font-mono">{machine.device_ip}</span>}
+                    {machine.connection_mode === 'cloud' && machine.cloud_device_id ? (
+                      <span className="text-[10px] text-blue-500 font-mono flex items-center gap-1">
+                        <Cloud size={10} />
+                        {machine.cloud_device_id}
+                      </span>
+                    ) : machine.device_ip ? (
+                      <span className="text-[10px] text-gray-400 font-mono">{machine.device_ip}</span>
+                    ) : null}
                     <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${statusColor[machine.status]}`}>
                       {statusLabel[machine.status]}
                     </span>
@@ -615,8 +654,14 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
                       <label className="text-xs text-gray-500 mb-1 block">Dispositivo smart</label>
                       <DeviceSelect name="device_type" devices={deviceOptions} defaultValue={machine.device_type} />
                     </div>
-                    <input name="device_ip" defaultValue={machine.device_ip ?? ''} placeholder="IP do dispositivo" className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                    <input name="device_auth" defaultValue={machine.device_auth ?? ''} placeholder="Senha (opcional)" className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                    <ConnectionFields
+                      defaultMode={machine.connection_mode}
+                      defaultIp={machine.device_ip}
+                      defaultAuth={machine.device_auth}
+                      defaultCloudServer={machine.cloud_server}
+                      defaultCloudDeviceId={machine.cloud_device_id}
+                      defaultCloudAuthKey={machine.cloud_auth_key}
+                    />
                     <div className="sm:col-span-2 flex gap-2 justify-end">
                       <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-brand-500 rounded-lg hover:bg-brand-600 transition-colors flex items-center gap-1.5">
                         <Pencil size={12} />
@@ -624,16 +669,28 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
                       </button>
                     </div>
                   </form>
-                  <form action={handleDeleteMachine} className="mt-2 flex justify-end">
-                    <input type="hidden" name="id" value={machine.id} />
-                    <button
-                      type="submit"
-                      className="px-3 py-1.5 text-xs font-medium text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1"
-                    >
-                      <Trash2 size={12} />
-                      Remover
-                    </button>
-                  </form>
+                  <div className="mt-2 flex justify-between items-center">
+                    <form action={handleTestMachine}>
+                      <input type="hidden" name="id" value={machine.id} />
+                      <button
+                        type="submit"
+                        className="px-3 py-1.5 text-xs font-medium text-brand-600 bg-brand-50 border border-brand-200 rounded-lg hover:bg-brand-100 transition-colors flex items-center gap-1"
+                      >
+                        <Wifi size={12} />
+                        Testar conexão
+                      </button>
+                    </form>
+                    <form action={handleDeleteMachine}>
+                      <input type="hidden" name="id" value={machine.id} />
+                      <button
+                        type="submit"
+                        className="px-3 py-1.5 text-xs font-medium text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1"
+                      >
+                        <Trash2 size={12} />
+                        Remover
+                      </button>
+                    </form>
+                  </div>
                 </div>
               </details>
             ))}
