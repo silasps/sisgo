@@ -161,6 +161,7 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
 
   async function postMessage(formData: FormData) {
     'use server'
+    if (!user) return
     const content = (formData.get('content') as string).trim()
     if (!content) return
     const mentionMatches = content.match(/@[\w\s]+/g) ?? []

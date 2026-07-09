@@ -14,7 +14,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const { data: org } = await supabase
     .from('organizations')
-    .select('name')
+    .select('id, name')
     .eq('slug', slug)
     .eq('active', true)
     .single()
