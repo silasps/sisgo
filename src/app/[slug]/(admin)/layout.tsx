@@ -19,7 +19,7 @@ type DividerNavItem  = { divider: true; label: string }
 type NavItem = RegularNavItem | DividerNavItem
 
 const PESSOAL_DIVIDER: DividerNavItem = { divider: true, label: 'Pessoal' }
-const PESSOAL_ICONS   = new Set(['refeicoes', 'contas', 'carteirinha'])
+const PESSOAL_ICONS   = new Set(['refeicoes', 'contas', 'carteirinha', 'minha-lavanderia'])
 
 function addPersonalSplit(items: RegularNavItem[], personalIcons = PESSOAL_ICONS): NavItem[] {
   const op   = items.filter(i => !personalIcons.has(i.icon))
@@ -74,6 +74,7 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
     { href: `/${slug}/manutencao/estoque`, label: 'Est. Manutenção', icon: 'estoque',  show: canSeeManutencao },
     { href: `/${slug}/financeiro`,   label: 'Financeiro',       icon: 'financeiro',    show: canSeeGeneralFinance },
     { href: `/${slug}/minhas-contas`, label: 'Minhas Contas',   icon: 'contas',        show: true },
+    { href: `/${slug}/minha-lavanderia`, label: 'Lavanderia',   icon: 'minha-lavanderia', show: laundryEnabled },
     { href: `/${slug}/minha-carteirinha`, label: 'Minha Carteirinha', icon: 'carteirinha', show: idCardEnabled },
     { href: `/${slug}/configuracoes`, label: 'Configurações',   icon: 'configuracoes', show: isManagement },
   ]
@@ -81,29 +82,29 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
   const dropDisabledCard = (items: AllItem[]) => items.filter(i => i.icon !== 'carteirinha' || idCardEnabled)
 
   if (isHospitalidade) {
-    return addPersonalSplit(dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/pessoas', '/reservas', '/hospedagem', '/hospedagem/quartos', '/hospedagem/agenda', '/hospedagem/lavanderia', '/ministerios', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-carteirinha'))).map(toItem))
+    return addPersonalSplit(dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/pessoas', '/reservas', '/hospedagem', '/hospedagem/quartos', '/hospedagem/agenda', '/hospedagem/lavanderia', '/ministerios', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))).map(toItem))
   }
 
   if (isCozinha) {
-    return addPersonalSplit(dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/cozinha', '/cozinha/estoque', '/cozinha/receitas', '/ministerios', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-carteirinha'))).map(toItem))
+    return addPersonalSplit(dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/cozinha', '/cozinha/estoque', '/cozinha/receitas', '/ministerios', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))).map(toItem))
   }
 
   if (isManutencao) {
-    return addPersonalSplit(dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/manutencao', '/manutencao/estoque', '/ministerios', '/refeicoes', '/minhas-contas', '/minha-carteirinha'))).map(toItem))
+    return addPersonalSplit(dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/manutencao', '/manutencao/estoque', '/ministerios', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))).map(toItem))
   }
 
   if (isObreiroMinisterio) {
-    return addPersonalSplit(dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/ministerios', '/reservas', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-carteirinha'))).map(toItem))
+    return addPersonalSplit(dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/ministerios', '/reservas', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))).map(toItem))
   }
 
   if (isObreiroEted) {
-    return addPersonalSplit(dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/escolas', '/reservas', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-carteirinha'))).map(toItem))
+    return addPersonalSplit(dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/escolas', '/reservas', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))).map(toItem))
   }
 
   if (isAluno || isAssociado) {
     return addPersonalSplit(
-      dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/reservas', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-carteirinha'))).map(toItem),
-      new Set(['reservas', 'refeicoes', 'contas', 'carteirinha']),
+      dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/reservas', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))).map(toItem),
+      new Set(['reservas', 'refeicoes', 'contas', 'carteirinha', 'minha-lavanderia']),
     )
   }
 

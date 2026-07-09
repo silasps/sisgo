@@ -1,6 +1,6 @@
 # SISGO — Arquitetura do Sistema
 
-**Atualizado:** 8 de julho de 2026
+**Atualizado:** 8 de julho de 2026 (lavanderia: PIX público + página interna identificada)
 **Produção:** https://www.sisgomission.com (Vercel)
 
 ---
@@ -60,7 +60,8 @@ O SISGO é um sistema de gestão **multi-tenant** para bases missionárias da JO
 `ministerios` (workspace com mural, equipe e calendário) · `calendario` ·
 `presenca` · `pendentes` · `financeiro` · `caixa` · `minhas-contas` ·
 `cozinha` · `refeicoes` · `reservas` · `manutencao` · `configuracoes` ·
-`minha-carteirinha` · `hospedagem` (quartos/camas, agenda, **lavanderia**)
+`minha-carteirinha` · `minha-lavanderia` (lavanderia como cliente, para
+qualquer usuário logado) · `hospedagem` (quartos/camas, agenda, **lavanderia**)
 
 ---
 
@@ -121,10 +122,31 @@ Autosserviço com pagamento por tempo. Cada máquina tem um relé Wi-Fi
 - **Modelos de dispositivo** (`laundry_device_models`): templates de URL
   (`{ip}`, `{seconds}`) para suportar outros relés (Tasmota etc.), com
   instruções de instalação e nível de dificuldade.
-- **Fluxo:** admin libera (ou público via QR em `/{slug}/lavanderia`) →
-  `startMachine` liga o relé com timer e cria `laundry_sessions` → sessão
-  expira ou é parada → máquina volta a `available`. Sessões expiradas são
-  auto-completadas na renderização das páginas.
+- **Fluxo admin:** hospitalidade libera no painel → `startMachine` liga o relé
+  com timer e cria `laundry_sessions` → sessão expira ou é parada → máquina
+  volta a `available`. Sessões expiradas são auto-completadas na renderização.
+- **Fluxo público com PIX** (`/{slug}/lavanderia`): qualquer pessoa escolhe a
+  máquina disponível → seleciona o tempo (preço de `laundry_pricing`) → o
+  sistema cria cobrança PIX no **Asaas** (`src/lib/laundry/payments.ts`,
+  config por org em `laundry_payment_settings`: API key, customer padrão,
+  webhook token, sandbox/produção) → QR code + copia-e-cola na tela → paga →
+  webhook `/api/payments/laundry/webhook` (ou o polling
+  `/api/payments/laundry/status`, que confere direto no Asaas — funciona sem
+  webhook) confirma, **liga a máquina** e lança receita em
+  `financial_transactions` (categoria Lavanderia). Confirmação idempotente
+  via update condicional de `payment_status` (webhook e polling podem correr
+  em paralelo). Máquinas ocupadas aparecem com countdown e não são clicáveis.
+- **Fluxo interno** (`/{slug}/minha-lavanderia`, seção Pessoal do menu, todos
+  os papéis): mesma UI e mesmo fluxo PIX da página pública (componente
+  `PublicLaundry` com `payerName`/`embedded`), mas a rota de cobrança resolve
+  o usuário logado pelos cookies e grava `created_by`/`person_id`/nome na
+  sessão. O nome aparece só para a hospitalidade no painel — a página pública
+  nunca exibe nomes. A máquina do próprio usuário ganha o selo "Sua lavagem".
+- Cortesia (admin) libera a máquina com `amount_paid = 0` — não gera receita.
+- Código compartilhado em `src/lib/laundry/`: `control.ts` (relé + status
+  online, individual e em lote), `payments.ts` (cobrança/confirmação),
+  `public-data.ts` (loader das páginas de cliente), `shelly-cloud.ts`
+  (API Shelly), `devices.ts` (templates de URL).
 
 ---
 

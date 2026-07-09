@@ -39,6 +39,7 @@ export const ICON_MAP: Record<string, LucideIcon> = {
   quartos:        DoorOpen,
   agenda:         CalendarDays,
   lavanderia:     WashingMachine,
+  'minha-lavanderia': WashingMachine,
   refeicoes:      UtensilsCrossed,
   caixa:          Landmark,
   cozinha:        ChefHat,

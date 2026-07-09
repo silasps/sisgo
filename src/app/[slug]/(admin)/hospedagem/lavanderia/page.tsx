@@ -5,10 +5,11 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { notFound, redirect } from 'next/navigation'
 import { getRolePreview } from '@/lib/role-preview'
 import { isManagementRole, canSeeHospedagem } from '@/lib/auth/permissions'
-import { startMachine, stopMachine, createMachine, updateMachine, deleteMachine, upsertPricing, toggleLaundryEnabled, checkMachinesOnline, createDeviceModel, deleteDeviceModel, testDeviceConnection, testMachineConnection } from './actions'
-import { WashingMachine, Power, PowerOff, Plus, Settings, History, Pencil, Trash2, DollarSign, Timer, Wifi, WifiOff, Cpu, Info, Cloud } from 'lucide-react'
+import { startMachine, stopMachine, createMachine, updateMachine, deleteMachine, upsertPricing, toggleLaundryEnabled, checkMachinesOnline, createDeviceModel, deleteDeviceModel, testDeviceConnection, testMachineConnection, upsertLaundryPaymentSettings } from './actions'
+import { WashingMachine, Power, PowerOff, Plus, Settings, History, Pencil, Trash2, DollarSign, Timer, Wifi, WifiOff, Cpu, Info, Cloud, QrCode, ExternalLink } from 'lucide-react'
 import { DeviceSelect } from './DeviceSelect'
 import { ConnectionFields } from './ConnectionFields'
+import { SessionCountdown } from './SessionCountdown'
 import Link from 'next/link'
 
 type Props = {
@@ -133,7 +134,17 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
     .order('brand')
   const deviceModels = (deviceModelsData ?? []) as Array<{ id: string; brand: string; model: string; label: string; setup_instructions: string | null; difficulty: string; display_order: number }>
   const deviceOptions = deviceModels.map(d => ({ id: d.id, label: d.label, brand: d.brand, model: d.model, setup_instructions: d.setup_instructions, difficulty: d.difficulty }))
-  const activeTab = tab === 'maquinas' ? 'maquinas' : tab === 'precos' ? 'precos' : tab === 'dispositivos' ? 'dispositivos' : 'dashboard'
+
+  const { data: paymentSettingsData } = await sbAdmin.from('laundry_payment_settings')
+    .select('environment, access_token, default_customer_id, webhook_token, pix_key, public_payments_enabled')
+    .eq('organization_id', org.id)
+    .maybeSingle()
+  const paymentSettings = paymentSettingsData as {
+    environment: string; access_token: string | null; default_customer_id: string | null
+    webhook_token: string | null; pix_key: string | null; public_payments_enabled: boolean
+  } | null
+
+  const activeTab = tab === 'maquinas' ? 'maquinas' : tab === 'precos' ? 'precos' : tab === 'dispositivos' ? 'dispositivos' : tab === 'pagamento' ? 'pagamento' : 'dashboard'
 
   // ── Server actions ──────────────────────────────────────────────────────────
   const handleStartMachine = async (formData: FormData) => {
@@ -144,14 +155,16 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
     const p = pricingMap.get(machine.type)
     const minutes = parseInt(formData.get('duration_minutes') as string)
     if (isNaN(minutes) || minutes < 1) return
-    const amount = p ? minutes * p.price_per_minute_cents : 0
+    const paymentMethod = (formData.get('payment_method') as string) || 'cash'
+    // cortesia libera a máquina sem gerar receita
+    const amount = paymentMethod === 'free' ? 0 : (p ? minutes * p.price_per_minute_cents : 0)
 
     await startMachine({
       organizationId: org.id,
       machineId,
       durationMinutes: minutes,
       amountPaid: amount,
-      paymentMethod: (formData.get('payment_method') as string) || 'cash',
+      paymentMethod,
       guestName: (formData.get('guest_name') as string)?.trim() || null,
       personId: null,
       pricingId: p?.id ?? null,
@@ -282,6 +295,20 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
     redirect(`/${slug}/hospedagem/lavanderia?tab=maquinas&msg=${result.ok ? 'conexao_ok' : 'conexao_falhou'}`)
   }
 
+  const handleSavePaymentSettings = async (formData: FormData) => {
+    'use server'
+    await upsertLaundryPaymentSettings({
+      organizationId: org.id,
+      environment: (formData.get('environment') as string) || 'production',
+      accessToken: (formData.get('access_token') as string) || null,
+      defaultCustomerId: (formData.get('default_customer_id') as string) || null,
+      webhookToken: (formData.get('webhook_token') as string) || null,
+      pixKey: (formData.get('pix_key') as string) || null,
+      publicPaymentsEnabled: formData.get('public_payments_enabled') === 'on',
+    })
+    redirect(`/${slug}/hospedagem/lavanderia?tab=pagamento&msg=pagamento_salvo`)
+  }
+
   const handleTestMachine = async (formData: FormData) => {
     'use server'
     const result = await testMachineConnection({
@@ -302,6 +329,7 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
     desativada:  'Lavanderia desativada. O módulo foi removido do menu.',
     dispositivo_criado:  'Modelo de dispositivo cadastrado.',
     dispositivo_removido: 'Modelo de dispositivo removido.',
+    pagamento_salvo: 'Configuração de pagamento salva.',
     conexao_ok:  'Conexão com o dispositivo OK!',
     conexao_falhou: 'Falha na conexão — verifique os dados da conexão (IP local ou Shelly Cloud) e se o dispositivo está ligado e com internet.',
   }
@@ -373,6 +401,7 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
             { key: 'maquinas', label: 'Máquinas', icon: Settings },
             { key: 'precos', label: 'Preços', icon: DollarSign },
             { key: 'dispositivos', label: 'Dispositivos', icon: Cpu },
+            { key: 'pagamento', label: 'Pagamento', icon: QrCode },
           ] as const).map(t => (
             <Link
               key={t.key}
@@ -480,8 +509,8 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
                           </div>
                           <div className="flex items-center gap-1 text-[10px] text-blue-400">
                             <Timer size={10} />
-                            <span>{session.duration_minutes} min</span>
-                            <span>· até {new Date(session.expected_end_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                            <span>{session.duration_minutes} min ·</span>
+                            <SessionCountdown expectedEndAt={session.expected_end_at} />
                           </div>
                           <form action={handleStopMachine}>
                             <input type="hidden" name="session_id" value={session.id} />
@@ -772,6 +801,109 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
             })}
           </div>
         )}
+        {/* ── PAGAMENTO TAB ─────────────────────────────────────────────── */}
+        {activeTab === 'pagamento' && (
+          <div className="space-y-4">
+            <div className={`rounded-xl border p-3 flex items-center gap-3 ${
+              paymentSettings?.public_payments_enabled && paymentSettings?.access_token
+                ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'
+            }`}>
+              <QrCode size={18} className={paymentSettings?.public_payments_enabled && paymentSettings?.access_token ? 'text-green-500' : 'text-amber-500'} />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-gray-800">
+                  {paymentSettings?.public_payments_enabled && paymentSettings?.access_token
+                    ? 'Pagamento PIX ativo na página pública'
+                    : 'Pagamento PIX ainda não configurado'}
+                </p>
+                <p className="text-[10px] text-gray-500">
+                  Quando ativo, qualquer pessoa acessa <span className="font-mono">/{slug}/lavanderia</span>, escolhe o tempo, paga por PIX e a máquina liga sozinha.
+                </p>
+              </div>
+              <Link
+                href={`/${slug}/lavanderia`}
+                target="_blank"
+                className="shrink-0 flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-brand-600 bg-white border border-brand-200 rounded-lg hover:bg-brand-50 transition-colors"
+              >
+                <ExternalLink size={12} />
+                Ver página
+              </Link>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <h3 className="text-sm font-semibold text-gray-800 mb-1">Recebimento via Asaas</h3>
+              <p className="text-[10px] text-gray-400 mb-3">
+                O dinheiro cai direto na conta Asaas da base e cada pagamento vira uma receita na categoria &quot;Lavanderia&quot; no financeiro.
+              </p>
+              <form action={handleSavePaymentSettings} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="sm:col-span-2 flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-gray-50">
+                  <input
+                    type="checkbox"
+                    name="public_payments_enabled"
+                    id="public_payments_enabled"
+                    defaultChecked={paymentSettings?.public_payments_enabled ?? false}
+                    className="w-4 h-4 accent-brand-500"
+                  />
+                  <label htmlFor="public_payments_enabled" className="text-sm text-gray-700">
+                    Habilitar pagamento PIX na página pública
+                  </label>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Ambiente</label>
+                  <select name="environment" defaultValue={paymentSettings?.environment ?? 'production'} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
+                    <option value="production">Produção (recebe de verdade)</option>
+                    <option value="sandbox">Sandbox (testes)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Chave PIX da conta (opcional, só informativo)</label>
+                  <input name="pix_key" defaultValue={paymentSettings?.pix_key ?? ''} placeholder="CNPJ, e-mail ou chave aleatória" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-xs text-gray-500 mb-1 block">
+                    API Key do Asaas {paymentSettings?.access_token && <span className="text-green-600">(já salva — deixe em branco para manter)</span>}
+                  </label>
+                  <input name="access_token" type="password" placeholder={paymentSettings?.access_token ? '••••••••••••' : '$aact_...'} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">ID do cliente padrão (Customer ID)</label>
+                  <input name="default_customer_id" defaultValue={paymentSettings?.default_customer_id ?? ''} placeholder="cus_000000000000" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">
+                    Token do webhook {paymentSettings?.webhook_token && <span className="text-green-600">(já salvo — deixe em branco para manter)</span>}
+                  </label>
+                  <input name="webhook_token" placeholder={paymentSettings?.webhook_token ? '••••••••••••' : 'gerado automaticamente ao salvar'} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                </div>
+                <div className="sm:col-span-2">
+                  <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-brand-500 rounded-lg hover:bg-brand-600 transition-colors">
+                    Salvar configuração
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <h3 className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                <Info size={14} />
+                Como configurar (uma vez só)
+              </h3>
+              <ol className="space-y-2 text-xs text-gray-600 list-decimal ml-4">
+                <li>Crie uma conta em <strong>asaas.com</strong> para a base (grátis; taxa por PIX recebido).</li>
+                <li>No Asaas, vá em <strong>Integrações → API</strong> e copie a <strong>API Key</strong> — cole no campo acima.</li>
+                <li>Em <strong>Clientes</strong>, cadastre um cliente genérico (ex.: &quot;Lavanderia — consumidor&quot;) e copie o <strong>ID</strong> dele (começa com <code className="bg-gray-100 px-1 rounded">cus_</code>) — é usado como pagador padrão das cobranças.</li>
+                <li>Salve esta configuração — o token do webhook é gerado automaticamente.</li>
+                <li>No Asaas, em <strong>Integrações → Webhooks</strong>, crie um webhook para eventos de <strong>cobrança</strong> apontando para:
+                  <div className="mt-1 font-mono text-[10px] bg-gray-100 rounded px-2 py-1.5 break-all">https://www.sisgomission.com/api/payments/laundry/webhook</div>
+                  e no campo <strong>Token de autenticação</strong> cole o token do webhook salvo acima.
+                </li>
+              </ol>
+              <p className="text-[10px] text-gray-400 mt-3">
+                Mesmo sem o webhook configurado o fluxo funciona: a página pública confere o pagamento direto no Asaas a cada poucos segundos. O webhook só torna a liberação instantânea.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* ── DISPOSITIVOS TAB ────────────────────────────────────────── */}
         {activeTab === 'dispositivos' && (
           <div className="space-y-4">
