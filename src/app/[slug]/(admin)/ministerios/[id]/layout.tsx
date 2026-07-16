@@ -77,8 +77,8 @@ export default async function MinisterioWorkspaceLayout({ children, params }: Pr
 
   const base = `/${slug}/ministerios/${id}`
   const tabs = [
-    { href: base, label: 'Geral' },
-    { href: `${base}/equipe`, label: 'Equipe' },
+    { href: base, label: 'Chat', icon: 'chat' as const },
+    { href: `${base}/equipe`, label: 'Quadro de Obreiros', icon: 'equipe' as const },
   ]
 
   return (

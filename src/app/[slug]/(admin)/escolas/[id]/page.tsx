@@ -88,6 +88,7 @@ export default async function EscolaOverviewPage({ params }: Props) {
 
   async function postMessage(formData: FormData) {
     'use server'
+    if (!user) return
     const content = (formData.get('content') as string).trim()
     if (!content) return
     const mentionMatches = content.match(/@[\w\s]+/g) ?? []

@@ -2,6 +2,149 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 
+// ── Resolução de pendências de hospedagem (obreiro/aluno) ──────────────────────
+
+export type AvailableRoom = {
+  roomId: string
+  roomName: string
+  allocationMode: 'cama' | 'quarto'
+  genderConstraint: string | null
+  availableBeds: { id: string; label: string }[] // vazio quando allocationMode === 'quarto'
+}
+
+// Quartos com vaga real na janela de datas pedida — reaproveita a mesma regra
+// de sobreposição já usada em ReservationTimeline (check_in < checkOut E check_out > checkIn).
+export async function getAvailableRooms(params: {
+  organizationId: string
+  guestType: 'obreiro' | 'aluno'
+  checkIn: string
+  checkOut: string
+}): Promise<AvailableRoom[]> {
+  const sb = createAdminClient()
+
+  const { data: rooms } = await sb
+    .from('rooms')
+    .select('id, name, capacity, allocation_mode, gender_constraint, destination')
+    .eq('organization_id', params.organizationId)
+    .eq('status', 'ativo')
+    .eq('destination', params.guestType)
+    .order('display_order', { ascending: true })
+
+  const roomList = (rooms ?? []) as Array<{ id: string; name: string; capacity: number; allocation_mode: 'cama' | 'quarto'; gender_constraint: string | null }>
+  if (roomList.length === 0) return []
+
+  const roomIds = roomList.map(r => r.id)
+
+  const { data: overlapping } = await sb
+    .from('room_allocations')
+    .select('room_id, bed_id')
+    .eq('organization_id', params.organizationId)
+    .in('room_id', roomIds)
+    .neq('status', 'cancelada')
+    .lt('check_in', params.checkOut)
+    .gt('check_out', params.checkIn)
+
+  const occupiedRoomIds = new Set<string>()
+  const occupiedBedIds = new Set<string>()
+  for (const a of (overlapping ?? []) as Array<{ room_id: string; bed_id: string | null }>) {
+    occupiedRoomIds.add(a.room_id)
+    if (a.bed_id) occupiedBedIds.add(a.bed_id)
+  }
+
+  const camaRoomIds = roomList.filter(r => r.allocation_mode === 'cama').map(r => r.id)
+  const { data: beds } = camaRoomIds.length > 0
+    ? await sb.from('beds').select('id, room_id, label').in('room_id', camaRoomIds).eq('status', 'disponivel')
+    : { data: [] }
+  const bedsByRoom = new Map<string, { id: string; label: string }[]>()
+  for (const b of (beds ?? []) as Array<{ id: string; room_id: string; label: string }>) {
+    if (occupiedBedIds.has(b.id)) continue
+    bedsByRoom.set(b.room_id, [...(bedsByRoom.get(b.room_id) ?? []), { id: b.id, label: b.label }])
+  }
+
+  const result: AvailableRoom[] = []
+  for (const r of roomList) {
+    if (r.allocation_mode === 'quarto') {
+      if (!occupiedRoomIds.has(r.id)) {
+        result.push({ roomId: r.id, roomName: r.name, allocationMode: 'quarto', genderConstraint: r.gender_constraint, availableBeds: [] })
+      }
+    } else {
+      const free = bedsByRoom.get(r.id) ?? []
+      if (free.length > 0) {
+        result.push({ roomId: r.id, roomName: r.name, allocationMode: 'cama', genderConstraint: r.gender_constraint, availableBeds: free })
+      }
+    }
+  }
+  return result
+}
+
+export async function resolverHospedagemComAlocacao(params: {
+  requestId: string
+  organizationId: string
+  roomId: string
+  bedId: string | null
+  personId: string | null
+  guestName: string
+  guestType: 'obreiro' | 'aluno'
+  checkIn: string
+  checkOut: string
+  reviewedBy: string
+}) {
+  await createAllocation({
+    organizationId: params.organizationId,
+    roomId: params.roomId,
+    bedId: params.bedId,
+    reservationId: null,
+    personId: params.personId,
+    guestName: params.guestName,
+    guestType: params.guestType,
+    checkIn: params.checkIn,
+    checkOut: params.checkOut,
+    notes: null,
+    createdBy: params.reviewedBy,
+  })
+
+  const sb = createAdminClient()
+  await sb.from('service_requests').update({
+    status: 'resolvido',
+    reviewed_by: params.reviewedBy,
+    reviewed_at: new Date().toISOString(),
+  }).eq('id', params.requestId)
+}
+
+// Confirma que há vaga (desbloqueia a candidatura) sem travar na escolha do
+// quarto específico agora — isso vira uma pendência só da hospitalidade,
+// separada do processo de admissão.
+export async function resolverHospedagemSemAlocacao(params: {
+  requestId: string
+  organizationId: string
+  guestName: string
+  staffApplicationId: string | null
+  schoolApplicationId: string | null
+  requestedArrivalDate: string | null
+  reviewedBy: string
+}) {
+  const sb = createAdminClient()
+
+  await sb.from('service_requests').update({
+    status: 'resolvido',
+    reviewed_by: params.reviewedBy,
+    reviewed_at: new Date().toISOString(),
+  }).eq('id', params.requestId)
+
+  await sb.from('service_requests').insert({
+    organization_id: params.organizationId,
+    requester_id: params.reviewedBy,
+    requester_role: 'hospitalidade',
+    target_department: 'hospitalidade',
+    request_type: 'alocar_quarto',
+    subject: `Definir quarto — ${params.guestName}`,
+    description: 'Disponibilidade já confirmada — falta escolher o quarto/cama específico.',
+    staff_application_id: params.staffApplicationId,
+    school_application_id: params.schoolApplicationId,
+    requested_arrival_date: params.requestedArrivalDate,
+  })
+}
+
 // ── Rooms ────────────────────────────────────────────────────────────────────
 
 export async function createRoom(data: {

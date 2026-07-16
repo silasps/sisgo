@@ -63,6 +63,15 @@ export const FINANCE_WRITE_ROLES: readonly Role[] = [
   'secretaria',
 ]
 
+/** Papéis com acesso ao perfil individual de uma pessoa (/pessoas/[id]) */
+export const PROFILE_ROLES: readonly Role[] = [
+  ...MANAGEMENT_ROLES,
+  'secretaria',
+]
+
+/** Papéis com acesso a dados sensíveis de saúde (LGPD — dado sensível) */
+export const HEALTH_ROLES: readonly Role[] = MANAGEMENT_ROLES
+
 /** Papéis com acesso ao módulo de cozinha e estoque */
 export const KITCHEN_ROLES: readonly Role[] = [
   'superadmin',

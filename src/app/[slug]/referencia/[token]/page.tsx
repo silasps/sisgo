@@ -26,7 +26,7 @@ export default async function ReferenciaPage({ params, searchParams }: Props) {
         school_interest_forms(full_name)
       ),
       staff_applications(
-        id, organization_id,
+        id, organization_id, form_data,
         staff_interest_forms(full_name)
       )
     `)
@@ -45,6 +45,7 @@ export default async function ReferenciaPage({ params, searchParams }: Props) {
   const staffApp = ref.staff_applications as unknown as {
     id: string
     organization_id: string
+    form_data: Record<string, Record<string, string>> | null
     staff_interest_forms: { full_name: string } | null
   } | null
 
@@ -61,11 +62,23 @@ export default async function ReferenciaPage({ params, searchParams }: Props) {
 
   if (!org?.active || org.slug !== slug) notFound()
 
-  const escolaNome = isStaff ? (org.name ?? 'JOCUM') : ((schoolApp?.schools?.name) ?? 'JOCUM')
+  const s5 = staffApp?.form_data?.s5
+  const experienciaNome = s5?.experiencia_recente_tipo === 'escola'
+    ? s5?.escola_nome
+    : s5?.experiencia_recente_tipo === 'missao'
+      ? s5?.missao_organizacao
+      : undefined
+  const escolaNome = isStaff
+    ? (ref.type === 'lideranca_experiencia' ? (experienciaNome ?? org.name ?? 'JOCUM') : (org.name ?? 'JOCUM'))
+    : ((schoolApp?.schools?.name) ?? 'JOCUM')
   const candidatoNome = isStaff
     ? (staffApp?.staff_interest_forms?.full_name ?? 'o(a) candidato(a)')
     : (schoolApp?.school_interest_forms?.full_name ?? 'o(a) candidato(a)')
-  const tipoLabel = ref.type === 'pastor' ? d.ref.form_type_pastor : d.ref.form_type_amigo
+  const tipoLabel = ref.type === 'pastor'
+    ? d.ref.form_type_pastor
+    : ref.type === 'amigo'
+      ? d.ref.form_type_amigo
+      : d.ref.form_type_lideranca_experiencia
 
   if (new Date(ref.token_expires_at) < new Date()) {
     return (
@@ -117,7 +130,7 @@ export default async function ReferenciaPage({ params, searchParams }: Props) {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6 md:p-8">
           <FormularioReferencia
             token={token}
-            tipo={ref.type as 'pastor' | 'amigo'}
+            tipo={ref.type as 'pastor' | 'amigo' | 'lideranca_experiencia'}
             candidatoNome={candidatoNome}
             escolaNome={escolaNome}
             initialLang={langParam}

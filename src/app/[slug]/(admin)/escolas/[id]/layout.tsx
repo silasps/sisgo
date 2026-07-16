@@ -78,9 +78,9 @@ export default async function EscolaWorkspaceLayout({ children, params }: Props)
   const canConfigure = isManagement || isLiderEted
   const base = `/${slug}/escolas/${id}`
   const tabs = [
-    { href: base, label: 'Geral' },
-    { href: `${base}/equipe`, label: 'Equipe' },
-    ...(canConfigure ? [{ href: `${base}/configuracoes`, label: 'Configurações', alsoMatches: [`${base}/turmas`, `${base}/formulario`] }] : []),
+    { href: base, label: 'Geral', icon: 'geral' as const },
+    { href: `${base}/equipe`, label: 'Quadro de Obreiros', icon: 'equipe' as const },
+    ...(canConfigure ? [{ href: `${base}/configuracoes`, label: 'Configurações', icon: 'configuracoes' as const, alsoMatches: [`${base}/turmas`, `${base}/formulario`] }] : []),
   ]
 
   return (

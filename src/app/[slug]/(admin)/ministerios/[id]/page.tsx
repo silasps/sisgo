@@ -62,7 +62,7 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
     supabase.from('ministry_members').select('*', { count: 'exact', head: true }).eq('ministry_id', id).eq('active', true),
     supabase.from('ministry_pending_requests').select('*', { count: 'exact', head: true }).eq('ministry_id', id).eq('status', 'pendente'),
     sbAdmin.from('ministry_messages')
-      .select('id, author_name, author_id, content, mentions, color, font, text_color, font_size, created_at')
+      .select('id, author_name, author_id, content, mentions, color, font, text_color, font_size, created_at, edited_at')
       .eq('ministry_id', id)
       .order('created_at', { ascending: true })
       .limit(30),
@@ -89,6 +89,11 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
   if (messages.length > 0) {
     nextColor = (messages[messages.length - 1].color + 1) % 6
   }
+
+  await sbAdmin.from('ministry_message_reads').upsert(
+    { user_id: user.id, ministry_id: id, last_read_at: new Date().toISOString() },
+    { onConflict: 'user_id,ministry_id' }
+  )
 
   let leaderEmail: string | null = null
   let orgUsersForAssignment: Array<{ id: string; email: string }> = []
@@ -197,6 +202,19 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
     await db.from('ministry_messages').delete().eq('id', messageId).eq('ministry_id', id)
   }
 
+  async function editMessage(formData: FormData) {
+    'use server'
+    const messageId = formData.get('message_id') as string
+    const content = (formData.get('content') as string)?.trim()
+    if (!messageId || !content || !user) return
+    const db = createAdminClient()
+    await db.from('ministry_messages')
+      .update({ content, edited_at: new Date().toISOString() })
+      .eq('id', messageId)
+      .eq('ministry_id', id)
+      .eq('author_id', user.id)
+  }
+
   const msgs: Record<string, { text: string; cls: string }> = {
     criado:           { text: 'Ministério criado com sucesso.', cls: 'bg-green-50 border-green-200 text-green-700' },
     atualizado:       { text: 'Informações atualizadas.', cls: 'bg-green-50 border-green-200 text-green-700' },
@@ -221,7 +239,7 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
               </div>
             </div>
           </Link>
-          <Link href={`${base}/equipe`} className="flex-1 group bg-white rounded-xl border border-gray-200 p-2.5 lg:p-3 transition-all hover:shadow-md hover:-translate-y-0.5">
+          <Link href={`/${slug}/pendentes`} className="flex-1 group bg-white rounded-xl border border-gray-200 p-2.5 lg:p-3 transition-all hover:shadow-md hover:-translate-y-0.5">
             <div className="flex items-center gap-2">
               <div className="rounded-lg bg-amber-50 p-1.5"><ClipboardList size={14} className="text-amber-600" /></div>
               <div>
@@ -342,6 +360,7 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
           nextColor={nextColor}
           postAction={postMessage}
           deleteAction={deleteMessage}
+          editAction={editMessage}
         />
       </div>
     </main>

@@ -4,7 +4,15 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getRolePreview } from '@/lib/role-preview'
 import { Pencil } from 'lucide-react'
+import { PipelineStepper, stagesFromFlags } from '@/components/inscricoes/PipelineStepper'
+import { AvancarEtapaControl, AdvanceHistoryList } from '@/components/inscricoes/AvancarEtapaControl'
+import { getStageAdvances, resolveAdvancerNames } from '@/lib/pipelineStageAdvance'
 import BackgroundChecksSection from './BackgroundChecksSection'
+import { PastorReferenceGate } from './PastorReferenceGate'
+import { HospedagemHandoffCard } from './HospedagemHandoffCard'
+import { HospedagemSolicitacaoCard } from './HospedagemSolicitacaoCard'
+import { HospedagemGate } from './HospedagemGate'
+import { avancarEtapaObreiro } from './actions'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
@@ -89,15 +97,20 @@ const SECTIONS: FormSection[] = [
     ],
   },
   {
-    title: 'Experiência missionária',
+    title: 'Experiência recente',
     fields: [
-      { label: 'Serviu em projeto missionário?', key: 'serviu_missao' },
-      { label: 'Descrição da experiência', key: 'missao_descricao', type: 'textarea' },
+      { label: 'Experiência mais recente', key: 'experiencia_recente_tipo' },
+      { label: 'Nome da escola', key: 'escola_nome' },
+      { label: 'Período/turma', key: 'escola_periodo' },
+      { label: 'Líder da escola', key: 'escola_lider_nome' },
+      { label: 'E-mail do líder da escola', key: 'escola_lider_email' },
+      { label: 'Telefone do líder da escola', key: 'escola_lider_tel' },
+      { label: 'Descrição da experiência missionária', key: 'missao_descricao', type: 'textarea' },
       { label: 'Organização/base', key: 'missao_organizacao' },
       { label: 'Duração', key: 'missao_duracao' },
-      { label: 'Líder responsável', key: 'missao_lider_nome' },
-      { label: 'E-mail do líder', key: 'missao_lider_email' },
-      { label: 'Telefone do líder', key: 'missao_lider_tel' },
+      { label: 'Líder responsável (missão)', key: 'missao_lider_nome' },
+      { label: 'E-mail do líder (missão)', key: 'missao_lider_email' },
+      { label: 'Telefone do líder (missão)', key: 'missao_lider_tel' },
       { label: 'Conhece alguém na base?', key: 'conhece_alguem' },
       { label: 'Tipo de vínculo', key: 'vinculo_tipo' },
       { label: 'Nome da pessoa', key: 'vinculo_nome' },
@@ -181,6 +194,10 @@ const STATUS_COLORS: Record<string, string> = {
   reprovado: 'bg-red-100 text-red-700',
   cancelado: 'bg-gray-100 text-gray-500',
 }
+const STATUS_LABELS: Record<string, string> = {
+  rascunho: 'Rascunho', enviado: 'Enviado', em_analise: 'Em análise',
+  aprovado: 'Aprovado', reprovado: 'Reprovado', cancelado: 'Cancelado',
+}
 
 export default async function FormularioObreiroViewerPage({ params }: Props) {
   const { slug, id } = await params
@@ -212,12 +229,16 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
   const allowed = ['superadmin', 'admin_base', 'lider_base', 'dh', 'lider_eted', 'lider_ministerio'].includes(userRole)
   if (!allowed) notFound()
   const canManageChecks = ['superadmin', 'admin_base', 'lider_base', 'dh'].includes(userRole)
+  const canManagePastorSkip = ['superadmin', 'admin_base', 'dh'].includes(userRole)
 
   const { data: app } = await sb
     .from('staff_applications')
     .select(`
       id, status, form_data, applied_at,
       organization_id, ministry_id, person_id,
+      pastor_reference_skip_reason, pastor_reference_skipped_by, pastor_reference_skipped_at,
+      hospedagem_skip_reason, hospedagem_skipped_by, hospedagem_skipped_at,
+      edited_by, edited_at,
       people(full_name),
       ministries(name),
       staff_interest_forms(full_name, email, phone)
@@ -227,6 +248,24 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
     .single()
 
   if (!app) notFound()
+
+  let skippedByName: string | null = null
+  if (app.pastor_reference_skipped_by) {
+    const { data: skipUser } = await sb.auth.admin.getUserById(app.pastor_reference_skipped_by)
+    skippedByName = (skipUser.user?.user_metadata?.full_name as string | undefined) ?? skipUser.user?.email ?? null
+  }
+
+  let editedByName: string | null = null
+  if (app.edited_by) {
+    const { data: editUser } = await sb.auth.admin.getUserById(app.edited_by)
+    editedByName = (editUser.user?.user_metadata?.full_name as string | undefined) ?? editUser.user?.email ?? null
+  }
+
+  let hospedagemSkippedByName: string | null = null
+  if (app.hospedagem_skipped_by) {
+    const { data: skipUser } = await sb.auth.admin.getUserById(app.hospedagem_skipped_by)
+    hospedagemSkippedByName = (skipUser.user?.user_metadata?.full_name as string | undefined) ?? skipUser.user?.email ?? null
+  }
 
   const formData = (app.form_data as Record<string, unknown>) ?? {}
   const ministry = app.ministries as unknown as { name: string } | null
@@ -242,6 +281,38 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
 
   const pastorRef = refs?.find(r => r.type === 'pastor')
   const amigoRef = refs?.find(r => r.type === 'amigo')
+  const liderancaRef = refs?.find(r => r.type === 'lideranca_experiencia')
+
+  const isLiderMinisterio = userRole === 'lider_ministerio'
+  let leaderMinistryId: string | null = null
+  if (isLiderMinisterio) {
+    leaderMinistryId = preview?.ministryId
+      ?? (await supabase.from('ministry_leaders').select('ministry_id').eq('user_id', user.id).limit(1).single()).data?.ministry_id ?? null
+  }
+  const canRequestHospedagem = canManageChecks || (isLiderMinisterio && !!app.ministry_id && leaderMinistryId === app.ministry_id)
+
+  const { data: hospRequest } = await sb
+    .from('service_requests')
+    .select('status, requested_arrival_date, description')
+    .eq('staff_application_id', id)
+    .eq('request_type', 'hospedagem_obreiro')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const hospedagemResolved = hospRequest?.status === 'resolvido'
+  const canHandoffHospedagem = canRequestHospedagem && hospedagemResolved
+
+  let rooms: { id: string; name: string; floor: string | null; allocation_mode: string; beds: { id: string; label: string; status: string }[] }[] = []
+  if (canHandoffHospedagem) {
+    const { data: roomRows } = await sb
+      .from('rooms')
+      .select('id, name, floor, allocation_mode, beds(id, label, status)')
+      .eq('organization_id', app.organization_id)
+      .eq('status', 'ativo')
+      .order('display_order', { ascending: true })
+    rooms = (roomRows ?? []) as unknown as typeof rooms
+  }
 
   const { data: backgroundChecks } = await sb
     .from('background_checks')
@@ -258,6 +329,21 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
 
   const allFields = Object.values(sectionData).reduce<Record<string, string>>((acc, sec) => ({ ...acc, ...sec }), {})
 
+  const stageAdvances = await getStageAdvances(sb, 'obreiro', id)
+  const advancerNames = await resolveAdvancerNames(sb, stageAdvances)
+  const advancedLabels = new Set(stageAdvances.map(a => a.to_stage))
+  const STAGE_LABELS = ['Pré-inscrição', 'Formulário enviado', 'Recomendação do pastor', 'Verificação de antecedentes', 'Hospedagem', 'Aprovado']
+  const naturalFlags = [
+    true,
+    Object.keys(formData).length > 1,
+    pastorRef?.status === 'enviado' || !!app.pastor_reference_skip_reason,
+    backgroundChecks !== null && backgroundChecks.length > 0 && !backgroundChecks.some(c => ['pendente', 'solicitado', 'em_analise'].includes(c.status)),
+    hospedagemResolved || !!app.hospedagem_skip_reason,
+    app.status === 'aprovado',
+  ]
+  const stages = stagesFromFlags(STAGE_LABELS, naturalFlags.map((f, i) => f || advancedLabels.has(STAGE_LABELS[i])))
+  const currentStageLabel = stages.find(s => s.status === 'current')?.label ?? null
+
   return (
     <>
       <header className="bg-white border-b border-gray-100 px-4 sm:px-6 py-4 sticky top-0 z-10">
@@ -269,15 +355,37 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
             <h1 className="text-lg font-bold text-gray-900 mt-0.5">{nomeCandidato}</h1>
             <div className="flex items-center gap-2 mt-1">
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_COLORS[app.status] ?? 'bg-gray-100 text-gray-500'}`}>
-                {app.status}
+                {STATUS_LABELS[app.status] ?? app.status}
               </span>
               {ministry && <span className="text-xs text-gray-400">{ministry.name}</span>}
               <span className="text-xs text-gray-300">
                 {new Date(app.applied_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
               </span>
             </div>
+            <div className="mt-2">
+              <PipelineStepper stages={stages} />
+              {canManagePastorSkip && (
+                <AvancarEtapaControl
+                  currentStageLabel={currentStageLabel}
+                  fixed={{ applicationId: id, organizationId: app.organization_id, slug }}
+                  action={avancarEtapaObreiro}
+                />
+              )}
+              <AdvanceHistoryList advances={stageAdvances} names={Object.fromEntries(advancerNames)} />
+            </div>
           </div>
+          <Link
+            href={`/${slug}/inscricoes/formulario-obreiro/${id}/editar`}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-white text-amber-700 font-semibold text-sm rounded-xl border border-amber-200 hover:bg-amber-50 transition-colors shrink-0"
+          >
+            <Pencil className="size-3.5 inline -mt-0.5" /> Preencher / editar formulário
+          </Link>
         </div>
+        {app.edited_at && (
+          <p className="max-w-3xl mx-auto text-xs text-gray-400 mt-1.5">
+            Editado por {editedByName ?? 'um administrador'} em {new Date(app.edited_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
+          </p>
+        )}
       </header>
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-4">
@@ -307,22 +415,50 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
         })}
 
         {/* Referências */}
-        {(pastorRef || amigoRef) && (
+        {(pastorRef || amigoRef || liderancaRef || app.pastor_reference_skip_reason) && (
           <SectionCard title="Referências">
-            {pastorRef && (
-              <div className="py-2">
-                <p className="text-xs font-semibold text-gray-500 mb-1">Pastor / Líder</p>
-                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${pastorRef.status === 'enviado' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                  {pastorRef.status === 'enviado' ? 'Enviado' : 'Pendente'}
+            <div className="py-2">
+              <p className="text-xs font-semibold text-gray-500 mb-1">Pastor / Líder (obrigatória)</p>
+              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${pastorRef?.status === 'enviado' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                {pastorRef?.status === 'enviado' ? 'Enviado' : 'Pendente'}
+              </span>
+              {pastorRef?.status === 'enviado' && pastorRef.form_data && (
+                <div className="mt-2 space-y-1">
+                  {(pastorRef.form_data as Record<string, string>).conduta_menores === 'tem_preocupacao' && (
+                    <p className="text-xs font-semibold text-red-700 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5">
+                      ⚠ Referência sinalizou preocupação sobre conduta com menores
+                    </p>
+                  )}
+                  {Object.entries(pastorRef.form_data as Record<string, string>).map(([k, v]) => (
+                    <FieldRow key={k} label={k.replace(/_/g, ' ')} value={v} />
+                  ))}
+                </div>
+              )}
+              <PastorReferenceGate
+                staffApplicationId={id}
+                organizationId={app.organization_id}
+                slug={slug}
+                status={pastorRef?.status === 'enviado' ? 'enviado' : 'pendente'}
+                skipReason={app.pastor_reference_skip_reason}
+                skippedByName={skippedByName}
+                skippedAt={app.pastor_reference_skipped_at}
+                readOnly={!canManagePastorSkip}
+              />
+            </div>
+            {liderancaRef && (
+              <div className="py-2 border-t border-gray-50">
+                <p className="text-xs font-semibold text-gray-500 mb-1">Liderança da experiência recente (escola/missão)</p>
+                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${liderancaRef.status === 'enviado' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                  {liderancaRef.status === 'enviado' ? 'Enviado' : 'Pendente'}
                 </span>
-                {pastorRef.status === 'enviado' && pastorRef.form_data && (
+                {liderancaRef.status === 'enviado' && liderancaRef.form_data && (
                   <div className="mt-2 space-y-1">
-                    {(pastorRef.form_data as Record<string, string>).conduta_menores === 'tem_preocupacao' && (
+                    {(liderancaRef.form_data as Record<string, string>).conduta_menores === 'tem_preocupacao' && (
                       <p className="text-xs font-semibold text-red-700 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5">
                         ⚠ Referência sinalizou preocupação sobre conduta com menores
                       </p>
                     )}
-                    {Object.entries(pastorRef.form_data as Record<string, string>).map(([k, v]) => (
+                    {Object.entries(liderancaRef.form_data as Record<string, string>).map(([k, v]) => (
                       <FieldRow key={k} label={k.replace(/_/g, ' ')} value={v} />
                     ))}
                   </div>
@@ -363,6 +499,47 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
             readOnly={!canManageChecks}
           />
         </SectionCard>
+
+        {/* Hospitalidade — solicitação pode ser feita a qualquer momento, bloqueia a aprovação final */}
+        {(canRequestHospedagem || app.hospedagem_skip_reason) && (
+          <SectionCard title="Hospitalidade">
+            <div className="space-y-3">
+              {canRequestHospedagem && (
+                <HospedagemSolicitacaoCard
+                  slug={slug}
+                  organizationId={app.organization_id}
+                  ministryId={app.ministry_id}
+                  staffApplicationId={id}
+                  guestName={nomeCandidato}
+                  status={hospRequest?.status ?? null}
+                  requestedArrivalDate={hospRequest?.requested_arrival_date ?? null}
+                  requestNotes={hospRequest?.description ?? null}
+                />
+              )}
+              <HospedagemGate
+                staffApplicationId={id}
+                organizationId={app.organization_id}
+                slug={slug}
+                resolved={hospedagemResolved}
+                skipReason={app.hospedagem_skip_reason}
+                skippedByName={hospedagemSkippedByName}
+                skippedAt={app.hospedagem_skipped_at}
+                readOnly={!canManagePastorSkip}
+              />
+              {canHandoffHospedagem && (
+                <HospedagemHandoffCard
+                  slug={slug}
+                  organizationId={app.organization_id}
+                  ministryId={app.ministry_id}
+                  staffApplicationId={id}
+                  personId={app.person_id}
+                  guestName={nomeCandidato}
+                  rooms={rooms}
+                />
+              )}
+            </div>
+          </SectionCard>
+        )}
       </main>
     </>
   )

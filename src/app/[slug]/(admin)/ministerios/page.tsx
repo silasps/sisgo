@@ -26,34 +26,33 @@ export default async function MinistriosPage({ params }: Props) {
     : { role: '', preview: null }
   const isManagement = isManagementRole(role)
   const canWrite = isManagement
+  let allowedMinistryIds: string[] | null = null
 
-  // Usuário vinculado a ministério → redireciona diretamente para o seu ministério
+  // Usuário vinculado a ministério → redireciona diretamente pro seu ministério,
+  // ou (se lidera mais de um) mostra a listagem filtrada só aos dele
   if (role === 'lider_ministerio' && user) {
-    const leaderRow = preview?.ministryId
-      ? { ministry_id: preview.ministryId }
-      : (await supabase
-        .from('ministry_leaders')
-        .select('ministry_id')
-        .eq('user_id', user.id)
-        .limit(1)
-        .single()).data
+    const ministryIds = preview?.ministryId
+      ? [preview.ministryId]
+      : ((await supabase.from('ministry_leaders').select('ministry_id').eq('user_id', user.id)).data ?? []).map(r => r.ministry_id)
 
-    if (leaderRow?.ministry_id) {
-      redirect(`/${slug}/ministerios/${leaderRow.ministry_id}`)
+    if (ministryIds.length === 1) redirect(`/${slug}/ministerios/${ministryIds[0]}`)
+
+    if (ministryIds.length === 0) {
+      return (
+        <>
+          <Header title="Ministérios" />
+          <main className="p-4 md:p-6">
+            <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
+              <Music className="size-8 mx-auto mb-3 text-gray-300" />
+              <p className="text-gray-500 text-sm">Nenhum ministério atribuído a você ainda.</p>
+              <p className="text-gray-400 text-xs mt-1">Entre em contato com o DH da sua base.</p>
+            </div>
+          </main>
+        </>
+      )
     }
 
-    return (
-      <>
-        <Header title="Ministérios" />
-        <main className="p-4 md:p-6">
-          <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
-            <Music className="size-8 mx-auto mb-3 text-gray-300" />
-            <p className="text-gray-500 text-sm">Nenhum ministério atribuído a você ainda.</p>
-            <p className="text-gray-400 text-xs mt-1">Entre em contato com o DH da sua base.</p>
-          </div>
-        </main>
-      </>
-    )
+    allowedMinistryIds = ministryIds
   }
 
   if (role === 'obreiro_ministerio' && user) {
@@ -130,11 +129,13 @@ export default async function MinistriosPage({ params }: Props) {
     ministry_leaders: Array<{ user_id: string }>
   }
 
-  const { data } = await supabase
+  let ministeriosQuery = supabase
     .from('ministries')
     .select('id, name, description, active, linked_role, ministry_members(id, active), ministry_leaders(user_id)')
     .eq('organization_id', orgId)
     .order('name')
+  if (allowedMinistryIds) ministeriosQuery = ministeriosQuery.in('id', allowedMinistryIds)
+  const { data } = await ministeriosQuery
 
   const ministerios = (data ?? []) as unknown as MinistryRaw[]
 

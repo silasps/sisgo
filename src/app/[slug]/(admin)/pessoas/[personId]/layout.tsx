@@ -6,9 +6,7 @@ import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
-import { MANAGEMENT_ROLES } from '@/lib/auth/permissions'
-
-const PROFILE_ROLES = [...MANAGEMENT_ROLES, 'dh', 'secretaria', 'lider_eted']
+import { PROFILE_ROLES, HEALTH_ROLES } from '@/lib/auth/permissions'
 
 type Props = {
   children: React.ReactNode
@@ -37,10 +35,25 @@ export default async function PessoaWorkspaceLayout({ children, params }: Props)
     .single()
   if (!person) notFound()
 
+  type SchoolLinkRaw = { role: string; schools: { name: string } | null }
+  type MinistryLinkRaw = { ministry_roles: { name: string } | null; ministries: { name: string } | null }
+  const [{ data: schoolLinksRaw }, { data: ministryLinksRaw }] = await Promise.all([
+    db.from('school_staff').select('role, schools(name)').eq('person_id', personId).eq('active', true),
+    db.from('ministry_members').select('ministry_roles(name), ministries(name)').eq('person_id', personId).eq('active', true),
+  ])
+  const serveEmLabels = [
+    ...((schoolLinksRaw ?? []) as unknown as SchoolLinkRaw[])
+      .filter(l => l.schools)
+      .map(l => `${l.schools!.name} (${l.role})`),
+    ...((ministryLinksRaw ?? []) as unknown as MinistryLinkRaw[])
+      .filter(l => l.ministries)
+      .map(l => `${l.ministries!.name}${l.ministry_roles ? ` (${l.ministry_roles.name})` : ''}`),
+  ]
+
   const base = `/${slug}/pessoas/${personId}`
   const tabs = [
     { href: `${base}/carteirinha`, label: 'Carteirinha' },
-    { href: `${base}/saude`, label: 'Saúde' },
+    ...(HEALTH_ROLES.includes(role as never) ? [{ href: `${base}/saude`, label: 'Saúde' }] : []),
   ]
 
   return (
@@ -54,6 +67,12 @@ export default async function PessoaWorkspaceLayout({ children, params }: Props)
           </Link>
         }
       />
+      <div className="px-4 md:px-6 pt-2.5 pb-2 bg-white border-b border-gray-100">
+        <p className="text-xs text-gray-500">
+          <span className="font-medium text-gray-600">Serve em:</span>{' '}
+          {serveEmLabels.length > 0 ? serveEmLabels.join(' · ') : 'Nenhum vínculo com escola ou ministério ainda.'}
+        </p>
+      </div>
       <WorkspaceTabBar tabs={tabs} />
       {children}
     </>

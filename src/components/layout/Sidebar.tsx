@@ -6,9 +6,9 @@ import Image from 'next/image'
 import {
   LayoutDashboard, AlertTriangle, Users, Church, GraduationCap,
   ClipboardList, Music2, BedDouble, UtensilsCrossed, Landmark,
-  ChefHat, Package, DollarSign, Receipt, Settings, LogOut,
+  ChefHat, Package, Boxes, DollarSign, Receipt, Settings, LogOut,
   UserCheck, CalendarDays, Wrench, Building2, Eye, Code2, Inbox, CookingPot,
-  Hotel, DoorOpen, WashingMachine, IdCard,
+  Hotel, DoorOpen, WashingMachine, Shirt, IdCard,
   type LucideIcon,
 } from 'lucide-react'
 import { SisgoLogo } from './Logo'
@@ -39,11 +39,12 @@ export const ICON_MAP: Record<string, LucideIcon> = {
   quartos:        DoorOpen,
   agenda:         CalendarDays,
   lavanderia:     WashingMachine,
-  'minha-lavanderia': WashingMachine,
+  'minha-lavanderia': Shirt,
   refeicoes:      UtensilsCrossed,
   caixa:          Landmark,
   cozinha:        ChefHat,
   estoque:        Package,
+  'estoque-manutencao': Boxes,
   receitas:       CookingPot,
   manutencao:     Wrench,
   solicitacoes:   Inbox,

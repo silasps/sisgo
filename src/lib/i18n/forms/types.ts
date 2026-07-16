@@ -35,6 +35,10 @@ export interface FormDict {
     dont_speak: string
     currently_studying: string
     studied_before: string
+    scale_ruim: string
+    scale_regular: string
+    scale_bom: string
+    scale_excelente: string
   }
 
   // ── Submitted screen ───────────────────────────────────────────────────
@@ -87,6 +91,8 @@ export interface FormDict {
     how_know_outro: string
     conversou_sim: string
     conversou_nao: string
+    data_chegada: string
+    data_chegada_hint: string
   }
 
   // ── Section 5 ──────────────────────────────────────────────────────────
@@ -352,6 +358,7 @@ export interface FormDict {
     // Form header
     form_type_pastor: string
     form_type_amigo: string
+    form_type_lideranca_experiencia: string
     ref_for: string    // "Referência para" — name added by component
     // Pastor form
     pastor_intro: string  // {name} placeholder
@@ -364,10 +371,10 @@ export interface FormDict {
     pastor_phone: string
     pastor_eval_title: string
     pastor_carater_q: string   // {name} placeholder
-    pastor_responsabilidade: string
+    pastor_responsabilidade: string  // {name} placeholder
     pastor_dificuldades: string
-    pastor_dificuldades_ph: string
-    pastor_autoridade: string
+    pastor_dificuldades_detalhe: string
+    pastor_autoridade: string  // {name} placeholder
     pastor_recomenda: string
     pastor_rec_sim: string; pastor_rec_ressalvas: string; pastor_rec_nao: string
     pastor_observacoes: string
@@ -395,6 +402,17 @@ export interface FormDict {
     amigo_decl: string
     conduta_menores_q: string  // {name} placeholder
     conduta_menores_detalhe: string
+    // Liderança de experiência recente form (escola/missão)
+    lideranca_intro: string    // {name} placeholder
+    lideranca_funcao: string
+    lideranca_periodo: string
+    lideranca_carater_q: string  // {name} placeholder
+    lideranca_pontos_fortes: string
+    lideranca_areas_atencao: string
+    lideranca_recomenda: string
+    lideranca_observacoes: string
+    lideranca_observacoes_ph: string
+    lideranca_decl: string
     // Common
     submit: string
     submitting: string

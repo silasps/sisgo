@@ -9,6 +9,7 @@ type Params = {
   replyTo: string
   organizationId: string
   schoolId: string
+  decisionNote?: string | null
 }
 
 function formatDate(iso: string) {
@@ -50,10 +51,18 @@ function buildHtml(p: Params): string {
                 </td>
               </tr>
             </table>
-            <p style="margin:0;font-size:14px;color:#6b7280;line-height:1.6;">
+            <p style="margin:0 0 24px;font-size:14px;color:#6b7280;line-height:1.6;">
               Em breve você receberá mais informações sobre os próximos passos.
               Caso tenha dúvidas, responda este e-mail ou entre em contato diretamente.
             </p>
+            ${p.decisionNote ? `<table width="100%" cellpadding="0" cellspacing="0" style="background:#fefce8;border-radius:10px;border:1px solid #fde68a;">
+              <tr>
+                <td style="padding:20px 24px;">
+                  <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#92400e;text-transform:uppercase;letter-spacing:0.05em;">Uma palavra da liderança</p>
+                  <p style="margin:0;font-size:14px;color:#78350f;line-height:1.6;white-space:pre-wrap;">${p.decisionNote}</p>
+                </td>
+              </tr>
+            </table>` : ''}
           </td>
         </tr>
         <tr>

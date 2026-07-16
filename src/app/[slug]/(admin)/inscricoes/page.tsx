@@ -2,7 +2,6 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { notFound } from 'next/navigation'
-import Link from 'next/link'
 import { ClipboardList, Mail, MessageCircle } from 'lucide-react'
 import { NovaPreInscricaoButton, NovaPreInscricaoObreiroButton, EditarPreInscricaoButton, EditarPreInscricaoObreiroButton, MarcarRecebidoExternoButton, LinksReferenciaAdminButton } from './InscricoesModals'
 import { RecusarModal } from './RecusarModal'
@@ -20,7 +19,7 @@ import { SearchBar } from '@/components/ui/SearchBar'
 
 type Props = {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ tab?: string; ver?: string; q?: string; flash_success?: string }>
+  searchParams: Promise<{ tab?: string; etapa?: string; q?: string; flash_success?: string }>
 }
 
 type InscricaoItem = {
@@ -40,6 +39,7 @@ type InscricaoItem = {
   notes: string | null
   criadoEm: string
   diasAberto: number
+  diasNaEtapaAtual: number
   personId: string | null
   ministryId?: string | null
   hasLogin?: boolean
@@ -47,9 +47,23 @@ type InscricaoItem = {
   staffApplicationId?: string | null
   hasFormData?: boolean
   bgCheckSummary?: BgCheckSummary | null
+  backgroundChecks?: BackgroundCheckRow[]
+  assumedByName?: string | null
+  refSummary?: RefSummary | null
+  pastorSkipped?: boolean
+  hospedagemSkipped?: boolean
+  hospedagemResolved?: boolean
+  hospedagemStatus?: string | null
+  hospedagemArrivalDate?: string | null
+  hospedagemDepartureDate?: string | null
+  candidateArrivalDate?: string | null
 }
 
+type BackgroundCheckRow = { id: string; check_type: string; country: string | null; status: string; issued_at: string | null; expires_at: string | null; notes: string | null; flagged_concern: boolean }
+
 type BgCheckSummary = { total: number; pendentes: number; reprovados: number; flagged: number; expirados: number }
+type RefEntry = { status: string; data: Record<string, string> | null }
+type RefSummary = { pastor: RefEntry | null; amigo: RefEntry | null }
 
 type HistoricoItem = {
   id: string
@@ -61,13 +75,6 @@ type HistoricoItem = {
   recusadoPorId: string | null
   recusadoEm: string
 }
-
-const TIPO_TABS = [
-  { key: 'todas',         label: 'Todas' },
-  { key: 'pre_inscricao', label: 'Pré-inscrições' },
-  { key: 'aluno',         label: 'Alunos' },
-  { key: 'obreiro',       label: 'Obreiros' },
-]
 
 function daysAgo(dateStr: string) {
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24))
@@ -117,7 +124,7 @@ type OpenClassOption = {
 
 export default async function InscricoesPage({ params, searchParams }: Props) {
   const { slug } = await params
-  const { tab = 'todas', ver = 'ativas', q } = await searchParams
+  const { tab = 'todas', etapa = 'todas', q } = await searchParams
 
   const supabase = await createClient()
   const { data: org } = await supabase.from('organizations').select('id').eq('slug', slug).single()
@@ -211,8 +218,40 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     }
     const { redirect: redir } = await import('next/navigation')
     const label = status === 'em_contato' ? 'Marcado como Em contato' : status === 'em_analise' ? 'Marcado como Em análise' : 'Status atualizado'
-    const tabRedirect = tipo === 'pre_inscricao' ? 'pre_inscricao' : tipo === 'pre_inscricao_obreiro' ? 'obreiro' : tipo
-    redir(`/${slug}/inscricoes?tab=${tabRedirect}&flash_success=${encodeURIComponent(label)}`)
+    const tabRedirect = (tipo === 'pre_inscricao' || tipo === 'aluno') ? 'aluno' : 'obreiro'
+    const etapaRedirect = (tipo === 'pre_inscricao' || tipo === 'pre_inscricao_obreiro') ? 'pre_inscricao' : 'candidatura'
+    redir(`/${slug}/inscricoes?tab=${tabRedirect}&etapa=${etapaRedirect}&flash_success=${encodeURIComponent(label)}`)
+  }
+
+  async function assumirPreInscricaoObreiro(formData: FormData) {
+    'use server'
+    const { createAdminClient: adm } = await import('@/lib/supabase/admin')
+    const { createClient } = await import('@/lib/supabase/server')
+    const { redirect: redir } = await import('next/navigation')
+    const db = adm()
+    const authClient = await createClient()
+    const id = formData.get('id') as string
+    const orgIdForm = formData.get('org_id') as string
+    if (!id || !orgIdForm) return
+
+    const { data: { user } } = await authClient.auth.getUser()
+    const { data: orgUsers } = await authClient
+      .from('organization_users')
+      .select('organization_id, roles(name)')
+      .eq('user_id', user?.id ?? '')
+      .eq('active', true)
+    const memberships = (orgUsers ?? []) as unknown as Array<{ organization_id: string | null; roles: { name: string } | null }>
+    const role = memberships.find(row => row.roles?.name === 'superadmin')?.roles?.name
+      ?? memberships.find(row => row.organization_id === orgIdForm)?.roles?.name
+      ?? ''
+    if (!user || !['superadmin', 'admin_base', 'dh'].includes(role)) return
+
+    await db.from('staff_interest_forms').update({
+      assumed_by: user.id,
+      assumed_at: new Date().toISOString(),
+    }).eq('id', id)
+
+    redir(`/${slug}/inscricoes?tab=obreiro&flash_success=${encodeURIComponent('Conversa assumida pelo DH')}`)
   }
 
   async function recusar(formData: FormData) {
@@ -225,25 +264,66 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     const tipo   = formData.get('tipo') as string
     const id     = formData.get('id') as string
     const reason = (formData.get('reason') as string)?.trim()
+    const decisionNote = (formData.get('decision_note') as string | null)?.trim() || null
+    const decisionNoteShared = formData.get('decision_note_shared') === 'on'
     if (!reason) return
     const now = new Date().toISOString()
     if (tipo === 'pre_inscricao') {
-      const { error } = await db.from('school_interest_forms')
-        .update({ status: 'descartado', refusal_reason: reason, responded_at: now, reviewed_at: now, reviewed_by: user?.id ?? null })
+      const { data: row, error } = await db.from('school_interest_forms')
+        .update({ status: 'descartado', refusal_reason: reason, responded_at: now, reviewed_at: now, reviewed_by: user?.id ?? null, decision_note: decisionNote, decision_note_shared: decisionNoteShared })
         .eq('id', id)
+        .select('email, full_name, school_id, schools(name, contact_email)')
+        .single()
       if (error?.code === 'PGRST204') {
         await db.from('school_interest_forms')
           .update({ status: 'descartado', refusal_reason: reason, responded_at: now })
           .eq('id', id)
+      }
+      const escola = row?.schools as unknown as { name: string; contact_email: string | null } | null
+      if (decisionNoteShared && row?.email && escola?.contact_email) {
+        const { sendRejectionEmail } = await import('@/lib/email/sendRejectionEmail')
+        sendRejectionEmail({
+          to: row.email, candidateName: row.full_name, schoolName: escola.name,
+          replyTo: escola.contact_email, organizationId: orgId, schoolId: row.school_id ?? '',
+          decisionNote,
+        }).catch(() => {})
+      }
+      // Pessoa saiu do processo de entrada — cancela pendência de hospedagem
+      // (se existir) ligada à candidatura desse aluno, mesmo padrão do obreiro.
+      const { data: alunoApps } = await db.from('school_applications').select('id').eq('interest_form_id', id)
+      const alunoAppIds = (alunoApps ?? []).map(a => a.id)
+      if (alunoAppIds.length > 0) {
+        await db.from('service_requests')
+          .update({ status: 'rejeitado', reviewed_at: now, reviewed_by: user?.id ?? null })
+          .in('school_application_id', alunoAppIds)
+          .eq('request_type', 'hospedagem_aluno')
+          .in('status', ['pendente', 'em_analise', 'em_andamento'])
       }
     } else if (tipo === 'pre_inscricao_obreiro') {
       await db.from('staff_interest_forms')
         .update({ status: 'descartado', refusal_reason: reason, responded_at: now, reviewed_at: now, reviewed_by: user?.id ?? null })
         .eq('id', id)
     } else if (tipo === 'aluno') {
-      await db.from('student_applications')
-        .update({ status: 'reprovado', refusal_reason: reason, reviewed_at: now, reviewed_by: user?.id ?? null })
+      const { data: row } = await db.from('student_applications')
+        .update({ status: 'reprovado', refusal_reason: reason, reviewed_at: now, reviewed_by: user?.id ?? null, decision_note: decisionNote, decision_note_shared: decisionNoteShared })
         .eq('id', id)
+        .select('person_id, school_id, people(full_name), schools(name, contact_email)')
+        .single()
+      const escola = row?.schools as unknown as { name: string; contact_email: string | null } | null
+      if (decisionNoteShared && row?.person_id && escola?.contact_email) {
+        const { data: contact } = await db.from('person_contacts')
+          .select('value').eq('person_id', row.person_id).eq('type', 'email')
+          .order('is_primary', { ascending: false }).limit(1).maybeSingle()
+        if (contact?.value) {
+          const { sendRejectionEmail } = await import('@/lib/email/sendRejectionEmail')
+          sendRejectionEmail({
+            to: contact.value,
+            candidateName: (row.people as unknown as { full_name: string } | null)?.full_name ?? 'Candidato',
+            schoolName: escola.name, replyTo: escola.contact_email, organizationId: orgId,
+            schoolId: row.school_id ?? '', decisionNote,
+          }).catch(() => {})
+        }
+      }
     } else {
       const { error } = await db.from('staff_applications')
         .update({ status: 'reprovado', refusal_reason: reason, reviewed_at: now, reviewed_by: user?.id ?? null })
@@ -253,6 +333,14 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           .update({ status: 'reprovado', reviewed_at: now, reviewed_by: user?.id ?? null })
           .eq('id', id)
       }
+      // Pessoa saiu do processo de entrada — cancela a pendência de
+      // hospedagem (se existir) pra parar de ocupar a fila da hospitalidade
+      // e a necessidade de quarto/alojamento associada a ela.
+      await db.from('service_requests')
+        .update({ status: 'rejeitado', reviewed_at: now, reviewed_by: user?.id ?? null })
+        .eq('staff_application_id', id)
+        .eq('request_type', 'hospedagem_obreiro')
+        .in('status', ['pendente', 'em_analise', 'em_andamento'])
     }
     // Note: router.refresh() is called in RecusarModal client component
   }
@@ -269,6 +357,8 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     const personIdI = formData.get('person_id') as string | null
     const orgIdForm = formData.get('org_id') as string
     const classId   = formData.get('class_id') as string | null
+    const decisionNote = (formData.get('decision_note') as string | null)?.trim() || null
+    const decisionNoteShared = formData.get('decision_note_shared') === 'on'
     const now       = new Date().toISOString()
     const { data: { user: actingUser } } = await authClient.auth.getUser()
 
@@ -357,14 +447,14 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     }
     if (tipo === 'pre_inscricao') {
       const { error } = await db.from('school_interest_forms')
-        .update({ status: 'convertido', responded_at: now, reviewed_at: now, reviewed_by: actingUser?.id ?? null, class_id: classId })
+        .update({ status: 'convertido', responded_at: now, reviewed_at: now, reviewed_by: actingUser?.id ?? null, class_id: classId, decision_note: decisionNote, decision_note_shared: decisionNoteShared })
         .eq('id', id)
       if (error?.code === 'PGRST204') {
         await db.from('school_interest_forms').update({ status: 'convertido', responded_at: now, class_id: classId }).eq('id', id)
       }
     } else if (tipo === 'aluno') {
       await db.from('student_applications')
-        .update({ status: 'aprovado', reviewed_at: now, reviewed_by: actingUser?.id ?? null, class_id: classId })
+        .update({ status: 'aprovado', reviewed_at: now, reviewed_by: actingUser?.id ?? null, class_id: classId, decision_note: decisionNote, decision_note_shared: decisionNoteShared })
         .eq('id', id)
     }
     // Email de aprovação — best-effort, não bloqueia o redirect
@@ -390,6 +480,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
             replyTo: schoolInfo.contact_email,
             organizationId: orgIdForm,
             schoolId: approvedClassRow.school_id,
+            decisionNote: decisionNoteShared ? decisionNote : null,
           }).catch(() => {})
         }
       }
@@ -399,49 +490,27 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     redir(`/${slug}/pessoas?tab=alunos&flash_success=${encodeURIComponent('Aluno aprovado e adicionado à turma')}`)
   }
 
-  async function encaminharObreiroDh(formData: FormData) {
+  // O envio do formulário definitivo já leva a candidatura direto pra
+  // 'em_analise' (formulario-obreiro/[token]/actions.ts) — o líder não
+  // precisa mais "encaminhar ao DH" manualmente. Isso só guarda a palavra
+  // opcional do líder sobre receber a pessoa, sem mexer em status.
+  async function salvarPalavraLider(formData: FormData) {
     'use server'
     const { createAdminClient: adm } = await import('@/lib/supabase/admin')
     const { createClient } = await import('@/lib/supabase/server')
     const db = adm()
     const authClient = await createClient()
     const id = formData.get('id') as string
-    const now = new Date().toISOString()
+    const leaderWord = (formData.get('leader_word') as string | null)?.trim() || null
+    const leaderWordShared = formData.get('leader_word_shared') === 'on'
     const { data: { user } } = await authClient.auth.getUser()
     if (!id || !user) return
     await db.from('staff_applications').update({
-      status: 'em_analise',
-      reviewed_at: now,
-      reviewed_by: user.id,
-      leader_accepted_at: now,
+      leader_accepted_at: new Date().toISOString(),
       leader_accepted_by: user.id,
+      leader_word: leaderWord,
+      leader_word_shared: leaderWordShared,
     }).eq('id', id)
-
-    const { data: existingChecks } = await db
-      .from('background_checks')
-      .select('id')
-      .eq('staff_application_id', id)
-      .limit(1)
-    if (!existingChecks?.length) {
-      const { data: appRow } = await db
-        .from('staff_applications')
-        .select('organization_id, person_id, form_data')
-        .eq('id', id)
-        .single()
-      if (appRow) {
-        const s2 = (appRow.form_data as Record<string, Record<string, string>> | null)?.s2
-        const isBrasileiro = s2?.is_brasileiro !== 'nao'
-        const checkTypes = isBrasileiro
-          ? ['pf_federal', 'ssp_estadual', 'autodeclaracao_conduta', 'referencia_conduta_menores']
-          : ['police_clearance_estrangeiro', 'autodeclaracao_conduta', 'referencia_conduta_menores']
-        await db.from('background_checks').insert(checkTypes.map(check_type => ({
-          organization_id: appRow.organization_id,
-          staff_application_id: id,
-          person_id: appRow.person_id,
-          check_type,
-        })))
-      }
-    }
   }
 
   async function finalizarObreiro(formData: FormData) {
@@ -472,6 +541,23 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       ?? memberships.find(row => row.organization_id === orgIdForm)?.roles?.name
       ?? ''
     if (!['superadmin', 'admin_base', 'lider_base', 'dh'].includes(role)) return
+
+    const { data: pastorRef } = await db.from('reference_forms')
+      .select('status').eq('staff_application_id', id).eq('type', 'pastor').maybeSingle()
+    const { data: skipRow } = await db.from('staff_applications')
+      .select('pastor_reference_skip_reason, hospedagem_skip_reason, leader_word, leader_word_shared').eq('id', id).maybeSingle()
+    if (pastorRef?.status !== 'enviado' && !skipRow?.pastor_reference_skip_reason) {
+      redir(`/${slug}/inscricoes?tab=obreiro&flash_error=${encodeURIComponent('Referência do pastor pendente — aguarde a resposta ou registre uma justificativa para pular esta etapa.')}`)
+      return
+    }
+
+    const { data: hospRequest } = await db.from('service_requests')
+      .select('status').eq('staff_application_id', id).eq('request_type', 'hospedagem_obreiro')
+      .order('created_at', { ascending: false }).limit(1).maybeSingle()
+    if (hospRequest?.status !== 'resolvido' && !skipRow?.hospedagem_skip_reason) {
+      redir(`/${slug}/inscricoes?tab=obreiro&flash_error=${encodeURIComponent('Hospedagem pendente — aguarde a resposta da hospitalidade ou registre uma justificativa para pular esta etapa.')}`)
+      return
+    }
 
     const { data: { users } } = await db.auth.admin.listUsers({ perPage: 1000 })
     const existingAuthUser = users.find(authUser => authUser.email?.toLowerCase() === email)
@@ -545,6 +631,24 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       started_at: now,
       created_by: actingUser?.id ?? null,
     })
+
+    // E-mail de aprovação — best-effort, não bloqueia o redirect
+    const { data: orgRow } = await db.from('organizations').select('name, email').eq('id', orgIdForm).maybeSingle()
+    let ministryName: string | null = null
+    if (ministryId) {
+      const { data: ministryRow } = await db.from('ministries').select('name').eq('id', ministryId).maybeSingle()
+      ministryName = ministryRow?.name ?? null
+    }
+    const { sendStaffApprovalEmail } = await import('@/lib/email/sendStaffApprovalEmail')
+    sendStaffApprovalEmail({
+      to: email,
+      candidateName: (formData.get('name') as string | null) || 'Obreiro',
+      organizationName: orgRow?.name ?? 'JOCUM',
+      ministryName,
+      replyTo: orgRow?.email || 'noreply@sisgomission.com',
+      organizationId: orgIdForm,
+      leaderWord: skipRow?.leader_word_shared ? skipRow.leader_word : null,
+    }).catch(() => {})
 
     redir(`/${slug}/pessoas?tab=obreiros&flash_success=${encodeURIComponent('Obreiro finalizado — acesso criado com sucesso')}`)
   }
@@ -929,11 +1033,38 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     const protocol = host.startsWith('localhost') ? 'http' : 'https'
     const formUrl = `${protocol}://${host}/${slug}/formulario-obreiro/${token}`
 
+    // Tenta enviar e-mail — usa o e-mail da organização (ou do ministério, se houver) como reply-to
+    let emailWarning: string | undefined
+    if (form.email) {
+      const { data: orgRow } = await db.from('organizations').select('name, email').eq('id', form.organization_id).maybeSingle()
+      let ministryName: string | null = null
+      if (form.ministry_id) {
+        const { data: ministryRow } = await db.from('ministries').select('name').eq('id', form.ministry_id).maybeSingle()
+        ministryName = ministryRow?.name ?? null
+      }
+      const { sendFormEmail } = await import('@/lib/email/sendFormEmail')
+      const emailResult = await sendFormEmail({
+        to: form.email,
+        candidateName: form.full_name,
+        schoolName: ministryName ?? orgRow?.name ?? 'JOCUM',
+        formUrl,
+        expiresAt,
+        replyTo: orgRow?.email || 'noreply@sisgomission.com',
+        language: form.language,
+        organizationId: form.organization_id,
+      })
+      if (!emailResult.success) {
+        emailWarning = emailResult.error === 'quota_atingida' ? 'quota_atingida' : 'email_falhou'
+      }
+    } else {
+      emailWarning = 'sem_email_candidato'
+    }
+
     await db.from('staff_interest_forms')
       .update({ status: 'formulario_enviado' })
       .eq('id', interestFormId)
 
-    return { url: formUrl }
+    return { url: formUrl, emailWarning }
   }
 
   async function criarPreInscricaoObreiroManual(formData: FormData) {
@@ -1002,9 +1133,10 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
 
   const items: InscricaoItem[] = []
   const historico: HistoricoItem[] = []
+  const assumedLookups: { item: InscricaoItem; userId: string }[] = []
 
-  // Pré-inscrições ativas
-  if (tab === 'todas' || tab === 'pre_inscricao') {
+  // Pré-inscrições ativas (sempre carrega tudo — filtro de tipo/etapa é feito no cliente, instantâneo)
+  {
     type IFRaw = {
       id: string; full_name: string; email: string; phone: string | null
       message: string | null; status: string; created_at: string; responded_at: string | null; refusal_reason: string | null; reviewed_by: string | null
@@ -1042,7 +1174,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           recusadoPorId: r.reviewed_by ?? null,
           recusadoEm: r.responded_at ?? r.created_at,
         })
-      } else if (!isFinalizado(r.status) || ver === 'todas') {
+      } else {
         items.push({
           id: r.id, tipo: 'pre_inscricao', tipoLabel: 'Pré-inscrição',
           tipoColor: 'bg-indigo-50 text-indigo-700',
@@ -1051,16 +1183,19 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           turma: (r.school_classes as { name: string } | null)?.name ?? null,
           classId: r.class_id ?? null,
           mensagem: r.message, status: r.status, notes: null,
-          criadoEm: r.created_at, diasAberto: daysAgo(r.created_at), personId: null,
+          criadoEm: r.created_at, diasAberto: daysAgo(r.created_at),
+          diasNaEtapaAtual: daysAgo(r.responded_at ?? r.created_at),
+          personId: null,
           applicationId: appRow?.id ?? null,
           hasFormData: appRow ? (appRow.form_data !== null && Object.keys(appRow.form_data as object).length > 0) : false,
+          candidateArrivalDate: (appRow?.form_data as Record<string, Record<string, string>> | undefined)?.s4?.data_chegada || null,
         })
       }
     }
   }
 
   // Candidatos a Aluno
-  if (tab === 'todas' || tab === 'aluno') {
+  {
     type SAraw = {
       id: string; class_id: string | null; status: string; applied_at: string; reviewed_at: string | null; reviewed_by: string | null; notes: string | null; refusal_reason: string | null
       people: { id: string; full_name: string } | null
@@ -1084,7 +1219,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           recusadoPorId: r.reviewed_by ?? null,
           recusadoEm: r.reviewed_at ?? r.applied_at,
         })
-      } else if (!isFinalizado(r.status) || ver === 'todas') {
+      } else {
         items.push({
           id: r.id, tipo: 'aluno', tipoLabel: 'Candidato a Aluno',
           tipoColor: 'bg-sky-50 text-sky-700',
@@ -1094,6 +1229,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           classId: r.class_id ?? null,
           mensagem: null, status: r.status, notes: r.notes ?? null,
           criadoEm: r.applied_at, diasAberto: daysAgo(r.applied_at),
+          diasNaEtapaAtual: daysAgo(r.reviewed_at ?? r.applied_at),
           personId: pessoa?.id ?? null,
         })
       }
@@ -1101,20 +1237,21 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
   }
 
   // Pré-inscrições de Obreiro + Candidatos a Obreiro
-  if (tab === 'todas' || tab === 'obreiro') {
+  {
     // Pré-inscrições de obreiro (staff_interest_forms)
     type SIFRaw = {
       id: string; full_name: string; email: string; phone: string | null
       message: string | null; status: string; created_at: string; responded_at: string | null
       refusal_reason: string | null; reviewed_by: string | null
       ministry_id: string | null; school_id: string | null; person_id: string | null
+      assumed_by: string | null; assumed_at: string | null
       ministries: { name: string } | null
       schools: { name: string } | null
       staff_applications: { id: string; status: string; form_data: Record<string, unknown> | null; token: string | null }[] | null
     }
     const sifResult = await sb
       .from('staff_interest_forms')
-      .select('id, full_name, email, phone, message, status, created_at, responded_at, refusal_reason, reviewed_by, ministry_id, school_id, person_id, ministries(name), schools(name), staff_applications(id, status, form_data, token)')
+      .select('id, full_name, email, phone, message, status, created_at, responded_at, refusal_reason, reviewed_by, ministry_id, school_id, person_id, assumed_by, assumed_at, ministries(name), schools(name), staff_applications(id, status, form_data, token)')
       .eq('organization_id', orgId)
       .order('created_at', { ascending: false })
 
@@ -1123,6 +1260,11 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       const school = r.schools as { name: string } | null
       const appRow = (r.staff_applications ?? []).find(a => ['enviado', 'em_analise', 'aprovado'].includes(a.status))
         ?? (r.staff_applications ?? []).find(a => a.status === 'rascunho')
+
+      // Uma vez que a candidatura (staff_applications) já foi enviada, o card
+      // 'obreiro' (montado abaixo, a partir de staff_applications) já representa
+      // esse candidato — evita duplicar o mesmo nome em dois cards na lista.
+      const appJaEnviada = !!appRow && ['enviado', 'em_analise', 'aprovado'].includes(appRow.status)
 
       if (isFinalizado(r.status) && r.refusal_reason) {
         historico.push({
@@ -1133,32 +1275,36 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           recusadoPorId: r.reviewed_by ?? null,
           recusadoEm: r.responded_at ?? r.created_at,
         })
-      } else if (!isFinalizado(r.status) || ver === 'todas') {
-        items.push({
+      } else if (!appJaEnviada) {
+        const item: InscricaoItem = {
           id: r.id, tipo: 'pre_inscricao_obreiro', tipoLabel: 'Pré-inscrição Obreiro',
           tipoColor: 'bg-orange-50 text-orange-700',
           nome: r.full_name, email: r.email, phone: r.phone ?? null,
           escola: ministry?.name ?? school?.name ?? null, schoolId: r.school_id, turma: null, classId: null,
           mensagem: r.message, status: r.status, notes: null,
           criadoEm: r.created_at, diasAberto: daysAgo(r.created_at),
+          diasNaEtapaAtual: daysAgo(r.assumed_at ?? r.responded_at ?? r.created_at),
           personId: r.person_id ?? null,
           ministryId: r.ministry_id,
           staffApplicationId: appRow?.id ?? null,
           hasFormData: appRow ? (appRow.form_data !== null && Object.keys(appRow.form_data as object).length > 1) : false,
-        })
+        }
+        items.push(item)
+        if (r.assumed_by) assumedLookups.push({ item, userId: r.assumed_by })
       }
     }
 
     // Candidatos a Obreiro (staff_applications sem interest_form ou com formulário preenchido)
     type StaffRaw = {
       id: string; ministry_id: string | null; school_id: string | null; interest_form_id: string | null; status: string; applied_at: string; reviewed_at: string | null; reviewed_by: string | null; refusal_reason: string | null; notes: string | null; form_data: Record<string, unknown> | null
+      pastor_reference_skip_reason: string | null; hospedagem_skip_reason: string | null
       people: { id: string; full_name: string } | null
       ministries: { name: string } | null
       schools: { name: string } | null
     }
     const result = await sb
       .from('staff_applications')
-      .select('id, ministry_id, school_id, interest_form_id, status, applied_at, reviewed_at, reviewed_by, refusal_reason, notes, form_data, people(id, full_name), ministries(name), schools(name)')
+      .select('id, ministry_id, school_id, interest_form_id, status, applied_at, reviewed_at, reviewed_by, refusal_reason, notes, form_data, pastor_reference_skip_reason, hospedagem_skip_reason, people(id, full_name), ministries(name), schools(name)')
       .eq('organization_id', orgId)
       .order('applied_at', { ascending: false })
 
@@ -1218,7 +1364,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           recusadoPorId: r.reviewed_by ?? null,
           recusadoEm: r.reviewed_at ?? r.applied_at,
         })
-      } else if (!isFinalizado(r.status) || ver === 'todas') {
+      } else {
         items.push({
           id: r.id, tipo: 'obreiro', tipoLabel: 'Candidato a Obreiro',
           tipoColor: 'bg-amber-50 text-amber-700',
@@ -1226,11 +1372,15 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           escola: ministry?.name ?? school?.name ?? null, schoolId: r.school_id ?? null, turma: null, classId: null, mensagem: null,
           status: r.status, notes: r.notes ?? null,
           criadoEm: r.applied_at, diasAberto: daysAgo(r.applied_at),
+          diasNaEtapaAtual: daysAgo(r.reviewed_at ?? r.applied_at),
           personId: pessoa?.id ?? null,
           ministryId: r.ministry_id,
           hasLogin: pessoa?.id ? staffLoginByPerson.has(pessoa.id) : false,
           staffApplicationId: r.id,
           hasFormData: r.form_data !== null && Object.keys(r.form_data as object).length > 1,
+          pastorSkipped: !!r.pastor_reference_skip_reason,
+          hospedagemSkipped: !!r.hospedagem_skip_reason,
+          candidateArrivalDate: (r.form_data as Record<string, Record<string, string>> | null)?.s6?.data_chegada || null,
         })
       }
     }
@@ -1242,11 +1392,13 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     if (obreiroAppIds.length > 0) {
       const { data: checks } = await sb
         .from('background_checks')
-        .select('staff_application_id, status, flagged_concern, expires_at')
+        .select('id, staff_application_id, check_type, country, status, issued_at, expires_at, notes, flagged_concern')
         .in('staff_application_id', obreiroAppIds)
 
+      type CheckRow = { id: string; staff_application_id: string; check_type: string; country: string | null; status: string; issued_at: string | null; expires_at: string | null; notes: string | null; flagged_concern: boolean }
       const summaries = new Map<string, BgCheckSummary>()
-      for (const c of (checks ?? []) as Array<{ staff_application_id: string; status: string; flagged_concern: boolean; expires_at: string | null }>) {
+      const rowsByApp = new Map<string, CheckRow[]>()
+      for (const c of (checks ?? []) as CheckRow[]) {
         const s = summaries.get(c.staff_application_id) ?? { total: 0, pendentes: 0, reprovados: 0, flagged: 0, expirados: 0 }
         s.total += 1
         if (['pendente', 'solicitado', 'em_analise'].includes(c.status)) s.pendentes += 1
@@ -1254,13 +1406,104 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         if (c.flagged_concern) s.flagged += 1
         if (c.expires_at && new Date(c.expires_at) < new Date()) s.expirados += 1
         summaries.set(c.staff_application_id, s)
+        rowsByApp.set(c.staff_application_id, [...(rowsByApp.get(c.staff_application_id) ?? []), c])
       }
 
       for (const item of items) {
         if (item.tipo === 'obreiro' && item.staffApplicationId) {
           item.bgCheckSummary = summaries.get(item.staffApplicationId) ?? null
+          item.backgroundChecks = rowsByApp.get(item.staffApplicationId) ?? []
         }
       }
+
+      const { data: hospRequests } = await sb
+        .from('service_requests')
+        .select('staff_application_id, status, requested_arrival_date, requested_departure_date, created_at')
+        .eq('request_type', 'hospedagem_obreiro')
+        .in('staff_application_id', obreiroAppIds)
+        .order('created_at', { ascending: false })
+
+      const hospByApp = new Map<string, { status: string; arrivalDate: string | null; departureDate: string | null }>()
+      for (const h of (hospRequests ?? []) as Array<{ staff_application_id: string; status: string; requested_arrival_date: string | null; requested_departure_date: string | null }>) {
+        if (!hospByApp.has(h.staff_application_id)) hospByApp.set(h.staff_application_id, { status: h.status, arrivalDate: h.requested_arrival_date, departureDate: h.requested_departure_date })
+      }
+      for (const item of items) {
+        if (item.tipo === 'obreiro' && item.staffApplicationId) {
+          const hosp = hospByApp.get(item.staffApplicationId) ?? null
+          item.hospedagemStatus = hosp?.status ?? null
+          item.hospedagemArrivalDate = hosp?.arrivalDate ?? null
+          item.hospedagemDepartureDate = hosp?.departureDate ?? null
+          item.hospedagemResolved = hosp?.status === 'resolvido'
+        }
+      }
+    }
+  }
+
+  // Hospedagem do aluno — mesmo padrão do obreiro, ligado por school_application_id.
+  {
+    const alunoAppIds = items
+      .filter(i => i.tipo === 'pre_inscricao' && i.applicationId)
+      .map(i => i.applicationId as string)
+
+    if (alunoAppIds.length > 0) {
+      const { data: hospRequestsAluno } = await sb
+        .from('service_requests')
+        .select('school_application_id, status, requested_arrival_date, requested_departure_date, created_at')
+        .eq('request_type', 'hospedagem_aluno')
+        .in('school_application_id', alunoAppIds)
+        .order('created_at', { ascending: false })
+
+      const hospByAppAluno = new Map<string, { status: string; arrivalDate: string | null; departureDate: string | null }>()
+      for (const h of (hospRequestsAluno ?? []) as Array<{ school_application_id: string; status: string; requested_arrival_date: string | null; requested_departure_date: string | null }>) {
+        if (!hospByAppAluno.has(h.school_application_id)) hospByAppAluno.set(h.school_application_id, { status: h.status, arrivalDate: h.requested_arrival_date, departureDate: h.requested_departure_date })
+      }
+      for (const item of items) {
+        if (item.tipo === 'pre_inscricao' && item.applicationId) {
+          const hosp = hospByAppAluno.get(item.applicationId) ?? null
+          item.hospedagemStatus = hosp?.status ?? null
+          item.hospedagemArrivalDate = hosp?.arrivalDate ?? null
+          item.hospedagemDepartureDate = hosp?.departureDate ?? null
+          item.hospedagemResolved = hosp?.status === 'resolvido'
+        }
+      }
+    }
+  }
+
+  // Status/respostas de referências (pastor/amigo) — evita que "Links de
+  // recomendação" ofereça gerar link de novo quando já foi respondido.
+  {
+    const staffRefIds = items
+      .filter(i => (i.tipo === 'pre_inscricao_obreiro' || i.tipo === 'obreiro') && i.staffApplicationId)
+      .map(i => i.staffApplicationId as string)
+    const schoolRefIds = items
+      .filter(i => i.tipo === 'pre_inscricao' && i.applicationId)
+      .map(i => i.applicationId as string)
+
+    type RefRow = { staff_application_id: string | null; school_application_id: string | null; type: string; status: string; form_data: Record<string, string> | null }
+    const refByApp = new Map<string, RefSummary>()
+
+    const [staffRefs, schoolRefs] = await Promise.all([
+      staffRefIds.length > 0
+        ? sb.from('reference_forms').select('staff_application_id, school_application_id, type, status, form_data')
+          .in('staff_application_id', staffRefIds).in('type', ['pastor', 'amigo'])
+        : Promise.resolve({ data: [] as RefRow[] }),
+      schoolRefIds.length > 0
+        ? sb.from('reference_forms').select('staff_application_id, school_application_id, type, status, form_data')
+          .in('school_application_id', schoolRefIds).in('type', ['pastor', 'amigo'])
+        : Promise.resolve({ data: [] as RefRow[] }),
+    ])
+
+    for (const r of [...(staffRefs.data ?? []), ...(schoolRefs.data ?? [])] as RefRow[]) {
+      const appId = r.staff_application_id ?? r.school_application_id
+      if (!appId || (r.type !== 'pastor' && r.type !== 'amigo')) continue
+      const entry = refByApp.get(appId) ?? { pastor: null, amigo: null }
+      entry[r.type as 'pastor' | 'amigo'] = { status: r.status, data: r.form_data }
+      refByApp.set(appId, entry)
+    }
+
+    for (const item of items) {
+      const appId = item.tipo === 'pre_inscricao' ? item.applicationId : item.staffApplicationId
+      if (appId && refByApp.has(appId)) item.refSummary = refByApp.get(appId)
     }
   }
 
@@ -1285,14 +1528,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       })
     : items
 
-  const listItems = (ver === 'todas' ? roleFiltered : roleFiltered.filter(i => !isFinalizado(i.status)))
-  listItems.sort((a, b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime())
-  const filtered = q
-    ? listItems.filter(i => {
-        const term = q.toLowerCase()
-        return i.nome?.toLowerCase().includes(term) || i.email?.toLowerCase().includes(term)
-      })
-    : listItems
+  roleFiltered.sort((a, b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime())
   const quota = await getEmailQuota()
 
   const reviewerIds = [...new Set(historico.map(item => item.recusadoPorId).filter((id): id is string => Boolean(id)))]
@@ -1306,6 +1542,17 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
 
   for (const item of historico) {
     item.recusadoPor = item.recusadoPorId ? reviewerNames.get(item.recusadoPorId) ?? null : null
+  }
+
+  const assumedIds = [...new Set(assumedLookups.map(a => a.userId))]
+  const assumedNames = new Map<string, string>()
+  await Promise.all(assumedIds.map(async (id) => {
+    const { data } = await sb.auth.admin.getUserById(id)
+    const displayName = getUserDisplayName(data.user)
+    if (displayName) assumedNames.set(id, displayName)
+  }))
+  for (const { item, userId } of assumedLookups) {
+    item.assumedByName = assumedNames.get(userId) ?? null
   }
 
   // Histórico: max 30, mais recentes primeiro
@@ -1340,16 +1587,6 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                 schools={allSchools}
               />
             )}
-            <Link
-              href={`/${slug}/inscricoes?tab=${tab}&ver=${ver === 'todas' ? 'ativas' : 'todas'}`}
-              className="px-3 py-2 text-xs font-medium text-gray-500 hover:text-gray-800 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap"
-            >
-              {ver === 'todas' ? (
-                <><span className="hidden sm:inline">Ocultar </span>Concluídas</>
-              ) : (
-                <><span className="hidden sm:inline">Ver todas</span><span className="sm:hidden">+ Concluídas</span></>
-              )}
-            </Link>
           </div>
         }
       />
@@ -1357,63 +1594,38 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       <Suspense><ScrollHighlight /></Suspense>
       <main className="p-4 md:p-6 space-y-4">
 
-        {/* Tabs */}
-        <div className="flex gap-1 bg-gray-100 p-1 rounded-xl overflow-x-auto scrollbar-none">
-          {TIPO_TABS.map(t => {
-            const count = t.key === 'todas'
-              ? items.filter(i => !isFinalizado(i.status)).length
-              : t.key === 'obreiro'
-                ? items.filter(i => (i.tipo === 'obreiro' || i.tipo === 'pre_inscricao_obreiro') && !isFinalizado(i.status)).length
-                : items.filter(i => i.tipo === t.key && !isFinalizado(i.status)).length
-            return (
-              <Link key={t.key}
-                href={`/${slug}/inscricoes?tab=${t.key}&ver=${ver}`}
-                className={`px-4 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-                  tab === t.key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                {t.label}
-                {count > 0 && (
-                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
-                    tab === t.key ? 'bg-brand-100 text-brand-700' : 'bg-gray-200 text-gray-500'
-                  }`}>{count}</span>
-                )}
-              </Link>
-            )
-          })}
-        </div>
-
-        {/* Card com link do formulário de pré-inscrição — visível na tab Pré-inscrições */}
-        {(tab === 'todas' || tab === 'pre_inscricao') && publicSchools.length > 0 && (
-          <InscricaoLinkCard
-            orgSlug={slug}
-            schools={(allowedSchoolIds
-              ? publicSchools.filter(s => allowedSchoolIds.includes(s.id))
-              : publicSchools
-            ).map(s => ({ slug: s.slug, name: s.name }))}
-          />
-        )}
-
-        {/* Card com link da página /servir — visível na tab Obreiros */}
-        {tab === 'obreiro' && <ServirLinkCard slug={slug} />}
-
-        {/* Card com link individual por ministério — visível na tab Obreiros */}
-        {tab === 'obreiro' && publicMinistries.length > 0 && (
-          <MinistryLinkCard
-            orgSlug={slug}
-            ministries={(isLiderMinisterio && leaderMinistryId
-              ? publicMinistries.filter(m => m.id === leaderMinistryId)
-              : publicMinistries
-            ).map(m => ({ slug: m.slug, name: m.name }))}
-          />
-        )}
-
+        <Suspense>
         <InscricoesList
-          items={listItems}
+          items={roleFiltered}
           historico={historicoTab}
           slug={slug}
           orgId={orgId}
-          ver={ver}
+          initialTab={tab}
+          initialEtapa={etapa}
+          hideAlunoTipo={isLiderMinisterio}
+          linksAluno={publicSchools.length > 0 ? (
+            <InscricaoLinkCard
+              orgSlug={slug}
+              schools={(allowedSchoolIds
+                ? publicSchools.filter(s => allowedSchoolIds.includes(s.id))
+                : publicSchools
+              ).map(s => ({ slug: s.slug, name: s.name }))}
+            />
+          ) : null}
+          linksObreiro={(
+            <>
+              <ServirLinkCard slug={slug} />
+              {publicMinistries.length > 0 && (
+                <MinistryLinkCard
+                  orgSlug={slug}
+                  ministries={(isLiderMinisterio && leaderMinistryId
+                    ? publicMinistries.filter(m => m.id === leaderMinistryId)
+                    : publicMinistries
+                  ).map(m => ({ slug: m.slug, name: m.name }))}
+                />
+              )}
+            </>
+          )}
           openClasses={openClasses.map(c => ({
             id: c.id,
             school_id: c.school_id,
@@ -1432,7 +1644,8 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           updateStatus={updateStatus}
           recusar={recusar}
           aprovar={aprovar}
-          encaminharObreiroDh={encaminharObreiroDh}
+          salvarPalavraLider={salvarPalavraLider}
+          assumirPreInscricaoObreiro={assumirPreInscricaoObreiro}
           finalizarObreiro={finalizarObreiro}
           disponibilizarFormulario={disponibilizarFormulario}
           disponibilizarFormularioObreiro={disponibilizarFormularioObreiro}
@@ -1443,50 +1656,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           encaminharParaEscola={encaminharParaEscola}
           encaminharParaMinisterio={encaminharParaMinisterio}
         />
-
-        {/* ── Histórico de Recusas ──────────────────────────────────────────── */}
-        {historicoTab.length > 0 && (
-          <details className="group">
-            <summary className="cursor-pointer flex items-center gap-2 py-2 text-sm font-semibold text-gray-500 hover:text-gray-700 select-none list-none">
-              <span className="transition-transform group-open:rotate-90">▶</span>
-              Histórico de recusas ({historicoTab.length})
-            </summary>
-            <div className="mt-3 bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Nome</th>
-                    <th className="hidden sm:table-cell text-left px-4 py-3 font-medium text-gray-600">Tipo</th>
-                    <th className="hidden md:table-cell text-left px-4 py-3 font-medium text-gray-600">Escola</th>
-                    <th className="hidden lg:table-cell text-left px-4 py-3 font-medium text-gray-600">Recusado por</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Motivo</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {historicoTab.map(h => (
-                    <tr key={`hist-${h.id}`} className="hover:bg-gray-50">
-                      <td className="px-4 py-3">
-                        <p className="font-medium text-gray-900">{h.nome}</p>
-                        <p className="text-xs text-gray-400">
-                          {new Date(h.recusadoEm).toLocaleDateString('pt-BR')}
-                        </p>
-                      </td>
-                      <td className="hidden sm:table-cell px-4 py-3 text-xs text-gray-500">{h.tipo}</td>
-                      <td className="hidden md:table-cell px-4 py-3 text-xs text-gray-500">{h.escola ?? '—'}</td>
-                      <td className="hidden lg:table-cell px-4 py-3 text-xs text-gray-500">{h.recusadoPor ?? '—'}</td>
-                      <td className="px-4 py-3 text-xs text-gray-600 max-w-xs">
-                        <p className="line-clamp-2" title={h.motivo}>{h.motivo}</p>
-                        <p className="mt-1 text-[11px] text-gray-400 lg:hidden">
-                          Recusado por: {h.recusadoPor ?? '—'}
-                        </p>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </details>
-        )}
+        </Suspense>
 
       </main>
     </>

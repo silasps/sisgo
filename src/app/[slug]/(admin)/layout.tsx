@@ -5,6 +5,7 @@ import { SuperAdminContextBar } from '@/components/layout/SuperAdminContextBar'
 import { notFound, redirect } from 'next/navigation'
 import { accentCssVars } from '@/lib/accent-colors'
 import { getRolePreview } from '@/lib/role-preview'
+import { getNavMode } from '@/lib/nav-mode'
 import { asLooseClient } from '@/lib/supabase/loose-client'
 import { FeedbackButton } from '@/components/layout/FeedbackButton'
 import { isManagementRole, isGeneralFinanceRole, MANUTENCAO_ROLES, HOSPEDAGEM_ROLES, userHasAnyRole } from '@/lib/auth/permissions'
@@ -26,6 +27,51 @@ function addPersonalSplit(items: RegularNavItem[], personalIcons = PESSOAL_ICONS
   const pers = items.filter(i =>  personalIcons.has(i.icon))
   if (pers.length === 0) return op
   return [...op, PESSOAL_DIVIDER, ...pers]
+}
+
+// ── Modo Pessoal x Administração ────────────────────────────────────────────
+// Itens "universais" aparecem nos dois modos; o resto do navItems final (que já
+// passou por addPersonalSplit) é dividido pela posição do divisor "Pessoal".
+const UNIVERSAL_ICONS = new Set(['dashboard', 'calendario', 'pendentes', 'solicitacoes'])
+
+function splitNavByMode(navItems: NavItem[]) {
+  const dividerIdx = navItems.findIndex(i => 'divider' in i)
+  const before = (dividerIdx === -1 ? navItems : navItems.slice(0, dividerIdx)) as RegularNavItem[]
+  const personal = (dividerIdx === -1 ? [] : navItems.slice(dividerIdx + 1)) as RegularNavItem[]
+  const universal = before.filter(i => UNIVERSAL_ICONS.has(i.icon))
+  const admin = before.filter(i => !UNIVERSAL_ICONS.has(i.icon))
+  return { universal, admin, personal }
+}
+
+const NAV_SECTION_BY_ICON: Record<string, string> = {
+  pessoas: 'Pessoas & Times', presenca: 'Pessoas & Times', obreiros: 'Pessoas & Times',
+  escolas: 'Pessoas & Times', inscricoes: 'Pessoas & Times', ministerios: 'Pessoas & Times',
+  reservas: 'Hospedagem', hospedagem: 'Hospedagem', quartos: 'Hospedagem', agenda: 'Hospedagem', lavanderia: 'Hospedagem',
+  cozinha: 'Cozinha', estoque: 'Cozinha', receitas: 'Cozinha',
+  'estoque-manutencao': 'Manutenção',
+  financeiro: 'Financeiro', caixa: 'Financeiro',
+  configuracoes: 'Configurações',
+}
+
+function sectionize(items: RegularNavItem[]): NavItem[] {
+  const out: NavItem[] = []
+  let lastSection: string | null = null
+  for (const item of items) {
+    const section = NAV_SECTION_BY_ICON[item.icon] ?? null
+    if (section && section !== lastSection) out.push({ divider: true, label: section })
+    lastSection = section
+    out.push(item)
+  }
+  return out
+}
+
+// Tela "Ver tudo": mostra TUDO que o papel tem acesso, independente do modo atual.
+function buildAllAppsItems(universal: RegularNavItem[], admin: RegularNavItem[], personal: RegularNavItem[]): NavItem[] {
+  const out: NavItem[] = []
+  if (universal.length) out.push({ divider: true, label: 'Visão geral' }, ...universal)
+  out.push(...sectionize(admin))
+  if (personal.length) out.push({ divider: true, label: 'Pessoal' }, ...personal)
+  return out
 }
 
 function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPending: boolean, hasReservationsPending: boolean, hasOwnCashScope: boolean, laundryEnabled: boolean, hasMinistryMessages: boolean, hasSchoolMessages: boolean, idCardEnabled: boolean): NavItem[] {
@@ -54,7 +100,7 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
     { href: `/${slug}/dashboard`,    label: 'Dashboard',        icon: 'dashboard',     show: true },
     { href: `/${slug}/calendario`,   label: 'Calendário',       icon: 'calendario',    show: true },
     { href: `/${slug}/pendentes`,    label: 'Pendentes',        icon: 'pendentes',     show: true, alert: hasPending },
-    { href: `/${slug}/pessoas`,      label: 'Pessoas',          icon: 'pessoas',       show: true },
+    { href: `/${slug}/pessoas`,      label: 'Pessoas',          icon: 'pessoas',       show: !is('lider_eted') && !isLiderMinisterio },
     { href: `/${slug}/presenca`,     label: 'Presença',         icon: 'presenca',      show: isManagement || is('secretaria') || is('hospitalidade') || isCozinha || is('lider_eted') || isObreiroEted || isLiderMinisterio || isObreiroMinisterio },
     { href: `/${slug}/obreiros`,     label: 'Obreiros',         icon: 'obreiros',      show: isManagement },
     { href: `/${slug}/escolas`,      label: 'Escolas',          icon: 'escolas',       show: isManagement || is('lider_eted') || isObreiroEted, alert: hasSchoolMessages },
@@ -66,13 +112,13 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
     { href: `/${slug}/hospedagem/agenda`,  label: 'Agenda',     icon: 'agenda',        show: canSeeHospedagem },
     { href: `/${slug}/hospedagem/lavanderia`, label: 'Lavanderia', icon: 'lavanderia', show: canSeeHospedagem && laundryEnabled },
     { href: `/${slug}/refeicoes`,    label: 'Minhas refeições', icon: 'refeicoes',     show: canBuyMeals },
-    { href: `/${slug}/caixa`,        label: 'Caixa da área',    icon: 'caixa',         show: hasOwnCashScope },
     { href: `/${slug}/cozinha`,      label: 'Cozinha',          icon: 'cozinha',       show: isManagement || is('secretaria') || isCozinha },
     { href: `/${slug}/cozinha/estoque`, label: 'Estoque',       icon: 'estoque',       show: isManagement || is('secretaria') || isCozinha },
     { href: `/${slug}/cozinha/receitas`, label: 'Receitas',     icon: 'receitas',      show: isManagement || is('secretaria') || isCozinha },
     { href: `/${slug}/manutencao`,   label: 'Solicitações',     icon: 'solicitacoes',  show: true },
-    { href: `/${slug}/manutencao/estoque`, label: 'Est. Manutenção', icon: 'estoque',  show: canSeeManutencao },
+    { href: `/${slug}/manutencao/estoque`, label: 'Est. Manutenção', icon: 'estoque-manutencao', show: canSeeManutencao },
     { href: `/${slug}/financeiro`,   label: 'Financeiro',       icon: 'financeiro',    show: canSeeGeneralFinance },
+    { href: `/${slug}/caixa`,        label: 'Caixa da área',    icon: 'caixa',         show: hasOwnCashScope },
     { href: `/${slug}/minhas-contas`, label: 'Minhas Contas',   icon: 'contas',        show: true },
     { href: `/${slug}/minha-lavanderia`, label: 'Lavanderia',   icon: 'minha-lavanderia', show: laundryEnabled },
     { href: `/${slug}/minha-carteirinha`, label: 'Minha Carteirinha', icon: 'carteirinha', show: idCardEnabled },
@@ -157,25 +203,6 @@ function pickBottomBarItems(navItems: NavItem[], role: string): BottomBarItem[] 
   return barItems
 }
 
-function pickOverflowItems(navItems: NavItem[], bottomBarItems: BottomBarItem[]): NavItem[] {
-  const barIcons = new Set(bottomBarItems.filter(i => !i.isMore).map(i => i.icon))
-
-  const filtered: NavItem[] = []
-  for (const item of navItems) {
-    if ('divider' in item) {
-      filtered.push(item)
-    } else if (!barIcons.has(item.icon)) {
-      filtered.push(item)
-    }
-  }
-
-  return filtered.filter((item, i, arr) => {
-    if (!('divider' in item)) return true
-    if (i === 0 || i === arr.length - 1) return false
-    return arr.slice(i + 1).some(x => !('divider' in x))
-  })
-}
-
 type Props = { children: React.ReactNode; params: Promise<{ slug: string }> }
 
 export default async function SlugLayout({ children, params }: Props) {
@@ -195,7 +222,7 @@ export default async function SlugLayout({ children, params }: Props) {
 
   const { data: orgUsers } = await supabase
     .from('organization_users')
-    .select('organization_id, roles(name), extra_roles')
+    .select('organization_id, roles(name), extra_roles, organizations(slug, name)')
     .eq('user_id', user.id)
     .eq('active', true)
 
@@ -203,6 +230,7 @@ export default async function SlugLayout({ children, params }: Props) {
     organization_id: string | null
     roles: { name: string } | null
     extra_roles?: string[] | null
+    organizations: { slug: string; name: string } | null
   }>
 
   const sbAdmin = createAdminClient()
@@ -469,18 +497,32 @@ export default async function SlugLayout({ children, params }: Props) {
 
   const laundryEnabled = (org as { laundry_enabled?: boolean }).laundry_enabled ?? false
 
-  // ── Mensagens novas no mural (últimas 24h, não do próprio usuário) ─────────
+  // ── Mensagens novas no chat do ministério (desde a última visita) ──────────
   const muralSince = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
   let hasMinistryMessages = false
   let hasSchoolMessages = false
 
-  if (isLiderMinisterio || allRoles.includes('obreiro_ministerio') || linkedRoles.length > 0) {
-    const { count } = await sbAdmin.from('ministry_messages')
-      .select('*', { count: 'exact', head: true })
-      .eq('organization_id', org.id)
-      .neq('author_id', user.id)
-      .gte('created_at', muralSince)
-    hasMinistryMessages = (count ?? 0) > 0
+  const myMinistryIds = [...new Set([
+    ...(leaderLinkedData ?? []).map(r => r.ministry_id),
+    ...(memberLinkedData ?? []).map(r => r.ministry_id),
+  ])]
+
+  if (myMinistryIds.length > 0 && (isLiderMinisterio || allRoles.includes('obreiro_ministerio') || linkedRoles.length > 0)) {
+    const [{ data: reads }, { data: msgs }] = await Promise.all([
+      sbAdmin.from('ministry_message_reads')
+        .select('ministry_id, last_read_at')
+        .eq('user_id', user.id)
+        .in('ministry_id', myMinistryIds),
+      sbAdmin.from('ministry_messages')
+        .select('ministry_id, created_at')
+        .in('ministry_id', myMinistryIds)
+        .neq('author_id', user.id),
+    ])
+    const lastReadMap = new Map((reads ?? []).map(r => [r.ministry_id, r.last_read_at]))
+    hasMinistryMessages = (msgs ?? []).some(m => {
+      const lastRead = lastReadMap.get(m.ministry_id)
+      return !lastRead || new Date(m.created_at) > new Date(lastRead)
+    })
   }
 
   if (allRoles.includes('lider_eted') || allRoles.includes('obreiro_eted')) {
@@ -494,6 +536,23 @@ export default async function SlugLayout({ children, params }: Props) {
   const idCardEnabled = (org as { id_card_enabled?: boolean }).id_card_enabled ?? false
   const navItems = buildNav(slug, role, [...accumulatedRoles, ...extraRoles, ...linkedRoles], hasPending, reservationsPending > 0, hasOwnCashScope, laundryEnabled, hasMinistryMessages, hasSchoolMessages, idCardEnabled)
   const bottomItems = pickBottomBarItems(navItems, role)
+
+  // ── Menu de conta: modo Pessoal x Administração + troca de base ──────────
+  const { universal, admin: adminNavItems, personal: personalNavItems } = splitNavByMode(navItems)
+  const canSwitchMode = adminNavItems.length > 0
+  const navMode = canSwitchMode ? await getNavMode() : 'pessoal'
+  const sidebarItems: NavItem[] = navMode === 'administracao'
+    ? [...universal, ...sectionize(adminNavItems)]
+    : [...universal, ...personalNavItems]
+  const allNavItems = buildAllAppsItems(universal, adminNavItems, personalNavItems)
+
+  const myOrgs = userOrgRows
+    .map(r => r.organizations)
+    .filter((o): o is { slug: string; name: string } => !!o)
+
+  const metadata = (user.user_metadata ?? {}) as Record<string, unknown>
+  const displayName = [metadata.full_name, metadata.name, metadata.fullName, metadata.display_name]
+    .find((v): v is string => typeof v === 'string' && v.trim().length > 0) ?? null
 
   return (
     <div className="flex flex-col h-dvh">
@@ -510,12 +569,21 @@ export default async function SlugLayout({ children, params }: Props) {
         />
       )}
       <AppShell
-        items={navItems}
+        items={sidebarItems}
         bottomBarItems={bottomItems}
-        overflowItems={pickOverflowItems(navItems, bottomItems)}
         subtitle={org.name}
         logoUrl={(org as { logo_url?: string | null }).logo_url ?? undefined}
         className="flex flex-1 min-h-0 overflow-hidden"
+        allNavItems={allNavItems}
+        account={{
+          name: displayName,
+          email: user.email ?? '',
+          orgSlug: slug,
+          orgName: org.name,
+          orgs: myOrgs,
+          canSwitchMode,
+          mode: navMode,
+        }}
       >
         {children}
       </AppShell>

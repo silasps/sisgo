@@ -128,6 +128,7 @@ export function InscricaoLinkCard({ orgSlug, schools }: { orgSlug: string; schoo
                 href={`/${orgSlug}/escola/${school.slug}/inscricao`}
                 target="_blank"
                 rel="noopener noreferrer"
+                suppressHydrationWarning
                 className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
               >
                 <ExternalLink className="size-3" />

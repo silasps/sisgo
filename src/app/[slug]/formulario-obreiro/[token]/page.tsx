@@ -3,10 +3,15 @@ import { notFound } from 'next/navigation'
 import { FormularioObreiro } from './FormularioObreiro'
 import { CheckCircle2 } from 'lucide-react'
 
-type Props = { params: Promise<{ slug: string; token: string }> }
+type Props = {
+  params: Promise<{ slug: string; token: string }>
+  searchParams: Promise<{ print?: string }>
+}
 
-export default async function FormularioObreiroPage({ params }: Props) {
+export default async function FormularioObreiroPage({ params, searchParams }: Props) {
   const { slug, token } = await params
+  const { print } = await searchParams
+  const printMode = print === '1'
   const sb = createAdminClient()
 
   const { data: app } = await sb
@@ -97,13 +102,15 @@ export default async function FormularioObreiroPage({ params }: Props) {
         </div>
       </header>
 
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 pt-5 sm:pt-6">
+      <div className="print:hidden max-w-2xl mx-auto px-4 sm:px-6 pt-5 sm:pt-6">
         <div className="bg-amber-600 text-white rounded-2xl p-5 mb-6">
           <h2 className="font-bold text-base mb-1">Bem-vindo(a) ao formulário de inscrição!</h2>
           <p className="text-sm text-amber-100 leading-relaxed">
-            Este formulário faz parte do processo de avaliação para servir na base.
-            Responda com atenção e sinceridade.
-            Seu progresso é salvo automaticamente a cada seção. Tempo estimado: <strong>20 a 30 minutos</strong>.
+            {printMode
+              ? 'Esta é a versão em branco para preenchimento à mão, caso não seja possível preencher pela internet.'
+              : <>Este formulário faz parte do processo de avaliação para servir na base.
+                Responda com atenção e sinceridade.
+                Seu progresso é salvo automaticamente a cada seção. Tempo estimado: <strong>20 a 30 minutos</strong>.</>}
           </p>
         </div>
       </div>
@@ -122,6 +129,7 @@ export default async function FormularioObreiroPage({ params }: Props) {
             initialSection={app.current_section ?? 1}
             initialData={formData}
             initialLang={prefill.idioma}
+            printMode={printMode}
           />
         </div>
 

@@ -1,22 +1,46 @@
 import { Header } from '@/components/layout/Header'
-import { redirect } from 'next/navigation'
+import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { SCHOOL_TYPES } from '@/lib/schools'
+import { createClient } from '@/lib/supabase/server'
+import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
+import { isManagementRole } from '@/lib/auth/permissions'
 
 type Props = { params: Promise<{ slug: string }> }
 
 export default async function NovaEscolaPage({ params }: Props) {
   const { slug } = await params
 
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: org } = await supabase.from('organizations').select('id').eq('slug', slug).single()
+  if (!org) notFound()
+
+  const { role } = await getCurrentOrganizationRole(supabase, user.id, org.id)
+  if (!isManagementRole(role)) redirect(`/${slug}/escolas`)
+
   async function createSchool(formData: FormData) {
     'use server'
+    const { createClient: createServerClient } = await import('@/lib/supabase/server')
+    const { getCurrentOrganizationRole: getRole } = await import('@/lib/auth/org-role')
+    const { isManagementRole: isMgmt } = await import('@/lib/auth/permissions')
     const { createAdminClient } = await import('@/lib/supabase/admin')
+
+    const authClient = await createServerClient()
+    const { data: { user: actionUser } } = await authClient.auth.getUser()
+    if (!actionUser) return
+
     const sb = createAdminClient()
-    const { data: org } = await sb.from('organizations').select('id').eq('slug', slug).single()
-    if (!org) return
+    const { data: orgRow } = await sb.from('organizations').select('id').eq('slug', slug).single()
+    if (!orgRow) return
+
+    const { role: actionRole } = await getRole(authClient, actionUser.id, orgRow.id)
+    if (!isMgmt(actionRole)) return
 
     const { data: escola } = await sb.from('schools').insert({
-      organization_id: org.id,
+      organization_id: orgRow.id,
       name: formData.get('name') as string,
       type: formData.get('school_type') as string,
       active: true,

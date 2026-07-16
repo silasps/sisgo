@@ -2,14 +2,12 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import { Heart, Phone, AlertCircle } from 'lucide-react'
-import { MANAGEMENT_ROLES } from '@/lib/auth/permissions'
+import { HEALTH_ROLES } from '@/lib/auth/permissions'
 import { getRolePreview } from '@/lib/role-preview'
 
 type Props = {
   params: Promise<{ slug: string; personId: string }>
 }
-
-const HEALTH_ROLES = [...MANAGEMENT_ROLES, 'dh', 'secretaria', 'lider_eted']
 
 function InfoRow({ label, value }: { label: string; value: string | null | undefined }) {
   if (!value) return null

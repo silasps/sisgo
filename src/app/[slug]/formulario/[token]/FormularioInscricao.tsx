@@ -52,6 +52,7 @@ type Props = {
   initialData?: Record<string, unknown>
   hiddenFields?: string[]
   initialLang?: string
+  printMode?: boolean
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -200,6 +201,10 @@ function S4Escola({ schoolName, className, data }: { schoolName: string; classNa
         <H id="s4.motivacao"><div className="sm:col-span-2">
           <TextArea label={d.s4.motivacao} name="motivacao"
             defaultValue={data?.motivacao} required rows={4} />
+        </div></H>
+        <H id="s4.data_chegada"><div className="sm:col-span-2">
+          <Field label={d.s4.data_chegada} name="data_chegada" type="date" defaultValue={data?.data_chegada} />
+          <p className="text-xs text-gray-400 mt-1">{d.s4.data_chegada_hint}</p>
         </div></H>
       </div>
     </div>
@@ -1102,7 +1107,7 @@ function SubmittedScreen({ slug, applicationId, schoolName, d }: {
 type SectionDef = { id: number; component: React.ReactNode }
 
 export function FormularioInscricao({
-  slug, token, applicationId, schoolName, className, prefill, initialSection = 1, initialData, hiddenFields, initialLang
+  slug, token, applicationId, schoolName, className, prefill, initialSection = 1, initialData, hiddenFields, initialLang, printMode
 }: Props) {
   const hiddenSet = useMemo(() => new Set(hiddenFields ?? []), [hiddenFields])
   const [lang, setLang] = useState<Lang>(normalizeLang(initialLang ?? prefill?.idioma))
@@ -1139,6 +1144,34 @@ export function FormularioInscricao({
     { id: 15, component: <S15Documentos isBrazilian={isBrazilian} /> },
     { id: 16, component: <S16Aceite data={localData.s16} /> },
   ]
+
+  if (printMode) {
+    return (
+      <DictCtx.Provider value={d}>
+      <HiddenCtx.Provider value={hiddenSet}>
+      <HiddenStyles />
+      <div>
+        <div className="print:hidden mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-sm text-amber-800">
+            Versão para preenchimento à mão — imprima e devolva à equipe por outro meio.
+          </p>
+          <button type="button" onClick={() => window.print()}
+            className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold transition-colors">
+            Baixar PDF (imprimir)
+          </button>
+        </div>
+        <div className="space-y-8">
+          {sections.map(s => (
+            <div key={s.id} className="pb-8 border-b border-gray-100 last:border-0 break-inside-avoid-page">
+              {s.component}
+            </div>
+          ))}
+        </div>
+      </div>
+      </HiddenCtx.Provider>
+      </DictCtx.Provider>
+    )
+  }
 
   const currentIndex = sections.findIndex(s => s.id === current)
   const isLast = currentIndex === sections.length - 1

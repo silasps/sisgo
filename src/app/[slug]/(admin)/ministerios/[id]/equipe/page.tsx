@@ -235,6 +235,10 @@ export default async function EquipePage({ params, searchParams }: Props) {
     <>
     <Suspense><ScrollHighlight /></Suspense>
     <main className="p-4 md:p-6 space-y-4 max-w-3xl overflow-y-auto flex-1">
+      <p className="text-xs text-gray-400 -mt-2">
+        Vínculo de líderes e obreiros com este ministério — quem serve aqui e com que papel.
+      </p>
+
       {msgInfo && (
         <div className={`border rounded-lg px-4 py-3 text-sm ${msgInfo.cls}`}>{msgInfo.text}</div>
       )}

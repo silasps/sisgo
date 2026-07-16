@@ -1,9 +1,11 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { GraduationCap, Award } from 'lucide-react'
+import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
+import { HEALTH_ROLES } from '@/lib/auth/permissions'
 
 type Props = { params: Promise<{ slug: string; id: string; classId: string }> }
 
@@ -32,8 +34,13 @@ export default async function AlunosTurmaPage({ params }: Props) {
   const { slug, id, classId } = await params
 
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
   const { data: org } = await supabase.from('organizations').select('id').eq('slug', slug).single()
   if (!org) notFound()
+
+  const { role } = await getCurrentOrganizationRole(supabase, user.id, org.id)
+  const canSeeHealth = HEALTH_ROLES.includes(role as never)
 
   const db = createAdminClient()
 
@@ -169,7 +176,7 @@ export default async function AlunosTurmaPage({ params }: Props) {
                               Certificado
                             </Link>
                           )}
-                          {pessoa?.id && (
+                          {pessoa?.id && canSeeHealth && (
                             <Link
                               href={`/${slug}/pessoas/${pessoa.id}/saude`}
                               className="text-xs text-gray-400 hover:text-brand-600 transition-colors"

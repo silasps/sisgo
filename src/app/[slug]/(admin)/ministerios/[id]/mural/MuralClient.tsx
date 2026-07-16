@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback, useTransition } from 'react'
-import { Send, Trash2, Type, Palette, ALargeSmall } from 'lucide-react'
+import { Send, Trash2, Type, Palette, ALargeSmall, MessageCircle, HelpCircle, X, ChevronDown, Copy, Pencil } from 'lucide-react'
 
 type Message = {
   id: string
@@ -14,6 +14,7 @@ type Message = {
   text_color: number
   font_size: number
   created_at: string
+  edited_at?: string | null
 }
 
 type Member = {
@@ -97,9 +98,10 @@ type Props = {
   nextColor: number
   postAction: (fd: FormData) => Promise<void>
   deleteAction: (fd: FormData) => Promise<void>
+  editAction?: (fd: FormData) => Promise<void>
 }
 
-export function MuralClient({ messages: serverMessages, members, currentUserId, currentUserName, canDelete, nextColor, postAction, deleteAction }: Props) {
+export function MuralClient({ messages: serverMessages, members, currentUserId, currentUserName, canDelete, nextColor, postAction, deleteAction, editAction }: Props) {
   const [localMessages, setLocalMessages] = useState<Message[]>(serverMessages)
   const [text, setText] = useState('')
   const [font, setFont] = useState(0)
@@ -108,9 +110,12 @@ export function MuralClient({ messages: serverMessages, members, currentUserId, 
   const [showMentions, setShowMentions] = useState(false)
   const [mentionFilter, setMentionFilter] = useState('')
   const [showToolbar, setShowToolbar] = useState(false)
+  const [showInfo, setShowInfo] = useState(false)
   const [colorCounter, setColorCounter] = useState(nextColor)
-  const [expandedMsg, setExpandedMsg] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editText, setEditText] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -199,11 +204,40 @@ export function MuralClient({ messages: serverMessages, members, currentUserId, 
 
   function handleDelete(messageId: string) {
     setLocalMessages(prev => prev.filter(m => m.id !== messageId))
-    setExpandedMsg(null)
+    setOpenMenuId(null)
     const fd = new FormData()
     fd.set('message_id', messageId)
     startTransition(async () => {
       await deleteAction(fd)
+    })
+  }
+
+  async function handleCopy(content: string) {
+    setOpenMenuId(null)
+    try { await navigator.clipboard.writeText(content) } catch { /* clipboard indisponível */ }
+  }
+
+  function startEdit(msg: Message) {
+    setEditingId(msg.id)
+    setEditText(msg.content)
+    setOpenMenuId(null)
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    setEditText('')
+  }
+
+  function saveEdit(messageId: string) {
+    const content = editText.trim()
+    if (!content || !editAction) return
+    setLocalMessages(prev => prev.map(m => m.id === messageId ? { ...m, content, edited_at: new Date().toISOString() } : m))
+    setEditingId(null)
+    const fd = new FormData()
+    fd.set('message_id', messageId)
+    fd.set('content', content)
+    startTransition(async () => {
+      await editAction(fd)
     })
   }
 
@@ -216,12 +250,40 @@ export function MuralClient({ messages: serverMessages, members, currentUserId, 
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
+      {/* Header */}
+      <div className="relative shrink-0 border-b border-gray-200 bg-white px-3 py-2.5 md:px-6 flex items-center justify-between">
+        <div className="flex items-center gap-1.5 text-gray-700">
+          <MessageCircle size={16} />
+          <span className="text-sm font-semibold">Chat do ministério</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowInfo(v => !v)}
+          className={`p-1.5 rounded-lg transition-colors ${showInfo ? 'bg-brand-50 text-brand-600' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
+        >
+          <HelpCircle size={16} />
+        </button>
+        {showInfo && (
+          <div className="absolute top-full right-3 md:right-6 mt-1 w-72 max-w-[calc(100vw-1.5rem)] bg-white rounded-xl border border-gray-200 shadow-lg z-20 p-3.5 text-xs text-gray-600 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <p className="font-semibold text-gray-800 text-sm">Como funciona</p>
+              <button type="button" onClick={() => setShowInfo(false)} className="text-gray-300 hover:text-gray-500">
+                <X size={14} />
+              </button>
+            </div>
+            <p>Espaço só da equipe deste ministério — não é visto por outros ministérios.</p>
+            <p>Digite <span className="font-medium text-brand-700">@nome</span> para marcar alguém da equipe.</p>
+            <p>Só ficam guardadas as 30 mensagens mais recentes; as mais antigas somem sozinhas.</p>
+          </div>
+        )}
+      </div>
+
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 md:p-6 space-y-2.5 md:space-y-3">
         {localMessages.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-4xl mb-3">📌</p>
-            <p className="text-sm text-gray-400">Nenhuma anotação no mural ainda.</p>
+            <p className="text-sm text-gray-400">Nenhuma mensagem ainda.</p>
             <p className="text-xs text-gray-300 mt-1">Escreva algo para a equipe!</p>
           </div>
         ) : (
@@ -234,31 +296,87 @@ export function MuralClient({ messages: serverMessages, members, currentUserId, 
               const fontClass = FONTS[msg.font % FONTS.length].class
               const colorClass = TEXT_COLORS[msg.text_color % TEXT_COLORS.length].class
               const isTemp = msg.id.startsWith('temp-')
-              const isExpanded = expandedMsg === msg.id
+              const isEditing = editingId === msg.id
+              const canEdit = isOwn && !!editAction
+              const menuOpen = openMenuId === msg.id
               return (
                 <div
                   key={msg.id}
                   className={`relative ${c.bg} ${c.border} border rounded-lg px-3.5 md:pl-4 md:pr-6 py-2.5 md:py-3 shadow-sm ${c.shadow} ${rot} ${c.fold} transition-all duration-200 hover:rotate-0 hover:shadow-md group ${isTemp ? 'opacity-70' : ''}`}
-                  onClick={() => canRemove && !isTemp && setExpandedMsg(isExpanded ? null : msg.id)}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 md:gap-2 mb-1 md:mb-1.5">
                         <span className="text-[11px] md:text-xs font-bold text-gray-700 truncate">{msg.author_name}</span>
                         <span className="text-[10px] text-gray-400 shrink-0">{timeAgo(msg.created_at)}</span>
+                        {msg.edited_at && <span className="text-[10px] text-gray-400 shrink-0 italic">(editado)</span>}
                       </div>
-                      <p className={`${colorClass} ${fontClass} ${FONT_SIZES[msg.font_size % FONT_SIZES.length].class} whitespace-pre-line leading-relaxed`}>
-                        {renderContent(msg.content, members)}
-                      </p>
+                      {isEditing ? (
+                        <div className="space-y-1.5">
+                          <textarea
+                            value={editText}
+                            onChange={e => setEditText(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(msg.id) }
+                              if (e.key === 'Escape') cancelEdit()
+                            }}
+                            autoFocus
+                            rows={2}
+                            className={`w-full resize-none rounded-md border border-white/60 bg-white/70 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-brand-400 ${colorClass} ${fontClass} ${FONT_SIZES[msg.font_size % FONT_SIZES.length].class}`}
+                          />
+                          <div className="flex gap-2">
+                            <button type="button" onClick={() => saveEdit(msg.id)} className="text-[11px] font-medium text-brand-700 hover:text-brand-800">Salvar</button>
+                            <button type="button" onClick={cancelEdit} className="text-[11px] text-gray-500 hover:text-gray-700">Cancelar</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className={`${colorClass} ${fontClass} ${FONT_SIZES[msg.font_size % FONT_SIZES.length].class} whitespace-pre-line leading-relaxed`}>
+                          {renderContent(msg.content, members)}
+                        </p>
+                      )}
                     </div>
-                    {canRemove && !isTemp && (
-                      <button
-                        type="button"
-                        onClick={e => { e.stopPropagation(); handleDelete(msg.id) }}
-                        className={`shrink-0 p-1.5 rounded text-gray-400 hover:text-red-500 hover:bg-white/50 transition-all ${isExpanded ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                    {!isTemp && !isEditing && (
+                      <div className="relative shrink-0">
+                        <button
+                          type="button"
+                          onClick={e => { e.stopPropagation(); setOpenMenuId(menuOpen ? null : msg.id) }}
+                          className="p-1.5 rounded text-gray-400/70 hover:text-gray-700 hover:bg-white/50 transition-all"
+                        >
+                          <ChevronDown size={14} />
+                        </button>
+                        {menuOpen && (
+                          <>
+                            <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
+                            <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-lg border border-gray-200 shadow-lg z-20 py-1 text-xs">
+                              <button
+                                type="button"
+                                onClick={e => { e.stopPropagation(); handleCopy(msg.content) }}
+                                className="w-full flex items-center gap-2 px-3 py-1.5 text-gray-600 hover:bg-gray-50 text-left"
+                              >
+                                <Copy size={12} /> Copiar
+                              </button>
+                              {canEdit && (
+                                <button
+                                  type="button"
+                                  onClick={e => { e.stopPropagation(); startEdit(msg) }}
+                                  className="w-full flex items-center gap-2 px-3 py-1.5 text-gray-600 hover:bg-gray-50 text-left"
+                                >
+                                  <Pencil size={12} /> Editar
+                                </button>
+                              )}
+                              {canRemove && (
+                                <button
+                                  type="button"
+                                  onClick={e => { e.stopPropagation(); handleDelete(msg.id) }}
+                                  className="w-full flex items-center gap-2 px-3 py-1.5 text-red-500 hover:bg-red-50 text-left"
+                                >
+                                  <Trash2 size={12} /> Excluir
+                                </button>
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -360,7 +478,7 @@ export function MuralClient({ messages: serverMessages, members, currentUserId, 
                 onChange={e => handleInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 onFocus={() => setShowToolbar(false)}
-                placeholder="Escreva no mural..."
+                placeholder="Escreva uma mensagem..."
                 rows={1}
                 className={`w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:bg-white transition-colors ${FONTS[font].class} ${TEXT_COLORS[textColor].class} ${FONT_SIZES[fontSize].class}`}
               />

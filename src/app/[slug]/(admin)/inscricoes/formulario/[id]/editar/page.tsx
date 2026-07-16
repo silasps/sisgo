@@ -256,7 +256,10 @@ export default async function FormularioEditorPage({ params }: Props) {
   async function salvar(fd: FormData) {
     'use server'
     const { createAdminClient: adm } = await import('@/lib/supabase/admin')
+    const { createClient: createAuthClient } = await import('@/lib/supabase/server')
     const db = adm()
+    const authClient = await createAuthClient()
+    const { data: { user: actingUser } } = await authClient.auth.getUser()
 
     // Reconstrói o form_data a partir dos inputs name="sX.campo"
     const updated: Record<string, Record<string, string>> = {}
@@ -273,7 +276,7 @@ export default async function FormularioEditorPage({ params }: Props) {
     // Preserva seções que não aparecem no editor (s2, s3, s15, s16, prefill…)
     const { data: current } = await db
       .from('school_applications')
-      .select('form_data')
+      .select('form_data, status')
       .eq('id', id)
       .single()
     const existing = (current?.form_data as Record<string, unknown>) ?? {}
@@ -283,8 +286,14 @@ export default async function FormularioEditorPage({ params }: Props) {
       merged[section] = { ...(merged[section] as Record<string, string> ?? {}), ...fields }
     }
 
+    // Só volta pra 'em_analise' se ainda estiver em andamento — uma
+    // aprovação/reprovação já dada não é desfeita por uma correção de dados.
+    const statusPatch = current?.status && ['enviado', 'em_analise'].includes(current.status)
+      ? { status: 'em_analise' }
+      : {}
+
     await db.from('school_applications')
-      .update({ form_data: merged, status: 'em_analise' })
+      .update({ form_data: merged, edited_by: actingUser?.id ?? null, edited_at: new Date().toISOString(), ...statusPatch })
       .eq('id', id)
 
     redirect(`/${slug}/inscricoes/formulario/${id}`)

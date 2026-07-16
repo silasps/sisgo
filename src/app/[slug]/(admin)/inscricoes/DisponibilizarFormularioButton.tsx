@@ -7,7 +7,7 @@ import { AlertTriangle, Link as LinkIcon, ClipboardList, Loader2 } from 'lucide-
 type ActionResult = {
   url?: string
   error?: string
-  emailWarning?: 'sem_email_eted' | 'email_falhou' | 'quota_atingida' | string
+  emailWarning?: 'sem_email_eted' | 'sem_email_candidato' | 'email_falhou' | 'quota_atingida' | string
   schoolId?: string
 }
 
@@ -56,6 +56,7 @@ function CopiedToast({ visible }: { visible: boolean }) {
 export function DisponibilizarFormularioButton({ interestFormId, slug, action, schoolId, emailDisabled, emailDisabledReason, label }: Props) {
   const [isPending, startTransition] = useTransition()
   const [showCopied, setShowCopied] = useState(false)
+  const [formUrl, setFormUrl] = useState<string | null>(null)
   const [emailNotice, setEmailNotice] = useState<{
     msg: string
     schoolId?: string
@@ -80,6 +81,8 @@ export function DisponibilizarFormularioButton({ interestFormId, slug, action, s
         return
       }
 
+      setFormUrl(result.url)
+
       // Copia link — sempre
       try { await navigator.clipboard.writeText(result.url) } catch {}
 
@@ -91,6 +94,10 @@ export function DisponibilizarFormularioButton({ interestFormId, slug, action, s
         setEmailNotice({
           msg: 'E-mail não enviado automaticamente — a ETED ainda não tem e-mail cadastrado. Envie o link manualmente.',
           schoolId: result.schoolId ?? schoolId,
+        })
+      } else if (result.emailWarning === 'sem_email_candidato') {
+        setEmailNotice({
+          msg: 'E-mail não enviado — o candidato não informou e-mail na pré-inscrição. Envie o link manualmente (WhatsApp, por exemplo).',
         })
       } else if (result.emailWarning === 'quota_atingida') {
         setEmailNotice({
@@ -113,12 +120,25 @@ export function DisponibilizarFormularioButton({ interestFormId, slug, action, s
           disabled={isPending}
           className="inline-flex items-center gap-1 text-xs px-3 py-1.5 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors disabled:opacity-60"
         >
-          {isPending ? <><Loader2 className="size-3.5 inline -mt-0.5 animate-spin" /> Gerando…</> : <><ClipboardList className="size-3.5 inline -mt-0.5" /> {label ?? 'Disponibilizar formulário'}</>}
+          {isPending ? <><Loader2 className="size-3.5 inline -mt-0.5 animate-spin" /> Enviando…</> : <><ClipboardList className="size-3.5 inline -mt-0.5" /> {label ?? 'Enviar formulário por e-mail'}</>}
         </button>
+        <p className="text-xs text-gray-400 leading-tight max-w-[220px]">
+          O link também é copiado, caso prefira compartilhar por outro meio.
+        </p>
         {emailDisabled && (
           <p className="text-xs text-orange-500 leading-tight max-w-[200px]" title={emailDisabledReason}>
             <AlertTriangle className="size-3.5 inline -mt-0.5" /> Sem envio automático
           </p>
+        )}
+        {formUrl && (
+          <a
+            href={`${formUrl}${formUrl.includes('?') ? '&' : '?'}print=1`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-amber-700 underline hover:text-amber-900"
+          >
+            A pessoa não consegue preencher pelo link? Gerar PDF
+          </a>
         )}
       </div>
 

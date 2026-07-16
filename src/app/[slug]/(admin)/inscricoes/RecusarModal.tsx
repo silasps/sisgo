@@ -75,6 +75,24 @@ export function RecusarModal({ id, tipo, action }: Props) {
                 </p>
               </div>
 
+              {(tipo === 'aluno' || tipo === 'pre_inscricao') && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">
+                    Palavra para o candidato (opcional)
+                  </label>
+                  <textarea
+                    name="decision_note"
+                    rows={2}
+                    placeholder="Uma palavra de encorajamento ou explicação, se desejar..."
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
+                  />
+                  <label className="flex items-start gap-2 text-xs text-gray-600 mt-1.5">
+                    <input type="checkbox" name="decision_note_shared" className="mt-0.5" />
+                    Enviar esta mensagem ao candidato junto com o e-mail de recusa
+                  </label>
+                </div>
+              )}
+
               <div className="flex gap-3 justify-end pt-1">
                 <button type="button" onClick={handleClose} disabled={isPending}
                   className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50">

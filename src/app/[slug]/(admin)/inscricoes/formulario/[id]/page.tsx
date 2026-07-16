@@ -5,6 +5,10 @@ import Link from 'next/link'
 import { getRolePreview } from '@/lib/role-preview'
 import { ReferenceModal } from './ReferenceModal'
 import { Pencil, FileText } from 'lucide-react'
+import { PipelineStepper, stagesFromFlags } from '@/components/inscricoes/PipelineStepper'
+import { AvancarEtapaControl, AdvanceHistoryList } from '@/components/inscricoes/AvancarEtapaControl'
+import { getStageAdvances, resolveAdvancerNames } from '@/lib/pipelineStageAdvance'
+import { avancarEtapaAluno } from './actions'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
@@ -286,7 +290,7 @@ export default async function FormularioViewerPage({ params }: Props) {
   const { data: app } = await sb
     .from('school_applications')
     .select(`
-      id, status, form_data, created_at,
+      id, status, form_data, created_at, edited_by, edited_at,
       organization_id,
       schools(name),
       school_classes(name),
@@ -305,6 +309,21 @@ export default async function FormularioViewerPage({ params }: Props) {
   const turma = app.school_classes as unknown as { name: string } | null
   const preform = app.school_interest_forms as unknown as { full_name?: string; email?: string; phone?: string } | null
   const nomeCandidato = (formData.s5 as Record<string, string> | undefined)?.nome ?? preform?.full_name ?? '—'
+
+  let editedByName: string | null = null
+  if (app.edited_by) {
+    const { data: editUser } = await sb.auth.admin.getUserById(app.edited_by)
+    editedByName = (editUser.user?.user_metadata?.full_name as string | undefined) ?? editUser.user?.email ?? null
+  }
+
+  const canAdvanceStage = ['superadmin', 'admin_base', 'dh'].includes(userRole)
+  const stageAdvances = await getStageAdvances(sb, 'aluno', id)
+  const advancerNames = await resolveAdvancerNames(sb, stageAdvances)
+  const advancedLabels = new Set(stageAdvances.map(a => a.to_stage))
+  const ALUNO_STAGE_LABELS = ['Pré-inscrição', 'Formulário enviado', 'Em análise', 'Aprovado']
+  const alunoNaturalFlags = [true, ['enviado', 'em_analise', 'aprovado'].includes(app.status), ['em_analise', 'aprovado'].includes(app.status), app.status === 'aprovado']
+  const stages = stagesFromFlags(ALUNO_STAGE_LABELS, alunoNaturalFlags.map((f, i) => f || advancedLabels.has(ALUNO_STAGE_LABELS[i])))
+  const currentStageLabel = stages.find(s => s.status === 'current')?.label ?? null
 
   // Busca formulários de referência
   const { data: refs } = await sb
@@ -343,6 +362,22 @@ export default async function FormularioViewerPage({ params }: Props) {
             {STATUS_LABELS[app.status] ?? app.status}
           </span>
         </div>
+        <div className="mt-2">
+          <PipelineStepper stages={stages} />
+          {canAdvanceStage && (
+            <AvancarEtapaControl
+              currentStageLabel={currentStageLabel}
+              fixed={{ applicationId: id, organizationId: app.organization_id, slug }}
+              action={avancarEtapaAluno}
+            />
+          )}
+          <AdvanceHistoryList advances={stageAdvances} names={Object.fromEntries(advancerNames)} />
+        </div>
+        {app.edited_at && (
+          <p className="text-xs text-gray-400 mt-1">
+            Editado por {editedByName ?? 'um administrador'} em {new Date(app.edited_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
+          </p>
+        )}
       </div>
 
       <main className="p-4 md:p-6 space-y-5 max-w-4xl mx-auto">

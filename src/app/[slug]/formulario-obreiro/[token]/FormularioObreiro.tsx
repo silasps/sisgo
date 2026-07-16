@@ -33,6 +33,7 @@ type Props = {
   initialSection?: number
   initialData?: Record<string, unknown>
   initialLang?: string
+  printMode?: boolean
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -451,20 +452,33 @@ function S4Igreja({ data }: { data?: Record<string, string> }) {
 }
 
 function S5Experiencia({ data }: { data?: Record<string, string> }) {
-  const [serviu, setServiu] = useState(data?.serviu_missao === 'sim')
+  const [tipo, setTipo] = useState(data?.experiencia_recente_tipo ?? '')
   const [conhece, setConhece] = useState(data?.conhece_alguem === 'sim')
   return (
     <div className="space-y-4">
-      <SectionTitle number="Seção 05" title="Experiência Missionária" />
+      <SectionTitle number="Seção 05" title="Experiência Recente" />
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
-          <Select label="Já serviu em algum projeto missionário?" name="serviu_missao" required
-            defaultValue={data?.serviu_missao}
+          <Select label="Qual foi sua experiência mais recente?" name="experiencia_recente_tipo" required
+            defaultValue={data?.experiencia_recente_tipo}
             options={[
-              { value: 'sim', label: 'Sim' }, { value: 'nao', label: 'Não' },
-            ]} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setServiu(e.target.value === 'sim')} />
+              { value: 'escola', label: 'Fiz uma escola desta instituição' },
+              { value: 'missao', label: 'Servi em um projeto missionário' },
+              { value: 'nenhuma', label: 'Nenhuma das duas' },
+            ]} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setTipo(e.target.value)} />
         </div>
-        {serviu && <>
+
+        {tipo === 'escola' && <>
+          <Field label="Nome da escola" name="escola_nome" defaultValue={data?.escola_nome} required />
+          <Field label="Período / Turma" name="escola_periodo" defaultValue={data?.escola_periodo} />
+          <SubSection title="Contato da liderança da escola" />
+          <Field label="Nome do líder" name="escola_lider_nome" defaultValue={data?.escola_lider_nome} required />
+          <Field label="E-mail do líder" name="escola_lider_email" type="email" defaultValue={data?.escola_lider_email} />
+          <InternationalPhoneField phoneName="escola_lider_tel" countryName="escola_lider_tel_country"
+            label="Telefone do líder" defaultCountryIso="BR" defaultPhone={data?.escola_lider_tel} required />
+        </>}
+
+        {tipo === 'missao' && <>
           <div className="sm:col-span-2">
             <TextArea label="Qual projeto? Descreva sua experiência" name="missao_descricao"
               defaultValue={data?.missao_descricao} required rows={4} />
@@ -776,13 +790,15 @@ function SubmittedScreen({ slug, applicationId, orgName }: {
       <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-left max-w-md mx-auto space-y-4">
         <h3 className="font-bold text-gray-900 text-center">Próximos passos: Referências</h3>
         <p className="text-sm text-gray-600 text-center">
-          Gere os links de referência e envie para seu pastor e um amigo próximo.
+          Já enviamos por e-mail o pedido de recomendação ao seu pastor (e à liderança da sua
+          experiência recente, se informada). Se preferir agilizar por WhatsApp ou outro meio,
+          gere o link abaixo e envie você mesmo.
         </p>
 
         <div className="space-y-2">
           <button onClick={() => gerarLink('pastor')} disabled={loadingPastor}
             className="w-full py-3 px-4 bg-amber-600 hover:bg-amber-700 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors text-sm">
-            {loadingPastor ? 'Gerando…' : pastorLink ? 'Gerar novo link (Pastor)' : 'Gerar link — Referência do Pastor'}
+            {loadingPastor ? 'Gerando…' : pastorLink ? 'Gerar novo link (Pastor)' : 'Copiar link — Referência do Pastor'}
           </button>
           {pastorLink && (
             <div className="flex items-center gap-2 bg-white border border-amber-200 rounded-xl px-3 py-2">
@@ -825,7 +841,7 @@ type SectionDef = { id: number; component: React.ReactNode }
 
 export function FormularioObreiro({
   slug, token, applicationId, orgName, ministryName, ministryId, ministries,
-  prefill, initialSection = 1, initialData, initialLang
+  prefill, initialSection = 1, initialData, initialLang, printMode
 }: Props) {
   const [lang, setLang] = useState<Lang>((initialLang as Lang) ?? 'pt')
   const [current, setCurrent] = useState(initialSection)
@@ -854,6 +870,31 @@ export function FormularioObreiro({
     { id: 9, component: <S9Financeiro data={localData.s9} /> },
     { id: 10, component: <S10DocumentosAceite isBrazilian={isBrazilian} estadoCivil={localData.s2?.estado_civil ?? localData.s3?.estado_civil_atual ?? ''} /> },
   ]
+
+  if (printMode) {
+    return (
+      <LangCtx.Provider value={lang}>
+      <div>
+        <div className="print:hidden mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-sm text-amber-800">
+            Versão para preenchimento à mão — imprima e devolva à equipe por outro meio.
+          </p>
+          <button type="button" onClick={() => window.print()}
+            className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold transition-colors">
+            Baixar PDF (imprimir)
+          </button>
+        </div>
+        <div className="space-y-8">
+          {sections.map(s => (
+            <div key={s.id} className="pb-8 border-b border-gray-100 last:border-0 break-inside-avoid-page">
+              {s.component}
+            </div>
+          ))}
+        </div>
+      </div>
+      </LangCtx.Provider>
+    )
+  }
 
   const currentIndex = sections.findIndex(s => s.id === current)
   const isLast = currentIndex === sections.length - 1

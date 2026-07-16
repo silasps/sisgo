@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/Header'
@@ -290,28 +291,48 @@ export default async function PendentesPage({ params, searchParams }: Props) {
     people: { full_name: string } | null
     ministry_roles: { name: string } | null
   }
+  // ── 4b. Solicitações de escola (gestão) — mesmo tratamento das de ministério ─
+  type SchoolReqRaw = {
+    id: string; role: string; notes: string | null; created_at: string
+    school_id: string; requested_by: string
+    person_id: string | null
+    schools: { name: string } | null
+    people: { full_name: string } | null
+  }
   let ministryRequests: MinistryReqRaw[] = []
+  let schoolRequests: SchoolReqRaw[] = []
   if (isManagement) {
-    const { data } = await supabase
-      .from('ministry_pending_requests')
-      .select('id, request_type, notes, created_at, ministry_id, requested_by, person_id, ministries(name), people(full_name), ministry_roles(name)')
-      .eq('organization_id', orgId)
-      .eq('status', 'pendente')
-      .order('created_at', { ascending: true })
-    ministryRequests = (data ?? []) as unknown as MinistryReqRaw[]
+    const [{ data: mrData }, { data: srData }] = await Promise.all([
+      supabase
+        .from('ministry_pending_requests')
+        .select('id, request_type, notes, created_at, ministry_id, requested_by, person_id, ministries(name), people(full_name), ministry_roles(name)')
+        .eq('organization_id', orgId)
+        .eq('status', 'pendente')
+        .order('created_at', { ascending: true }),
+      supabase
+        .from('school_pending_requests')
+        .select('id, role, notes, created_at, school_id, requested_by, person_id, schools(name), people(full_name)')
+        .eq('organization_id', orgId)
+        .eq('status', 'pendente')
+        .order('created_at', { ascending: true }),
+    ])
+    ministryRequests = (mrData ?? []) as unknown as MinistryReqRaw[]
+    schoolRequests = (srData ?? []) as unknown as SchoolReqRaw[]
   }
 
   // ── 5. Solicitações de serviço ───────────────────────────────────────────────
   type ServiceReqRaw = {
     id: string; subject: string; request_type: string; target_department: string
     description: string | null; status: string; created_at: string; requester_role: string; requester_id: string
+    requested_arrival_date: string | null; requested_departure_date: string | null
+    staff_application_id: string | null; school_application_id: string | null
   }
   let serviceRequests: ServiceReqRaw[] = []
   if (isManagement || isHospitalidade || seesDepartmentServices) {
     const sbAdmin = createAdminClient()
     let q = sbAdmin
       .from('service_requests')
-      .select('id, subject, request_type, target_department, description, status, created_at, requester_role, requester_id')
+      .select('id, subject, request_type, target_department, description, status, created_at, requester_role, requester_id, requested_arrival_date, requested_departure_date, staff_application_id, school_application_id')
       .eq('organization_id', orgId)
       .in('status', ['pendente', 'em_analise'])
       .order('created_at', { ascending: true })
@@ -338,7 +359,7 @@ export default async function PendentesPage({ params, searchParams }: Props) {
         .eq('status', 'pendente')
         .order('created_at', { ascending: false }),
       supabase.from('service_requests')
-        .select('id, subject, request_type, target_department, description, status, created_at, requester_role, requester_id')
+        .select('id, subject, request_type, target_department, description, status, created_at, requester_role, requester_id, requested_arrival_date, requested_departure_date, staff_application_id, school_application_id')
         .eq('organization_id', orgId)
         .eq('requester_id', user.id)
         .not('status', 'in', '("resolvido","rejeitado")')
@@ -359,6 +380,7 @@ export default async function PendentesPage({ params, searchParams }: Props) {
     ...serviceRequests.map(request => request.requester_id),
     ...ministryRequests.map(request => request.requested_by),
     ...myMinistryRequests.map(request => request.requested_by),
+    ...schoolRequests.map(request => request.requested_by),
   ].filter(Boolean))]
   const requesterMap = new Map<string, { name: string; email: string; phone: string | null }>()
   const userEmails = new Map<string, string>()
@@ -678,6 +700,27 @@ export default async function PendentesPage({ params, searchParams }: Props) {
   const handleServiceStatusUpdate = async (formData: FormData) => {
     'use server'
     await updateServiceStatus(formData.get('request_id') as string, formData.get('status') as string, user!.id)
+    redirect(`/${slug}/pendentes`)
+  }
+
+  const handleResolverHospedagemComAlocacao = async (params: {
+    requestId: string; roomId: string; bedId: string | null; personId: string | null
+    guestName: string; guestType: 'obreiro' | 'aluno'; checkIn: string; checkOut: string
+  }) => {
+    'use server'
+    if (!user) return
+    const { resolverHospedagemComAlocacao } = await import('../hospedagem/actions')
+    await resolverHospedagemComAlocacao({ ...params, organizationId: orgId, reviewedBy: user.id })
+    redirect(`/${slug}/pendentes`)
+  }
+
+  const handleResolverHospedagemSemAlocacao = async (params: {
+    requestId: string; guestName: string; staffApplicationId: string | null; schoolApplicationId: string | null; requestedArrivalDate: string | null
+  }) => {
+    'use server'
+    if (!user) return
+    const { resolverHospedagemSemAlocacao } = await import('../hospedagem/actions')
+    await resolverHospedagemSemAlocacao({ ...params, organizationId: orgId, reviewedBy: user.id })
     redirect(`/${slug}/pendentes`)
   }
 
@@ -1070,6 +1113,9 @@ export default async function PendentesPage({ params, searchParams }: Props) {
                   diasAberto: daysAgo(sr.created_at),
                 }))}
                 handleStatusUpdate={handleServiceStatusUpdate}
+                resolverComAlocacao={handleResolverHospedagemComAlocacao}
+                resolverSemAlocacao={handleResolverHospedagemSemAlocacao}
+                organizationId={orgId}
               />
             )}
           </>
@@ -1158,6 +1204,56 @@ export default async function PendentesPage({ params, searchParams }: Props) {
               </div>
             )}
 
+            {/* ── Seção: Solicitações de Escola (gestão) ── */}
+            {canWrite && schoolRequests.length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+                  <h3 className="text-sm font-semibold text-gray-700">
+                    Solicitações de Escola
+                    <span className="ml-2 text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full">
+                      {schoolRequests.length}
+                    </span>
+                  </h3>
+                </div>
+                <div className="p-3 space-y-2">
+                  {schoolRequests.map(req => {
+                    const pName = req.people?.full_name
+                    const sName = req.schools?.name
+                    const dias  = daysAgo(req.created_at)
+                    const urg   = urgencyBadge(dias)
+                    const requester = requesterMap.get(req.requested_by)
+                    return (
+                      <Link
+                        key={req.id}
+                        href={`/${slug}/escolas/${req.school_id}`}
+                        className="group flex items-start gap-3 bg-gray-50 rounded-xl border border-gray-200 px-4 py-3 shadow-sm transition-all duration-150 hover:shadow-md hover:-translate-y-0.5"
+                      >
+                        <span className={`flex-shrink-0 inline-flex items-center justify-center min-w-[2.5rem] px-2 py-0.5 rounded-full text-xs font-bold ${urg.color}`}>
+                          {urg.label}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-900 group-hover:text-brand-600 transition-colors">
+                            Adicionar obreiro
+                            {pName && ` — ${pName}`}
+                            {req.role && ` → ${req.role}`}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-0.5">Escola: {sName ?? '—'}</p>
+                          {req.notes && <p className="text-xs text-gray-400 italic mt-0.5">&ldquo;{req.notes}&rdquo;</p>}
+                          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                            <span className="text-xs text-gray-500">{requester?.name ?? '—'}</span>
+                            <WhatsAppButton phone={requester?.phone} />
+                          </div>
+                        </div>
+                        <span className="flex-shrink-0 text-xs font-semibold text-brand-500 group-hover:text-brand-700 transition-colors">
+                          Abrir →
+                        </span>
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* ── Seção: Serviços recebidos (gestão + hospitalidade) ── */}
             {(isManagement || isHospitalidade || seesDepartmentServices) && serviceRequests.length > 0 && (
               <ServiceRequestsPanel
@@ -1170,6 +1266,9 @@ export default async function PendentesPage({ params, searchParams }: Props) {
                   diasAberto: daysAgo(sr.created_at),
                 }))}
                 handleStatusUpdate={handleServiceStatusUpdate}
+                resolverComAlocacao={handleResolverHospedagemComAlocacao}
+                resolverSemAlocacao={handleResolverHospedagemSemAlocacao}
+                organizationId={orgId}
               />
             )}
 

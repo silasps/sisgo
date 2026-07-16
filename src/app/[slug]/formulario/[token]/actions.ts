@@ -103,19 +103,32 @@ export async function gerarLinkReferencia(
 
   if (!org || org.slug !== slug) return { error: 'Acesso negado.' }
 
-  // Reutiliza link existente se ainda pendente
+  // Reutiliza a mesma referência se ainda pendente; se já foi respondida,
+  // "gerar novo link" reabre a MESMA linha (não cria uma segunda) e limpa a
+  // resposta anterior, já que o novo envio vai substituí-la.
   const { data: existing } = await sb
     .from('reference_forms')
-    .select('token')
+    .select('id, token, status')
     .eq('school_application_id', applicationId)
     .eq('type', tipo)
-    .eq('status', 'pendente')
     .maybeSingle()
 
   let token: string
 
-  if (existing) {
+  if (existing?.status === 'pendente') {
     token = existing.token
+  } else if (existing) {
+    const { randomBytes } = await import('node:crypto')
+    token = randomBytes(32).toString('hex')
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    const { data: updated } = await sb
+      .from('reference_forms')
+      .update({ token, token_expires_at: expiresAt, status: 'pendente', form_data: null })
+      .eq('id', existing.id)
+      .select('token')
+      .single()
+    if (!updated) return { error: 'Não foi possível gerar o link.' }
+    token = updated.token
   } else {
     const { data: created } = await sb
       .from('reference_forms')

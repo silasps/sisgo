@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import type { Database } from '@/types/database'
 import { schoolTypeGroup, schoolTypeShortLabel } from '@/lib/schools'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
+import { isManagementRole } from '@/lib/auth/permissions'
 
 type Props = { params: Promise<{ slug: string }> }
 type School = Database['public']['Tables']['schools']['Row']
@@ -17,23 +18,36 @@ export default async function EscolasPage({ params }: Props) {
   const { data: org } = await supabase.from('organizations').select('id').eq('slug', slug).single()
   const orgId = org?.id ?? ''
 
+  let isManagement = false
+  // null = sem restrição (gestão); array (mesmo vazio) = escopado às unidades da pessoa.
+  // Fica vazio (não null) quando o vínculo ainda não existe, pra nunca cair na
+  // listagem completa por engano (fail closed, não fail open).
+  let allowedSchoolIds: string[] | null = null
+
   if (user && orgId) {
     const { role, preview } = await getCurrentOrganizationRole(supabase, user.id, orgId)
+    isManagement = isManagementRole(role)
     if (role === 'lider_eted') {
-      const schoolId = preview?.schoolId
-        ?? (await supabase.from('school_leaders').select('school_id').eq('user_id', user.id).limit(1).single()).data?.school_id
-      if (schoolId) redirect(`/${slug}/escolas/${schoolId}`)
+      const { data: leaderRows } = await supabase.from('school_leaders').select('school_id').eq('organization_id', orgId).eq('user_id', user.id)
+      const schoolIds = preview?.schoolId ? [preview.schoolId] : (leaderRows ?? []).map(r => r.school_id)
+      if (schoolIds.length === 1) redirect(`/${slug}/escolas/${schoolIds[0]}`)
+      allowedSchoolIds = schoolIds
     }
     if (role === 'obreiro_eted') {
-      const { data: sp } = await supabase.from('staff_profiles').select('person_id').eq('organization_id', orgId).eq('user_id', user.id).single()
-      if (sp?.person_id) {
-        const { data: staff } = await supabase.from('school_staff').select('school_id').eq('person_id', sp.person_id).eq('active', true).limit(1).single()
-        if (staff?.school_id) redirect(`/${slug}/escolas/${staff.school_id}`)
-      }
+      const { data: sp } = await supabase.from('staff_profiles').select('person_id').eq('organization_id', orgId).eq('user_id', user.id).maybeSingle()
+      const { data: staff } = sp?.person_id
+        ? await supabase.from('school_staff').select('school_id').eq('person_id', sp.person_id).eq('active', true).limit(1).maybeSingle()
+        : { data: null }
+      if (staff?.school_id) redirect(`/${slug}/escolas/${staff.school_id}`)
+      allowedSchoolIds = []
     }
   }
 
-  const { data } = await supabase.from('schools').select('*').eq('organization_id', orgId).order('name')
+  const noSchoolAssigned = allowedSchoolIds !== null && allowedSchoolIds.length === 0
+
+  let escolasQuery = supabase.from('schools').select('*').eq('organization_id', orgId).order('name')
+  if (allowedSchoolIds) escolasQuery = escolasQuery.in('id', allowedSchoolIds.length > 0 ? allowedSchoolIds : ['no-match'])
+  const { data } = await escolasQuery
   const escolas = (data ?? []) as School[]
   const eteds = escolas.filter(e => schoolTypeGroup((e as unknown as { school_type: string | null }).school_type) === 'eted')
   const secondLevelSchools = escolas.filter(e => schoolTypeGroup((e as unknown as { school_type: string | null }).school_type) === 'second_level')
@@ -44,19 +58,32 @@ export default async function EscolasPage({ params }: Props) {
       <Header
         title="Escolas Missionárias"
         actions={
-          <Link href={`/${slug}/escolas/nova`}
-            className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg transition-colors">
-            + Nova escola
-          </Link>
+          isManagement ? (
+            <Link href={`/${slug}/escolas/nova`}
+              className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg transition-colors">
+              + Nova escola
+            </Link>
+          ) : undefined
         }
       />
       <main className="p-4 md:p-6">
         {!escolas.length ? (
           <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
-            <p className="text-gray-400 text-sm mb-3">Nenhuma escola cadastrada ainda.</p>
-            <Link href={`/${slug}/escolas/nova`} className="text-brand-500 hover:text-brand-600 text-sm font-medium">
-              + Criar primeira escola
-            </Link>
+            {noSchoolAssigned ? (
+              <>
+                <p className="text-gray-400 text-sm">Nenhuma escola atribuída a você ainda.</p>
+                <p className="text-gray-400 text-xs mt-1">Entre em contato com o DH da sua base.</p>
+              </>
+            ) : (
+              <>
+                <p className="text-gray-400 text-sm mb-3">Nenhuma escola cadastrada ainda.</p>
+                {isManagement && (
+                  <Link href={`/${slug}/escolas/nova`} className="text-brand-500 hover:text-brand-600 text-sm font-medium">
+                    + Criar primeira escola
+                  </Link>
+                )}
+              </>
+            )}
           </div>
         ) : (
           <div className="space-y-8 animate-stagger">

@@ -3,10 +3,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
-import { MANAGEMENT_ROLES } from '@/lib/auth/permissions'
+import { PROFILE_ROLES } from '@/lib/auth/permissions'
 import { revalidatePath } from 'next/cache'
-
-const PROFILE_ROLES = [...MANAGEMENT_ROLES, 'dh', 'secretaria', 'lider_eted']
 
 async function verifyAccess(orgId: string) {
   const supabase = await createClient()

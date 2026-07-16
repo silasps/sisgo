@@ -10,7 +10,7 @@ import type { Lang } from '@/lib/i18n/forms'
 
 type Props = {
   token: string
-  tipo: 'pastor' | 'amigo'
+  tipo: 'pastor' | 'amigo' | 'lideranca_experiencia'
   candidatoNome: string
   escolaNome: string
   initialLang?: string
@@ -88,6 +88,54 @@ function CondutaMenoresField({ candidatoNome, d, selectPh }: {
   )
 }
 
+function RatingField({ label, name, d }: {
+  label: string; name: string; d: ReturnType<typeof getFormDict>
+}) {
+  const options = [
+    { value: 'ruim', label: d.opts.scale_ruim, active: 'peer-checked:bg-red-500 peer-checked:border-red-500 peer-checked:text-white' },
+    { value: 'regular', label: d.opts.scale_regular, active: 'peer-checked:bg-amber-500 peer-checked:border-amber-500 peer-checked:text-white' },
+    { value: 'bom', label: d.opts.scale_bom, active: 'peer-checked:bg-lime-500 peer-checked:border-lime-500 peer-checked:text-white' },
+    { value: 'excelente', label: d.opts.scale_excelente, active: 'peer-checked:bg-green-600 peer-checked:border-green-600 peer-checked:text-white' },
+  ]
+  return (
+    <div className="sm:col-span-2">
+      <label className="block text-sm font-medium text-gray-700 mb-2">
+        {label}<span className="text-red-500 ml-0.5">*</span>
+      </label>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {options.map(opt => (
+          <label key={opt.value} className="cursor-pointer">
+            <input type="radio" name={name} value={opt.value} required className="peer sr-only" />
+            <span className={`flex items-center justify-center text-center px-3 py-2.5 rounded-xl border text-sm font-semibold transition-colors
+              border-gray-200 bg-gray-50 text-gray-600 hover:border-indigo-300 peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-400 ${opt.active}`}>
+              {opt.label}
+            </span>
+          </label>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function DificuldadesField({ d, selectPh }: { d: ReturnType<typeof getFormDict>; selectPh: string }) {
+  const [temDificuldade, setTemDificuldade] = useState(false)
+  return (
+    <div className="sm:col-span-2">
+      <Select
+        label={d.ref.pastor_dificuldades}
+        name="dificuldades" required selectPlaceholder={selectPh}
+        options={[{ value: 'nao', label: d.opts.no }, { value: 'sim', label: d.opts.yes }]}
+        onChange={(e) => setTemDificuldade(e.target.value === 'sim')}
+      />
+      {temDificuldade && (
+        <div className="mt-3">
+          <TextArea label={d.ref.pastor_dificuldades_detalhe} name="dificuldades_detalhe" required rows={3} />
+        </div>
+      )}
+    </div>
+  )
+}
+
 function InlineWithName({ template, name }: { template: string; name: string }) {
   const [before, after] = template.split('{name}')
   return <><strong>{name}</strong>{after ?? before}</>
@@ -121,27 +169,16 @@ function FormPastor({ candidatoNome, d, selectPh, isStaff }: {
           <p className="text-sm font-semibold text-gray-700 mb-3">{d.ref.pastor_eval_title}</p>
         </div>
 
-        <div className="sm:col-span-2">
-          <TextArea
-            label={t(d.ref.pastor_carater_q, { name: candidatoNome })}
-            name="carater" required rows={4} />
-        </div>
-        <div className="sm:col-span-2">
-          <TextArea
-            label={d.ref.pastor_responsabilidade}
-            name="responsabilidade" required rows={3} />
-        </div>
-        <div className="sm:col-span-2">
-          <TextArea
-            label={d.ref.pastor_dificuldades}
-            name="dificuldades" rows={3}
-            placeholder={d.ref.pastor_dificuldades_ph} />
-        </div>
-        <div className="sm:col-span-2">
-          <TextArea
-            label={d.ref.pastor_autoridade}
-            name="autoridade" rows={3} />
-        </div>
+        <RatingField
+          label={t(d.ref.pastor_carater_q, { name: candidatoNome })}
+          name="carater" d={d} />
+        <RatingField
+          label={t(d.ref.pastor_responsabilidade, { name: candidatoNome })}
+          name="responsabilidade" d={d} />
+        <RatingField
+          label={t(d.ref.pastor_autoridade, { name: candidatoNome })}
+          name="autoridade" d={d} />
+        <DificuldadesField d={d} selectPh={selectPh} />
 
         <div className="sm:col-span-2">
           <Select label={d.ref.pastor_recomenda} name="recomenda" required selectPlaceholder={selectPh}
@@ -260,6 +297,65 @@ function FormAmigo({ candidatoNome, d, selectPh, isStaff }: {
   )
 }
 
+function FormLiderancaExperiencia({ candidatoNome, d, selectPh, isStaff }: {
+  candidatoNome: string
+  d: ReturnType<typeof getFormDict>
+  selectPh: string
+  isStaff?: boolean
+}) {
+  return (
+    <div className="space-y-5">
+      <p className="text-sm text-gray-600 leading-relaxed">
+        <InlineWithName template={d.ref.lideranca_intro} name={candidatoNome} />
+      </p>
+
+      <div className="grid sm:grid-cols-2 gap-4">
+        <Field label={d.ref.lideranca_funcao} name="lideranca_funcao" required />
+        <Field label={d.ref.lideranca_periodo} name="lideranca_periodo" required />
+
+        <div className="sm:col-span-2">
+          <TextArea
+            label={t(d.ref.lideranca_carater_q, { name: candidatoNome })}
+            name="carater" required rows={4} />
+        </div>
+        <div className="sm:col-span-2">
+          <TextArea
+            label={d.ref.lideranca_pontos_fortes}
+            name="pontos_fortes" required rows={3} />
+        </div>
+        <div className="sm:col-span-2">
+          <TextArea
+            label={d.ref.lideranca_areas_atencao}
+            name="areas_atencao" rows={3} />
+        </div>
+
+        <div className="sm:col-span-2">
+          <Select label={d.ref.lideranca_recomenda} name="recomenda" required selectPlaceholder={selectPh}
+            options={[
+              { value: 'sim', label: d.ref.pastor_rec_sim },
+              { value: 'sim_ressalvas', label: d.ref.pastor_rec_ressalvas },
+              { value: 'nao', label: d.ref.pastor_rec_nao },
+            ]} />
+        </div>
+        <div className="sm:col-span-2">
+          <TextArea label={d.ref.lideranca_observacoes} name="observacoes" rows={3}
+            placeholder={d.ref.lideranca_observacoes_ph} />
+        </div>
+
+        {isStaff && <CondutaMenoresField candidatoNome={candidatoNome} d={d} selectPh={selectPh} />}
+
+        <div className="sm:col-span-2 border-t pt-4 mt-2">
+          <label className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 cursor-pointer hover:border-indigo-200">
+            <input type="checkbox" name="decl_verdadeiro" value="sim" required
+              className="mt-0.5 accent-indigo-600 flex-shrink-0" />
+            <span className="text-sm text-gray-700">{d.ref.lideranca_decl}</span>
+          </label>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function FormularioReferencia({ token, tipo, candidatoNome, escolaNome, initialLang, isStaff }: Props) {
   const [lang, setLang] = useState<Lang>(normalizeLang(initialLang))
   const d = getFormDict(lang)
@@ -268,7 +364,11 @@ export function FormularioReferencia({ token, tipo, candidatoNome, escolaNome, i
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState('')
 
-  const tipoLabel = tipo === 'pastor' ? d.ref.form_type_pastor : d.ref.form_type_amigo
+  const tipoLabel = tipo === 'pastor'
+    ? d.ref.form_type_pastor
+    : tipo === 'amigo'
+      ? d.ref.form_type_amigo
+      : d.ref.form_type_lideranca_experiencia
   const selectPh = d.nav.select_placeholder
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -319,7 +419,9 @@ export function FormularioReferencia({ token, tipo, candidatoNome, escolaNome, i
 
       {tipo === 'pastor'
         ? <FormPastor candidatoNome={candidatoNome} d={d} selectPh={selectPh} isStaff={isStaff} />
-        : <FormAmigo candidatoNome={candidatoNome} d={d} selectPh={selectPh} isStaff={isStaff} />
+        : tipo === 'amigo'
+          ? <FormAmigo candidatoNome={candidatoNome} d={d} selectPh={selectPh} isStaff={isStaff} />
+          : <FormLiderancaExperiencia candidatoNome={candidatoNome} d={d} selectPh={selectPh} isStaff={isStaff} />
       }
 
       {error && (

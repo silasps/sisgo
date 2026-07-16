@@ -137,7 +137,7 @@ export default async function PublicBasePage({ params, searchParams }: Props) {
             <ul className="space-y-2 text-sm text-gray-400">
               <li><a href={`/${slug}#escolas`} className="hover:text-white transition-colors">ETEDs</a></li>
               <li><a href={`/${slug}#escolas`} className="hover:text-white transition-colors">Escolas de 2º Nível</a></li>
-              <li><a href={`/${slug}/inscricao`} className="hover:text-white transition-colors">Seja Voluntário(a)</a></li>
+              <li><a href={`/${slug}/servir`} className="hover:text-white transition-colors">Seja Voluntário(a)</a></li>
             </ul>
           </div>
           <div>

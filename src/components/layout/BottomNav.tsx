@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { ICON_MAP } from './Sidebar'
 import { MoreHorizontal, X } from 'lucide-react'
 import { usePlatform, type Platform } from '@/hooks/usePlatform'
+import { useAllApps } from './all-apps-context'
 
 export type BottomBarItem = {
   href: string
@@ -14,10 +14,6 @@ export type BottomBarItem = {
   alert?: boolean
   isMore?: boolean
 }
-
-type NavItem =
-  | { href: string; label: string; icon: string; alert?: boolean }
-  | { divider: true; label: string }
 
 const tabBarExtra: Record<Platform, string> = {
   ios: '',
@@ -43,49 +39,14 @@ const tabPressStyles: Record<Platform, string> = {
   web: 'active:bg-gray-50',
 }
 
-export function BottomNav({
-  items,
-  overflowItems,
-}: {
-  items: BottomBarItem[]
-  overflowItems: NavItem[]
-}) {
-  const [sheetOpen, setSheetOpen] = useState(false)
-  const [dragY, setDragY] = useState(0)
-  const [isDragging, setIsDragging] = useState(false)
-  const touchStartY = useRef(0)
-  const sheetRef = useRef<HTMLDivElement>(null)
+export function BottomNav({ items }: { items: BottomBarItem[] }) {
   const pathname = usePathname()
   const platform = usePlatform()
+  const { items: allItems, open: allAppsOpen, openAllApps, closeAllApps } = useAllApps()
 
-  useEffect(() => {
-    setSheetOpen(false)
-  }, [pathname])
-
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    touchStartY.current = e.touches[0].clientY
-    setIsDragging(true)
-    setDragY(0)
-  }, [])
-
-  const handleTouchMove = useCallback(
-    (e: React.TouchEvent) => {
-      if (!isDragging) return
-      const deltaY = e.touches[0].clientY - touchStartY.current
-      if (deltaY > 0) {
-        setDragY(deltaY)
-      }
-    },
-    [isDragging],
-  )
-
-  const handleTouchEnd = useCallback(() => {
-    setIsDragging(false)
-    if (dragY > 80) {
-      setSheetOpen(false)
-    }
-    setDragY(0)
-  }, [dragY])
+  // Item tem alerta pendente mas não está entre as abas visíveis? "Mais" herda o aviso.
+  const barIcons = new Set(items.filter(i => !i.isMore).map(i => i.icon))
+  const hasOverflowAlert = allItems.some(i => !('divider' in i) && !barIcons.has(i.icon) && i.alert)
 
   const iconSize = platform === 'ios' ? 24 : 22
   const labelClass =
@@ -97,86 +58,6 @@ export function BottomNav({
 
   return (
     <>
-      {/* Overlay */}
-      {sheetOpen && (
-        <div
-          className="fixed inset-0 z-30 bg-black/30 md:hidden transition-opacity duration-300"
-          style={{
-            opacity: isDragging ? Math.max(0, 1 - dragY / 200) : 1,
-          }}
-          onClick={() => setSheetOpen(false)}
-        />
-      )}
-
-      {/* Bottom Sheet */}
-      <div
-        ref={sheetRef}
-        className="fixed inset-x-0 bottom-0 z-30 md:hidden"
-        style={{
-          transform: sheetOpen
-            ? `translateY(${dragY}px)`
-            : 'translateY(100%)',
-          transition: isDragging ? 'none' : 'transform 0.3s ease-out',
-        }}
-      >
-        <div className="bg-dark-950 rounded-t-2xl shadow-xl max-h-[50vh] flex flex-col pb-[calc(5rem+env(safe-area-inset-bottom))]">
-          {/* Drag handle */}
-          <div
-            className="shrink-0 bg-dark-950 rounded-t-2xl pt-3 pb-3 cursor-grab active:cursor-grabbing touch-none"
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-          >
-            <div className="w-10 h-1.5 bg-dark-700 rounded-full mx-auto" />
-          </div>
-
-          <nav className="px-3 pb-2 space-y-0.5 overflow-y-auto flex-1">
-            {overflowItems.map((item, idx) => {
-              if ('divider' in item) {
-                return (
-                  <div key={`div-${idx}`} className="pt-2 pb-1 mx-1">
-                    <div className="border-t border-dark-800 mb-2" />
-                    <span className="px-2 text-[10px] font-semibold uppercase tracking-widest text-gray-600 select-none">
-                      {item.label}
-                    </span>
-                  </div>
-                )
-              }
-              const active =
-                pathname === item.href ||
-                pathname.startsWith(item.href + '/')
-              const Icon = ICON_MAP[item.icon]
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`relative flex items-center gap-3 px-4 py-3.5 rounded-xl text-base transition-colors ${
-                    active
-                      ? 'bg-brand-500 text-white font-medium'
-                      : 'text-gray-400 hover:bg-brand-500/10 hover:text-white active:bg-brand-500/10'
-                  }`}
-                >
-                  {item.alert && !active && (
-                    <span className="absolute inset-0 rounded-xl bg-red-500/30 animate-pulse" />
-                  )}
-                  {Icon && (
-                    <Icon
-                      size={20}
-                      className="relative shrink-0"
-                      aria-hidden
-                    />
-                  )}
-                  <span className="relative">{item.label}</span>
-                  {item.alert && !active && (
-                    <span className="relative ml-auto w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                  )}
-                </Link>
-              )
-            })}
-          </nav>
-        </div>
-      </div>
-
       {/* Tab Bar — fixed overlay so content scrolls behind (glass effect) */}
       {/* Glass/opaque styling comes from .bottom-nav-bar in globals.css via @supports */}
       <nav
@@ -190,28 +71,28 @@ export function BottomNav({
               return (
                 <button
                   key="more"
-                  onClick={() => setSheetOpen((prev) => !prev)}
+                  onClick={() => (allAppsOpen ? closeAllApps() : openAllApps())}
                   className={`flex-1 flex flex-col items-center justify-center gap-1 transition-colors ${tabPressStyles[platform]} ${
-                    sheetOpen
+                    allAppsOpen
                       ? tabActiveStyles[platform]
                       : tabInactiveStyles[platform]
                   }`}
                   aria-label={
-                    sheetOpen ? 'Fechar menu' : 'Abrir menu completo'
+                    allAppsOpen ? 'Fechar menu' : 'Ver tudo'
                   }
                 >
                   <span className="relative">
-                    {sheetOpen ? (
+                    {allAppsOpen ? (
                       <X size={iconSize} aria-hidden />
                     ) : (
                       <MoreHorizontal size={iconSize} aria-hidden />
                     )}
-                    {!sheetOpen && item.alert && (
+                    {!allAppsOpen && (item.alert || hasOverflowAlert) && (
                       <span className="absolute -top-1 -right-1.5 w-2 h-2 rounded-full bg-red-500 animate-pulse" />
                     )}
                   </span>
                   <span className={labelClass}>
-                    {sheetOpen ? 'Fechar' : 'Mais'}
+                    {allAppsOpen ? 'Fechar' : 'Mais'}
                   </span>
                 </button>
               )
@@ -257,7 +138,7 @@ export function BottomNav({
           <div className="absolute top-0 left-0 right-0 flex h-[3px]">
             {items.map((item) => {
               const active = item.isMore
-                ? sheetOpen
+                ? allAppsOpen
                 : pathname === item.href ||
                   pathname.startsWith(item.href + '/')
               return (

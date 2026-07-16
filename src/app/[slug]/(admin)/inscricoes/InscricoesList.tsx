@@ -1,15 +1,19 @@
 'use client'
 
-import { useState } from 'react'
-import Link from 'next/link'
-import { Search, ClipboardList, Mail, MessageCircle } from 'lucide-react'
+import { useState, useTransition, type ReactNode } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
+import { useFormStatus } from 'react-dom'
+import { Search, ClipboardList, Mail, MessageCircle, ChevronDown, Link2, Loader2 } from 'lucide-react'
 import { RecusarModal } from './RecusarModal'
 import { DisponibilizarFormularioButton } from './DisponibilizarFormularioButton'
+import { PipelineStepper, stagesFromFlags } from '@/components/inscricoes/PipelineStepper'
+import BackgroundChecksSection, { type BackgroundCheck } from './formulario-obreiro/[id]/BackgroundChecksSection'
+import { solicitarHospedagemObreiro } from './formulario-obreiro/[id]/actions'
+import { solicitarHospedagemAluno } from './formulario/[id]/actions'
 import {
   EditarPreInscricaoButton,
   EditarPreInscricaoObreiroButton,
   MarcarRecebidoExternoButton,
-  LinksReferenciaAdminButton,
 } from './InscricoesModals'
 
 type InscricaoItem = {
@@ -29,6 +33,7 @@ type InscricaoItem = {
   notes: string | null
   criadoEm: string
   diasAberto: number
+  diasNaEtapaAtual: number
   personId: string | null
   ministryId?: string | null
   hasLogin?: boolean
@@ -36,6 +41,16 @@ type InscricaoItem = {
   staffApplicationId?: string | null
   hasFormData?: boolean
   bgCheckSummary?: { total: number; pendentes: number; reprovados: number; flagged: number; expirados: number } | null
+  backgroundChecks?: BackgroundCheck[]
+  assumedByName?: string | null
+  refSummary?: { pastor: { status: string; data: Record<string, string> | null } | null; amigo: { status: string; data: Record<string, string> | null } | null } | null
+  pastorSkipped?: boolean
+  hospedagemSkipped?: boolean
+  hospedagemResolved?: boolean
+  hospedagemStatus?: string | null
+  hospedagemArrivalDate?: string | null
+  hospedagemDepartureDate?: string | null
+  candidateArrivalDate?: string | null
 }
 
 type HistoricoItem = {
@@ -62,7 +77,11 @@ type Props = {
   historico: HistoricoItem[]
   slug: string
   orgId: string
-  ver: string
+  initialTab: string
+  initialEtapa: string
+  hideAlunoTipo: boolean
+  linksAluno: ReactNode
+  linksObreiro: ReactNode
   openClasses: OpenClassOption[]
   allSchools: Array<{ id: string; name: string }>
   allMinistries: Array<{ id: string; name: string }>
@@ -75,10 +94,11 @@ type Props = {
   updateStatus: (formData: FormData) => Promise<void>
   recusar: (formData: FormData) => Promise<void>
   aprovar: (formData: FormData) => Promise<void>
-  encaminharObreiroDh: (formData: FormData) => Promise<void>
+  salvarPalavraLider: (formData: FormData) => Promise<void>
+  assumirPreInscricaoObreiro: (formData: FormData) => Promise<void>
   finalizarObreiro: (formData: FormData) => Promise<void>
   disponibilizarFormulario: (formData: FormData) => Promise<{ url?: string; error?: string; emailWarning?: string; schoolId?: string }>
-  disponibilizarFormularioObreiro: (formData: FormData) => Promise<{ url?: string; error?: string }>
+  disponibilizarFormularioObreiro: (formData: FormData) => Promise<{ url?: string; error?: string; emailWarning?: string }>
   editarPreInscricao: (formData: FormData) => Promise<void>
   editarPreInscricaoObreiro: (formData: FormData) => Promise<void>
   marcarRecebidoExternamente: (formData: FormData) => Promise<void>
@@ -117,12 +137,191 @@ function urgencyBadge(dias: number) {
 const isFinalizado = (s: string) =>
   ['convertido', 'aprovado', 'descartado', 'reprovado', 'cancelado'].includes(s)
 
+const TIPO_TABS = [
+  { key: 'todas',   label: 'Todas' },
+  { key: 'aluno',   label: 'Alunos' },
+  { key: 'obreiro', label: 'Obreiros' },
+]
+
+const ETAPA_TABS = [
+  { key: 'todas',         label: 'Todas as etapas' },
+  { key: 'pre_inscricao', label: 'Pré-inscrição' },
+  { key: 'candidatura',   label: 'Candidatura' },
+  { key: 'finalizados',   label: 'Finalizados' },
+]
+
+function matchesTipo(i: { tipo: string }, key: string) {
+  if (key === 'todas') return true
+  if (key === 'aluno') return i.tipo === 'pre_inscricao' || i.tipo === 'aluno'
+  return i.tipo === 'pre_inscricao_obreiro' || i.tipo === 'obreiro'
+}
+// "Finalizados" agrupa por status (concluído em qualquer etapa), não por tipo —
+// um candidato aceito continua com o mesmo `tipo` de quando estava em
+// pré-inscrição, então rotear só por tipo o deixaria preso na aba errada.
+function matchesEtapa(i: { tipo: string; status: string }, key: string) {
+  if (key === 'todas') return true
+  if (key === 'finalizados') return isFinalizado(i.status)
+  if (isFinalizado(i.status)) return false
+  if (key === 'pre_inscricao') return i.tipo === 'pre_inscricao' || i.tipo === 'pre_inscricao_obreiro'
+  return i.tipo === 'aluno' || i.tipo === 'obreiro'
+}
+
+const OBREIRO_STAGE_LABELS = ['Pré-inscrição', 'Formulário enviado', 'Recomendação do pastor', 'Verificação de antecedentes', 'Hospedagem', 'Aprovado']
+const ALUNO_STAGE_LABELS = ['Pré-inscrição', 'Formulário enviado', 'Em análise', 'Aprovado']
+
+function obreiroStages(item: InscricaoItem) {
+  const formSubmitted = item.tipo === 'obreiro' || !!item.hasFormData
+  const pastorDone = item.refSummary?.pastor?.status === 'enviado' || !!item.pastorSkipped
+  const bg = item.bgCheckSummary
+  const bgDone = (!!bg && bg.total > 0 && bg.pendentes === 0) || (!bg && item.tipo === 'obreiro' && item.status === 'aprovado')
+  const hospedagemDone = !!item.hospedagemResolved || !!item.hospedagemSkipped
+  const approved = item.status === 'aprovado'
+  return stagesFromFlags(OBREIRO_STAGE_LABELS, [true, formSubmitted, pastorDone, bgDone, hospedagemDone, approved])
+}
+
+function alunoStages(item: InscricaoItem) {
+  const formSubmitted = ['formulario_enviado', 'em_analise', 'convertido'].includes(item.status) || !!item.hasFormData
+  const emAnalise = ['em_analise', 'convertido'].includes(item.status)
+  const approved = item.status === 'convertido'
+  return stagesFromFlags(ALUNO_STAGE_LABELS, [true, formSubmitted, emAnalise, approved])
+}
+
+function StatusDropdown({ item, label, color, options, updateStatus }: {
+  item: InscricaoItem
+  label: string
+  color: string
+  options: { value: string; label: string }[]
+  updateStatus: (formData: FormData) => Promise<void>
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className={`text-xs font-medium px-2 py-0.5 rounded-full ${color} inline-flex items-center gap-1 hover:ring-2 hover:ring-offset-1 hover:ring-gray-300 transition-shadow`}
+      >
+        {label}
+        <svg className="size-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+          <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+        </svg>
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-full mt-1 z-20 min-w-[10rem] rounded-lg border border-gray-200 bg-white shadow-lg py-1">
+            {options.map(opt => (
+              <form key={opt.value} action={updateStatus}>
+                <input type="hidden" name="id" value={item.id} />
+                <input type="hidden" name="tipo" value={item.tipo} />
+                <input type="hidden" name="status" value={opt.value} />
+                <button type="submit" onClick={() => setOpen(false)}
+                  className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">
+                  {opt.label}
+                </button>
+              </form>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function AssumirConversaButton() {
+  const { pending } = useFormStatus()
+  return (
+    <button type="submit" disabled={pending}
+      className="text-xs text-indigo-600 hover:text-indigo-800 underline disabled:opacity-50">
+      {pending ? 'Assumindo…' : 'Assumir conversa'}
+    </button>
+  )
+}
+
+function AceitarAlunoButton({ formularioPreenchido }: { formularioPreenchido: boolean }) {
+  const { pending } = useFormStatus()
+  const disabled = !formularioPreenchido || pending
+  return (
+    <button
+      type="submit"
+      disabled={disabled}
+      className={`w-full text-xs px-3 py-2 rounded-lg font-semibold transition-colors ${formularioPreenchido ? 'bg-green-50 text-green-700 hover:bg-green-100 disabled:opacity-60' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+    >
+      {pending
+        ? <><Loader2 className="size-3.5 inline -mt-0.5 animate-spin" /> Aceitando…</>
+        : formularioPreenchido ? '✓ Aceitar aluno' : '✓ Aceitar aluno (aguardando formulário)'}
+    </button>
+  )
+}
+
+// Data de chegada pode ser informada a qualquer momento do processo (não só
+// depois de aprovado) — vira pendência pra hospitalidade já ir verificando
+// disponibilidade em paralelo, conforme migration 099.
+function DataChegadaField({ slug, organizationId, ministryId, staffApplicationId, guestName, guestType, prefillDate, prefillDeparture, submitLabel, hint, action }: {
+  slug: string
+  organizationId: string
+  ministryId: string | null
+  staffApplicationId: string
+  guestName: string
+  guestType: 'obreiro' | 'aluno'
+  prefillDate?: string | null
+  prefillDeparture?: string | null
+  submitLabel?: string
+  hint?: string
+  action: (params: { slug: string; organizationId: string; ministryId: string | null; staffApplicationId: string; guestName: string; arrivalDate: string; departureDate?: string | null; notes: string | null }) => Promise<void>
+}) {
+  const [arrivalDate, setArrivalDate] = useState(prefillDate ?? '')
+  const [departureDate, setDepartureDate] = useState(prefillDeparture ?? '')
+  const [done, setDone] = useState(false)
+  const [pending, startTransition] = useTransition()
+  const router = useRouter()
+
+  return (
+    <div className="mt-1.5 space-y-1.5">
+      <p className="text-amber-800">{hint ?? 'Assim que informada, a hospitalidade já pode verificar disponibilidade em paralelo ao restante do processo.'}</p>
+      <div className="grid grid-cols-2 gap-1.5">
+        <div>
+          <label className="block text-[11px] text-amber-700 mb-0.5">Chegada</label>
+          <input type="date" value={arrivalDate} onChange={e => { setArrivalDate(e.target.value); setDone(false) }}
+            className="w-full rounded-lg border border-amber-200 bg-white px-2 py-1.5 text-xs text-gray-700" />
+        </div>
+        <div>
+          <label className="block text-[11px] text-amber-700 mb-0.5">Saída prevista (opcional)</label>
+          <input type="date" value={departureDate} onChange={e => { setDepartureDate(e.target.value); setDone(false) }}
+            className="w-full rounded-lg border border-amber-200 bg-white px-2 py-1.5 text-xs text-gray-700" />
+        </div>
+      </div>
+      <p className="text-[11px] text-amber-700">
+        {guestType === 'obreiro'
+          ? 'Deixe em branco se o obreiro vier residir de forma permanente — dá pra definir depois, no desligamento ou transferência.'
+          : 'Geralmente é o fim da turma, mas pode deixar em branco e ajustar depois — não trava a hospitalidade.'}
+      </p>
+      <div className="flex items-center gap-1.5">
+        <button type="button" disabled={pending || !arrivalDate}
+          onClick={() => startTransition(async () => {
+            await action({ slug, organizationId, ministryId, staffApplicationId, guestName, arrivalDate, departureDate: departureDate || null, notes: null })
+            setDone(true)
+            router.refresh()
+          })}
+          className="text-xs px-3 py-1.5 bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-60 rounded-lg transition-colors font-semibold whitespace-nowrap">
+          {pending ? 'Enviando…' : submitLabel ?? 'Avisar hospitalidade'}
+        </button>
+      </div>
+      {done && <p className="text-green-700">✓ Enviado à hospitalidade.</p>}
+    </div>
+  )
+}
+
 export function InscricoesList({
   items,
   historico,
   slug,
   orgId,
-  ver,
+  initialTab,
+  initialEtapa,
+  hideAlunoTipo,
+  linksAluno,
+  linksObreiro,
   openClasses,
   allSchools,
   allMinistries,
@@ -135,7 +334,8 @@ export function InscricoesList({
   updateStatus,
   recusar,
   aprovar,
-  encaminharObreiroDh,
+  salvarPalavraLider,
+  assumirPreInscricaoObreiro,
   finalizarObreiro,
   disponibilizarFormulario,
   disponibilizarFormularioObreiro,
@@ -146,7 +346,30 @@ export function InscricoesList({
   encaminharParaEscola,
   encaminharParaMinisterio,
 }: Props) {
+  const [tab, setTab] = useState(initialTab)
+  const [etapa, setEtapa] = useState(initialEtapa)
+  const [showLinks, setShowLinks] = useState(false)
   const [query, setQuery] = useState(initialQuery)
+  const searchParams = useSearchParams()
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => {
+    const initial = new Set<string>()
+    const highlightId = searchParams.get('highlight')
+    if (highlightId) initial.add(highlightId)
+    for (const item of items) {
+      const bg = item.bgCheckSummary
+      if (bg && (bg.reprovados > 0 || bg.flagged > 0)) initial.add(item.id)
+    }
+    return initial
+  })
+
+  function toggleExpanded(id: string) {
+    setExpandedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   const canWriteItem = (item: InscricaoItem) => {
     if (canWrite) return true
@@ -154,14 +377,80 @@ export function InscricoesList({
     return false
   }
 
-  const filtered = items.filter(i =>
+  const tabEtapaFiltered = items.filter(i => matchesTipo(i, tab) && matchesEtapa(i, etapa))
+  const filtered = tabEtapaFiltered.filter(i =>
     !query ||
     i.nome.toLowerCase().includes(query.toLowerCase()) ||
     (i.email ?? '').toLowerCase().includes(query.toLowerCase())
   )
 
+  const currentLinks = tab === 'aluno' ? linksAluno : tab === 'obreiro' ? linksObreiro : null
+  const visibleTipoTabs = hideAlunoTipo ? TIPO_TABS.filter(t => t.key !== 'aluno') : TIPO_TABS
+
   return (
-    <>
+    <div className="space-y-4">
+      {/* Tabs: tipo de pessoa (quem) — some se só houver um tipo possível (ex: líder de ministério só vê obreiros) */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        {visibleTipoTabs.length > 2 && (
+        <div className="flex gap-1 bg-gray-100 p-1 rounded-xl overflow-x-auto scrollbar-none">
+          {visibleTipoTabs.map(t => {
+            const count = items.filter(i => matchesTipo(i, t.key) && matchesEtapa(i, etapa)).length
+            return (
+              <button key={t.key} type="button" onClick={() => setTab(t.key)}
+                className={`px-4 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+                  tab === t.key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {t.label}
+                {count > 0 && (
+                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
+                    tab === t.key ? 'bg-brand-100 text-brand-700' : 'bg-gray-200 text-gray-500'
+                  }`}>{count}</span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+        )}
+      </div>
+
+      {/* Chips: etapa do processo (onde) */}
+      <div className="flex gap-1.5 overflow-x-auto scrollbar-none">
+        {ETAPA_TABS.map(e => {
+          const count = items.filter(i => matchesTipo(i, tab) && matchesEtapa(i, e.key)).length
+          return (
+            <button key={e.key} type="button" onClick={() => setEtapa(e.key)}
+              className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors border flex items-center gap-1 ${
+                etapa === e.key
+                  ? 'bg-brand-50 border-brand-200 text-brand-700'
+                  : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+              }`}
+            >
+              {e.label}
+              {count > 0 && <span className="opacity-70">{count}</span>}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Links públicos de inscrição — escondidos atrás de um botão, para não poluir a tela */}
+      {currentLinks && (
+        <div>
+          <button type="button" onClick={() => setShowLinks(s => !s)}
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-800"
+          >
+            <Link2 className="size-3.5" />
+            {tab === 'aluno' ? 'Link de pré-inscrição pública' : 'Links para servir / ministérios'}
+            <ChevronDown className={`size-3.5 transition-transform ${showLinks ? 'rotate-180' : ''}`} />
+          </button>
+          {showLinks && (
+            <div className="mt-2 space-y-3">
+              {currentLinks}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Search */}
       <div className="relative w-full sm:w-80">
         <Search
@@ -185,34 +474,78 @@ export function InscricoesList({
           <p className="text-gray-400 text-sm">
             {query
               ? `Nenhum resultado para "${query}".`
-              : ver === 'ativas'
-              ? 'Nenhuma inscrição ativa.'
               : 'Nenhuma inscrição encontrada.'}
           </p>
         </div>
       ) : (
         <div className="space-y-3">
           {filtered.map(item => {
-            const statusInfo = STATUS_CONFIG[item.status] ?? { label: item.status, color: 'bg-gray-100 text-gray-500' }
+            const statusInfo = item.tipo === 'pre_inscricao_obreiro' && item.status === 'pendente'
+              ? { label: 'Aguardando contato', color: 'bg-yellow-100 text-yellow-700' }
+              : STATUS_CONFIG[item.status] ?? { label: item.status, color: 'bg-gray-100 text-gray-500' }
             const urgency    = urgencyBadge(item.diasAberto)
             const finalizado = isFinalizado(item.status)
+            const canEditStatus = item.tipo === 'pre_inscricao_obreiro' ? canWriteObreiro : canWriteItem(item)
+            const statusOptions: { value: string; label: string }[] =
+              item.status !== 'pendente' ? [] :
+              item.tipo === 'aluno' ? [{ value: 'em_contato', label: 'Em contato' }, { value: 'em_analise', label: 'Em análise' }] :
+              (item.tipo === 'pre_inscricao' || item.tipo === 'pre_inscricao_obreiro') ? [{ value: 'em_contato', label: 'Em contato' }] :
+              []
             const whatsapp   = item.phone ? `https://wa.me/${item.phone.replace(/\D/g, '')}` : null
             const bg         = item.bgCheckSummary
             const bgConcern  = !!bg && (bg.reprovados > 0 || bg.flagged > 0)
             const bgPending  = !!bg && !bgConcern && bg.pendentes > 0
 
+            const isObreiroTrack = item.tipo === 'obreiro' || item.tipo === 'pre_inscricao_obreiro'
+            const isAlunoTrack = item.tipo === 'pre_inscricao'
+            const stepperStages = isObreiroTrack ? obreiroStages(item) : isAlunoTrack ? alunoStages(item) : null
+            const stepperHref = isObreiroTrack && item.staffApplicationId
+              ? `/${slug}/inscricoes/formulario-obreiro/${item.staffApplicationId}`
+              : isAlunoTrack && item.applicationId
+              ? `/${slug}/inscricoes/formulario/${item.applicationId}`
+              : undefined
+            // A pill de status só sobra útil quando ainda é o dropdown editável
+            // (fase de contato inicial) — depois disso o stepper já conta a
+            // mesma história com mais precisão, então a pill estática vira
+            // informação repetida.
+            const showStatusPill = !stepperStages || (canEditStatus && statusOptions.length > 0 && !finalizado)
+            const currentStageLabel = stepperStages?.find(s => s.status === 'current')?.label ?? null
+
+            const isOpen = expandedIds.has(item.id)
             return (
               <div
                 key={`${item.tipo}-${item.id}`}
                 id={`item-${item.id}`}
-                className={`bg-white rounded-xl border border-l-4 p-4 transition-opacity scroll-mt-20 ${finalizado ? 'opacity-60' : ''} ${urgencyBorderColor(item.diasAberto)}`}
+                className={`bg-white rounded-xl border border-l-4 transition-opacity scroll-mt-20 ${finalizado ? 'opacity-60' : ''} ${finalizado ? 'border-l-gray-200' : urgencyBorderColor(item.diasAberto)}`}
               >
-                <div className="flex flex-col sm:flex-row sm:items-start gap-3">
-                  <div className="flex-1 min-w-0">
+                {/* Cabeçalho compacto — sempre visível, clique expande/recolhe */}
+                <div className="flex items-start gap-3 p-4">
+                  <div className="flex-1 min-w-0 cursor-pointer" onClick={() => toggleExpanded(item.id)}>
                     <div className="flex items-center gap-2 flex-wrap mb-1">
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${item.tipoColor}`}>{item.tipoLabel}</span>
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full tabular-nums ${urgency.color}`}>{urgency.label}</span>
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusInfo.color}`}>{statusInfo.label}</span>
+                      {!finalizado && (
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full tabular-nums ${urgency.color}`}>{urgency.label}</span>
+                      )}
+                      {!finalizado && item.diasNaEtapaAtual < item.diasAberto && (
+                        <span className="text-xs text-gray-400 tabular-nums" title="Tempo total vs. tempo nesta etapa">
+                          {item.diasAberto}d no total · {item.diasNaEtapaAtual}d nesta etapa
+                        </span>
+                      )}
+                      {canEditStatus && statusOptions.length > 0 && !finalizado ? (
+                        <span onClick={e => e.stopPropagation()}>
+                          <StatusDropdown item={item} label={statusInfo.label} color={statusInfo.color} options={statusOptions} updateStatus={updateStatus} />
+                        </span>
+                      ) : showStatusPill ? (
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusInfo.color}`}>{statusInfo.label}</span>
+                      ) : null}
+                      {item.tipo === 'pre_inscricao_obreiro' && item.ministryId && item.assumedByName && (
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
+                          Assumido pelo DH — {item.assumedByName}
+                        </span>
+                      )}
+                      {bgConcern && (
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">⚠ Antecedentes</span>
+                      )}
                     </div>
                     <p className="font-semibold text-gray-900">{item.nome}</p>
                     {(item.email || item.phone) && (
@@ -220,6 +553,49 @@ export function InscricoesList({
                         {item.email}{item.email && item.phone ? ' · ' : ''}{item.phone}
                       </p>
                     )}
+                    {stepperStages && (
+                      <div className="mt-1.5">
+                        <PipelineStepper stages={stepperStages} href={stepperHref} size="md" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {!finalizado && item.email && (
+                      <a
+                        href={`mailto:${item.email}?subject=Sua inscrição - ${item.escola ?? 'JOCUM'}&body=Olá ${item.nome},%0A%0A`}
+                        className="p-1.5 border border-gray-200 text-gray-500 hover:bg-gray-50 rounded-lg transition-colors"
+                        aria-label="Enviar e-mail"
+                      >
+                        <Mail className="size-4" />
+                      </a>
+                    )}
+                    {!finalizado && whatsapp && (
+                      <a
+                        href={whatsapp}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        suppressHydrationWarning
+                        className="p-1.5 border border-green-200 text-green-700 hover:bg-green-50 rounded-lg transition-colors"
+                        aria-label="WhatsApp"
+                      >
+                        <MessageCircle className="size-4" />
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => toggleExpanded(item.id)}
+                      className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition-colors"
+                      aria-label={isOpen ? 'Recolher' : 'Ver detalhes e ações'}
+                    >
+                      <ChevronDown className={`size-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Corpo expansível — detalhes e ações */}
+                {isOpen && (
+                <div className="px-4 pb-4 border-t border-gray-50 pt-3 space-y-1.5">
                     {(item.escola || item.turma) ? (
                       <p className="text-xs text-gray-400 mt-0.5">
                         {item.escola}{item.turma ? ` · ${item.turma}` : ''}
@@ -237,52 +613,13 @@ export function InscricoesList({
                     {item.notes && (
                       <p className="text-xs text-gray-400 mt-1 bg-gray-50 px-2 py-1 rounded">Obs: {item.notes}</p>
                     )}
-                    {item.tipo === 'pre_inscricao_obreiro' && item.staffApplicationId && item.hasFormData && (
-                      <Link
-                        href={`/${slug}/inscricoes/formulario-obreiro/${item.staffApplicationId}`}
-                        className="inline-flex items-center gap-1 text-xs text-amber-700 mt-1 bg-amber-50 border border-amber-100 px-2 py-1 rounded font-medium hover:bg-amber-100 transition-colors"
-                      >
-                        <ClipboardList className="size-3.5 inline -mt-0.5" /> Formulário preenchido — Ver respostas
-                      </Link>
-                    )}
-                    {item.tipo === 'obreiro' && item.hasFormData && item.staffApplicationId && (
-                      <Link
-                        href={`/${slug}/inscricoes/formulario-obreiro/${item.staffApplicationId}`}
-                        className="inline-flex items-center gap-1 text-xs text-amber-700 mt-1 bg-amber-50 border border-amber-100 px-2 py-1 rounded font-medium hover:bg-amber-100 transition-colors"
-                      >
-                        <ClipboardList className="size-3.5 inline -mt-0.5" /> Ver formulário preenchido
-                      </Link>
-                    )}
-                    {item.tipo === 'obreiro' && item.status === 'em_analise' && !item.hasLogin && (
-                      <p className="text-xs text-amber-700 mt-1 bg-amber-50 border border-amber-100 px-2 py-1 rounded font-medium">
-                        Obreiro sem cadastro
-                      </p>
-                    )}
+                    {/* Formulário preenchido, links de recomendação etc. — só em Detalhes (link do stepper) */}
                     <p className="text-xs text-gray-300 mt-1.5">
                       {new Date(item.criadoEm).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
                     </p>
-                  </div>
 
                   {!finalizado && (
-                    <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-col sm:items-end shrink-0 w-full sm:w-auto">
-                      {item.email && (
-                        <a
-                          href={`mailto:${item.email}?subject=Sua inscrição - ${item.escola ?? 'JOCUM'}&body=Olá ${item.nome},%0A%0A`}
-                          className="inline-flex items-center justify-center gap-1 text-xs px-3 py-2 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
-                        >
-                          <Mail className="size-3.5 inline -mt-0.5" /> E-mail
-                        </a>
-                      )}
-                      {whatsapp && (
-                        <a
-                          href={whatsapp}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center justify-center gap-1 text-xs px-3 py-2 border border-green-200 text-green-700 hover:bg-green-50 rounded-lg transition-colors"
-                        >
-                          <MessageCircle className="size-3.5 inline -mt-0.5" /> WhatsApp
-                        </a>
-                      )}
+                    <div className="grid grid-cols-2 gap-1.5 pt-1">
 
                       {canWriteItem(item) && item.tipo === 'pre_inscricao' && !item.applicationId && (
                         <div className="col-span-2">
@@ -301,42 +638,110 @@ export function InscricoesList({
                         </div>
                       )}
 
-                      {item.tipo === 'pre_inscricao' && item.applicationId && (
-                        <div className="col-span-2">
-                          <LinksReferenciaAdminButton
-                            applicationId={item.applicationId}
-                            candidateName={item.nome}
-                            slug={slug}
-                          />
-                        </div>
+                      {((canWriteItem(item) && item.tipo === 'pre_inscricao') || (canWriteObreiro && (item.tipo === 'pre_inscricao_obreiro' || (item.tipo === 'obreiro' && !finalizado)))) && (
+                        <details className="col-span-2 text-xs">
+                          <summary className="cursor-pointer text-gray-400 select-none py-1">Mais ações</summary>
+                          <div className="mt-1.5 space-y-1.5">
+                            <div className="grid grid-cols-2 gap-1.5">
+                              {canWriteItem(item) && item.tipo === 'pre_inscricao' && (
+                                <EditarPreInscricaoButton
+                                  item={{ id: item.id, full_name: item.nome, email: item.email, phone: item.phone, message: item.mensagem, classId: item.classId }}
+                                  openClasses={openClasses}
+                                  editarAction={editarPreInscricao}
+                                />
+                              )}
+                              {canWriteObreiro && item.tipo === 'pre_inscricao_obreiro' && (
+                                <EditarPreInscricaoObreiroButton
+                                  item={{ id: item.id, full_name: item.nome, email: item.email, phone: item.phone, message: item.mensagem, ministryId: item.ministryId ?? null, schoolId: item.schoolId }}
+                                  ministries={allMinistries}
+                                  schools={allSchools}
+                                  editarAction={editarPreInscricaoObreiro}
+                                />
+                              )}
+                            </div>
+                            {item.tipo === 'obreiro' && (
+                              <form action={salvarPalavraLider} className="space-y-1.5 border-t border-gray-100 pt-1.5">
+                                <input type="hidden" name="id" value={item.id} />
+                                <p className="text-gray-500">Palavra sobre receber este obreiro (opcional)</p>
+                                <textarea
+                                  name="leader_word"
+                                  rows={2}
+                                  placeholder="A palavra que Deus deu sobre receber esta pessoa, se houver..."
+                                  className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-700"
+                                />
+                                <label className="flex items-start gap-2 text-gray-600">
+                                  <input type="checkbox" name="leader_word_shared" className="mt-0.5" />
+                                  Enviar esta palavra ao obreiro, se for aceito
+                                </label>
+                                <button type="submit" className="w-full text-xs px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg transition-colors font-semibold">
+                                  Salvar palavra
+                                </button>
+                              </form>
+                            )}
+                          </div>
+                        </details>
                       )}
-
-                      {canWriteItem(item) && item.tipo === 'pre_inscricao' && (
-                        <EditarPreInscricaoButton
-                          item={{ id: item.id, full_name: item.nome, email: item.email, phone: item.phone, message: item.mensagem, classId: item.classId }}
-                          openClasses={openClasses}
-                          editarAction={editarPreInscricao}
-                        />
+                      {canWriteObreiro && item.tipo === 'obreiro' && !finalizado && item.staffApplicationId && !item.hospedagemResolved && !item.hospedagemSkipped && (
+                        item.hospedagemStatus ? (
+                          <div className="col-span-2 rounded-lg border border-blue-200 bg-blue-50 p-2.5">
+                            <p className="text-xs font-semibold text-blue-800">
+                              ✓ Chegada em {new Date(item.hospedagemArrivalDate! + 'T00:00:00').toLocaleDateString('pt-BR')} — aguardando confirmação da hospitalidade
+                            </p>
+                            {item.candidateArrivalDate && item.candidateArrivalDate !== item.hospedagemArrivalDate && (
+                              <p className="text-xs font-semibold text-red-700 mt-1">
+                                ⚠ Diferente do que {item.nome} informou no formulário ({new Date(item.candidateArrivalDate + 'T00:00:00').toLocaleDateString('pt-BR')}) — avise sobre a mudança.
+                              </p>
+                            )}
+                            <details className="text-xs mt-1">
+                              <summary className="cursor-pointer text-blue-600 select-none">Alterar data</summary>
+                              <DataChegadaField
+                                slug={slug}
+                                organizationId={orgId}
+                                ministryId={item.ministryId ?? null}
+                                staffApplicationId={item.staffApplicationId}
+                                guestName={item.nome}
+                                guestType="obreiro"
+                                prefillDate={item.hospedagemArrivalDate}
+                                prefillDeparture={item.hospedagemDepartureDate}
+                                submitLabel="Atualizar"
+                                action={solicitarHospedagemObreiro}
+                              />
+                            </details>
+                          </div>
+                        ) : (
+                          <div className="col-span-2 rounded-lg border border-amber-300 bg-amber-50 p-2.5">
+                            <p className="text-xs font-bold text-amber-900">
+                              {item.candidateArrivalDate
+                                ? `⏳ ${item.nome} indicou chegada em ${new Date(item.candidateArrivalDate + 'T00:00:00').toLocaleDateString('pt-BR')} — revise e envie para a hospitalidade`
+                                : '⏳ Data de chegada ainda não informada'}
+                            </p>
+                            <DataChegadaField
+                              slug={slug}
+                              organizationId={orgId}
+                              ministryId={item.ministryId ?? null}
+                              staffApplicationId={item.staffApplicationId}
+                              guestName={item.nome}
+                              guestType="obreiro"
+                              prefillDate={item.candidateArrivalDate}
+                              hint={item.candidateArrivalDate
+                                ? 'Confirme (ou ajuste) a data antes de avisar a hospitalidade.'
+                                : undefined}
+                              action={solicitarHospedagemObreiro}
+                            />
+                          </div>
+                        )
                       )}
-                      {canWriteObreiro && item.tipo === 'pre_inscricao_obreiro' && (
-                        <EditarPreInscricaoObreiroButton
-                          item={{ id: item.id, full_name: item.nome, email: item.email, phone: item.phone, message: item.mensagem, ministryId: item.ministryId ?? null, schoolId: item.schoolId }}
-                          ministries={allMinistries}
-                          schools={allSchools}
-                          editarAction={editarPreInscricaoObreiro}
-                        />
+                      {canWrite && item.tipo === 'pre_inscricao_obreiro' && item.ministryId && !item.assumedByName && !finalizado && (
+                        <form action={assumirPreInscricaoObreiro}>
+                          <input type="hidden" name="id" value={item.id} />
+                          <input type="hidden" name="org_id" value={orgId} />
+                          <AssumirConversaButton />
+                        </form>
                       )}
 
                       {item.tipo === 'pre_inscricao' && item.schoolId && (
                         <div className="col-span-2">
-                          {item.applicationId ? (
-                            <Link
-                              href={`/${slug}/inscricoes/formulario/${item.applicationId}`}
-                              className="inline-flex items-center gap-1.5 w-full justify-center text-xs text-blue-700 bg-blue-50 border border-blue-200 px-3 py-2.5 rounded-lg font-semibold hover:bg-blue-100 transition-colors"
-                            >
-                              <ClipboardList className="size-3.5" /> Formulário preenchido — Ver respostas
-                            </Link>
-                          ) : canWriteItem(item) ? (
+                          {item.applicationId ? null : canWriteItem(item) ? (
                             <DisponibilizarFormularioButton
                               interestFormId={item.id}
                               slug={slug}
@@ -361,18 +766,7 @@ export function InscricoesList({
                             schoolId="__obreiro__"
                             action={disponibilizarFormularioObreiro}
                             emailDisabled={false}
-                            label="Gerar formulário de obreiro"
-                          />
-                        </div>
-                      )}
-
-                      {(item.tipo === 'pre_inscricao_obreiro' || item.tipo === 'obreiro') && item.staffApplicationId && item.hasFormData && (
-                        <div className="col-span-2">
-                          <LinksReferenciaAdminButton
-                            applicationId={item.staffApplicationId}
-                            candidateName={item.nome}
-                            slug={slug}
-                            isStaff
+                            label="Enviar formulário de obreiro por e-mail"
                           />
                         </div>
                       )}
@@ -415,15 +809,64 @@ export function InscricoesList({
                         </form>
                       )}
 
-                      {(item.tipo === 'pre_inscricao_obreiro' ? canWriteObreiro : canWriteItem(item)) && item.status === 'pendente' && (
-                        <form action={updateStatus}>
-                          <input type="hidden" name="id" value={item.id} />
-                          <input type="hidden" name="tipo" value={item.tipo} />
-                          <input type="hidden" name="status" value="em_contato" />
-                          <button type="submit" className="w-full text-xs px-3 py-2 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-lg transition-colors">
-                            Em contato
-                          </button>
-                        </form>
+                      {canWriteItem(item) && item.tipo === 'pre_inscricao' && item.applicationId && !finalizado && !item.hospedagemResolved && (
+                        item.hospedagemStatus ? (
+                          <div className="col-span-2 rounded-lg border border-blue-200 bg-blue-50 p-2.5">
+                            <p className="text-xs font-semibold text-blue-800">
+                              ✓ Chegada em {new Date(item.hospedagemArrivalDate! + 'T00:00:00').toLocaleDateString('pt-BR')} — aguardando confirmação da hospitalidade
+                            </p>
+                            {item.candidateArrivalDate && item.candidateArrivalDate !== item.hospedagemArrivalDate && (
+                              <p className="text-xs font-semibold text-red-700 mt-1">
+                                ⚠ Diferente do que {item.nome} informou no formulário ({new Date(item.candidateArrivalDate + 'T00:00:00').toLocaleDateString('pt-BR')}) — avise sobre a mudança.
+                              </p>
+                            )}
+                            <details className="text-xs mt-1">
+                              <summary className="cursor-pointer text-blue-600 select-none">Alterar data</summary>
+                              <DataChegadaField
+                                slug={slug}
+                                organizationId={orgId}
+                                ministryId={null}
+                                staffApplicationId={item.applicationId}
+                                guestName={item.nome}
+                                guestType="aluno"
+                                prefillDate={item.hospedagemArrivalDate}
+                                prefillDeparture={item.hospedagemDepartureDate}
+                                submitLabel="Atualizar"
+                                action={solicitarHospedagemAluno}
+                              />
+                            </details>
+                          </div>
+                        ) : item.candidateArrivalDate ? (
+                          <div className="col-span-2 rounded-lg border border-amber-300 bg-amber-50 p-2.5">
+                            <p className="text-xs font-bold text-amber-900">
+                              ⏳ {item.nome} indicou chegada em {new Date(item.candidateArrivalDate + 'T00:00:00').toLocaleDateString('pt-BR')} — revise e envie para a hospitalidade
+                            </p>
+                            <DataChegadaField
+                              slug={slug}
+                              organizationId={orgId}
+                              ministryId={null}
+                              staffApplicationId={item.applicationId}
+                              guestName={item.nome}
+                              guestType="aluno"
+                              prefillDate={item.candidateArrivalDate}
+                              hint="Confirme (ou ajuste) a data antes de avisar a hospitalidade."
+                              action={solicitarHospedagemAluno}
+                            />
+                          </div>
+                        ) : item.applicationId ? (
+                          <div className="col-span-2 rounded-lg border border-amber-300 bg-amber-50 p-2.5">
+                            <p className="text-xs font-bold text-amber-900">⏳ Data de chegada ainda não informada</p>
+                            <DataChegadaField
+                              slug={slug}
+                              organizationId={orgId}
+                              ministryId={null}
+                              staffApplicationId={item.applicationId}
+                              guestName={item.nome}
+                              guestType="aluno"
+                              action={solicitarHospedagemAluno}
+                            />
+                          </div>
+                        ) : null
                       )}
                       {canWriteItem(item) && (item.status === 'pendente' || item.status === 'em_contato' || item.status === 'formulario_enviado' || item.status === 'em_analise') && item.tipo !== 'obreiro' && item.tipo !== 'pre_inscricao_obreiro' && (() => {
                         const formularioPreenchido = item.tipo !== 'pre_inscricao' || !!item.applicationId
@@ -449,35 +892,41 @@ export function InscricoesList({
                                 </option>
                               ))}
                             </select>
-                            <button
-                              type="submit"
-                              disabled={!formularioPreenchido}
-                              className={`w-full text-xs px-3 py-2 rounded-lg font-semibold transition-colors ${formularioPreenchido ? 'bg-green-50 text-green-700 hover:bg-green-100' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
-                            >
-                              {formularioPreenchido ? '✓ Aceitar aluno' : '✓ Aceitar aluno (aguardando formulário)'}
-                            </button>
+                            {formularioPreenchido && (
+                              <details className="text-xs">
+                                <summary className="cursor-pointer text-gray-500 select-none">Palavra para o aluno (opcional)</summary>
+                                <div className="mt-1.5 space-y-1.5">
+                                  <textarea
+                                    name="decision_note"
+                                    rows={2}
+                                    placeholder="Uma palavra de boas-vindas ou orientação, se desejar..."
+                                    className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-700"
+                                  />
+                                  <label className="flex items-start gap-2 text-gray-600">
+                                    <input type="checkbox" name="decision_note_shared" className="mt-0.5" />
+                                    Enviar esta mensagem ao aluno junto com o e-mail de aceite
+                                  </label>
+                                </div>
+                              </details>
+                            )}
+                            <AceitarAlunoButton formularioPreenchido={formularioPreenchido} />
                           </form>
                         )
                       })()}
-                      {canWriteItem(item) && item.tipo === 'aluno' && item.status === 'pendente' && (
-                        <form action={updateStatus}>
-                          <input type="hidden" name="id" value={item.id} />
-                          <input type="hidden" name="tipo" value={item.tipo} />
-                          <input type="hidden" name="status" value="em_analise" />
-                          <button type="submit" className="w-full text-xs px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg transition-colors">
-                            Em análise
-                          </button>
-                        </form>
+                      {item.tipo === 'obreiro' && currentStageLabel === 'Verificação de antecedentes' && canWrite && item.staffApplicationId && (
+                        <div className="col-span-2 rounded-lg border border-gray-200 bg-white p-3">
+                          <p className="text-xs font-semibold text-gray-700 mb-2">Verificação de antecedentes — etapa atual</p>
+                          <BackgroundChecksSection
+                            checks={item.backgroundChecks ?? []}
+                            organizationId={orgId}
+                            slug={slug}
+                            staffApplicationId={item.staffApplicationId}
+                            personId={item.personId}
+                            readOnly={false}
+                          />
+                        </div>
                       )}
-                      {canWriteObreiro && item.tipo === 'obreiro' && item.status !== 'em_analise' && (
-                        <form action={encaminharObreiroDh} className="col-span-2">
-                          <input type="hidden" name="id" value={item.id} />
-                          <button type="submit" className="w-full text-xs px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg transition-colors font-semibold">
-                            Enviar ao DH
-                          </button>
-                        </form>
-                      )}
-                      {item.tipo === 'obreiro' && item.status === 'em_analise' && canWrite && item.personId && (
+                      {item.tipo === 'obreiro' && currentStageLabel === 'Aprovado' && canWrite && item.personId && (
                         <>
                           {bgConcern && (
                             <div className="col-span-2 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-800">
@@ -491,7 +940,12 @@ export function InscricoesList({
                           )}
                           {bgPending && (
                             <div className="col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
-                              Verificação de antecedentes ainda pendente ({bg!.pendentes}/{bg!.total}).
+                              Verificação de antecedentes: {bg!.total - bg!.pendentes} de {bg!.total} concluídas.{' '}
+                              {item.staffApplicationId && (
+                                <a href={`/${slug}/inscricoes/formulario-obreiro/${item.staffApplicationId}`} className="underline font-semibold">
+                                  Dar OK ou comentar cada verificação →
+                                </a>
+                              )}
                             </div>
                           )}
                           <form action={finalizarObreiro} className="col-span-2 space-y-1.5 rounded-lg border border-amber-100 bg-amber-50 p-2">
@@ -500,7 +954,7 @@ export function InscricoesList({
                             <input type="hidden" name="person_id" value={item.personId} />
                             <input type="hidden" name="ministry_id" value={item.ministryId ?? ''} />
                             <input type="hidden" name="name" value={item.nome} />
-                            <p className="text-xs font-semibold text-amber-800">Obreiro sem cadastro</p>
+                            <p className="text-xs font-semibold text-amber-800">Criar acesso à plataforma e aprovar</p>
                             <input
                               name="email"
                               type="email"
@@ -537,8 +991,9 @@ export function InscricoesList({
                     </div>
                   )}
 
-                  {finalizado && <div className="shrink-0 text-xs text-gray-300 sm:text-right">concluído</div>}
+                  {finalizado && <div className="text-xs text-gray-300">concluído</div>}
                 </div>
+                )}
               </div>
             )
           })}
@@ -588,6 +1043,6 @@ export function InscricoesList({
           </div>
         </details>
       )}
-    </>
+    </div>
   )
 }

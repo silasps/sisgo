@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { getRolePreview } from '@/lib/role-preview'
 import { SearchBar } from '@/components/ui/SearchBar'
 import { Suspense } from 'react'
@@ -127,6 +128,22 @@ export default async function PessoasPage({ params, searchParams }: Props) {
   const realRole = superadminRow?.roles?.name ?? currentOrgRow?.roles?.name ?? ''
   const preview = await getRolePreview(realRole)
   const userRole = preview?.role ?? realRole
+
+  // Líderes de escola/ministério não veem o diretório geral da base (LGPD) —
+  // o vínculo deles fica escopado no Quadro de Obreiros da própria unidade.
+  // O redirect é incondicional (mesmo sem vínculo ainda) pra nunca deixar cair
+  // na query de baixo, que não tem nenhum filtro por unidade.
+  if (userRole === 'lider_eted') {
+    const schoolId = preview?.schoolId
+      ?? (await supabase.from('school_leaders').select('school_id').eq('organization_id', orgId).eq('user_id', user?.id ?? '').limit(1).maybeSingle()).data?.school_id
+    redirect(schoolId ? `/${slug}/escolas/${schoolId}/equipe` : `/${slug}/escolas`)
+  }
+  if (userRole === 'lider_ministerio') {
+    const ministryId = preview?.ministryId
+      ?? (await supabase.from('ministry_leaders').select('ministry_id').eq('organization_id', orgId).eq('user_id', user?.id ?? '').limit(1).maybeSingle()).data?.ministry_id
+    redirect(ministryId ? `/${slug}/ministerios/${ministryId}/equipe` : `/${slug}/ministerios`)
+  }
+
   const isEtedLeader = userRole === 'lider_eted'
 
   let allowedSchoolIds: string[] | null = null
@@ -580,6 +597,10 @@ export default async function PessoasPage({ params, searchParams }: Props) {
         }
       />
       <main className="p-4 md:p-6 space-y-4">
+
+        <p className="text-xs text-gray-400 -mt-2">
+          Diretório geral da base. Vínculos com escola ou ministério (papel, entrada/saída) ficam no Quadro de Obreiros de cada unidade.
+        </p>
 
         {/* Tabs */}
         <div className="flex gap-1 bg-gray-100 p-1 rounded-xl overflow-x-auto scrollbar-none">

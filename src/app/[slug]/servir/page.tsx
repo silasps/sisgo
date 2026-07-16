@@ -57,19 +57,22 @@ export default async function ServirPage({ params, searchParams }: Props) {
   }[]).filter(m => m.slug)
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-orange-50">
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-amber-50 via-white to-orange-50">
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-gray-100 sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-5 py-4 flex items-center gap-3">
-          {org.logo_url ? (
-            <img src={org.logo_url} alt={org.name} className="h-8 w-8 rounded-lg object-cover" />
-          ) : (
-            <HeartHandshake className="size-7 text-amber-600" />
-          )}
-          <span className="font-bold text-gray-900 text-sm">{org.name}</span>
+          <a href={`/${slug}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+            {org.logo_url ? (
+              <img src={org.logo_url} alt={org.name} className="h-8 w-8 rounded-lg object-cover" />
+            ) : (
+              <HeartHandshake className="size-7 text-amber-600" />
+            )}
+            <span className="font-bold text-gray-900 text-sm">{org.name}</span>
+          </a>
         </div>
       </header>
 
+      <main className="flex-1">
       {/* Hero */}
       <section className="px-5 pt-12 pb-8 sm:pt-16 sm:pb-10">
         <div className="max-w-2xl mx-auto text-center">
@@ -150,6 +153,7 @@ export default async function ServirPage({ params, searchParams }: Props) {
           </div>
         </div>
       </section>
+      </main>
 
       {/* Footer */}
       <footer className="bg-gray-950 text-white px-5 py-10">
