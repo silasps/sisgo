@@ -4,6 +4,7 @@ import { Header } from '@/components/layout/Header'
 import { notFound } from 'next/navigation'
 import { ClipboardList, Mail, MessageCircle } from 'lucide-react'
 import { NovaPreInscricaoButton, NovaPreInscricaoObreiroButton, EditarPreInscricaoButton, EditarPreInscricaoObreiroButton, MarcarRecebidoExternoButton, LinksReferenciaAdminButton } from './InscricoesModals'
+import { EnviarFormularioObreiroDiretoButton } from '@/components/inscricoes/EnviarFormularioObreiroDiretoButton'
 import { RecusarModal } from './RecusarModal'
 import { DisponibilizarFormularioButton } from './DisponibilizarFormularioButton'
 import { getEmailQuota } from '@/lib/email/getEmailQuota'
@@ -49,6 +50,7 @@ type InscricaoItem = {
   bgCheckSummary?: BgCheckSummary | null
   backgroundChecks?: BackgroundCheckRow[]
   assumedByName?: string | null
+  createdByName?: string | null
   refSummary?: RefSummary | null
   pastorSkipped?: boolean
   hospedagemSkipped?: boolean
@@ -946,7 +948,6 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     'use server'
     const { createAdminClient: adm } = await import('@/lib/supabase/admin')
     const { createClient } = await import('@/lib/supabase/server')
-    const { headers: hdrs } = await import('next/headers')
     const db = adm()
     const authClient = await createClient()
 
@@ -968,103 +969,44 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       .in('status', ['rascunho', 'enviado'])
       .maybeSingle()
 
-    let token: string
-    let expiresAt: string
+    let result: { url?: string; error?: string; emailWarning?: string }
 
     if (existing) {
-      token = existing.token!
-      expiresAt = existing.token_expires_at!
-    } else {
-      let personId = form.person_id
-      if (!personId && form.email) {
-        const { data: contact } = await db.from('person_contacts')
-          .select('person_id').eq('type', 'email').eq('value', form.email).maybeSingle()
-        if (contact) personId = contact.person_id
-      }
-      if (!personId && !form.email && form.phone) {
-        const { data: contact } = await db.from('person_contacts')
-          .select('person_id').eq('type', 'phone').eq('value', form.phone).maybeSingle()
-        if (contact) personId = contact.person_id
-      }
-      if (!personId) {
-        const { data: person } = await db.from('people')
-          .insert({ organization_id: form.organization_id, full_name: form.full_name })
-          .select('id').single()
-        personId = person?.id ?? null
-        if (personId) {
-          if (form.email) {
-            await db.from('person_contacts').insert({ person_id: personId, type: 'email', value: form.email, is_primary: true })
-          } else if (form.phone) {
-            await db.from('person_contacts').insert({ person_id: personId, type: 'phone', value: form.phone, is_primary: true })
-          }
-        }
-      }
-      if (!personId) return { error: 'Não foi possível criar a pessoa.' }
-
-      const { data: newApp } = await db
-        .from('staff_applications')
-        .insert({
-          interest_form_id: interestFormId,
-          organization_id: form.organization_id,
-          person_id: personId,
-          ministry_id: form.ministry_id,
-          school_id: form.school_id,
-          status: 'rascunho',
-          form_data: {
-            prefill: {
-              nome: form.full_name,
-              email: form.email,
-              telefone: form.phone,
-              idioma: form.language,
-            }
-          },
-          leader_accepted_by: user?.id ?? null,
-          leader_accepted_at: new Date().toISOString(),
-        })
-        .select('token, token_expires_at')
-        .single()
-      if (!newApp) return { error: 'Não foi possível criar o formulário.' }
-      token = newApp.token!
-      expiresAt = newApp.token_expires_at!
-    }
-
-    const headersList = await hdrs()
-    const host = headersList.get('host') ?? 'localhost:3000'
-    const protocol = host.startsWith('localhost') ? 'http' : 'https'
-    const formUrl = `${protocol}://${host}/${slug}/formulario-obreiro/${token}`
-
-    // Tenta enviar e-mail — usa o e-mail da organização (ou do ministério, se houver) como reply-to
-    let emailWarning: string | undefined
-    if (form.email) {
-      const { data: orgRow } = await db.from('organizations').select('name, email').eq('id', form.organization_id).maybeSingle()
-      let ministryName: string | null = null
-      if (form.ministry_id) {
-        const { data: ministryRow } = await db.from('ministries').select('name').eq('id', form.ministry_id).maybeSingle()
-        ministryName = ministryRow?.name ?? null
-      }
-      const { sendFormEmail } = await import('@/lib/email/sendFormEmail')
-      const emailResult = await sendFormEmail({
-        to: form.email,
-        candidateName: form.full_name,
-        schoolName: ministryName ?? orgRow?.name ?? 'JOCUM',
-        formUrl,
-        expiresAt,
-        replyTo: orgRow?.email || 'noreply@sisgomission.com',
-        language: form.language,
+      const { resendStaffApplicationEmail } = await import('@/lib/staff/staffApplicationInvite')
+      result = await resendStaffApplicationEmail({
+        slug,
+        token: existing.token!,
+        expiresAt: existing.token_expires_at!,
         organizationId: form.organization_id,
+        ministryId: form.ministry_id,
+        fullName: form.full_name,
+        email: form.email,
+        language: form.language,
       })
-      if (!emailResult.success) {
-        emailWarning = emailResult.error === 'quota_atingida' ? 'quota_atingida' : 'email_falhou'
-      }
     } else {
-      emailWarning = 'sem_email_candidato'
+      const { createAndSendStaffApplication } = await import('@/lib/staff/staffApplicationInvite')
+      result = await createAndSendStaffApplication({
+        slug,
+        organizationId: form.organization_id,
+        interestFormId,
+        ministryId: form.ministry_id,
+        schoolId: form.school_id,
+        fullName: form.full_name,
+        email: form.email,
+        phone: form.phone,
+        language: form.language,
+        personId: form.person_id,
+        leaderAcceptedBy: user?.id ?? null,
+      })
     }
+
+    if (!result.url) return result
 
     await db.from('staff_interest_forms')
       .update({ status: 'formulario_enviado' })
       .eq('id', interestFormId)
 
-    return { url: formUrl, emailWarning }
+    return result
   }
 
   async function criarPreInscricaoObreiroManual(formData: FormData) {
@@ -1088,6 +1030,33 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     })
 
     revalidatePath(`/${slug}/inscricoes`)
+  }
+
+  async function enviarFormularioObreiroDireto(formData: FormData) {
+    'use server'
+    const { createClient } = await import('@/lib/supabase/server')
+    const { sendDirectStaffInvite } = await import('@/lib/staff/staffApplicationInvite')
+    const { revalidatePath } = await import('next/cache')
+    const authClient = await createClient()
+    const { data: { user } } = await authClient.auth.getUser()
+
+    const destination = (formData.get('destination') as string) || ''
+    const [destType, destId] = destination.includes(':') ? destination.split(':') : [null, null]
+
+    const result = await sendDirectStaffInvite({
+      slug,
+      organizationId: orgId,
+      ministryId: destType === 'ministry' ? destId : null,
+      schoolId: destType === 'school' ? destId : null,
+      fullName: (formData.get('full_name') as string).trim(),
+      email: (formData.get('email') as string) || null,
+      phone: (formData.get('phone') as string) || null,
+      message: (formData.get('message') as string) || null,
+      createdBy: user?.id ?? null,
+    })
+
+    revalidatePath(`/${slug}/inscricoes`)
+    return result
   }
 
   async function encaminharParaEscola(formData: FormData) {
@@ -1134,6 +1103,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
   const items: InscricaoItem[] = []
   const historico: HistoricoItem[] = []
   const assumedLookups: { item: InscricaoItem; userId: string }[] = []
+  const createdByLookups: { item: InscricaoItem; userId: string }[] = []
 
   // Pré-inscrições ativas (sempre carrega tudo — filtro de tipo/etapa é feito no cliente, instantâneo)
   {
@@ -1245,13 +1215,14 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       refusal_reason: string | null; reviewed_by: string | null
       ministry_id: string | null; school_id: string | null; person_id: string | null
       assumed_by: string | null; assumed_at: string | null
+      created_by: string | null
       ministries: { name: string } | null
       schools: { name: string } | null
       staff_applications: { id: string; status: string; form_data: Record<string, unknown> | null; token: string | null }[] | null
     }
     const sifResult = await sb
       .from('staff_interest_forms')
-      .select('id, full_name, email, phone, message, status, created_at, responded_at, refusal_reason, reviewed_by, ministry_id, school_id, person_id, assumed_by, assumed_at, ministries(name), schools(name), staff_applications(id, status, form_data, token)')
+      .select('id, full_name, email, phone, message, status, created_at, responded_at, refusal_reason, reviewed_by, ministry_id, school_id, person_id, assumed_by, assumed_at, created_by, ministries(name), schools(name), staff_applications(id, status, form_data, token)')
       .eq('organization_id', orgId)
       .order('created_at', { ascending: false })
 
@@ -1291,6 +1262,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         }
         items.push(item)
         if (r.assumed_by) assumedLookups.push({ item, userId: r.assumed_by })
+        if (r.created_by) createdByLookups.push({ item, userId: r.created_by })
       }
     }
 
@@ -1555,6 +1527,17 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     item.assumedByName = assumedNames.get(userId) ?? null
   }
 
+  const createdByIds = [...new Set(createdByLookups.map(a => a.userId))]
+  const createdByNames = new Map<string, string>()
+  await Promise.all(createdByIds.map(async (id) => {
+    const { data } = await sb.auth.admin.getUserById(id)
+    const displayName = getUserDisplayName(data.user)
+    if (displayName) createdByNames.set(id, displayName)
+  }))
+  for (const { item, userId } of createdByLookups) {
+    item.createdByName = createdByNames.get(userId) ?? null
+  }
+
   // Histórico: max 30, mais recentes primeiro
   const historicoTab = historico
     .sort((a, b) => new Date(b.recusadoEm).getTime() - new Date(a.recusadoEm).getTime())
@@ -1585,6 +1568,19 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                 criarAction={criarPreInscricaoObreiroManual}
                 ministries={allMinistries}
                 schools={allSchools}
+              />
+            )}
+            {canWriteObreiro && (
+              <EnviarFormularioObreiroDiretoButton
+                slug={slug}
+                action={enviarFormularioObreiroDireto}
+                ministries={isLiderMinisterio ? [] : allMinistries}
+                schools={isLiderMinisterio ? [] : allSchools}
+                fixedDestination={isLiderMinisterio && leaderMinistryId ? {
+                  type: 'ministry',
+                  id: leaderMinistryId,
+                  label: allMinistries.find(m => m.id === leaderMinistryId)?.name ?? 'seu ministério',
+                } : undefined}
               />
             )}
           </div>

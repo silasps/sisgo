@@ -325,3 +325,29 @@ export async function cancelTransfer(transferId: string, userId: string) {
     .eq('requested_by', userId)
     .in('status', ['pendente_destino', 'aceito_destino'])
 }
+
+// ── Líder/DH: envia formulário definitivo de obreiro direto, sem pré-inscrição
+// pública prévia (a pessoa já conversou com o líder fora do sistema) ────────
+export async function inviteStaffMemberDirect(data: {
+  slug: string
+  organizationId: string
+  ministryId: string
+  fullName: string
+  email: string | null
+  phone: string | null
+  message: string | null
+  createdBy: string | null
+}) {
+  const { sendDirectStaffInvite } = await import('@/lib/staff/staffApplicationInvite')
+  return sendDirectStaffInvite({
+    slug: data.slug,
+    organizationId: data.organizationId,
+    ministryId: data.ministryId,
+    schoolId: null,
+    fullName: data.fullName,
+    email: data.email,
+    phone: data.phone,
+    message: data.message,
+    createdBy: data.createdBy,
+  })
+}

@@ -1,8 +1,9 @@
 # Fluxo de Inscrição de Obreiros
 
-> Descrição funcional combinada com o usuário em 2026-07-09. Ainda **não
-> implementado** (ou parcialmente implementado) — usar este documento como
-> especificação de referência antes de construir/alterar o fluxo.
+> Descrição funcional combinada com o usuário em 2026-07-09. Implementado —
+> ver `src/app/[slug]/(admin)/inscricoes/page.tsx`,
+> `src/app/[slug]/formulario-obreiro/[token]/`. Atualizado em 2026-07-16 com
+> o fluxo de convite direto (seção 1.1).
 
 ## Visão geral das fases
 
@@ -10,6 +11,23 @@
    pela pessoa) → 3. **Recomendações** (pastor + liderança de escola, se
    houver) → 4. **Verificações** (antecedentes, etc.) → 5. **Aprovação DH** →
    6. **Hospitalidade / chegada** (líder).
+
+### 1.1 Entrada alternativa: convite direto (sem pré-inscrição pública)
+
+Quando a pessoa já conversou diretamente com o líder do ministério (ou com o
+DH) fora do sistema, não é preciso passar pela pré-inscrição pública — o
+líder/DH pode enviar o formulário definitivo (fase 2) direto, pelo botão
+"Enviar formulário direto" (`/inscricoes`, ao lado de "+ Obreiro") ou pela
+seção "Convidar obreiro" em `/ministerios/[id]/equipe`.
+
+Por baixo dos panos, isso ainda cria uma `staff_interest_forms` (para manter
+toda a lógica de listagem/dedup existente), mas já nasce em
+`status: 'formulario_enviado'` — pula `pendente`/`em_contato`, já que o
+alinhamento de expectativas (fase 2 da seção anterior) já aconteceu fora do
+sistema. Fica marcada com `created_by` (quem enviou) e aparece na listagem
+com o selo "🔗 Convite direto". Lógica compartilhada em
+`src/lib/staff/staffApplicationInvite.ts`. A partir daqui os dois fluxos
+convergem — mesmas fases 3-6 abaixo.
 
 ---
 

@@ -43,6 +43,7 @@ type InscricaoItem = {
   bgCheckSummary?: { total: number; pendentes: number; reprovados: number; flagged: number; expirados: number } | null
   backgroundChecks?: BackgroundCheck[]
   assumedByName?: string | null
+  createdByName?: string | null
   refSummary?: { pastor: { status: string; data: Record<string, string> | null } | null; amigo: { status: string; data: Record<string, string> | null } | null } | null
   pastorSkipped?: boolean
   hospedagemSkipped?: boolean
@@ -541,6 +542,11 @@ export function InscricoesList({
                       {item.tipo === 'pre_inscricao_obreiro' && item.ministryId && item.assumedByName && (
                         <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
                           Assumido pelo DH — {item.assumedByName}
+                        </span>
+                      )}
+                      {item.tipo === 'pre_inscricao_obreiro' && item.createdByName && (
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-violet-50 text-violet-700">
+                          🔗 Convite direto — {item.createdByName}
                         </span>
                       )}
                       {bgConcern && (

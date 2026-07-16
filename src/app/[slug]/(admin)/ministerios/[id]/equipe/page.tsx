@@ -5,11 +5,13 @@ import {
   addMember, removeMember, approveRequest, rejectRequest,
   submitMemberRequest, cancelRequest,
   requestTransfer, respondTransferAsDestination, confirmTransferAsDH, cancelTransfer,
+  inviteStaffMemberDirect,
 } from '../actions'
 import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
 import { Suspense } from 'react'
 import { ScrollHighlight } from '@/components/ui/ScrollHighlight'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
+import { EnviarFormularioObreiroDiretoButton } from '@/components/inscricoes/EnviarFormularioObreiroDiretoButton'
 
 type Props = {
   params: Promise<{ slug: string; id: string }>
@@ -39,6 +41,9 @@ export default async function EquipePage({ params, searchParams }: Props) {
   ])
   if (!user || !org) notFound()
   const orgId = org.id
+
+  const { data: ministry } = await supabase.from('ministries').select('name').eq('id', id).single()
+  const ministryName = ministry?.name ?? 'este ministério'
 
   const { role } = await getCurrentOrganizationRole(supabase, user.id, orgId)
   const isManagement = isManagementRole(role)
@@ -219,6 +224,19 @@ export default async function EquipePage({ params, searchParams }: Props) {
     await cancelTransfer(formData.get('transfer_id') as string, user.id)
     redirect(`/${slug}/ministerios/${id}/equipe`)
   }
+  const handleEnviarFormularioDireto = async (formData: FormData) => {
+    'use server'
+    return inviteStaffMemberDirect({
+      slug,
+      organizationId: orgId,
+      ministryId: id,
+      fullName: (formData.get('full_name') as string)?.trim() ?? '',
+      email: (formData.get('email') as string) || null,
+      phone: (formData.get('phone') as string) || null,
+      message: (formData.get('message') as string) || null,
+      createdBy: user.id,
+    })
+  }
 
   const msgs: Record<string, { text: string; cls: string }> = {
     enviada:               { text: 'Solicitação enviada. O DH será notificado.', cls: 'bg-blue-50 border-blue-200 text-blue-700' },
@@ -241,6 +259,16 @@ export default async function EquipePage({ params, searchParams }: Props) {
 
       {msgInfo && (
         <div className={`border rounded-lg px-4 py-3 text-sm ${msgInfo.cls}`}>{msgInfo.text}</div>
+      )}
+
+      {(canWrite || isLiderMinisterio) && (
+        <div className="flex justify-end">
+          <EnviarFormularioObreiroDiretoButton
+            slug={slug}
+            action={handleEnviarFormularioDireto}
+            fixedDestination={{ type: 'ministry', id, label: ministryName }}
+          />
+        </div>
       )}
 
       {/* Membros */}
