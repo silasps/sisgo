@@ -69,6 +69,15 @@ export const PROFILE_ROLES: readonly Role[] = [
   'secretaria',
 ]
 
+/** Papéis com acesso ao diretório geral da base (/pessoas) — LGPD: todo o
+ * resto (obreiro/aluno/associado/líder de unidade) fica escopado à própria
+ * unidade, no Quadro de Obreiros de cada escola/ministério. */
+export const PESSOAS_ROLES: readonly Role[] = [
+  ...MANAGEMENT_ROLES,
+  'secretaria',
+  'hospitalidade',
+]
+
 /** Papéis com acesso a dados sensíveis de saúde (LGPD — dado sensível) */
 export const HEALTH_ROLES: readonly Role[] = MANAGEMENT_ROLES
 

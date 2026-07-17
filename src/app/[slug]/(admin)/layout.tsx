@@ -97,7 +97,7 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
   const pick = (...ends: string[]) => (i: AllItem) => ends.some(e => i.href.endsWith(e))
 
   const all: AllItem[] = [
-    { href: `/${slug}/dashboard`,    label: 'Dashboard',        icon: 'dashboard',     show: true },
+    { href: `/${slug}/dashboard`,    label: 'Início',           icon: 'dashboard',     show: true },
     { href: `/${slug}/calendario`,   label: 'Calendário',       icon: 'calendario',    show: true },
     { href: `/${slug}/pendentes`,    label: 'Pendentes',        icon: 'pendentes',     show: true, alert: hasPending },
     { href: `/${slug}/pessoas`,      label: 'Pessoas',          icon: 'pessoas',       show: !is('lider_eted') && !isLiderMinisterio },
@@ -158,7 +158,6 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
 }
 
 const BOTTOM_BAR_LABELS: Record<string, string> = {
-  'Dashboard': 'Início',
   'Minhas refeições': 'Refeições',
 }
 

@@ -130,6 +130,7 @@ export default async function PendentesPage({ params, searchParams }: Props) {
   const isSecretaria       = role === 'secretaria'
   const isLiderEted        = role === 'lider_eted'
   const isLiderMinisterio  = role === 'lider_ministerio'
+  const isAluno            = role === 'aluno'
   const canBuyMeals        = Boolean(role)
 
   // Departamentos pelos quais este usuário é responsável (via department_assignments)
@@ -374,6 +375,24 @@ export default async function PendentesPage({ params, searchParams }: Props) {
     myMinistryRequests = (mr ?? []) as unknown as LeaderReqRaw[]
     myServiceRequests  = (sr ?? []) as unknown as ServiceReqRaw[]
     myStaffApplications = (staffApps ?? []) as unknown as Array<{ id: string; applied_at: string; people: { full_name: string } | null }>
+  }
+
+  // ── 7. Visão aluno: cobranças em aberto ──────────────────────────────────────
+  type MyChargeRow = { id: string; description: string; amount: number; due_date: string; status: string }
+  let myCharges: MyChargeRow[] = []
+  if (isAluno && user) {
+    const sbAdmin = createAdminClient()
+    const { data: studentProfile } = await sbAdmin
+      .from('student_profiles').select('person_id').eq('user_id', user.id).eq('organization_id', orgId).maybeSingle()
+    if (studentProfile?.person_id) {
+      const { data } = await sbAdmin
+        .from('finance_charges')
+        .select('id, description, amount, due_date, status')
+        .eq('organization_id', orgId).eq('person_id', studentProfile.person_id)
+        .in('status', ['pending', 'overdue'])
+        .order('due_date', { ascending: true })
+      myCharges = (data ?? []) as MyChargeRow[]
+    }
   }
 
   const requesterIds = [...new Set([
@@ -1092,6 +1111,40 @@ export default async function PendentesPage({ params, searchParams }: Props) {
               </>
             )}
           </>
+        )}
+
+        {/* ════ VISÃO ALUNO ════ */}
+        {isAluno && (
+          myCharges.length === 0 ? (
+            <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
+              <p className="text-3xl mb-3">✓</p>
+              <p className="text-gray-400 text-sm">Nenhuma pendência no momento.</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-700">
+                  Cobranças em aberto
+                  <span className="ml-2 text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full">{myCharges.length}</span>
+                </h3>
+                <Link href={`/${slug}/minhas-contas`} className="text-xs text-brand-600 hover:text-brand-800 font-medium">Ver Minhas Contas →</Link>
+              </div>
+              <div className="p-3 space-y-2">
+                {myCharges.map(c => (
+                  <div key={c.id} className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 ${c.status === 'overdue' ? 'bg-red-50 border-red-100' : 'bg-gray-50 border-gray-200'}`}>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{c.description}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        Vence {new Date(`${c.due_date}T00:00:00`).toLocaleDateString('pt-BR')}
+                        {c.status === 'overdue' && <span className="text-red-500 font-medium"> · em atraso</span>}
+                      </p>
+                    </div>
+                    <span className="text-sm font-bold text-gray-900 flex-shrink-0">{fmtMoney(Number(c.amount))}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
         )}
 
         {/* ════ VISÃO DE DEPARTAMENTO ════ */}

@@ -83,7 +83,7 @@ export default async function BaseDashboard({ params }: Props) {
 
     return (
       <>
-        <Header title="Dashboard" />
+        <Header title="Início" />
         <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 animate-stagger">
             <StatCard label="Reservas" value={myReservations ?? 0} icon={Home} href={`/${slug}/reservas`} color="orange" />
@@ -143,7 +143,7 @@ export default async function BaseDashboard({ params }: Props) {
 
     return (
       <>
-        <Header title="Dashboard" />
+        <Header title="Início" />
         <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 animate-stagger">
             <StatCard label="Quartos pendentes" value={pendingRooms ?? 0} icon={Home} href={`/${slug}/reservas`} color="orange" />
@@ -224,7 +224,7 @@ export default async function BaseDashboard({ params }: Props) {
 
     return (
       <>
-        <Header title="Dashboard" />
+        <Header title="Início" />
         <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
           {ministry?.name && (
             <p className="text-sm text-gray-500">Ministério: <span className="font-semibold text-gray-900">{ministry.name}</span></p>
@@ -270,7 +270,7 @@ export default async function BaseDashboard({ params }: Props) {
 
     return (
       <>
-        <Header title="Dashboard" />
+        <Header title="Início" />
         <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 animate-stagger">
             <StatCard label="Solicitações da área" value={serviceRequests ?? 0} icon={AlertTriangle} href={`/${slug}/pendentes`} color="pink" />
@@ -348,7 +348,7 @@ export default async function BaseDashboard({ params }: Props) {
 
     return (
       <>
-        <Header title="Dashboard" />
+        <Header title="Início" />
         <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
           <p className="text-sm text-gray-500">Departamento Humano — <span className="font-semibold text-gray-900">Gestão de Pessoas</span></p>
 
@@ -434,7 +434,7 @@ export default async function BaseDashboard({ params }: Props) {
 
     return (
       <>
-        <Header title="Dashboard" />
+        <Header title="Início" />
         <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 animate-stagger">
             <StatCard label="Turmas ativas" value={classCount ?? 0} icon={BookOpen} href={`/${slug}/escolas`} color="orange" />
@@ -480,7 +480,7 @@ export default async function BaseDashboard({ params }: Props) {
   if (!isManagement) {
     return (
       <>
-        <Header title="Dashboard" />
+        <Header title="Início" />
         <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
           <SectionCard title="Minha área">
             <EmptyState icon={LayoutDashboard} label="Nenhum painel específico configurado para este perfil" />
@@ -728,7 +728,7 @@ export default async function BaseDashboard({ params }: Props) {
 
   return (
     <>
-      <Header title="Dashboard" />
+      <Header title="Início" />
       <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
 
         {/* ── Stat Cards ─────────────────────────────── */}

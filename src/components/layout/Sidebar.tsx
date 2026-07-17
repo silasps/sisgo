@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import Image from 'next/image'
 import {
-  LayoutDashboard, AlertTriangle, Users, Church, GraduationCap,
+  Home, AlertTriangle, Users, Church, GraduationCap,
   ClipboardList, Music2, BedDouble, UtensilsCrossed, Landmark,
   ChefHat, Package, Boxes, DollarSign, Receipt, Settings, LogOut,
   UserCheck, CalendarDays, Wrench, Building2, Eye, Code2, Inbox, CookingPot,
@@ -25,7 +25,7 @@ type SidebarProps = {
 }
 
 export const ICON_MAP: Record<string, LucideIcon> = {
-  dashboard:      LayoutDashboard,
+  dashboard:      Home,
   calendario:     CalendarDays,
   pendentes:      AlertTriangle,
   pessoas:        Users,

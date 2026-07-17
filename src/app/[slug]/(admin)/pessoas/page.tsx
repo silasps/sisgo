@@ -7,6 +7,7 @@ import { getRolePreview } from '@/lib/role-preview'
 import { SearchBar } from '@/components/ui/SearchBar'
 import { Suspense } from 'react'
 import { SCHOOL_APPLICATION_TYPES } from '@/lib/schools'
+import { PESSOAS_ROLES } from '@/lib/auth/permissions'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -143,6 +144,11 @@ export default async function PessoasPage({ params, searchParams }: Props) {
       ?? (await supabase.from('ministry_leaders').select('ministry_id').eq('organization_id', orgId).eq('user_id', user?.id ?? '').limit(1).maybeSingle()).data?.ministry_id
     redirect(ministryId ? `/${slug}/ministerios/${ministryId}/equipe` : `/${slug}/ministerios`)
   }
+
+  // Todo o resto que não seja função administrativa geral (obreiro, aluno,
+  // associado, cozinha, manutenção...) nunca deveria alcançar esta página,
+  // nem por link direto — bloqueio de rota, não só esconder do menu.
+  if (!PESSOAS_ROLES.includes(userRole as never)) redirect(`/${slug}/dashboard`)
 
   const isEtedLeader = userRole === 'lider_eted'
 

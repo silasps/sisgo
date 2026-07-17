@@ -75,6 +75,19 @@ const EVENT_STYLE: Record<CalendarEventType, string> = {
   outro:      'bg-gray-100 text-gray-600 border-gray-200',
 }
 
+const EVENT_DOT: Record<CalendarEventType, string> = {
+  evento:     'bg-brand-500',
+  feriado:    'bg-red-500',
+  trimestre:  'bg-blue-500',
+  escola:     'bg-emerald-500',
+  aula:       'bg-indigo-500',
+  tema:       'bg-cyan-500',
+  nota:       'bg-amber-500',
+  reuniao:    'bg-violet-500',
+  devocional: 'bg-fuchsia-500',
+  outro:      'bg-gray-400',
+}
+
 const LAYER_LABEL: Record<CalendarLayer, string> = {
   base:       'Base',
   escola:     'ETED',
@@ -97,6 +110,9 @@ export function CalendarWorkspace({ year, slug, events, schoolOptions, ministryO
   const [view, setView]   = useState<ViewMode>('month')
   const [modal, setModal] = useState<ModalState>({ open: false })
   const [layerFilter, setLayerFilter] = useState<CalendarLayer | null>(null)
+  const [monthOffset, setMonthOffset] = useState(() => Math.min(new Date(`${initialDate}T12:00:00`).getMonth(), 10))
+  const [dayPopover, setDayPopover] = useState<string | null>(null)
+  const weekDays = getFullWeek(selectedDate)
 
   const presentLayers = useMemo(() => {
     const layers = new Set<CalendarLayer>()
@@ -124,9 +140,33 @@ export function CalendarWorkspace({ year, slug, events, schoolOptions, ministryO
     return map
   }, [filteredEvents])
 
+  const periodRange = useMemo(() => {
+    if (view === 'month') {
+      const endDay = new Date(year, monthOffset + 2, 0).getDate()
+      return { start: toDateKey(year, monthOffset, 1), end: toDateKey(year, monthOffset + 1, endDay) }
+    }
+    if (view === 'week') return { start: weekDays[0], end: weekDays[6] }
+    return null
+  }, [view, year, monthOffset, weekDays])
+
+  const periodEvents = useMemo(() => {
+    if (!periodRange) return []
+    const seen = new Set<string>()
+    const list: CalendarEvent[] = []
+    for (const [day, dayEvents] of eventsByDay) {
+      if (day < periodRange.start || day > periodRange.end) continue
+      for (const e of dayEvents) {
+        const key = `${e.layer}:${e.id}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        list.push(e)
+      }
+    }
+    return list.sort((a, b) => (a.starts_at ?? a.starts_on).localeCompare(b.starts_at ?? b.starts_on) || a.title.localeCompare(b.title))
+  }, [periodRange, eventsByDay])
+
   const canCreate = permissions.canManageBase || permissions.canManageSchool || permissions.canManageMinistry || permissions.canAddPrivateNote
   const defaultLayer: 'base' | 'escola' | 'ministerio' | 'pessoal' = permissions.canManageBase ? 'base' : permissions.canManageSchool ? 'escola' : permissions.canManageMinistry ? 'ministerio' : 'pessoal'
-  const weekDays = getFullWeek(selectedDate)
 
   function openCreate(date?: string) {
     setModal({ open: true, mode: 'create', layer: defaultLayer, date: date ?? selectedDate })
@@ -148,9 +188,19 @@ export function CalendarWorkspace({ year, slug, events, schoolOptions, ministryO
           {/* Navigation — varies by view */}
           {view === 'month' && (
             <div className="flex items-center gap-1">
-              <Link href={`/${slug}/calendario?ano=${year - 1}`} className={NAV_BTN}><ChevronLeft size={16} /></Link>
-              <span className={NAV_LABEL}>{year}</span>
-              <Link href={`/${slug}/calendario?ano=${year + 1}`} className={NAV_BTN}><ChevronRight size={16} /></Link>
+              {monthOffset === 0 ? (
+                <Link href={`/${slug}/calendario?ano=${year - 1}`} className={NAV_BTN} title="Ano anterior"><ChevronLeft size={16} /></Link>
+              ) : (
+                <button onClick={() => setMonthOffset(o => Math.max(0, o - 1))} className={NAV_BTN} title="Mês anterior"><ChevronLeft size={16} /></button>
+              )}
+              <span className={`${NAV_LABEL} min-w-40 text-center`}>
+                {MONTHS[monthOffset].slice(0, 3)}–{MONTHS[monthOffset + 1].slice(0, 3)} {year}
+              </span>
+              {monthOffset >= 10 ? (
+                <Link href={`/${slug}/calendario?ano=${year + 1}`} className={NAV_BTN} title="Próximo ano"><ChevronRight size={16} /></Link>
+              ) : (
+                <button onClick={() => setMonthOffset(o => Math.min(10, o + 1))} className={NAV_BTN} title="Próximo mês"><ChevronRight size={16} /></button>
+              )}
             </div>
           )}
           {view === 'week' && (
@@ -209,6 +259,7 @@ export function CalendarWorkspace({ year, slug, events, schoolOptions, ministryO
       {view === 'month' && (
         <MonthView
           year={year}
+          monthOffset={monthOffset}
           today={today}
           eventsByDay={eventsByDay}
           selectedDate={selectedDate}
@@ -216,6 +267,7 @@ export function CalendarWorkspace({ year, slug, events, schoolOptions, ministryO
           deleteAction={actions.deleteEvent}
           onSelectDate={setSelectedDate}
           onEditEvent={openEdit}
+          onOpenDay={setDayPopover}
         />
       )}
 
@@ -241,6 +293,19 @@ export function CalendarWorkspace({ year, slug, events, schoolOptions, ministryO
           onEditEvent={openEdit}
           onAddNew={() => openCreate()}
           canCreate={canCreate}
+        />
+      )}
+
+      {(view === 'month' || view === 'week') && (
+        <PeriodEventList events={periodEvents} onEditEvent={openEdit} />
+      )}
+
+      {dayPopover && (
+        <DayPopover
+          date={dayPopover}
+          events={eventsByDay.get(dayPopover) ?? []}
+          onClose={() => setDayPopover(null)}
+          onEditEvent={event => { setDayPopover(null); openEdit(event) }}
         />
       )}
 
@@ -288,19 +353,19 @@ function ViewToggle({ view, onChange }: { view: ViewMode; onChange: (v: ViewMode
 // ─── MonthView ─────────────────────────────────────────────────────────────────
 
 function MonthView({
-  year, today, eventsByDay, selectedDate, permissions, deleteAction,
-  onSelectDate, onEditEvent,
+  year, monthOffset, today, eventsByDay, selectedDate, permissions, deleteAction,
+  onSelectDate, onEditEvent, onOpenDay,
 }: {
-  year: number; today: string; eventsByDay: Map<string, CalendarEvent[]>
+  year: number; monthOffset: number; today: string; eventsByDay: Map<string, CalendarEvent[]>
   selectedDate: string; permissions: Props['permissions']; deleteAction: Action
-  onSelectDate: (d: string) => void; onEditEvent: (e: CalendarEvent) => void
+  onSelectDate: (d: string) => void; onEditEvent: (e: CalendarEvent) => void; onOpenDay: (d: string) => void
 }) {
   const selectedEvents = eventsByDay.get(selectedDate) ?? []
 
   return (
     <section className="grid gap-4 xl:grid-cols-[1fr_24rem]">
-      <div className="order-last grid gap-4 md:grid-cols-2 xl:order-first 2xl:grid-cols-3">
-        {MONTHS.map((_, index) => (
+      <div className="order-last grid gap-4 md:grid-cols-2 xl:order-first">
+        {[monthOffset, monthOffset + 1].map(index => (
           <MonthCard
             key={index}
             year={year}
@@ -309,6 +374,7 @@ function MonthView({
             eventsByDay={eventsByDay}
             selectedDate={selectedDate}
             onSelectDate={onSelectDate}
+            onOpenDay={onOpenDay}
           />
         ))}
       </div>
@@ -441,8 +507,8 @@ function WeekView({
         </div>
       </div>
 
-      {/* Grid body — horizontally scrollable, syncs header */}
-      <div className="overflow-x-auto" onScroll={syncScroll}>
+      {/* Grid body — scrollable in both directions (altura limitada), syncs header horizontally */}
+      <div className="max-h-[65vh] overflow-auto" onScroll={syncScroll}>
         <div className="min-w-[560px]">
           {/* All-day events */}
           {hasAllDay && (
@@ -892,11 +958,11 @@ function SchoolDayModal({
 // ─── MonthCard ─────────────────────────────────────────────────────────────────
 
 function MonthCard({
-  year, month, today, eventsByDay, selectedDate, onSelectDate,
+  year, month, today, eventsByDay, selectedDate, onSelectDate, onOpenDay,
 }: {
   year: number; month: number; today: string
   eventsByDay: Map<string, CalendarEvent[]>
-  selectedDate: string; onSelectDate: (d: string) => void
+  selectedDate: string; onSelectDate: (d: string) => void; onOpenDay: (d: string) => void
 }) {
   const firstDay   = new Date(year, month, 1)
   const daysInMonth = new Date(year, month + 1, 0).getDate()
@@ -916,37 +982,131 @@ function MonthCard({
           const dayEvents = eventsByDay.get(date) ?? []
           const selected  = selectedDate === date
           const isToday   = today === date
+          const hasEvents = dayEvents.length > 0
+          const distinctTypes = [...new Set(dayEvents.map(e => e.event_type))].slice(0, 4)
+
           return (
-            <button
-              key={date}
-              type="button"
-              onClick={() => onSelectDate(date)}
-              className={`min-h-16 rounded-lg border p-1.5 text-left transition focus:outline-none focus:ring-2 focus:ring-brand-400 ${
-                selected ? 'border-brand-400 bg-brand-50/70 shadow-sm' : 'border-gray-100 hover:border-brand-200 hover:bg-gray-50'
-              }`}
-            >
-              <span className={`flex h-5 w-5 items-center justify-center rounded-full text-xs font-semibold ${
-                isToday ? 'bg-brand-500 text-white' : selected ? 'text-brand-700' : 'text-gray-500'
-              }`}>
-                {day}
-              </span>
-              <span className="mt-1 block space-y-px">
-                {dayEvents.slice(0, 3).map(event => (
-                  <span
-                    key={`${event.layer}:${event.id}`}
-                    className={`block truncate rounded border px-1 py-px text-[10px] ${EVENT_STYLE[event.event_type]}`}
-                    title={event.title}
-                  >
-                    {event.starts_at ? `${formatTime(event.starts_at)} ` : ''}{event.title}
+            <div key={date} className="group relative">
+              <button
+                type="button"
+                onClick={() => { onSelectDate(date); if (hasEvents) onOpenDay(date) }}
+                className={`flex h-12 w-full flex-col items-center justify-center gap-1 rounded-lg border transition focus:outline-none focus:ring-2 focus:ring-brand-400 ${
+                  selected ? 'border-brand-400 bg-brand-50/70 shadow-sm'
+                    : hasEvents ? 'border-gray-100 bg-gray-50 hover:border-brand-200 hover:bg-brand-50/40'
+                    : 'border-gray-100 hover:border-brand-200 hover:bg-gray-50'
+                }`}
+              >
+                <span className={`flex h-5 w-5 items-center justify-center rounded-full text-xs font-semibold ${
+                  isToday ? 'bg-brand-500 text-white' : selected ? 'text-brand-700' : 'text-gray-500'
+                }`}>
+                  {day}
+                </span>
+                {hasEvents && (
+                  <span className="flex items-center gap-0.5">
+                    {distinctTypes.map(type => (
+                      <span key={type} className={`h-1.5 w-1.5 rounded-full ${EVENT_DOT[type]}`} />
+                    ))}
                   </span>
-                ))}
-                {dayEvents.length > 3 && <span className="block text-[10px] text-gray-400">+{dayEvents.length - 3}</span>}
-              </span>
-            </button>
+                )}
+              </button>
+
+              {/* Tooltip resumido — só desktop, aparece no hover */}
+              {hasEvents && (
+                <div className="pointer-events-none absolute left-1/2 top-full z-20 hidden w-48 -translate-x-1/2 pt-1 group-hover:md:block">
+                  <div className="rounded-lg border border-gray-200 bg-white p-2 shadow-lg">
+                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">{formatShortDate(date)}</p>
+                    <div className="space-y-1">
+                      {dayEvents.slice(0, 4).map(event => (
+                        <p key={`${event.layer}:${event.id}`} className="truncate text-[11px] text-gray-700">
+                          {event.starts_at ? `${formatTime(event.starts_at)} ` : ''}{event.title}
+                        </p>
+                      ))}
+                      {dayEvents.length > 4 && <p className="text-[10px] text-gray-400">+{dayEvents.length - 4} mais</p>}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           )
         })}
       </div>
     </div>
+  )
+}
+
+// ─── DayPopover ────────────────────────────────────────────────────────────────
+// Aberto ao clicar num dia com eventos (mobile ou desktop) — lista resumida;
+// clicar num evento abre o detalhe completo (EventModal, via onEditEvent).
+
+function DayPopover({
+  date, events, onClose, onEditEvent,
+}: {
+  date: string; events: CalendarEvent[]; onClose: () => void; onEditEvent: (e: CalendarEvent) => void
+}) {
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/30 p-0 md:items-center md:p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-sm rounded-t-2xl bg-white p-4 shadow-xl md:rounded-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-gray-900">{formatLongDate(date)}</h3>
+          <button onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="max-h-[60vh] space-y-2 overflow-y-auto">
+          {events.length === 0 ? (
+            <p className="py-6 text-center text-sm text-gray-400">Nenhum item neste dia.</p>
+          ) : (
+            events.map(event => (
+              <button
+                key={`${event.layer}:${event.id}`}
+                onClick={() => onEditEvent(event)}
+                className={`block w-full rounded-lg border px-3 py-2 text-left transition-opacity hover:opacity-80 ${EVENT_STYLE[event.event_type]}`}
+              >
+                <p className="text-xs font-semibold">{event.starts_at ? formatTime(event.starts_at) : 'Dia todo'} · {LAYER_LABEL[event.layer]}</p>
+                <p className="text-sm font-medium leading-snug">{event.title}</p>
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── PeriodEventList ───────────────────────────────────────────────────────────
+// Lista cronológica dos compromissos dentro do período visível (mês ou semana).
+
+function PeriodEventList({ events, onEditEvent }: { events: CalendarEvent[]; onEditEvent: (e: CalendarEvent) => void }) {
+  return (
+    <section className="rounded-xl border border-gray-200 bg-white p-4">
+      <h2 className="mb-3 text-sm font-semibold text-gray-800">Compromissos do período</h2>
+      {events.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-6 text-center text-sm text-gray-400">
+          Nada por aqui neste período.
+        </p>
+      ) : (
+        <div className="space-y-1.5">
+          {events.map(event => (
+            <button
+              key={`${event.layer}:${event.id}`}
+              onClick={() => onEditEvent(event)}
+              className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-gray-50"
+            >
+              <span className={`h-2 w-2 shrink-0 rounded-full ${EVENT_DOT[event.event_type]}`} />
+              <span className="w-24 shrink-0 text-xs text-gray-400">
+                {formatShortDate(event.starts_at ? isoToCalendarDateKey(event.starts_at) : event.starts_on)}
+                {event.starts_at ? ` · ${formatTime(event.starts_at)}` : ''}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-sm text-gray-800">{event.title}</span>
+              {event.school_name && <span className="shrink-0 text-xs text-gray-400">{event.school_name}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </section>
   )
 }
 

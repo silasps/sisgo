@@ -28,14 +28,16 @@ export default async function MinhasContasPage({ params }: Props) {
   if (!org) notFound()
   const orgId = org.id
 
-  // Encontra o person_id do usuário logado via staff_profiles ou student_profiles
-  const [{ data: staffProfile }, { data: associadoProfile }] = await Promise.all([
+  // Encontra o person_id do usuário logado via staff_profiles, associado_profiles ou student_profiles
+  const [{ data: staffProfile }, { data: associadoProfile }, { data: studentProfile }] = await Promise.all([
     sbAdmin.from('staff_profiles').select('person_id, people(full_name)').eq('user_id', user.id).eq('organization_id', orgId).maybeSingle(),
     sbAdmin.from('associado_profiles').select('person_id, people(full_name)').eq('user_id', user.id).eq('organization_id', orgId).maybeSingle(),
+    sbAdmin.from('student_profiles').select('person_id, people(full_name)').eq('user_id', user.id).eq('organization_id', orgId).maybeSingle(),
   ])
 
   type ProfileRow = { person_id: string; people: { full_name: string } | null } | null
-  const profile = (staffProfile as unknown as ProfileRow) ?? (associadoProfile as unknown as ProfileRow)
+  const profile = (staffProfile as unknown as ProfileRow) ?? (associadoProfile as unknown as ProfileRow) ?? (studentProfile as unknown as ProfileRow)
+  const isStudent = !!studentProfile
 
   if (!profile) {
     return (
@@ -54,6 +56,29 @@ export default async function MinhasContasPage({ params }: Props) {
 
   const personId = profile.person_id
   const personName = profile.people?.full_name ?? 'Você'
+
+  // Pra aluno: turma ativa + plano contratado (regra de cobrança da categoria)
+  type EnrollmentRow = {
+    status: string
+    school_classes: { name: string; starts_at: string | null; ends_at: string | null; schools: { name: string } | null } | null
+  }
+  type FeeRuleRow = { description: string; amount: number }
+  let enrollment: EnrollmentRow | null = null
+  let feeRule: FeeRuleRow | null = null
+  if (isStudent) {
+    const [{ data: enrollmentData }, { data: feeRuleData }] = await Promise.all([
+      sbAdmin.from('class_students')
+        .select('status, school_classes(name, starts_at, ends_at, schools(name))')
+        .eq('person_id', personId).eq('status', 'ativo')
+        .order('enrolled_at', { ascending: false }).limit(1).maybeSingle(),
+      sbAdmin.from('finance_fee_rules')
+        .select('description, amount')
+        .eq('organization_id', orgId).eq('person_category', 'aluno').eq('active', true)
+        .limit(1).maybeSingle(),
+    ])
+    enrollment = enrollmentData as unknown as EnrollmentRow | null
+    feeRule = feeRuleData as unknown as FeeRuleRow | null
+  }
 
   // Busca cobranças da pessoa
   const { data: chargesData } = await sbAdmin
@@ -85,6 +110,30 @@ export default async function MinhasContasPage({ params }: Props) {
           <p className="text-lg font-semibold text-gray-900">{personName}</p>
           <p className="text-sm text-gray-400">{org.name}</p>
         </div>
+
+        {/* Plano da escola (só aluno) */}
+        {isStudent && (enrollment?.school_classes || feeRule) && (
+          <section className="rounded-xl border border-gray-200 bg-white p-4">
+            <h2 className="text-sm font-semibold text-gray-800 mb-2">Escola</h2>
+            {enrollment?.school_classes ? (
+              <p className="text-sm text-gray-700">
+                {enrollment.school_classes.schools?.name ?? 'Escola'} · {enrollment.school_classes.name}
+                {enrollment.school_classes.starts_at && enrollment.school_classes.ends_at && (
+                  <span className="text-gray-400">
+                    {' '}({new Date(`${enrollment.school_classes.starts_at}T00:00:00`).toLocaleDateString('pt-BR')} – {new Date(`${enrollment.school_classes.ends_at}T00:00:00`).toLocaleDateString('pt-BR')})
+                  </span>
+                )}
+              </p>
+            ) : (
+              <p className="text-sm text-gray-400">Sem turma ativa no momento.</p>
+            )}
+            {feeRule && (
+              <p className="text-sm text-gray-700 mt-2">
+                <span className="text-gray-500">Plano contratado:</span> {feeRule.description} — <span className="font-semibold">{fmt(Number(feeRule.amount))}/mês</span>
+              </p>
+            )}
+          </section>
+        )}
 
         {/* KPIs */}
         <section className="grid grid-cols-3 gap-3 animate-stagger">

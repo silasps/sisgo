@@ -70,6 +70,9 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
   const scopedMinistryIds = canManageMinistry ? leaderMinistryIds : isObreiroMinisterio ? obreiroMinistryIds : []
   const shouldScopeMinistries = canManageMinistry || isObreiroMinisterio
 
+  // Aluno só vê o que é da própria escola + notas pessoais — nada de base/ministério.
+  const isAluno = role === 'aluno'
+
   const start = `${year}-01-01`
   const end = `${year}-12-31`
   const startAt = localDateTimeToIso(`${start}T00:00`)
@@ -117,9 +120,12 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
     const mIds = scopedMinistryIds.length > 0 ? scopedMinistryIds : ['no-match']
     ministryEventsQuery = ministryEventsQuery.in('ministry_id', mIds)
   }
+  if (isAluno) {
+    ministryEventsQuery = ministryEventsQuery.in('ministry_id', ['no-match'])
+  }
 
   const [{ data: baseRows }, { data: schoolRows }, { data: ministryRows }, { data: noteRows }, { data: classRows }, { data: schoolOptionsRows }, { data: ministryOptionsRows }] = await Promise.all([
-    baseEventsQuery,
+    isAluno ? Promise.resolve({ data: [] as unknown[] }) : baseEventsQuery,
     schoolEventsQuery,
     ministryEventsQuery,
     admin
@@ -246,8 +252,10 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
       school_name: row.schools?.name ?? null,
     }))
 
-  const events = [...baseEvents, ...schoolEvents, ...ministryEvents, ...personalNotes, ...holidayEvents(year), ...classEvents]
-    .sort((a, b) => sortKey(a).localeCompare(sortKey(b)) || a.title.localeCompare(b.title))
+  const events = [
+    ...baseEvents, ...schoolEvents, ...ministryEvents, ...personalNotes, ...classEvents,
+    ...(isAluno ? [] : holidayEvents(year)),
+  ].sort((a, b) => sortKey(a).localeCompare(sortKey(b)) || a.title.localeCompare(b.title))
 
   const schoolOptions = (schoolOptionsRows ?? []) as SchoolOption[]
   const ministryOptions = (ministryOptionsRows ?? []) as MinistryOption[]

@@ -407,16 +407,18 @@ export default async function ReservasPage({ params, searchParams }: Props) {
           </div>
         )}
 
-        {/* Formulário de nova reserva */}
+        {/* Formulário de nova reserva — colapsado atrás de um botão "+", igual ao padrão de Solicitações */}
         {canRequest && (
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
-              <p className="font-medium text-gray-800 text-sm">Nova Solicitação de Reserva</p>
-              {!canWrite && requesterLabel && (
-                <span className="text-xs text-gray-400">({requesterLabel})</span>
-              )}
-            </div>
-            <form action={handleCreate} className="px-5 pb-5 pt-4 space-y-3">
+          <details className="group bg-white rounded-xl border border-gray-200 overflow-hidden [&_summary::-webkit-details-marker]:hidden">
+            <summary className="cursor-pointer list-none px-5 py-3 flex items-center justify-between text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+              <span className="flex items-center gap-2">
+                <span className="text-brand-500 font-semibold">+</span> Nova reserva
+                {!canWrite && requesterLabel && <span className="text-xs text-gray-400 font-normal">({requesterLabel})</span>}
+              </span>
+              <span className="text-xs text-gray-400 group-open:hidden">abrir</span>
+              <span className="hidden text-xs text-gray-400 group-open:inline">fechar</span>
+            </summary>
+            <form action={handleCreate} className="border-t border-gray-100 px-5 pb-5 pt-4 space-y-3">
               <div className="grid sm:grid-cols-2 gap-3">
                 {/* Management: seleciona a entidade solicitante */}
                 {canWrite && (
@@ -543,7 +545,7 @@ export default async function ReservasPage({ params, searchParams }: Props) {
                 Enviar Solicitação
               </button>
             </form>
-          </div>
+          </details>
         )}
 
         {/* Lista de reservas */}
