@@ -1,6 +1,6 @@
 # SISGO — Arquitetura do Sistema
 
-**Atualizado:** 8 de julho de 2026 (lavanderia: PIX público + página interna identificada)
+**Atualizado:** 20 de julho de 2026 (Comunicação da Base + início do aluno redesenhado; conta pessoal: foto com recorte, senha, login com Google)
 **Produção:** https://www.sisgomission.com (Vercel)
 
 ---
@@ -58,8 +58,12 @@ O SISGO é um sistema de gestão **multi-tenant** para bases missionárias da JO
 
 `dashboard` · `pessoas` · `obreiros` · `alunos` · `escolas` · `inscricoes` ·
 `ministerios` (workspace com mural, equipe e calendário) · `calendario` ·
-`presenca` · `pendentes` · `financeiro` · `caixa` · `minhas-contas` ·
-`cozinha` · `refeicoes` · `reservas` · `manutencao` · `configuracoes` ·
+`comunicacao` (anúncios e eventos de base com audiência por papel — lider_base
+e Ministério de Comunicação) · `presenca` · `pendentes` · `financeiro` ·
+`caixa` · `minhas-contas` · `cozinha` · `refeicoes` · `reservas` ·
+`manutencao` · `configuracoes` ·
+`conta` (perfil pessoal — nome, foto com recorte, senha, contas
+conectadas — aberto a qualquer usuário logado, sem checagem de papel) ·
 `minha-carteirinha` · `minha-lavanderia` (lavanderia como cliente, para
 qualquer usuário logado) · `hospedagem` (quartos/camas, agenda, **lavanderia**)
 
@@ -82,14 +86,54 @@ qualquer usuário logado) · `hospedagem` (quartos/camas, agenda, **lavanderia**
 - **RLS:** toda tabela de negócio tem policies por organização e papel. Server
   actions administrativas usam `createAdminClient()` (service role) após checar
   permissão na aplicação.
+- **Conta pessoal (`/{slug}/conta`, `src/app/[slug]/(admin)/conta/`):**
+  self-service para qualquer usuário logado (sem checagem de papel — igual a
+  `minha-carteirinha`/`minha-lavanderia`). Nome e avatar ficam em
+  `user_metadata` (`full_name`, `avatar_url`); troca de senha reautentica com
+  `signInWithPassword` antes de `updateUser({ password })`; conexão com Google
+  usa `auth.linkIdentity`/`unlinkIdentity` (client-side, exige **Manual
+  Linking** habilitado no Supabase Dashboard) — só permite desvincular se
+  sobrar outra forma de entrar. Foto de perfil: recorte circular
+  arrastável/zoom no client (`AvatarCropperModal`, canvas puro, sem lib
+  externa), convertida para WebP antes do upload ao bucket `avatars`
+  (Storage, público para leitura, escrita restrita à própria pasta
+  `auth.uid()/`). Trocar ou remover a foto apaga o arquivo antigo do bucket
+  (sem resíduo). Retorno do fluxo de vinculação do Google usa
+  `/auth/callback?next=<path>` (o callback normal só redireciona por papel;
+  `next` é validado como path relativo antes de ser usado).
+- **Comunicação da Base (`/{slug}/comunicacao`) e início do aluno:** novo
+  módulo para `lider_base` + membros/líderes do Ministério de Comunicação
+  criarem anúncios (`base_announcements`) e eventos de base
+  (`base_calendar_events`) com audiência granular por papel
+  (`visible_to_roles text[]`, `null` = todos, opções em
+  `src/lib/audience-roles.ts`). A tela "Início" do aluno foi reformulada
+  (sem card de Reservas) com versículo do dia, anúncios da base filtrados
+  pela audiência e "Próximos eventos" (base + escola, via
+  `school_calendar_events.visible_to_students`, padrão visível).
+  **Padrão de permissão reaproveitado:** `ministries.linked_role` ganhou o
+  valor `'comunicacao'`, mas — diferente de Hospitalidade/Secretaria/
+  Cozinha/Manutenção/DH — **não** virou um `Role` formal no enum de
+  `src/lib/auth/permissions.ts`; o acesso é resolvido por participação no
+  ministério (`ministry_leaders`/`ministry_members`), não por papel
+  principal. Útil como padrão para futuras permissões "ministério-scoped"
+  sem inflar o enum de `Role`. `src/lib/school-scope.ts` resolve as escolas
+  em que um usuário aluno está matriculado (via `student_profiles`/
+  `person_contacts`/`class_students`/`student_applications`), usado para
+  filtrar os eventos de escola que aparecem no início dele.
 
 ---
 
 ## 5. Banco de Dados
 
-- **Migrations:** `supabase/migrations/NNN_nome.sql`, numeradas (001→085+),
+- **Migrations:** `supabase/migrations/NNN_nome.sql`, numeradas (001→108+),
   aplicadas manualmente com `psql "$DATABASE_URL" -f <arquivo>` (a
   `DATABASE_URL` está em `.env.local`). Não há CLI do Supabase configurada.
+  Banco único — é produção mesmo, sempre confirmar com o usuário antes de
+  rodar.
+- **Storage buckets:** `logos` (branding da org) e `avatars` (foto de perfil
+  pessoal, migration 108) — ambos públicos para leitura; escrita restrita a
+  usuários autenticados (avatars: só na própria pasta, via policy em
+  `storage.foldername(name)[1] = auth.uid()`).
 - **Domínios principais:** pessoas/contatos, escolas e inscrições
   (`school_interest_forms` = pré-inscrição; `school_applications` = formulário
   completo com `form_data` jsonb), ministérios (com `linked_role`), hospedagem
@@ -158,6 +202,7 @@ Autosserviço com pagamento por tempo. Cada máquina tem um relé Wi-Fi
 | Asaas / Mercado Pago / PagBank | PIX (refeições, cobranças) | `src/lib/payments/` + `/api/payments/*` |
 | Firebase (FCM) | Push notifications no app | `src/lib/firebase/` + `/api/push/*` |
 | Brevo (SMTP) | E-mails transacionais | `src/lib/email/` (envio bloqueado até verificar o domínio centralmidiajocum.com.br) |
+| bible-api.com | Versículo do dia (início do aluno) | `src/lib/votd.ts` — usar sempre o endpoint de capítulo (`/data/almeida/{USFM}/{capítulo}`), **nunca** o de referência única (`/{livro} {cap}:{vers}?translation=almeida`), que retorna 404 falso-negativo para várias referências válidas na tradução "almeida"; cache de 12h evita o rate limit (429 após ~10 req/s) |
 | Site institucional | Consome `/api/public/[slug]/*` | projeto separado `jocumat-site` (Next 16 + Tailwind v4) |
 
 ---

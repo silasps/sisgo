@@ -181,7 +181,7 @@ export default async function ObreirosPage({ params, searchParams }: Props) {
             {isOperationalManager(role) && (
               <CreateObreiroModal roles={roles} schools={schools} ministries={ministries} orgId={org.id} slug={slug} />
             )}
-            <Link href={`/${slug}/pessoas?tab=obreiros`} className="text-sm text-gray-500 hover:text-gray-700">
+            <Link href={`/${slug}/pessoas?tab=obreiros`} className="text-sm text-gray-300 hover:text-white">
               Ver cadastro de pessoas
             </Link>
           </div>

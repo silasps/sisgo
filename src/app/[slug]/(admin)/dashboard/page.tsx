@@ -7,11 +7,14 @@ import { AnimatedNumber } from '@/components/ui/AnimatedNumber'
 import Link from 'next/link'
 import { getRolePreview } from '@/lib/role-preview'
 import { isManagementRole } from '@/lib/auth/permissions'
+import { getStudentSchoolIds } from '@/lib/school-scope'
+import { getVerseOfDay } from '@/lib/votd'
 import type { LucideIcon } from 'lucide-react'
 import {
   Users, Briefcase, GraduationCap, BookOpen, Music, Home,
   CalendarDays, AlertTriangle, ClipboardList, CheckCircle2,
   User, Wallet, LayoutDashboard, MessageSquare, Wrench, UtensilsCrossed, BedDouble,
+  Megaphone, Pin, BookMarked,
 } from 'lucide-react'
 
 type Props = { params: Promise<{ slug: string }> }
@@ -71,10 +74,113 @@ export default async function BaseDashboard({ params }: Props) {
   const isObreiroMinisterio = userRole === 'obreiro_ministerio'
   const isAluno = userRole === 'aluno'
   const isAssociado = userRole === 'associado'
-  const isPersonalRole = isAluno || isAssociado
   const isEtedLeader = userRole === 'lider_eted' || userRole === 'obreiro_eted' || isAluno
 
-  if (isPersonalRole) {
+  if (isAluno) {
+    const admin = createAdminClient()
+    const studentSchoolIds = preview?.schoolId
+      ? [preview.schoolId]
+      : await getStudentSchoolIds(admin, orgId, user?.id ?? '', user?.email ?? null)
+
+    const [verse, { data: announcementsRaw }, { data: schoolEventsRaw }, { data: baseEventsRaw }] = await Promise.all([
+      getVerseOfDay(),
+      admin
+        .from('base_announcements')
+        .select('id, title, body, pinned, visible_to_roles, expires_at, created_at')
+        .eq('organization_id', orgId)
+        .or(`expires_at.is.null,expires_at.gte.${today}`)
+        .order('pinned', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(20),
+      studentSchoolIds.length > 0
+        ? admin
+          .from('school_calendar_events')
+          .select('id, title, starts_at')
+          .in('school_id', studentSchoolIds)
+          .eq('visible_to_students', true)
+          .gte('starts_at', today)
+          .order('starts_at', { ascending: true })
+          .limit(5)
+        : Promise.resolve({ data: [] as Array<{ id: string; title: string; starts_at: string }> }),
+      admin
+        .from('base_calendar_events')
+        .select('id, title, starts_on, visible_to_roles')
+        .eq('organization_id', orgId)
+        .gte('starts_on', today.slice(0, 10))
+        .order('starts_on', { ascending: true })
+        .limit(20),
+    ])
+
+    const isVisibleToAluno = (roles: string[] | null) => !roles || roles.length === 0 || roles.includes('aluno')
+
+    const announcements = ((announcementsRaw ?? []) as Array<{
+      id: string; title: string; body: string; pinned: boolean; visible_to_roles: string[] | null; expires_at: string | null; created_at: string
+    }>)
+      .filter(a => isVisibleToAluno(a.visible_to_roles))
+      .slice(0, 3)
+
+    const baseEvents = ((baseEventsRaw ?? []) as Array<{ id: string; title: string; starts_on: string; visible_to_roles: string[] | null }>)
+      .filter(e => isVisibleToAluno(e.visible_to_roles))
+      .map(e => ({ id: e.id, title: e.title, date: new Date(`${e.starts_on}T12:00:00`) }))
+
+    const schoolEvents = ((schoolEventsRaw ?? []) as Array<{ id: string; title: string; starts_at: string }>)
+      .map(e => ({ id: e.id, title: e.title, date: new Date(e.starts_at) }))
+
+    const upcomingEvents = [...schoolEvents, ...baseEvents]
+      .sort((a, b) => a.date.getTime() - b.date.getTime())
+      .slice(0, 5)
+
+    return (
+      <>
+        <Header title="Início" />
+        <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
+          <VerseOfDayCard verse={verse} />
+
+          <SectionCard title="Anúncios">
+            {announcements.length === 0 ? (
+              <EmptyState icon={Megaphone} label="Nenhum anúncio no momento" />
+            ) : (
+              <div className="space-y-3">
+                {announcements.map(a => (
+                  <div key={a.id} className="border-b border-gray-100 pb-3 last:border-0 last:pb-0">
+                    <div className="flex items-center gap-1.5">
+                      {a.pinned && <Pin size={12} className="text-brand-500 shrink-0" />}
+                      <p className="text-sm font-semibold text-gray-800">{a.title}</p>
+                    </div>
+                    <p className="text-sm text-gray-600 mt-0.5 line-clamp-3">{a.body}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </SectionCard>
+
+          <SectionCard title="Próximos eventos" href={`/${slug}/calendario`} linkLabel="Ver calendário">
+            {upcomingEvents.length === 0 ? (
+              <EmptyState icon={CalendarDays} label="Nenhum evento agendado" />
+            ) : (
+              <div className="space-y-3">
+                {upcomingEvents.map(e => (
+                  <div key={e.id} className="flex items-center gap-3">
+                    <div className="shrink-0 w-11 text-center bg-brand-50 rounded-lg py-1">
+                      <p className="text-[10px] uppercase text-brand-500 font-semibold leading-none">
+                        {e.date.toLocaleDateString('pt-BR', { month: 'short', timeZone: 'America/Sao_Paulo' }).replace('.', '')}
+                      </p>
+                      <p className="text-base font-bold text-brand-700 leading-tight">
+                        {e.date.toLocaleDateString('pt-BR', { day: '2-digit', timeZone: 'America/Sao_Paulo' })}
+                      </p>
+                    </div>
+                    <p className="text-sm text-gray-700">{e.title}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </SectionCard>
+        </main>
+      </>
+    )
+  }
+
+  if (isAssociado) {
     const { count: myReservations } = await supabase
       .from('reservations')
       .select('*', { count: 'exact', head: true })
@@ -950,6 +1056,23 @@ function StatCard({ label, value, icon: Icon, href, color }: {
       <p className={`text-3xl font-bold leading-none ${c.num}`}><AnimatedNumber value={value} /></p>
       <p className={`text-xs font-semibold uppercase tracking-wide ${c.label}`}>{label}</p>
     </Link>
+  )
+}
+
+function VerseOfDayCard({ verse }: { verse: Awaited<ReturnType<typeof getVerseOfDay>> }) {
+  return (
+    <a
+      href={verse.youversionUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-start gap-3 rounded-xl bg-brand-50 p-4 transition-colors hover:bg-brand-100"
+    >
+      <BookMarked className="size-5 shrink-0 text-brand-500 mt-0.5" />
+      <div className="min-w-0">
+        <p className="text-sm text-gray-700 italic">&ldquo;{verse.text}&rdquo;</p>
+        <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-brand-600">{verse.reference}</p>
+      </div>
+    </a>
   )
 }
 

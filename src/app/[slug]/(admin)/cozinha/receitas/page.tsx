@@ -158,7 +158,7 @@ export default async function ReceitasPage({ params, searchParams }: Props) {
       <Header
         title="Fichas Técnicas"
         actions={
-          <Link href={`/${slug}/cozinha`} className="text-sm text-gray-500 hover:text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors">
+          <Link href={`/${slug}/cozinha`} className="text-sm text-gray-300 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">
             ← Cozinha
           </Link>
         }

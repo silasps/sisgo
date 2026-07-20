@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/Header'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
+import { getStudentSchoolIds } from '@/lib/school-scope'
 import { notFound, redirect } from 'next/navigation'
 import {
   CalendarWorkspace,
@@ -70,25 +71,39 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
   const scopedMinistryIds = canManageMinistry ? leaderMinistryIds : isObreiroMinisterio ? obreiroMinistryIds : []
   const shouldScopeMinistries = canManageMinistry || isObreiroMinisterio
 
-  // Aluno só vê o que é da própria escola + notas pessoais — nada de base/ministério.
+  // Aluno só vê o que é da própria escola + notas pessoais + eventos de base
+  // cuja audiência inclua "aluno" (ou seja "todos") — nada de ministério.
   const isAluno = role === 'aluno'
+
+  // Ministério de Comunicação (ministries.linked_role = 'comunicacao'): além de
+  // admin_base/lider_base/superadmin, quem lidera ou participa desse ministério
+  // também pode criar anúncios e eventos de base.
+  const myMinistryIdsForComms = role === 'lider_ministerio' ? leaderMinistryIds : role === 'obreiro_ministerio' ? obreiroMinistryIds : []
+  const comunicacaoMinistryIds = myMinistryIdsForComms.length > 0
+    ? ((await admin.from('ministries').select('id').eq('organization_id', orgId).eq('linked_role', 'comunicacao')).data ?? []).map(row => row.id as string)
+    : []
+  const isComunicacaoMember = myMinistryIdsForComms.some(id => comunicacaoMinistryIds.includes(id))
 
   const start = `${year}-01-01`
   const end = `${year}-12-31`
   const startAt = localDateTimeToIso(`${start}T00:00`)
   const endAt = localDateTimeToIso(`${end}T23:59:59`)
 
-  const baseEventsQuery = admin
+  let baseEventsQuery = admin
     .from('base_calendar_events')
-    .select('id, title, description, event_type, starts_on, ends_on')
+    .select('id, title, description, event_type, starts_on, ends_on, created_by, visible_to_roles')
     .eq('organization_id', orgId)
     .gte('starts_on', start)
     .lte('starts_on', end)
     .order('starts_on', { ascending: true })
 
+  if (isAluno) {
+    baseEventsQuery = baseEventsQuery.or('visible_to_roles.is.null,visible_to_roles.cs.{aluno}')
+  }
+
   let schoolEventsQuery = admin
     .from('school_calendar_events')
-    .select('id, title, description, event_type, starts_at, ends_at, school_id, schools(name)')
+    .select('id, title, description, event_type, starts_at, ends_at, school_id, visible_to_students, schools(name)')
     .eq('organization_id', orgId)
     .gte('starts_at', startAt)
     .lte('starts_at', endAt)
@@ -125,7 +140,7 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
   }
 
   const [{ data: baseRows }, { data: schoolRows }, { data: ministryRows }, { data: noteRows }, { data: classRows }, { data: schoolOptionsRows }, { data: ministryOptionsRows }] = await Promise.all([
-    isAluno ? Promise.resolve({ data: [] as unknown[] }) : baseEventsQuery,
+    baseEventsQuery,
     schoolEventsQuery,
     ministryEventsQuery,
     admin
@@ -156,6 +171,8 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
     event_type: 'evento' | 'feriado' | 'trimestre' | 'escola' | 'outro'
     starts_on: string
     ends_on: string | null
+    created_by: string | null
+    visible_to_roles: string[] | null
   }>).map(event => ({
     ...event,
     starts_at: null,
@@ -172,6 +189,7 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
     starts_at: string
     ends_at: string | null
     school_id: string
+    visible_to_students: boolean
     schools: { name: string } | null
   }>).map(event => ({
     id: event.id,
@@ -182,6 +200,7 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
     starts_at: event.starts_at,
     ends_on: event.ends_at ? isoToCalendarDateKey(event.ends_at) : null,
     ends_at: event.ends_at,
+    visible_to_students: event.visible_to_students,
     layer: 'escola',
     source: 'manual',
     school_id: event.school_id,
@@ -262,11 +281,12 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
 
   async function createBaseEvent(formData: FormData) {
     'use server'
-    if (!canManageBase) return
+    if (!canManageBase && !isComunicacaoMember) return
     const db = createAdminClient()
     const title = (formData.get('title') as string).trim()
     const startsOn = formData.get('starts_on') as string
     const eventType = formData.get('event_type') as string
+    const visibleToRoles = formData.getAll('visible_to_roles') as string[]
     if (!title || !startsOn) return
 
     await db.from('base_calendar_events').insert({
@@ -276,6 +296,7 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
       event_type: eventType || 'evento',
       starts_on: startsOn,
       ends_on: (formData.get('ends_on') as string) || null,
+      visible_to_roles: visibleToRoles.length > 0 ? visibleToRoles : null,
       created_by: userId,
     })
     redirect(`/${slug}/calendario?ano=${year}`)
@@ -301,6 +322,7 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
       event_type: (formData.get('event_type') as string) || 'aula',
       starts_at: localDateTimeToIso(startsAt),
       ends_at: endsAt ? localDateTimeToIso(endsAt) : null,
+      visible_to_students: formData.get('visible_to_students') === 'on',
       created_by: userId,
     })
     redirect(`/${slug}/calendario?ano=${year}`)
@@ -357,8 +379,10 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
     const eventId = formData.get('event_id') as string
     const layer = formData.get('layer') as string
 
-    if (layer === 'base' && canManageBase) {
-      await db.from('base_calendar_events').delete().eq('organization_id', orgId).eq('id', eventId)
+    if (layer === 'base' && (canManageBase || isComunicacaoMember)) {
+      let query = db.from('base_calendar_events').delete().eq('organization_id', orgId).eq('id', eventId)
+      if (!canManageBase) query = query.eq('created_by', userId)
+      await query
     }
 
     if (layer === 'escola' && (canManageBase || canManageSchool)) {
@@ -388,11 +412,12 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
     const title = (formData.get('title') as string).trim()
     if (!eventId || !title) return
 
-    if (layer === 'base' && canManageBase) {
+    if (layer === 'base' && (canManageBase || isComunicacaoMember)) {
       const startsOn = formData.get('starts_on') as string
+      const visibleToRoles = formData.getAll('visible_to_roles') as string[]
       if (!startsOn) return
 
-      await db
+      let query = db
         .from('base_calendar_events')
         .update({
           title,
@@ -400,9 +425,12 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
           event_type: (formData.get('event_type') as string) || 'evento',
           starts_on: startsOn,
           ends_on: (formData.get('ends_on') as string) || null,
+          visible_to_roles: visibleToRoles.length > 0 ? visibleToRoles : null,
         })
         .eq('organization_id', orgId)
         .eq('id', eventId)
+      if (!canManageBase) query = query.eq('created_by', userId)
+      await query
     }
 
     if (layer === 'escola' && (canManageBase || canManageSchool)) {
@@ -422,6 +450,7 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
           event_type: (formData.get('event_type') as string) || 'aula',
           starts_at: localDateTimeToIso(startsAt),
           ends_at: endsAt ? localDateTimeToIso(endsAt) : null,
+          visible_to_students: formData.get('visible_to_students') === 'on',
         })
         .eq('organization_id', orgId)
         .eq('id', eventId)
@@ -483,7 +512,7 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
         events={events}
         schoolOptions={schoolOptions}
         ministryOptions={ministryOptions}
-        permissions={{ canManageBase, canManageSchool, canManageMinistry, canAddPrivateNote }}
+        permissions={{ canManageBase, canManageSchool, canManageMinistry, canAddPrivateNote, canManageComunicacao: isComunicacaoMember, currentUserId: userId }}
         actions={{ createBaseEvent, createSchoolEvent, createMinistryEvent, createPersonalNote, updateEvent, deleteEvent }}
       />
     </>
@@ -492,90 +521,6 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
 
 function sortKey(event: CalendarEvent) {
   return event.starts_at ?? `${event.starts_on}T00:00:00`
-}
-
-async function getStudentSchoolIds(
-  db: ReturnType<typeof createAdminClient>,
-  organizationId: string,
-  userId: string,
-  email: string | null
-) {
-  const personIds = new Set<string>()
-
-  const { data: profilesByUser, error: profilesByUserError } = await db
-    .from('student_profiles')
-    .select('person_id, user_id')
-    .eq('organization_id', organizationId)
-    .eq('user_id', userId)
-    .eq('active', true)
-
-  if (!profilesByUserError) {
-    for (const profile of (profilesByUser ?? []) as Array<{ person_id: string }>) {
-      personIds.add(profile.person_id)
-    }
-  }
-
-  if (email) {
-    const { data: contacts } = await db
-      .from('person_contacts')
-      .select('person_id, people!inner(organization_id)')
-      .eq('type', 'email')
-      .eq('value', email)
-      .eq('people.organization_id', organizationId)
-
-    const contactPersonIds = ((contacts ?? []) as unknown as Array<{ person_id: string }>).map(contact => contact.person_id)
-
-    if (contactPersonIds.length > 0) {
-      const { data: activeStudentProfiles } = await db
-        .from('student_profiles')
-        .select('person_id')
-        .eq('organization_id', organizationId)
-        .eq('active', true)
-        .in('person_id', contactPersonIds)
-
-      for (const profile of (activeStudentProfiles ?? []) as Array<{ person_id: string }>) {
-        personIds.add(profile.person_id)
-      }
-    }
-  }
-
-  if (personIds.size === 0) return []
-
-  const personIdList = [...personIds]
-  const schoolIds = new Set<string>()
-
-  const { data: enrollments } = await db
-    .from('class_students')
-    .select('class_id')
-    .in('person_id', personIdList)
-    .eq('status', 'ativo')
-
-  const classIds = [...new Set(((enrollments ?? []) as Array<{ class_id: string }>).map(row => row.class_id))]
-
-  if (classIds.length > 0) {
-    const { data: classes } = await db
-      .from('school_classes')
-      .select('id, school_id, schools!inner(organization_id)')
-      .in('id', classIds)
-      .eq('schools.organization_id', organizationId)
-
-    for (const row of (classes ?? []) as unknown as Array<{ school_id: string | null }>) {
-      if (row.school_id) schoolIds.add(row.school_id)
-    }
-  }
-
-  const { data: applications } = await db
-    .from('student_applications')
-    .select('school_id')
-    .eq('organization_id', organizationId)
-    .in('person_id', personIdList)
-    .eq('status', 'aprovado')
-
-  for (const app of (applications ?? []) as Array<{ school_id: string | null }>) {
-    if (app.school_id) schoolIds.add(app.school_id)
-  }
-
-  return [...schoolIds]
 }
 
 async function getObreiroMinistryIds(

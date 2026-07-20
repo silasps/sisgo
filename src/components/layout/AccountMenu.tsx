@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { useFormStatus } from 'react-dom'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Building2, ArrowLeftRight, Loader2, LogOut, User, Briefcase } from 'lucide-react'
+import { Building2, ArrowLeftRight, Loader2, LogOut, User, Briefcase, Settings } from 'lucide-react'
 import { useAccount, type AccountInfo } from './account-context'
 import { setNavMode } from '@/lib/nav-mode-actions'
 
@@ -31,10 +31,12 @@ export function AccountMenu() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="relative w-8 h-8 rounded-full bg-brand-50 border border-brand-100 flex items-center justify-center text-brand-600 text-xs font-bold uppercase shrink-0 hover:bg-brand-100 transition-colors"
+        className="relative w-8 h-8 rounded-full bg-brand-50 border border-brand-100 flex items-center justify-center text-brand-600 text-xs font-bold uppercase shrink-0 hover:bg-brand-100 transition-colors overflow-hidden"
         aria-label={`Minha conta — modo ${account.mode === 'administracao' ? 'Administração' : 'Pessoal'}`}
       >
-        {initial}
+        {account.avatarUrl
+          ? <img src={account.avatarUrl} alt="" className="w-full h-full object-cover" />
+          : initial}
         {account.canSwitchMode && (
           <span
             className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-white flex items-center justify-center ${
@@ -87,13 +89,25 @@ function PanelContent({
   return (
     <div className="p-2">
       <div className="flex items-center gap-3 px-3 py-3">
-        <div className="w-10 h-10 rounded-full bg-brand-50 border border-brand-100 flex items-center justify-center text-brand-600 text-sm font-bold uppercase shrink-0">
-          {(account.name ?? account.email).charAt(0)}
+        <div className="w-10 h-10 rounded-full bg-brand-50 border border-brand-100 flex items-center justify-center text-brand-600 text-sm font-bold uppercase shrink-0 overflow-hidden">
+          {account.avatarUrl
+            ? <img src={account.avatarUrl} alt="" className="w-full h-full object-cover" />
+            : (account.name ?? account.email).charAt(0)}
         </div>
         <div className="min-w-0">
           {account.name && <p className="text-sm font-semibold text-gray-900 truncate">{account.name}</p>}
           <p className="text-xs text-gray-500 truncate">{account.email}</p>
         </div>
+      </div>
+
+      <div className="px-3 pb-2">
+        <Link
+          href={`/${account.orgSlug}/conta`}
+          className="flex items-center gap-2 px-3 py-2 -mx-3 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+        >
+          <Settings size={15} className="shrink-0" />
+          Configurações da conta
+        </Link>
       </div>
 
       {account.canSwitchMode && (

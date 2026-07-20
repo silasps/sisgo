@@ -51,7 +51,7 @@ export default function NovaBasePage() {
       <Header
         title="Nova Base"
         actions={
-          <Link href="/superadmin/bases" className="text-sm text-gray-500 hover:text-gray-700">
+          <Link href="/superadmin/bases" className="text-sm text-gray-300 hover:text-white">
             ← Cancelar
           </Link>
         }

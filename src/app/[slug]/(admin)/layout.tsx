@@ -74,6 +74,18 @@ function buildAllAppsItems(universal: RegularNavItem[], admin: RegularNavItem[],
   return out
 }
 
+// Remove divisores de seção que ficaram sem nenhum item depois de um filtro.
+function dropEmptySections(items: NavItem[]): NavItem[] {
+  const out: NavItem[] = []
+  let pendingDivider: NavItem | null = null
+  for (const item of items) {
+    if ('divider' in item) { pendingDivider = item; continue }
+    if (pendingDivider) { out.push(pendingDivider); pendingDivider = null }
+    out.push(item)
+  }
+  return out
+}
+
 function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPending: boolean, hasReservationsPending: boolean, hasOwnCashScope: boolean, laundryEnabled: boolean, hasMinistryMessages: boolean, hasSchoolMessages: boolean, idCardEnabled: boolean): NavItem[] {
   const allRoles = [role, ...accumulatedRoles]
   const is = (r: string) => allRoles.includes(r)
@@ -100,6 +112,7 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
     { href: `/${slug}/dashboard`,    label: 'Início',           icon: 'dashboard',     show: true },
     { href: `/${slug}/calendario`,   label: 'Calendário',       icon: 'calendario',    show: true },
     { href: `/${slug}/pendentes`,    label: 'Pendentes',        icon: 'pendentes',     show: true, alert: hasPending },
+    { href: `/${slug}/comunicacao`,  label: 'Comunicação',      icon: 'comunicacao',   show: role === 'lider_base' || role === 'superadmin' || is('comunicacao') },
     { href: `/${slug}/pessoas`,      label: 'Pessoas',          icon: 'pessoas',       show: !is('lider_eted') && !isLiderMinisterio },
     { href: `/${slug}/presenca`,     label: 'Presença',         icon: 'presenca',      show: isManagement || is('secretaria') || is('hospitalidade') || isCozinha || is('lider_eted') || isObreiroEted || isLiderMinisterio || isObreiroMinisterio },
     { href: `/${slug}/obreiros`,     label: 'Obreiros',         icon: 'obreiros',      show: isManagement },
@@ -543,7 +556,13 @@ export default async function SlugLayout({ children, params }: Props) {
   const sidebarItems: NavItem[] = navMode === 'administracao'
     ? [...universal, ...sectionize(adminNavItems)]
     : [...universal, ...personalNavItems]
-  const allNavItems = buildAllAppsItems(universal, adminNavItems, personalNavItems)
+  // "Ver tudo" mostra só o complemento do que já está na sidebar do modo atual
+  // (ex.: itens do outro modo Pessoal/Administração) — não repete o que já é visível.
+  const sidebarIcons = new Set(sidebarItems.filter((i): i is RegularNavItem => !('divider' in i)).map(i => i.icon))
+  const allNavItems = dropEmptySections(
+    buildAllAppsItems(universal, adminNavItems, personalNavItems)
+      .filter(i => 'divider' in i || !sidebarIcons.has(i.icon)),
+  )
 
   const myOrgs = userOrgRows
     .map(r => r.organizations)
@@ -552,11 +571,14 @@ export default async function SlugLayout({ children, params }: Props) {
   const metadata = (user.user_metadata ?? {}) as Record<string, unknown>
   const displayName = [metadata.full_name, metadata.name, metadata.fullName, metadata.display_name]
     .find((v): v is string => typeof v === 'string' && v.trim().length > 0) ?? null
+  const avatarUrl = typeof metadata.avatar_url === 'string' && metadata.avatar_url.trim().length > 0
+    ? metadata.avatar_url
+    : null
 
   return (
     <div className="flex flex-col h-dvh">
       <style>{`:root{${accentCssVars(accentKey)}}`}</style>
-      <div className={`shrink-0 h-[env(safe-area-inset-top)] ${isSuperAdmin ? 'bg-gray-900' : 'bg-white'}`} />
+      <div className="shrink-0 h-[env(safe-area-inset-top)] bg-dark-950" />
       {isSuperAdmin && (
         <SuperAdminContextBar
           mode="admin"
@@ -577,6 +599,7 @@ export default async function SlugLayout({ children, params }: Props) {
         account={{
           name: displayName,
           email: user.email ?? '',
+          avatarUrl,
           orgSlug: slug,
           orgName: org.name,
           orgs: myOrgs,

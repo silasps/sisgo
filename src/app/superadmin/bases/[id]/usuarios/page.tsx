@@ -63,7 +63,7 @@ export default async function UsuariosPage({ params }: Props) {
       <Header
         title={`Usuários — ${base.name}`}
         actions={
-          <Link href={`/superadmin/bases/${orgId}`} className="text-sm text-gray-500 hover:text-gray-700">
+          <Link href={`/superadmin/bases/${orgId}`} className="text-sm text-gray-300 hover:text-white">
             ← Voltar
           </Link>
         }

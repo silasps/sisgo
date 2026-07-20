@@ -28,8 +28,11 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error) {
+      const next = searchParams.get('next')
+      const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : null
+
       const { data: { user } } = await supabase.auth.getUser()
-      const dest = user ? await getPostLoginDest(supabase, user.id) : '/bases'
+      const dest = safeNext ?? (user ? await getPostLoginDest(supabase, user.id) : '/bases')
 
       const response = NextResponse.redirect(`${origin}${dest}`)
       for (const { name, value, options } of cookiesToSet) {

@@ -36,6 +36,7 @@ export default async function NovoMinisterioPage({ params }: Props) {
     { value: 'dh', label: 'DH (Desenvolvimento Humano)' },
     { value: 'cozinha', label: 'Cozinha' },
     { value: 'manutencao', label: 'Manutenção' },
+    { value: 'comunicacao', label: 'Comunicação' },
   ]
   const availableRoles = LINKABLE_ROLES.filter(r => !usedRoles.has(r.value))
 

@@ -19,7 +19,7 @@ export function AllAppsMenu() {
   return (
     <button
       onClick={openAllApps}
-      className="w-8 h-8 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors shrink-0"
+      className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-white/10 hover:text-white transition-colors shrink-0"
       aria-label="Ver tudo"
     >
       <LayoutGrid size={18} />

@@ -145,6 +145,7 @@ export default async function MinistriosPage({ params }: Props) {
     { role: 'dh', name: 'DH', description: 'Desenvolvimento humano e gestão de pessoas' },
     { role: 'cozinha', name: 'Cozinha', description: 'Alimentação e refeições' },
     { role: 'manutencao', name: 'Manutenção', description: 'Manutenção e infraestrutura' },
+    { role: 'comunicacao', name: 'Comunicação', description: 'Anúncios e conteúdo da base' },
   ]
   const usedLinkedRoles = new Set(ministerios.map(m => m.linked_role).filter(Boolean))
   const availableFunctions = canWrite

@@ -124,13 +124,13 @@ export default async function EditarTurmaPage({ params }: Props) {
           <div className="flex items-center gap-2">
             <a
               href="#atividades-extras"
-              className="hidden sm:inline-flex px-4 py-2 text-sm font-semibold text-brand-600 hover:text-brand-800 border border-brand-200 rounded-lg hover:bg-brand-50 transition-colors"
+              className="hidden sm:inline-flex px-4 py-2 text-sm font-semibold text-brand-400 hover:text-brand-300 border border-white/15 rounded-lg hover:bg-white/10 transition-colors"
             >
               Atividades ↓
             </a>
             {schoolSlug && (
               <Link href={`/${slug}/escola/${schoolSlug}`} target="_blank"
-                className="px-3 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                className="px-3 py-2 text-sm font-semibold text-gray-300 hover:text-white border border-white/15 rounded-lg hover:bg-white/10 transition-colors">
                 <span className="hidden sm:inline">Ver página pública </span>↗
               </Link>
             )}

@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { AlertTriangle, CalendarDays, CalendarPlus, CalendarRange, ChevronLeft, ChevronRight, Clock, LayoutList, Plus, Save, Trash2, X } from 'lucide-react'
 import { useCallback, useMemo, useRef, useState, useTransition } from 'react'
+import { AUDIENCE_ROLES } from '@/lib/audience-roles'
 
 export type CalendarLayer = 'base' | 'escola' | 'ministerio' | 'pessoal' | 'auto'
 export type CalendarEventType = 'evento' | 'feriado' | 'trimestre' | 'escola' | 'aula' | 'tema' | 'nota' | 'reuniao' | 'devocional' | 'outro'
@@ -22,6 +23,9 @@ export type CalendarEvent = {
   school_name?: string | null
   ministry_id?: string | null
   ministry_name?: string | null
+  created_by?: string | null
+  visible_to_roles?: string[] | null
+  visible_to_students?: boolean
 }
 
 export type SchoolOption = { id: string; name: string }
@@ -40,6 +44,8 @@ type Props = {
     canManageSchool: boolean
     canManageMinistry: boolean
     canAddPrivateNote: boolean
+    canManageComunicacao: boolean
+    currentUserId: string
   }
   actions: {
     createBaseEvent: Action
@@ -165,8 +171,8 @@ export function CalendarWorkspace({ year, slug, events, schoolOptions, ministryO
     return list.sort((a, b) => (a.starts_at ?? a.starts_on).localeCompare(b.starts_at ?? b.starts_on) || a.title.localeCompare(b.title))
   }, [periodRange, eventsByDay])
 
-  const canCreate = permissions.canManageBase || permissions.canManageSchool || permissions.canManageMinistry || permissions.canAddPrivateNote
-  const defaultLayer: 'base' | 'escola' | 'ministerio' | 'pessoal' = permissions.canManageBase ? 'base' : permissions.canManageSchool ? 'escola' : permissions.canManageMinistry ? 'ministerio' : 'pessoal'
+  const canCreate = permissions.canManageBase || permissions.canManageComunicacao || permissions.canManageSchool || permissions.canManageMinistry || permissions.canAddPrivateNote
+  const defaultLayer: 'base' | 'escola' | 'ministerio' | 'pessoal' = (permissions.canManageBase || permissions.canManageComunicacao) ? 'base' : permissions.canManageSchool ? 'escola' : permissions.canManageMinistry ? 'ministerio' : 'pessoal'
 
   function openCreate(date?: string) {
     setModal({ open: true, mode: 'create', layer: defaultLayer, date: date ?? selectedDate })
@@ -1172,7 +1178,7 @@ function EventModal({
   const currentLayer = isCreate ? modal.layer : modal.event.layer as 'base' | 'escola' | 'ministerio' | 'pessoal'
 
   const availableLayers: Array<{ key: 'base' | 'escola' | 'ministerio' | 'pessoal'; label: string }> = [
-    ...(permissions.canManageBase ? [{ key: 'base' as const, label: 'Base' }] : []),
+    ...(permissions.canManageBase || permissions.canManageComunicacao ? [{ key: 'base' as const, label: 'Base' }] : []),
     ...(permissions.canManageSchool || permissions.canManageBase ? [{ key: 'escola' as const, label: 'ETED' }] : []),
     ...(permissions.canManageMinistry || permissions.canManageBase ? [{ key: 'ministerio' as const, label: 'Ministério' }] : []),
     { key: 'pessoal' as const, label: 'Privado' },
@@ -1211,7 +1217,7 @@ function EventModal({
         )}
 
         <div className="p-5">
-          {isCreate && currentLayer === 'base' && permissions.canManageBase && (
+          {isCreate && currentLayer === 'base' && (permissions.canManageBase || permissions.canManageComunicacao) && (
             <form action={actions.createBaseEvent} className="space-y-3">
               <input type="hidden" name="starts_on" value={modal.date} />
               <FieldInput name="title" placeholder="Título do evento" required />
@@ -1232,6 +1238,7 @@ function EventModal({
                 </div>
               </div>
               <FieldInput name="description" placeholder="Observação (opcional)" />
+              <AudienceRolesField defaultRoles={[]} />
               <SubmitButton label="Adicionar" />
             </form>
           )}
@@ -1259,6 +1266,7 @@ function EventModal({
                 </div>
               </div>
               <FieldInput name="description" placeholder="Professor, sala ou observação" />
+              <VisibleToStudentsField defaultChecked />
               <SubmitButton label="Adicionar" />
             </form>
           )}
@@ -1363,6 +1371,7 @@ function EditEventForm({ event, schools, ministries = [], updateAction, deleteAc
             <input name="ends_on"   type="date"         defaultValue={event.ends_on ?? ''} className={INPUT_CLASS} />
           </div>
           <FieldInput name="description" defaultValue={event.description ?? ''} placeholder="Observação" />
+          <AudienceRolesField defaultRoles={event.visible_to_roles ?? []} />
         </form>
         {actionsRow}
       </div>
@@ -1390,6 +1399,7 @@ function EditEventForm({ event, schools, ministries = [], updateAction, deleteAc
             <input name="ends_at"   type="datetime-local"         defaultValue={event.ends_at   ? isoToLocalInput(event.ends_at)   : ''} className={INPUT_CLASS} />
           </div>
           <FieldInput name="description" defaultValue={event.description ?? ''} placeholder="Professor, sala ou observação" />
+          <VisibleToStudentsField defaultChecked={event.visible_to_students ?? true} />
         </form>
         {actionsRow}
       </div>
@@ -1458,6 +1468,36 @@ function FieldSelect({ name, defaultValue, options }: {
   )
 }
 
+function AudienceRolesField({ defaultRoles }: { defaultRoles: string[] }) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-xs text-gray-500">
+        Quem vê <span className="text-gray-400">(nenhum marcado = todos)</span>
+      </label>
+      <div className="flex flex-wrap gap-1.5">
+        {AUDIENCE_ROLES.map(role => (
+          <label
+            key={role.value}
+            className="flex items-center gap-1 rounded-full border border-gray-200 px-2 py-1 text-xs text-gray-600 has-[:checked]:border-brand-400 has-[:checked]:bg-brand-50 has-[:checked]:text-brand-700"
+          >
+            <input type="checkbox" name="visible_to_roles" value={role.value} defaultChecked={defaultRoles.includes(role.value)} className="size-3" />
+            {role.label}
+          </label>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function VisibleToStudentsField({ defaultChecked }: { defaultChecked: boolean }) {
+  return (
+    <label className="flex items-center gap-2 text-sm text-gray-700">
+      <input type="checkbox" name="visible_to_students" defaultChecked={defaultChecked} className="size-4" />
+      Visível para os alunos
+    </label>
+  )
+}
+
 function SubmitButton({ label, small = false, form }: { label: string; small?: boolean; form?: string }) {
   return (
     <button type="submit" form={form} className={`inline-flex w-full items-center justify-center gap-2 rounded-lg bg-brand-500 font-semibold text-white transition-colors hover:bg-brand-600 ${small ? 'px-3 py-2 text-xs' : 'px-4 py-2 text-sm'}`}>
@@ -1482,7 +1522,7 @@ function Legend({ label, type, active, onClick }: { label: string; type: Calenda
 
 function canEdit(event: CalendarEvent, permissions: Props['permissions']) {
   if (event.source !== 'manual') return false
-  if (event.layer === 'base')       return permissions.canManageBase
+  if (event.layer === 'base')       return permissions.canManageBase || (permissions.canManageComunicacao && event.created_by === permissions.currentUserId)
   if (event.layer === 'escola')     return permissions.canManageBase || permissions.canManageSchool
   if (event.layer === 'ministerio') return permissions.canManageBase || permissions.canManageMinistry
   if (event.layer === 'pessoal')    return permissions.canAddPrivateNote

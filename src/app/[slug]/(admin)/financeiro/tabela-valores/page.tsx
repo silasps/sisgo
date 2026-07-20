@@ -102,7 +102,7 @@ export default async function TabelaValoresPage({ params }: Props) {
       <Header
         title="Tabela de Valores"
         actions={
-          <Link href={`/${slug}/financeiro`} className="text-sm text-gray-500 hover:text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors">
+          <Link href={`/${slug}/financeiro`} className="text-sm text-gray-300 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">
             ← Financeiro
           </Link>
         }

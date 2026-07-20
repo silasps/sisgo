@@ -61,7 +61,7 @@ export default async function PessoaWorkspaceLayout({ children, params }: Props)
       <Header
         title={person.full_name}
         actions={
-          <Link href={`/${slug}/pessoas`} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors">
+          <Link href={`/${slug}/pessoas`} className="flex items-center gap-1.5 text-sm text-gray-300 hover:text-white transition-colors">
             <ChevronLeft size={16} />
             Voltar
           </Link>
