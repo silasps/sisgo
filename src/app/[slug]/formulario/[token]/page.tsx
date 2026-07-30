@@ -5,12 +5,12 @@ import { CheckCircle2 } from 'lucide-react'
 
 type Props = {
   params: Promise<{ slug: string; token: string }>
-  searchParams: Promise<{ print?: string }>
+  searchParams: Promise<{ print?: string; lang?: string }>
 }
 
 export default async function FormularioPage({ params, searchParams }: Props) {
   const { slug, token } = await params
-  const { print } = await searchParams
+  const { print, lang } = await searchParams
   const printMode = print === '1'
   const sb = createAdminClient()
 
@@ -135,7 +135,7 @@ export default async function FormularioPage({ params, searchParams }: Props) {
             initialSection={app.current_section ?? 1}
             initialData={formData}
             hiddenFields={hiddenFields}
-            initialLang={prefill.idioma}
+            initialLang={lang ?? prefill.idioma}
             printMode={printMode}
           />
         </div>

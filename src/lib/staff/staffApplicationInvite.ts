@@ -14,6 +14,7 @@ type SendFormLinkParams = {
   fullName: string
   email: string | null
   language: string | null
+  sendEmail?: boolean
 }
 
 // Monta a URL de /formulario-obreiro/[token] e (re)envia o e-mail com o
@@ -28,7 +29,9 @@ async function sendFormLink(params: SendFormLinkParams): Promise<StaffInviteResu
   const formUrl = `${protocol}://${host}/${params.slug}/formulario-obreiro/${params.token}`
 
   let emailWarning: string | undefined
-  if (params.email) {
+  if (params.sendEmail === false) {
+    // usuário escolheu "copiar link" — não é falha, não gera aviso
+  } else if (params.email) {
     const { data: orgRow } = await db.from('organizations').select('name, email').eq('id', params.organizationId).maybeSingle()
     let ministryName: string | null = null
     if (params.ministryId) {
@@ -74,6 +77,7 @@ type CreateAndSendParams = {
   language: string | null
   personId?: string | null
   leaderAcceptedBy: string | null
+  sendEmail?: boolean
 }
 
 // Cria (ou reaproveita) a people, gera a staff_applications com token e envia
@@ -138,6 +142,7 @@ export async function createAndSendStaffApplication(params: CreateAndSendParams)
     fullName,
     email,
     language,
+    sendEmail: params.sendEmail,
   })
 }
 

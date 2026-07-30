@@ -4,9 +4,10 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Modal } from '@/components/ui/Modal'
 import { InternationalPhoneField } from '@/components/ui/InternationalPhoneField'
+import { useSidebarLeftClass } from '@/components/layout/account-context'
 import { gerarLinkReferencia } from '@/app/[slug]/formulario/[token]/actions'
 import { gerarLinkReferenciaObreiro } from '@/app/[slug]/formulario-obreiro/[token]/actions'
-import { Link as LinkIcon, RefreshCw, CheckCircle2 } from 'lucide-react'
+import { Link as LinkIcon, RefreshCw, CheckCircle2, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { ReferenceAnswers } from './ReferenceAnswers'
 
@@ -231,11 +232,12 @@ type PreInscricao = {
 }
 
 export function EditarPreInscricaoButton({
-  item, openClasses, editarAction,
+  item, openClasses, editarAction, iconOnly,
 }: {
   item: PreInscricao
   openClasses: ClassOption[]
   editarAction: EditarAction
+  iconOnly?: boolean
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -254,11 +256,19 @@ export function EditarPreInscricaoButton({
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)}
-        title="Editar pré-inscrição"
-        className="text-xs px-2.5 py-1.5 text-gray-500 hover:text-brand-600 hover:bg-brand-50 border border-gray-200 rounded-lg transition-colors">
-        Editar
-      </button>
+      {iconOnly ? (
+        <button type="button" onClick={() => setOpen(true)}
+          aria-label="Editar pré-inscrição" title="Editar dados da pré-inscrição"
+          className="p-1.5 border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-brand-600 rounded-lg transition-colors">
+          <Pencil className="size-4" />
+        </button>
+      ) : (
+        <button type="button" onClick={() => setOpen(true)}
+          title="Editar pré-inscrição"
+          className="text-xs px-2.5 py-1.5 text-gray-500 hover:text-brand-600 hover:bg-brand-50 border border-gray-200 rounded-lg transition-colors">
+          Editar
+        </button>
+      )}
 
       <Modal open={open} onClose={() => setOpen(false)} title="Editar pré-inscrição"
         subtitle={item.full_name}>
@@ -324,12 +334,13 @@ type PreInscricaoObreiro = {
 }
 
 export function EditarPreInscricaoObreiroButton({
-  item, ministries, schools, editarAction,
+  item, ministries, schools, editarAction, iconOnly,
 }: {
   item: PreInscricaoObreiro
   ministries: MinistryOption[]
   schools: SchoolOption[]
   editarAction: EditarAction
+  iconOnly?: boolean
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -348,11 +359,19 @@ export function EditarPreInscricaoObreiroButton({
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)}
-        title="Editar pré-inscrição"
-        className="text-xs px-2.5 py-1.5 text-gray-500 hover:text-violet-600 hover:bg-violet-50 border border-gray-200 rounded-lg transition-colors">
-        Editar
-      </button>
+      {iconOnly ? (
+        <button type="button" onClick={() => setOpen(true)}
+          aria-label="Editar pré-inscrição" title="Editar dados da pré-inscrição"
+          className="p-1.5 border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-violet-600 rounded-lg transition-colors">
+          <Pencil className="size-4" />
+        </button>
+      ) : (
+        <button type="button" onClick={() => setOpen(true)}
+          title="Editar pré-inscrição"
+          className="text-xs px-2.5 py-1.5 text-gray-500 hover:text-violet-600 hover:bg-violet-50 border border-gray-200 rounded-lg transition-colors">
+          Editar
+        </button>
+      )}
 
       <Modal open={open} onClose={() => setOpen(false)} title="Editar pré-inscrição de obreiro"
         subtitle={item.full_name}>
@@ -484,6 +503,7 @@ export function LinksReferenciaAdminButton({
   const [copied, setCopied] = useState<'pastor' | 'amigo' | null>(null)
   const [showRespostas, setShowRespostas] = useState<'pastor' | 'amigo' | null>(null)
   const [confirmTipo, setConfirmTipo] = useState<'pastor' | 'amigo' | null>(null)
+  const sidebarLeftClass = useSidebarLeftClass()
   const anyRespondido = refSummary?.pastor?.status === 'enviado' || refSummary?.amigo?.status === 'enviado'
 
   async function gerar(tipo: 'pastor' | 'amigo') {
@@ -573,7 +593,7 @@ export function LinksReferenciaAdminButton({
 
       {confirmTipo && (
         <div
-          className="fixed inset-0 md:left-60 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          className={`fixed inset-0 ${sidebarLeftClass} z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm`}
           onClick={() => setConfirmTipo(null)}
         >
           <div

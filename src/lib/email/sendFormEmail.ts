@@ -19,6 +19,22 @@ function formatDate(iso: string, lang: EmailLang) {
   return new Date(iso).toLocaleDateString(emailLocale(lang), { day: '2-digit', month: 'long', year: 'numeric' })
 }
 
+const LANG_NAMES: Record<EmailLang, string> = { pt: 'Português', en: 'English', es: 'Español' }
+
+// Igual ao seletor de idioma de dentro do formulário (LangSwitcher) — aqui
+// vira link porque e-mail não roda JS: cada opção reabre o formulário já no
+// idioma escolhido (?lang=xx), o form lê isso em initialLang.
+function langSwitcherHtml(formUrl: string, current: EmailLang): string {
+  const sep = formUrl.includes('?') ? '&' : '?'
+  const links = (Object.keys(LANG_NAMES) as EmailLang[]).map(l => {
+    const active = l === current
+    return `<a href="${formUrl}${sep}lang=${l}" style="color:${active ? '#4f46e5' : '#9ca3af'};text-decoration:none;font-weight:${active ? 700 : 400};">${LANG_NAMES[l]}</a>`
+  })
+  return `<table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:0 0 20px;font-size:12px;">
+    ${links.join('&nbsp;&nbsp;·&nbsp;&nbsp;')}
+  </td></tr></table>`
+}
+
 function buildHtml(p: SendFormEmailParams): string {
   const lang = normalizeLang(p.language) as EmailLang
   const d = getEmailDict(lang)
@@ -54,6 +70,7 @@ function buildHtml(p: SendFormEmailParams): string {
         <!-- Body -->
         <tr>
           <td style="padding:40px;">
+            ${langSwitcherHtml(p.formUrl, lang)}
             <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:#111827;">
               ${d.greeting.replace('{name}', p.candidateName)}
             </p>

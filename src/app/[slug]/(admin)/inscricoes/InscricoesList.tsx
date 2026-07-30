@@ -4,6 +4,7 @@ import { useState, useTransition, type ReactNode } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useFormStatus } from 'react-dom'
 import { Search, ClipboardList, Mail, MessageCircle, ChevronDown, Link2, Loader2 } from 'lucide-react'
+import { Modal } from '@/components/ui/Modal'
 import { RecusarModal } from './RecusarModal'
 import { DisponibilizarFormularioButton } from './DisponibilizarFormularioButton'
 import { PipelineStepper, stagesFromFlags } from '@/components/inscricoes/PipelineStepper'
@@ -313,6 +314,27 @@ function DataChegadaField({ slug, organizationId, ministryId, staffApplicationId
   )
 }
 
+// Muitas escolas/ministérios já combinam data fixa com a hospitalidade antes
+// mesmo da inscrição — por isso fica escondido num botão discreto em vez de
+// um bloco grande sempre aberto, e só quando ainda não há nenhuma data.
+function InformarChegadaButton(props: Parameters<typeof DataChegadaField>[0]) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="col-span-2">
+      <button type="button" onClick={() => setOpen(true)}
+        className="w-full text-xs px-3 py-2 bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors font-medium">
+        Informar data de chegada d{props.guestType === 'aluno' ? 'o aluno' : 'o obreiro'}
+      </button>
+
+      <Modal open={open} onClose={() => setOpen(false)} title="Data de chegada" subtitle={props.guestName}>
+        <div className="p-5">
+          <DataChegadaField {...props} />
+        </div>
+      </Modal>
+    </div>
+  )
+}
+
 export function InscricoesList({
   items,
   historico,
@@ -567,6 +589,23 @@ export function InscricoesList({
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
+                    {!finalizado && canWriteItem(item) && item.tipo === 'pre_inscricao' && (
+                      <EditarPreInscricaoButton
+                        item={{ id: item.id, full_name: item.nome, email: item.email, phone: item.phone, message: item.mensagem, classId: item.classId }}
+                        openClasses={openClasses}
+                        editarAction={editarPreInscricao}
+                        iconOnly
+                      />
+                    )}
+                    {!finalizado && canWriteObreiro && item.tipo === 'pre_inscricao_obreiro' && (
+                      <EditarPreInscricaoObreiroButton
+                        item={{ id: item.id, full_name: item.nome, email: item.email, phone: item.phone, message: item.mensagem, ministryId: item.ministryId ?? null, schoolId: item.schoolId }}
+                        ministries={allMinistries}
+                        schools={allSchools}
+                        editarAction={editarPreInscricaoObreiro}
+                        iconOnly
+                      />
+                    )}
                     {!finalizado && item.email && (
                       <a
                         href={`mailto:${item.email}?subject=Sua inscrição - ${item.escola ?? 'JOCUM'}&body=Olá ${item.nome},%0A%0A`}
@@ -644,46 +683,27 @@ export function InscricoesList({
                         </div>
                       )}
 
-                      {((canWriteItem(item) && item.tipo === 'pre_inscricao') || (canWriteObreiro && (item.tipo === 'pre_inscricao_obreiro' || (item.tipo === 'obreiro' && !finalizado)))) && (
+                      {canWriteObreiro && item.tipo === 'obreiro' && !finalizado && (
                         <details className="col-span-2 text-xs">
                           <summary className="cursor-pointer text-gray-400 select-none py-1">Mais ações</summary>
                           <div className="mt-1.5 space-y-1.5">
-                            <div className="grid grid-cols-2 gap-1.5">
-                              {canWriteItem(item) && item.tipo === 'pre_inscricao' && (
-                                <EditarPreInscricaoButton
-                                  item={{ id: item.id, full_name: item.nome, email: item.email, phone: item.phone, message: item.mensagem, classId: item.classId }}
-                                  openClasses={openClasses}
-                                  editarAction={editarPreInscricao}
-                                />
-                              )}
-                              {canWriteObreiro && item.tipo === 'pre_inscricao_obreiro' && (
-                                <EditarPreInscricaoObreiroButton
-                                  item={{ id: item.id, full_name: item.nome, email: item.email, phone: item.phone, message: item.mensagem, ministryId: item.ministryId ?? null, schoolId: item.schoolId }}
-                                  ministries={allMinistries}
-                                  schools={allSchools}
-                                  editarAction={editarPreInscricaoObreiro}
-                                />
-                              )}
-                            </div>
-                            {item.tipo === 'obreiro' && (
-                              <form action={salvarPalavraLider} className="space-y-1.5 border-t border-gray-100 pt-1.5">
-                                <input type="hidden" name="id" value={item.id} />
-                                <p className="text-gray-500">Palavra sobre receber este obreiro (opcional)</p>
-                                <textarea
-                                  name="leader_word"
-                                  rows={2}
-                                  placeholder="A palavra que Deus deu sobre receber esta pessoa, se houver..."
-                                  className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-700"
-                                />
-                                <label className="flex items-start gap-2 text-gray-600">
-                                  <input type="checkbox" name="leader_word_shared" className="mt-0.5" />
-                                  Enviar esta palavra ao obreiro, se for aceito
-                                </label>
-                                <button type="submit" className="w-full text-xs px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg transition-colors font-semibold">
-                                  Salvar palavra
-                                </button>
-                              </form>
-                            )}
+                            <form action={salvarPalavraLider} className="space-y-1.5 border-t border-gray-100 pt-1.5">
+                              <input type="hidden" name="id" value={item.id} />
+                              <p className="text-gray-500">Palavra sobre receber este obreiro (opcional)</p>
+                              <textarea
+                                name="leader_word"
+                                rows={2}
+                                placeholder="A palavra que Deus deu sobre receber esta pessoa, se houver..."
+                                className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-700"
+                              />
+                              <label className="flex items-start gap-2 text-gray-600">
+                                <input type="checkbox" name="leader_word_shared" className="mt-0.5" />
+                                Enviar esta palavra ao obreiro, se for aceito
+                              </label>
+                              <button type="submit" className="w-full text-xs px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg transition-colors font-semibold">
+                                Salvar palavra
+                              </button>
+                            </form>
                           </div>
                         </details>
                       )}
@@ -714,12 +734,10 @@ export function InscricoesList({
                               />
                             </details>
                           </div>
-                        ) : (
+                        ) : item.candidateArrivalDate ? (
                           <div className="col-span-2 rounded-lg border border-amber-300 bg-amber-50 p-2.5">
                             <p className="text-xs font-bold text-amber-900">
-                              {item.candidateArrivalDate
-                                ? `⏳ ${item.nome} indicou chegada em ${new Date(item.candidateArrivalDate + 'T00:00:00').toLocaleDateString('pt-BR')} — revise e envie para a hospitalidade`
-                                : '⏳ Data de chegada ainda não informada'}
+                              ⏳ {item.nome} indicou chegada em {new Date(item.candidateArrivalDate + 'T00:00:00').toLocaleDateString('pt-BR')} — revise e envie para a hospitalidade
                             </p>
                             <DataChegadaField
                               slug={slug}
@@ -729,12 +747,20 @@ export function InscricoesList({
                               guestName={item.nome}
                               guestType="obreiro"
                               prefillDate={item.candidateArrivalDate}
-                              hint={item.candidateArrivalDate
-                                ? 'Confirme (ou ajuste) a data antes de avisar a hospitalidade.'
-                                : undefined}
+                              hint="Confirme (ou ajuste) a data antes de avisar a hospitalidade."
                               action={solicitarHospedagemObreiro}
                             />
                           </div>
+                        ) : (
+                          <InformarChegadaButton
+                            slug={slug}
+                            organizationId={orgId}
+                            ministryId={item.ministryId ?? null}
+                            staffApplicationId={item.staffApplicationId}
+                            guestName={item.nome}
+                            guestType="obreiro"
+                            action={solicitarHospedagemObreiro}
+                          />
                         )
                       )}
                       {canWrite && item.tipo === 'pre_inscricao_obreiro' && item.ministryId && !item.assumedByName && !finalizado && (
@@ -752,6 +778,7 @@ export function InscricoesList({
                               interestFormId={item.id}
                               slug={slug}
                               schoolId={item.schoolId}
+                              candidateName={item.nome}
                               action={disponibilizarFormulario}
                               emailDisabled={quota.exceeded}
                               emailDisabledReason={
@@ -770,6 +797,7 @@ export function InscricoesList({
                             interestFormId={item.id}
                             slug={slug}
                             schoolId="__obreiro__"
+                            candidateName={item.nome}
                             action={disponibilizarFormularioObreiro}
                             emailDisabled={false}
                             label="Enviar formulário de obreiro por e-mail"
@@ -860,18 +888,15 @@ export function InscricoesList({
                             />
                           </div>
                         ) : item.applicationId ? (
-                          <div className="col-span-2 rounded-lg border border-amber-300 bg-amber-50 p-2.5">
-                            <p className="text-xs font-bold text-amber-900">⏳ Data de chegada ainda não informada</p>
-                            <DataChegadaField
-                              slug={slug}
-                              organizationId={orgId}
-                              ministryId={null}
-                              staffApplicationId={item.applicationId}
-                              guestName={item.nome}
-                              guestType="aluno"
-                              action={solicitarHospedagemAluno}
-                            />
-                          </div>
+                          <InformarChegadaButton
+                            slug={slug}
+                            organizationId={orgId}
+                            ministryId={null}
+                            staffApplicationId={item.applicationId}
+                            guestName={item.nome}
+                            guestType="aluno"
+                            action={solicitarHospedagemAluno}
+                          />
                         ) : null
                       )}
                       {canWriteItem(item) && (item.status === 'pendente' || item.status === 'em_contato' || item.status === 'formulario_enviado' || item.status === 'em_analise') && item.tipo !== 'obreiro' && item.tipo !== 'pre_inscricao_obreiro' && (() => {

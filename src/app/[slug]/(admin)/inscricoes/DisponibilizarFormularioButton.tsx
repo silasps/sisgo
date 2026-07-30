@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useTransition, useEffect } from 'react'
+import { useState, useTransition, useEffect, type ReactNode } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Link as LinkIcon, ClipboardList, Loader2 } from 'lucide-react'
+import { AlertTriangle, Link as LinkIcon, ClipboardList, Loader2, Mail, CheckCircle2 } from 'lucide-react'
+import { Modal } from '@/components/ui/Modal'
 
 type ActionResult = {
   url?: string
@@ -16,12 +17,18 @@ type Props = {
   slug: string
   action: (formData: FormData) => Promise<ActionResult>
   schoolId: string
+  candidateName?: string
   emailDisabled?: boolean
   emailDisabledReason?: string
   label?: string
 }
 
-function CopiedToast({ visible }: { visible: boolean }) {
+function CenterToast({ visible, icon, tone = 'dark', children }: {
+  visible: boolean
+  icon: ReactNode
+  tone?: 'dark' | 'success'
+  children: ReactNode
+}) {
   const [rendered, setRendered] = useState(false)
 
   useEffect(() => {
@@ -37,43 +44,51 @@ function CopiedToast({ visible }: { visible: boolean }) {
   if (!visible && !rendered) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center pointer-events-none">
       <div
-        className={`flex items-center gap-3 bg-gray-950 text-white px-7 py-4 rounded-2xl shadow-2xl
+        className={`flex items-center gap-3 px-7 py-4 rounded-2xl shadow-2xl
           transition-all duration-400 ease-out
+          ${tone === 'success' ? 'bg-emerald-600 text-white' : 'bg-gray-950 text-white'}
           ${rendered && visible
             ? 'opacity-100 scale-100 translate-y-0'
             : 'opacity-0 scale-90 translate-y-3'
           }`}
       >
-        <LinkIcon className="size-6 text-brand-500" />
-        <span className="text-base font-semibold tracking-tight">Link copiado!</span>
+        {icon}
+        <span className="text-base font-semibold tracking-tight">{children}</span>
       </div>
     </div>
   )
 }
 
-export function DisponibilizarFormularioButton({ interestFormId, slug, action, schoolId, emailDisabled, emailDisabledReason, label }: Props) {
+export function DisponibilizarFormularioButton({ interestFormId, slug, action, schoolId, candidateName, emailDisabled, emailDisabledReason, label }: Props) {
   const [isPending, startTransition] = useTransition()
+  const [pendingAction, setPendingAction] = useState<'copy' | 'email' | null>(null)
+  const [confirmOpen, setConfirmOpen] = useState(false)
   const [showCopied, setShowCopied] = useState(false)
+  const [showSent, setShowSent] = useState(false)
   const [formUrl, setFormUrl] = useState<string | null>(null)
   const [emailNotice, setEmailNotice] = useState<{
     msg: string
     schoolId?: string
   } | null>(null)
 
-  function triggerCopiedToast() {
-    setShowCopied(true)
-    setTimeout(() => setShowCopied(false), 2400)
+  function flashToast(setter: (v: boolean) => void) {
+    setter(true)
+    setTimeout(() => setter(false), 2400)
   }
 
-  function handleClick() {
+  function runAction(sendEmail: boolean) {
+    setPendingAction(sendEmail ? 'email' : 'copy')
     startTransition(async () => {
       const fd = new FormData()
       fd.append('interest_form_id', interestFormId)
       fd.append('slug', slug)
+      fd.append('send_email', sendEmail ? '1' : '0')
 
       const result = await action(fd)
+      setConfirmOpen(false)
+      setPendingAction(null)
 
       // Erro fatal (formulário não gerado)
       if (!result.url) {
@@ -83,29 +98,37 @@ export function DisponibilizarFormularioButton({ interestFormId, slug, action, s
 
       setFormUrl(result.url)
 
-      // Copia link — sempre
+      if (!sendEmail) {
+        try { await navigator.clipboard.writeText(result.url) } catch {}
+        flashToast(setShowCopied)
+        return
+      }
+
+      // Enviado por e-mail — se não deu certo, copia o link como fallback e
+      // explica o motivo; se deu certo, confirma o envio.
+      if (!result.emailWarning) {
+        flashToast(setShowSent)
+        return
+      }
+
       try { await navigator.clipboard.writeText(result.url) } catch {}
 
-      // Toast "Link copiado!" — sempre
-      triggerCopiedToast()
-
-      // Aviso de e-mail — secundário, não bloqueia
       if (result.emailWarning === 'sem_email_eted') {
         setEmailNotice({
-          msg: 'E-mail não enviado automaticamente — a ETED ainda não tem e-mail cadastrado. Envie o link manualmente.',
+          msg: 'E-mail não enviado automaticamente — a ETED ainda não tem e-mail cadastrado. O link foi copiado, envie manualmente.',
           schoolId: result.schoolId ?? schoolId,
         })
       } else if (result.emailWarning === 'sem_email_candidato') {
         setEmailNotice({
-          msg: 'E-mail não enviado — o candidato não informou e-mail na pré-inscrição. Envie o link manualmente (WhatsApp, por exemplo).',
+          msg: 'E-mail não enviado — o candidato não informou e-mail na pré-inscrição. O link foi copiado, envie manualmente (WhatsApp, por exemplo).',
         })
       } else if (result.emailWarning === 'quota_atingida') {
         setEmailNotice({
-          msg: 'Limite de e-mails do sistema atingido. O link foi gerado e copiado — envie manualmente ao candidato.',
+          msg: 'Limite de e-mails do sistema atingido. O link foi copiado, envie manualmente ao candidato.',
         })
       } else if (result.emailWarning === 'email_falhou') {
         setEmailNotice({
-          msg: 'E-mail não pôde ser enviado. Envie o link manualmente ao candidato.',
+          msg: 'E-mail não pôde ser enviado. O link foi copiado, envie manualmente ao candidato.',
         })
       }
     })
@@ -116,15 +139,12 @@ export function DisponibilizarFormularioButton({ interestFormId, slug, action, s
       <div className="flex flex-col gap-1">
         <button
           type="button"
-          onClick={handleClick}
+          onClick={() => setConfirmOpen(true)}
           disabled={isPending}
           className="inline-flex items-center gap-1 text-xs px-3 py-1.5 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors disabled:opacity-60"
         >
-          {isPending ? <><Loader2 className="size-3.5 inline -mt-0.5 animate-spin" /> Enviando…</> : <><ClipboardList className="size-3.5 inline -mt-0.5" /> {label ?? 'Enviar formulário por e-mail'}</>}
+          <ClipboardList className="size-3.5 inline -mt-0.5" /> {label ?? 'Enviar formulário por e-mail'}
         </button>
-        <p className="text-xs text-gray-400 leading-tight max-w-[220px]">
-          O link também é copiado, caso prefira compartilhar por outro meio.
-        </p>
         {emailDisabled && (
           <p className="text-xs text-orange-500 leading-tight max-w-[200px]" title={emailDisabledReason}>
             <AlertTriangle className="size-3.5 inline -mt-0.5" /> Sem envio automático
@@ -142,8 +162,53 @@ export function DisponibilizarFormularioButton({ interestFormId, slug, action, s
         )}
       </div>
 
-      {/* Toast central "Link copiado!" */}
-      <CopiedToast visible={showCopied} />
+      {/* Confirmação: enviar por e-mail agora ou só copiar o link */}
+      <Modal
+        open={confirmOpen}
+        onClose={() => { if (!isPending) setConfirmOpen(false) }}
+        title="Enviar formulário"
+        subtitle={candidateName}
+      >
+        <div className="p-5 space-y-4">
+          <p className="text-sm text-gray-600 leading-relaxed">
+            {emailDisabled
+              ? <>Envio automático indisponível no momento{emailDisabledReason ? ` — ${emailDisabledReason}` : '.'} Copie o link abaixo e envie manualmente.</>
+              : <>O formulário pode ser enviado automaticamente por e-mail{candidateName ? ` para ${candidateName}` : ''}, ou você pode copiar o link e enviar do seu jeito (WhatsApp, por exemplo).</>}
+          </p>
+          <div className="flex flex-col gap-2">
+            {!emailDisabled && (
+              <button
+                type="button"
+                onClick={() => runAction(true)}
+                disabled={isPending}
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-brand-500 hover:bg-brand-600 disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition-colors"
+              >
+                {isPending && pendingAction === 'email'
+                  ? <><Loader2 className="size-4 animate-spin" /> Enviando…</>
+                  : <><Mail className="size-4" /> Enviar por e-mail</>}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => runAction(false)}
+              disabled={isPending}
+              className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-60 text-sm font-semibold rounded-lg transition-colors"
+            >
+              {isPending && pendingAction === 'copy'
+                ? <><Loader2 className="size-4 animate-spin" /> Copiando…</>
+                : <><LinkIcon className="size-4" /> Copiar link</>}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Toasts centrais de confirmação */}
+      <CenterToast visible={showCopied} icon={<LinkIcon className="size-6 text-brand-500" />}>
+        Link copiado!
+      </CenterToast>
+      <CenterToast visible={showSent} icon={<CheckCircle2 className="size-6" />} tone="success">
+        E-mail enviado com sucesso!
+      </CenterToast>
 
       {/* Aviso de e-mail — só aparece quando necessário */}
       {emailNotice && (

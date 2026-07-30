@@ -662,6 +662,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     const { headers: hdrs } = await import('next/headers')
 
     const interestFormId = formData.get('interest_form_id') as string
+    const sendEmail = formData.get('send_email') !== '0'
 
     // Busca o interest form e a escola
     const { data: form } = await db
@@ -721,9 +722,12 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     const protocol = host.startsWith('localhost') ? 'http' : 'https'
     const formUrl = `${protocol}://${host}/${slug}/formulario/${token}`
 
-    // Tenta enviar e-mail somente se a escola tiver e-mail configurado
+    // Tenta enviar e-mail somente se a escola tiver e-mail configurado e o
+    // usuário tiver escolhido enviar agora (em vez de só copiar o link)
     let emailWarning: string | undefined
-    if (escola?.contact_email) {
+    if (!sendEmail) {
+      // usuário escolheu "copiar link" — não é falha, não gera aviso
+    } else if (escola?.contact_email) {
       const { sendFormEmail } = await import('@/lib/email/sendFormEmail')
       const emailResult = await sendFormEmail({
         to: form.email,
@@ -952,6 +956,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     const authClient = await createClient()
 
     const interestFormId = formData.get('interest_form_id') as string
+    const sendEmail = formData.get('send_email') !== '0'
     const { data: { user } } = await authClient.auth.getUser()
 
     const { data: form } = await db
@@ -982,6 +987,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         fullName: form.full_name,
         email: form.email,
         language: form.language,
+        sendEmail,
       })
     } else {
       const { createAndSendStaffApplication } = await import('@/lib/staff/staffApplicationInvite')
@@ -997,6 +1003,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         language: form.language,
         personId: form.person_id,
         leaderAcceptedBy: user?.id ?? null,
+        sendEmail,
       })
     }
 
