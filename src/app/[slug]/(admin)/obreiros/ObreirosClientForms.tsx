@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { ChevronDown, X } from 'lucide-react'
+import { useSidebarLeftClass } from '@/components/layout/account-context'
 import { changeRole, createStaffUser, toggleActive, updateExtraRoles } from './actions'
 
 type RoleRow = { id: string; name: string; label: string }
@@ -536,6 +537,7 @@ export function CreateObreiroModal({
   roles: RoleRow[]; schools: OptionRow[]; ministries: OptionRow[]; orgId: string; slug: string
 }) {
   const [open, setOpen] = useState(false)
+  const sidebarLeftClass = useSidebarLeftClass()
   return (
     <>
       <button
@@ -547,7 +549,7 @@ export function CreateObreiroModal({
 
       {open && (
         <div
-          className="fixed inset-0 md:left-60 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-16"
+          className={`fixed inset-0 ${sidebarLeftClass} z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-16`}
           onClick={() => setOpen(false)}
         >
           <div

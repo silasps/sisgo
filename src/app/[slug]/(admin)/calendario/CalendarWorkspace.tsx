@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { AlertTriangle, CalendarDays, CalendarPlus, CalendarRange, ChevronLeft, ChevronRight, Clock, LayoutList, Plus, Save, Trash2, X } from 'lucide-react'
 import { useCallback, useMemo, useRef, useState, useTransition } from 'react'
 import { AUDIENCE_ROLES } from '@/lib/audience-roles'
+import { useSidebarLeftClass } from '@/components/layout/account-context'
 
 export type CalendarLayer = 'base' | 'escola' | 'ministerio' | 'pessoal' | 'auto'
 export type CalendarEventType = 'evento' | 'feriado' | 'trimestre' | 'escola' | 'aula' | 'tema' | 'nota' | 'reuniao' | 'devocional' | 'outro'
@@ -793,6 +794,7 @@ function SchoolDayModal({
   const [conflict, setConflict]   = useState<CalendarEvent | null>(null)
   const [pendingFd, setPendingFd] = useState<FormData | null>(null)
   const [isPending, startTransition] = useTransition()
+  const sidebarLeftClass = useSidebarLeftClass()
 
   const dayIndex   = weekDays.indexOf(day)
   const allEvents  = eventsByDay.get(day) ?? []
@@ -834,7 +836,7 @@ function SchoolDayModal({
   }
 
   return (
-    <div className="fixed inset-0 md:left-60 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-12" onClick={onClose}>
+    <div className={`fixed inset-0 ${sidebarLeftClass} z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-12`} onClick={onClose}>
       <div className="w-full max-w-md rounded-xl bg-white shadow-xl" onClick={e => e.stopPropagation()}>
 
         {/* Header with day nav */}
@@ -1176,6 +1178,7 @@ function EventModal({
 }) {
   const isCreate = modal.mode === 'create'
   const currentLayer = isCreate ? modal.layer : modal.event.layer as 'base' | 'escola' | 'ministerio' | 'pessoal'
+  const sidebarLeftClass = useSidebarLeftClass()
 
   const availableLayers: Array<{ key: 'base' | 'escola' | 'ministerio' | 'pessoal'; label: string }> = [
     ...(permissions.canManageBase || permissions.canManageComunicacao ? [{ key: 'base' as const, label: 'Base' }] : []),
@@ -1185,7 +1188,7 @@ function EventModal({
   ]
 
   return (
-    <div className="fixed inset-0 md:left-60 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-16" onClick={onClose}>
+    <div className={`fixed inset-0 ${sidebarLeftClass} z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-16`} onClick={onClose}>
       <div className="w-full max-w-md rounded-xl bg-white shadow-xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
           <div>

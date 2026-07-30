@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { X, CalendarOff } from 'lucide-react'
 import { toast } from 'sonner'
+import { useSidebarLeftClass } from '@/components/layout/account-context'
 import { declareAbsence, cancelAbsence } from './ausencia-actions'
 
 type StaffPerson = { person_id: string; full_name: string }
@@ -40,6 +41,7 @@ export function AusenciaModal({
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const today = new Date().toISOString().slice(0, 10)
+  const sidebarLeftClass = useSidebarLeftClass()
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -65,7 +67,7 @@ export function AusenciaModal({
 
       {open && (
         <div
-          className="fixed inset-0 md:left-60 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-16"
+          className={`fixed inset-0 ${sidebarLeftClass} z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-16`}
           onClick={() => setOpen(false)}
         >
           <div

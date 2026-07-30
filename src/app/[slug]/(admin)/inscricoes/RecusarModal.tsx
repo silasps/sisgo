@@ -3,6 +3,7 @@
 import { useState, useTransition, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { useSidebarLeftClass } from '@/components/layout/account-context'
 
 type Props = {
   id: string
@@ -15,6 +16,7 @@ export function RecusarModal({ id, tipo, action }: Props) {
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
   const formRef = useRef<HTMLFormElement>(null)
+  const sidebarLeftClass = useSidebarLeftClass()
 
   function handleClose() {
     if (isPending) return
@@ -45,7 +47,7 @@ export function RecusarModal({ id, tipo, action }: Props) {
 
       {open && (
         <div
-          className="fixed inset-0 md:left-60 z-50 flex items-center justify-center bg-black/50 p-4"
+          className={`fixed inset-0 ${sidebarLeftClass} z-50 flex items-center justify-center bg-black/50 p-4`}
           onClick={e => { if (e.target === e.currentTarget) handleClose() }}
         >
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { Search, ChevronDown, Wifi, HelpCircle, X, Wrench, AlertTriangle, ShieldCheck } from 'lucide-react'
+import { useSidebarLeftClass } from '@/components/layout/account-context'
 
 type DeviceOption = {
   id: string
@@ -25,6 +26,8 @@ type Props = {
 }
 
 function SetupModal({ device, onClose }: { device: DeviceOption; onClose: () => void }) {
+  const sidebarLeftClass = useSidebarLeftClass()
+
   useEffect(() => {
     function handleKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', handleKey)
@@ -32,7 +35,7 @@ function SetupModal({ device, onClose }: { device: DeviceOption; onClose: () => 
   }, [onClose])
 
   return (
-    <div className="fixed inset-0 md:left-60 z-[100] flex items-center justify-center p-4" onClick={onClose}>
+    <div className={`fixed inset-0 ${sidebarLeftClass} z-[100] flex items-center justify-center p-4`} onClick={onClose}>
       <div className="absolute inset-0 bg-black/50" />
       <div
         className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col"

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { X, Mail, MessageCircle, Calendar, ArrowRight } from 'lucide-react'
+import { useSidebarLeftClass } from '@/components/layout/account-context'
 
 export type PendenteModalItem = {
   id: string
@@ -51,6 +52,7 @@ type Props = {
 export function PendentesCardList({ items }: Props) {
   const [selected, setSelected] = useState<PendenteModalItem | null>(null)
   const router = useRouter()
+  const sidebarLeftClass = useSidebarLeftClass()
 
   const close = useCallback(() => setSelected(null), [])
 
@@ -118,7 +120,7 @@ export function PendentesCardList({ items }: Props) {
       {/* Modal de detalhes */}
       {selected && (
         <div
-          className="fixed inset-0 md:left-60 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+          className={`fixed inset-0 ${sidebarLeftClass} z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4`}
           onClick={close}
         >
           <div

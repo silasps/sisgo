@@ -20,3 +20,11 @@ export const useAccount = () => useContext(AccountCtx)
 export type BrandInfo = { logoUrl?: string; sisgoLogo?: boolean; subtitle?: string; collapsed?: boolean }
 export const BrandCtx = createContext<BrandInfo>({})
 export const useBrand = () => useContext(BrandCtx)
+
+// Overlays fixos (modais) usam isso pra não cobrir a sidebar — precisa
+// bater com a largura real dela (md:w-16 recolhida / md:w-60 expandida em
+// Sidebar.tsx), senão sobra uma faixa do conteúdo sem o overlay por cima.
+export function useSidebarLeftClass() {
+  const { collapsed } = useBrand()
+  return collapsed ? 'md:left-16' : 'md:left-60'
+}

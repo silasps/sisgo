@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { getAvailableRooms, type AvailableRoom } from '../hospedagem/actions'
 import { INDEFINITE_CHECKOUT, isIndefiniteCheckout } from '@/lib/hospedagem'
+import { useSidebarLeftClass } from '@/components/layout/account-context'
 
 type ServiceReq = {
   id: string
@@ -196,6 +197,7 @@ function HospedagemResolver({ req, organizationId, resolverComAlocacao, resolver
 
 export function ServiceRequestsPanel({ requests, title, handleStatusUpdate, resolverComAlocacao, resolverSemAlocacao, organizationId }: Props) {
   const [selected, setSelected] = useState<ServiceReq | null>(null)
+  const sidebarLeftClass = useSidebarLeftClass()
 
   return (
     <>
@@ -247,7 +249,7 @@ export function ServiceRequestsPanel({ requests, title, handleStatusUpdate, reso
       {/* Modal */}
       {selected && (
         <div
-          className="fixed inset-0 md:left-60 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+          className={`fixed inset-0 ${sidebarLeftClass} z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4`}
           onClick={() => setSelected(null)}
         >
           <div
