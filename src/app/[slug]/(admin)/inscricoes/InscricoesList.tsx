@@ -181,11 +181,43 @@ function obreiroStages(item: InscricaoItem) {
   return stagesFromFlags(OBREIRO_STAGE_LABELS, [true, formSubmitted, pastorDone, bgDone, hospedagemDone, approved])
 }
 
+// Uma recomendação só "bloqueia" se ela chegou a ser solicitada (link
+// gerado) — não são obrigatórias pra aceitar o aluno, então uma referência
+// nunca pedida não deve travar a etapa.
+function alunoRefsOk(item: InscricaoItem) {
+  const pastor = item.refSummary?.pastor
+  const amigo = item.refSummary?.amigo
+  return (!pastor || pastor.status === 'enviado') && (!amigo || amigo.status === 'enviado')
+}
+
 function alunoStages(item: InscricaoItem) {
-  const formSubmitted = ['formulario_enviado', 'em_analise', 'convertido'].includes(item.status) || !!item.hasFormData
-  const emAnalise = ['em_analise', 'convertido'].includes(item.status)
+  // "Formulário enviado" = o convite foi mandado (status avança assim que o
+  // link/e-mail sai, mesmo que o candidato ainda não tenha respondido nada).
+  // Não confundir com "preencheu" — por isso não usamos hasFormData aqui.
+  const convited = ['formulario_enviado', 'em_analise', 'convertido'].includes(item.status)
+  // "Em análise" só fecha (e libera a etapa "Aprovado" para virar a atual)
+  // quando o formulário foi preenchido E toda recomendação solicitada
+  // (pastor/amigo) já foi respondida — até lá, mesmo com o formulário
+  // pronto, o candidato continua (corretamente) "em análise".
+  const formSubmitted = !!item.hasFormData && alunoRefsOk(item)
   const approved = item.status === 'convertido'
-  return stagesFromFlags(ALUNO_STAGE_LABELS, [true, formSubmitted, emAnalise, approved])
+  return stagesFromFlags(ALUNO_STAGE_LABELS, [true, convited, formSubmitted, approved])
+}
+
+// Recomendações (pastor/amigo) só fazem sentido depois que o formulário foi
+// preenchido — é o próprio formulário que gera o pedido pro pastor/amigo, e
+// como não são obrigatórias pra aceitar o aluno, mostrar isso antes ou depois
+// da etapa "Em análise" só duplicaria informação sem ajudar. Aparece só
+// enquanto o candidato está de fato "em análise" (formulário pronto, decisão
+// pendente) — não antes (nada pra mostrar) nem depois de aprovado (já resolvido).
+function alunoShowRecomendacoes(item: InscricaoItem) {
+  return !!item.hasFormData && item.status !== 'convertido'
+}
+
+function refLabel(entry: { status: string } | null | undefined): { text: string; color: string } {
+  if (!entry) return { text: 'não solicitada', color: 'bg-gray-100 text-gray-400' }
+  if (entry.status === 'enviado') return { text: 'respondeu ✓', color: 'bg-green-100 text-green-700' }
+  return { text: 'aguardando resposta', color: 'bg-amber-100 text-amber-700' }
 }
 
 function StatusDropdown({ item, label, color, options, updateStatus }: {
@@ -584,6 +616,18 @@ export function InscricoesList({
                     {stepperStages && (
                       <div className="mt-1.5">
                         <PipelineStepper stages={stepperStages} href={stepperHref} size="md" />
+                      </div>
+                    )}
+                    {isAlunoTrack && alunoShowRecomendacoes(item) && (
+                      <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                        {(['pastor', 'amigo'] as const).map(tipo => {
+                          const ref = refLabel(item.refSummary?.[tipo])
+                          return (
+                            <span key={tipo} className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${ref.color}`}>
+                              {tipo === 'pastor' ? 'Pastor' : 'Amigo'}: {ref.text}
+                            </span>
+                          )
+                        })}
                       </div>
                     )}
                   </div>
