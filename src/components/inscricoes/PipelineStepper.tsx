@@ -25,7 +25,7 @@ export function PipelineStepper({ stages, href, size = 'sm' }: { stages: Stage[]
   const isLastPending = currentIndex === total - 1
 
   const content = (
-    <div className={`flex items-center gap-2 ${textClass}`}>
+    <div className={`flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0 ${textClass}`}>
       <div className="flex gap-0.5 shrink-0">
         {stages.map((s, i) => (
           <span
@@ -52,7 +52,7 @@ export function PipelineStepper({ stages, href, size = 'sm' }: { stages: Stage[]
     <a
       href={href}
       onClick={e => e.stopPropagation()}
-      className="group inline-flex items-center gap-2 hover:opacity-80 transition-opacity"
+      className="group flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0 hover:opacity-80 transition-opacity"
       title="Ver e gerenciar esta etapa"
     >
       {content}

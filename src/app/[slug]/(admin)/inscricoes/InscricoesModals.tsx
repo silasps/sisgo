@@ -7,7 +7,7 @@ import { InternationalPhoneField } from '@/components/ui/InternationalPhoneField
 import { useSidebarLeftClass } from '@/components/layout/account-context'
 import { gerarLinkReferencia } from '@/app/[slug]/formulario/[token]/actions'
 import { gerarLinkReferenciaObreiro } from '@/app/[slug]/formulario-obreiro/[token]/actions'
-import { Link as LinkIcon, RefreshCw, CheckCircle2, Pencil } from 'lucide-react'
+import { Link as LinkIcon, RefreshCw, CheckCircle2, Pencil, GraduationCap, Briefcase } from 'lucide-react'
 import { toast } from 'sonner'
 import { ReferenceAnswers } from './ReferenceAnswers'
 
@@ -74,9 +74,10 @@ export function NovaPreInscricaoButton({
 
   return (
     <>
-      <button onClick={() => setOpen(true)}
-        className="px-3 py-2 text-xs font-semibold text-white bg-brand-500 hover:bg-brand-600 rounded-lg transition-colors whitespace-nowrap">
-        + Aluno
+      <button onClick={() => setOpen(true)} aria-label="Nova pré-inscrição de aluno"
+        className="p-2 sm:px-3 sm:py-2 text-xs font-semibold text-white bg-brand-500 hover:bg-brand-600 rounded-lg transition-colors whitespace-nowrap">
+        <GraduationCap className="size-4 sm:hidden" />
+        <span className="hidden sm:inline">+ Aluno</span>
       </button>
 
       <Modal open={open} onClose={() => setOpen(false)} title="Nova pré-inscrição manual"
@@ -163,9 +164,10 @@ export function NovaPreInscricaoObreiroButton({
 
   return (
     <>
-      <button onClick={() => setOpen(true)}
-        className="px-3 py-2 text-xs font-semibold text-white bg-violet-500 hover:bg-violet-600 rounded-lg transition-colors whitespace-nowrap">
-        + Obreiro
+      <button onClick={() => setOpen(true)} aria-label="Nova pré-inscrição de obreiro"
+        className="p-2 sm:px-3 sm:py-2 text-xs font-semibold text-white bg-violet-500 hover:bg-violet-600 rounded-lg transition-colors whitespace-nowrap">
+        <Briefcase className="size-4 sm:hidden" />
+        <span className="hidden sm:inline">+ Obreiro</span>
       </button>
 
       <Modal open={open} onClose={() => setOpen(false)} title="Nova pré-inscrição de obreiro"

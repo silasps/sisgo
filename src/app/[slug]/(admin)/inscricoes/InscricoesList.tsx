@@ -623,7 +623,7 @@ export function InscricoesList({
                         {(['pastor', 'amigo'] as const).map(tipo => {
                           const ref = refLabel(item.refSummary?.[tipo])
                           return (
-                            <span key={tipo} className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${ref.color}`}>
+                            <span key={tipo} className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap ${ref.color}`}>
                               {tipo === 'pastor' ? 'Pastor' : 'Amigo'}: {ref.text}
                             </span>
                           )

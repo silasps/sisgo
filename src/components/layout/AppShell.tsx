@@ -82,7 +82,7 @@ export function AppShell({
                 onToggleCollapsed={toggleCollapsed}
               />
 
-              <div className={`flex-1 flex flex-col overflow-auto scroll-smooth min-w-0 ${collapsed ? 'md:ml-16' : 'md:ml-60'} ${bottomBarItems ? 'pb-20 md:pb-0' : ''}`}>
+              <div className={`flex-1 flex flex-col overflow-y-auto overflow-x-hidden scroll-smooth min-w-0 ${collapsed ? 'md:ml-16' : 'md:ml-60'} ${bottomBarItems ? 'pb-20 md:pb-0' : ''}`}>
                 {children}
               </div>
             </div>
