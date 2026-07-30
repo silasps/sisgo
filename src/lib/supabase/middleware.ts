@@ -19,11 +19,22 @@ function isPublicSlugRoute(pathname: string): boolean {
 
 export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname
+  const isServerAction = request.method === 'POST' && request.headers.has('next-action')
+
   if (request.nextUrl.hostname === 'www.sisgomission.com' && !pathname.startsWith('/auth/callback')) {
     const canonicalUrl = request.nextUrl.clone()
     canonicalUrl.hostname = 'sisgomission.com'
     return NextResponse.redirect(canonicalUrl, 308)
   }
+
+  // Server Actions (toda mutação do sistema, não só login) recebem aqui a
+  // mesma resposta RSC que o Next espera de volta. Não vale a pena — nem é
+  // seguro — chamar supabase.auth.getUser() (rede) antes: cada Server Action
+  // já valida a própria sessão via createClient() em supabase/server.ts, e
+  // uma chamada de rede aqui no meio do caminho vira ponto único de falha —
+  // qualquer soluço na rede até o Supabase derruba a Server Action inteira
+  // e o cliente acusa "resposta do servidor interrompida".
+  if (isServerAction) return NextResponse.next({ request })
 
   let supabaseResponse = NextResponse.next({ request })
 
