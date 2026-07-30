@@ -663,6 +663,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
 
     const interestFormId = formData.get('interest_form_id') as string
     const sendEmail = formData.get('send_email') !== '0'
+    const langParam = (formData.get('lang') as string | null) || undefined
 
     // Busca o interest form e a escola
     const { data: form } = await db
@@ -721,6 +722,11 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     const host = headersList.get('host') ?? 'localhost:3000'
     const protocol = host.startsWith('localhost') ? 'http' : 'https'
     const formUrl = `${protocol}://${host}/${slug}/formulario/${token}`
+    // O CTA/links dentro do e-mail precisam abrir o formulário já no mesmo
+    // idioma escolhido pra enviar o e-mail — senão o texto vem num idioma
+    // e o formulário abre em outro. O link retornado ao cliente (formUrl)
+    // fica sem esse parâmetro pois o cliente já anexa o idioma escolhido.
+    const formUrlForEmail = langParam ? `${formUrl}?lang=${langParam}` : formUrl
 
     // Tenta enviar e-mail somente se a escola tiver e-mail configurado e o
     // usuário tiver escolhido enviar agora (em vez de só copiar o link)
@@ -733,10 +739,10 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         to: form.email,
         candidateName: form.full_name,
         schoolName: escola.name,
-        formUrl,
+        formUrl: formUrlForEmail,
         expiresAt,
         replyTo: escola.contact_email,
-        language: (form as unknown as { language?: string }).language,
+        language: langParam ?? (form as unknown as { language?: string }).language,
         organizationId: (form as unknown as { organization_id: string }).organization_id,
         schoolId: escola.id,
       })
@@ -957,6 +963,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
 
     const interestFormId = formData.get('interest_form_id') as string
     const sendEmail = formData.get('send_email') !== '0'
+    const langParam = (formData.get('lang') as string | null) || undefined
     const { data: { user } } = await authClient.auth.getUser()
 
     const { data: form } = await db
@@ -986,7 +993,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         ministryId: form.ministry_id,
         fullName: form.full_name,
         email: form.email,
-        language: form.language,
+        language: langParam ?? form.language,
         sendEmail,
       })
     } else {
@@ -1000,7 +1007,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         fullName: form.full_name,
         email: form.email,
         phone: form.phone,
-        language: form.language,
+        language: langParam ?? form.language,
         personId: form.person_id,
         leaderAcceptedBy: user?.id ?? null,
         sendEmail,

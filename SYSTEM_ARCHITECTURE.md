@@ -1,6 +1,6 @@
 # SISGO — Arquitetura do Sistema
 
-**Atualizado:** 20 de julho de 2026 (Comunicação da Base + início do aluno redesenhado; conta pessoal: foto com recorte, senha, login com Google)
+**Atualizado:** 30 de julho de 2026 (fix de middleware em Server Actions; overlay de modal corrigido para sidebar recolhida; confirmação de envio de formulário com escolha de idioma; edição rápida de pré-inscrição)
 **Produção:** https://www.sisgomission.com (Vercel)
 
 ---
@@ -21,7 +21,7 @@ O SISGO é um sistema de gestão **multi-tenant** para bases missionárias da JO
 | Banco / Auth / Storage | Supabase (PostgreSQL com RLS) |
 | Mobile | Capacitor 8 (Android + iOS, push nativo, biometria) |
 | Push | Firebase Admin (FCM) + tokens em `push_tokens` |
-| E-mail | Nodemailer (Brevo via SMTP — domínio pendente de verificação) |
+| E-mail | Brevo via API REST v3 (`fetch` direto, sem lib — não é SMTP/Nodemailer) |
 | Pagamentos | Asaas · Mercado Pago · PagBank (PIX) — `src/lib/payments/` |
 | IoT | Shelly Cloud Control API v2 (lavanderia) — `src/lib/laundry/` |
 | QR / Códigos | qrcode (carteirinha digital) · barcode-detector (estoque) |
@@ -72,9 +72,17 @@ qualquer usuário logado) · `hospedagem` (quartos/camas, agenda, **lavanderia**
 ## 4. Autenticação e Autorização
 
 - **Sessão:** Supabase Auth com cookies via `@supabase/ssr`. O `middleware.ts`
-  (→ `src/lib/supabase/middleware.ts`) valida/renova o JWT em toda requisição,
-  limpa cookies de refresh token inválido e faz o roteamento por papel
-  (superadmin → `/superadmin`, supervisor → `/supervisor`, demais → `/{slug}/pessoas`).
+  (→ `src/lib/supabase/middleware.ts`) valida/renova o JWT em toda requisição
+  de página, limpa cookies de refresh token inválido e faz o roteamento por
+  papel (superadmin → `/superadmin`, supervisor → `/supervisor`, demais →
+  `/{slug}/pessoas`). **Exceção deliberada:** requisições de Server Action
+  (`POST` com header `next-action`) pulam esse `getUser()` e retornam direto
+  — cada Server Action já valida a própria sessão via `createClient()`
+  (`src/lib/supabase/server.ts`); chamar o Supabase de novo no meio do
+  middleware virava ponto único de falha (qualquer soluço de rede quebrava
+  a Server Action inteira, cliente via "resposta do servidor interrompida").
+  Esse bypass tem que vir **antes** de qualquer chamada de rede no
+  middleware, não só antes do roteamento por papel.
 - **OAuth mobile:** PKCE client-side + rota passthrough + deep link `sisgo://`
   (nunca server action para OAuth no app nativo).
 - **Papéis (RBAC):** tabela `roles` + `organization_users` liga usuário↔org↔papel.
@@ -201,7 +209,7 @@ Autosserviço com pagamento por tempo. Cada máquina tem um relé Wi-Fi
 | Shelly Cloud | Relés da lavanderia | `src/lib/laundry/shelly-cloud.ts` |
 | Asaas / Mercado Pago / PagBank | PIX (refeições, cobranças) | `src/lib/payments/` + `/api/payments/*` |
 | Firebase (FCM) | Push notifications no app | `src/lib/firebase/` + `/api/push/*` |
-| Brevo (SMTP) | E-mails transacionais | `src/lib/email/` (envio bloqueado até verificar o domínio centralmidiajocum.com.br) |
+| Brevo (API REST v3, não SMTP) | E-mails transacionais (formulário de inscrição, verificação de e-mail da ETED) | `src/lib/email/sendFormEmail.ts` chama `POST https://api.brevo.com/v3/smtp/email` direto (nome do endpoint é do Brevo, mas é a API transacional, não SMTP). Domínio `centralmidiajocum.com.br` verificado — envio funcionando. Autenticação é por `BREVO_API_KEY` (`.env.local` local / env var na Vercel para produção — **duas cópias independentes**, atualizar as duas se a chave for regenerada no painel do Brevo). Se `sendFormEmail` começar a falhar com "Key not found", teste a chave direto: `curl -H "api-key: $BREVO_API_KEY" https://api.brevo.com/v3/account` — se der unauthorized, a chave foi revogada/regenerada no Brevo e precisa gerar uma nova (Configurações → Chaves SMTP e API → aba **"Chaves de API"**, não a de SMTP). E-mail suporta 3 idiomas (`src/lib/i18n/emails/`) — quem envia escolhe o idioma no modal de confirmação (`DisponibilizarFormularioButton`), que embute `?lang=xx` no link para o formulário abrir no mesmo idioma do e-mail; a página lê isso em `searchParams.lang` como `initialLang`. |
 | bible-api.com | Versículo do dia (início do aluno) | `src/lib/votd.ts` — usar sempre o endpoint de capítulo (`/data/almeida/{USFM}/{capítulo}`), **nunca** o de referência única (`/{livro} {cap}:{vers}?translation=almeida`), que retorna 404 falso-negativo para várias referências válidas na tradução "almeida"; cache de 12h evita o rate limit (429 após ~10 req/s) |
 | Site institucional | Consome `/api/public/[slug]/*` | projeto separado `jocumat-site` (Next 16 + Tailwind v4) |
 
@@ -228,6 +236,15 @@ Autosserviço com pagamento por tempo. Cada máquina tem um relé Wi-Fi
   própria página quando dependem do contexto dela.
 - Mensagens de feedback via query param `?msg=` renderizadas pela página.
 - Idioma do produto e do código de domínio: **português**.
+- **Overlay de modal/dialog (`fixed inset-0 ...`):** nunca hardcode
+  `md:left-60` para não cobrir a sidebar — ela pode estar recolhida
+  (`md:w-16`, padrão inicial) ou expandida (`md:w-60`), então um valor fixo
+  deixa uma faixa de conteúdo sem overlay. Use
+  `useSidebarLeftClass()` de `@/components/layout/account-context`
+  (lê `collapsed` do `BrandCtx`, já injetado pelo `AppShell`) e monte a
+  classe como `` `fixed inset-0 ${sidebarLeftClass} z-50 ...` ``. O
+  componente `Modal` (`@/components/ui/Modal`) já faz isso — prefira
+  reaproveitá-lo em vez de montar um overlay próprio.
 
 ## 10. Scripts e Operações
 

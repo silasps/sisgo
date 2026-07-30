@@ -27,6 +27,10 @@ async function sendFormLink(params: SendFormLinkParams): Promise<StaffInviteResu
   const host = headersList.get('host') ?? 'localhost:3000'
   const protocol = host.startsWith('localhost') ? 'http' : 'https'
   const formUrl = `${protocol}://${host}/${params.slug}/formulario-obreiro/${params.token}`
+  // O CTA dentro do e-mail precisa abrir o formulário já no mesmo idioma
+  // escolhido pra enviar — o link devolvido ao cliente (formUrl) fica sem
+  // esse parâmetro pois o cliente já anexa o idioma escolhido nele.
+  const formUrlForEmail = params.language ? `${formUrl}?lang=${encodeURIComponent(params.language)}` : formUrl
 
   let emailWarning: string | undefined
   if (params.sendEmail === false) {
@@ -43,7 +47,7 @@ async function sendFormLink(params: SendFormLinkParams): Promise<StaffInviteResu
       to: params.email,
       candidateName: params.fullName,
       schoolName: ministryName ?? orgRow?.name ?? 'JOCUM',
-      formUrl,
+      formUrl: formUrlForEmail,
       expiresAt: params.expiresAt,
       replyTo: orgRow?.email || 'noreply@sisgomission.com',
       language: params.language,

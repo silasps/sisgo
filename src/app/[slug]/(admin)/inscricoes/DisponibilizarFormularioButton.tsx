@@ -4,6 +4,8 @@ import { useState, useTransition, useEffect, type ReactNode } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, Link as LinkIcon, ClipboardList, Loader2, Mail, CheckCircle2 } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
+import { LangSwitcher } from '@/components/ui/LangSwitcher'
+import type { Lang } from '@/lib/i18n/forms'
 
 type ActionResult = {
   url?: string
@@ -65,6 +67,7 @@ export function DisponibilizarFormularioButton({ interestFormId, slug, action, s
   const [isPending, startTransition] = useTransition()
   const [pendingAction, setPendingAction] = useState<'copy' | 'email' | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [lang, setLang] = useState<Lang>('pt')
   const [showCopied, setShowCopied] = useState(false)
   const [showSent, setShowSent] = useState(false)
   const [formUrl, setFormUrl] = useState<string | null>(null)
@@ -85,6 +88,7 @@ export function DisponibilizarFormularioButton({ interestFormId, slug, action, s
       fd.append('interest_form_id', interestFormId)
       fd.append('slug', slug)
       fd.append('send_email', sendEmail ? '1' : '0')
+      fd.append('lang', lang)
 
       const result = await action(fd)
       setConfirmOpen(false)
@@ -96,10 +100,13 @@ export function DisponibilizarFormularioButton({ interestFormId, slug, action, s
         return
       }
 
-      setFormUrl(result.url)
+      // O link sempre abre o formulário já no idioma escolhido aqui —
+      // tanto no e-mail automático quanto quando copiado manualmente.
+      const url = `${result.url}${result.url.includes('?') ? '&' : '?'}lang=${lang}`
+      setFormUrl(url)
 
       if (!sendEmail) {
-        try { await navigator.clipboard.writeText(result.url) } catch {}
+        try { await navigator.clipboard.writeText(url) } catch {}
         flashToast(setShowCopied)
         return
       }
@@ -111,7 +118,7 @@ export function DisponibilizarFormularioButton({ interestFormId, slug, action, s
         return
       }
 
-      try { await navigator.clipboard.writeText(result.url) } catch {}
+      try { await navigator.clipboard.writeText(url) } catch {}
 
       if (result.emailWarning === 'sem_email_eted') {
         setEmailNotice({
@@ -175,6 +182,10 @@ export function DisponibilizarFormularioButton({ interestFormId, slug, action, s
               ? <>Envio automático indisponível no momento{emailDisabledReason ? ` — ${emailDisabledReason}` : '.'} Copie o link abaixo e envie manualmente.</>
               : <>O formulário pode ser enviado automaticamente por e-mail{candidateName ? ` para ${candidateName}` : ''}, ou você pode copiar o link e enviar do seu jeito (WhatsApp, por exemplo).</>}
           </p>
+          <div>
+            <p className="text-xs font-medium text-gray-500 mb-1.5">Em qual idioma o candidato vai preencher?</p>
+            <LangSwitcher lang={lang} onChange={setLang} />
+          </div>
           <div className="flex flex-col gap-2">
             {!emailDisabled && (
               <button
