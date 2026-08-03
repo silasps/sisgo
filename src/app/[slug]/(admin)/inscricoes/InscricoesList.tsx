@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { useFormStatus } from 'react-dom'
 import { Search, ClipboardList, Mail, MessageCircle, ChevronDown, Link2, Loader2 } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
-import { RecusarModal } from './RecusarModal'
+import { RecusarModal, ExcluirModal } from './RecusarModal'
 import { DisponibilizarFormularioButton } from './DisponibilizarFormularioButton'
 import { PipelineStepper, stagesFromFlags } from '@/components/inscricoes/PipelineStepper'
 import BackgroundChecksSection, { type BackgroundCheck } from './formulario-obreiro/[id]/BackgroundChecksSection'
@@ -63,6 +63,8 @@ type HistoricoItem = {
   motivo: string
   recusadoPor: string | null
   recusadoPorId: string | null
+  status: string
+  criadoEm: string
   recusadoEm: string
 }
 
@@ -137,7 +139,7 @@ function urgencyBadge(dias: number) {
 }
 
 const isFinalizado = (s: string) =>
-  ['convertido', 'aprovado', 'descartado', 'reprovado', 'cancelado'].includes(s)
+  ['convertido', 'aprovado', 'descartado', 'reprovado', 'cancelado', 'excluido'].includes(s)
 
 const TIPO_TABS = [
   { key: 'todas',   label: 'Todas' },
@@ -161,9 +163,11 @@ function matchesTipo(i: { tipo: string }, key: string) {
 // um candidato aceito continua com o mesmo `tipo` de quando estava em
 // pré-inscrição, então rotear só por tipo o deixaria preso na aba errada.
 function matchesEtapa(i: { tipo: string; status: string }, key: string) {
-  if (key === 'todas') return true
   if (key === 'finalizados') return isFinalizado(i.status)
+  // Finalizado só aparece em "Finalizados" — inclusive "Todas as etapas" é
+  // só as etapas ativas do processo, não um "todos os registros, sempre".
   if (isFinalizado(i.status)) return false
+  if (key === 'todas') return true
   if (key === 'pre_inscricao') return i.tipo === 'pre_inscricao' || i.tipo === 'pre_inscricao_obreiro'
   return i.tipo === 'aluno' || i.tipo === 'obreiro'
 }
@@ -195,12 +199,15 @@ function alunoStages(item: InscricaoItem) {
   // link/e-mail sai, mesmo que o candidato ainda não tenha respondido nada).
   // Não confundir com "preencheu" — por isso não usamos hasFormData aqui.
   const convited = ['formulario_enviado', 'em_analise', 'convertido'].includes(item.status)
+  const approved = item.status === 'convertido'
   // "Em análise" só fecha (e libera a etapa "Aprovado" para virar a atual)
   // quando o formulário foi preenchido E toda recomendação solicitada
   // (pastor/amigo) já foi respondida — até lá, mesmo com o formulário
-  // pronto, o candidato continua (corretamente) "em análise".
-  const formSubmitted = !!item.hasFormData && alunoRefsOk(item)
-  const approved = item.status === 'convertido'
+  // pronto, o candidato continua (corretamente) "em análise". Mas aceitar o
+  // aluno nunca dependeu das recomendações estarem prontas — se o líder já
+  // aprovou mesmo com alguma pendente, a barra não pode ficar "presa" em
+  // "Em análise": aprovado sempre implica as etapas anteriores concluídas.
+  const formSubmitted = !!item.hasFormData && (alunoRefsOk(item) || approved)
   return stagesFromFlags(ALUNO_STAGE_LABELS, [true, convited, formSubmitted, approved])
 }
 
@@ -1059,8 +1066,9 @@ export function InscricoesList({
                         </>
                       )}
                       {((item.tipo === 'pre_inscricao_obreiro' || item.tipo === 'obreiro') ? canWriteObreiro : canWriteItem(item)) && (
-                        <div className="col-span-2 sm:col-span-1">
+                        <div className="col-span-2 sm:col-span-1 flex items-center gap-1.5">
                           <RecusarModal id={item.id} tipo={item.tipo} action={recusar} />
+                          <ExcluirModal id={item.id} tipo={item.tipo} action={recusar} />
                         </div>
                       )}
                     </div>
@@ -1080,7 +1088,7 @@ export function InscricoesList({
         <details className="group">
           <summary className="cursor-pointer flex items-center gap-2 py-2 text-sm font-semibold text-gray-500 hover:text-gray-700 select-none list-none">
             <span className="transition-transform group-open:rotate-90">▶</span>
-            Histórico de recusas ({historico.length})
+            Histórico de recusas e exclusões ({historico.length})
           </summary>
           <div className="mt-3 bg-white rounded-xl border border-gray-200 overflow-hidden">
             <table className="w-full text-sm">
@@ -1089,7 +1097,7 @@ export function InscricoesList({
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Nome</th>
                   <th className="hidden sm:table-cell text-left px-4 py-3 font-medium text-gray-600">Tipo</th>
                   <th className="hidden md:table-cell text-left px-4 py-3 font-medium text-gray-600">Escola</th>
-                  <th className="hidden lg:table-cell text-left px-4 py-3 font-medium text-gray-600">Recusado por</th>
+                  <th className="hidden lg:table-cell text-left px-4 py-3 font-medium text-gray-600">Registrado por</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Motivo</th>
                 </tr>
               </thead>
@@ -1097,9 +1105,14 @@ export function InscricoesList({
                 {historico.map(h => (
                   <tr key={`hist-${h.id}`} className="hover:bg-gray-50">
                     <td className="px-4 py-3">
-                      <p className="font-medium text-gray-900">{h.nome}</p>
+                      <p className="font-medium text-gray-900 flex items-center gap-1.5">
+                        {h.nome}
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${h.status === 'excluido' ? 'bg-gray-100 text-gray-500' : 'bg-red-50 text-red-600'}`}>
+                          {h.status === 'excluido' ? 'Excluído' : 'Recusado'}
+                        </span>
+                      </p>
                       <p className="text-xs text-gray-400">
-                        {new Date(h.recusadoEm).toLocaleDateString('pt-BR')}
+                        {new Date(h.criadoEm).toLocaleDateString('pt-BR')} → {new Date(h.recusadoEm).toLocaleDateString('pt-BR')}
                       </p>
                     </td>
                     <td className="hidden sm:table-cell px-4 py-3 text-xs text-gray-500">{h.tipo}</td>
@@ -1108,7 +1121,7 @@ export function InscricoesList({
                     <td className="px-4 py-3 text-xs text-gray-600 max-w-xs">
                       <p className="line-clamp-2" title={h.motivo}>{h.motivo}</p>
                       <p className="mt-1 text-[11px] text-gray-400 lg:hidden">
-                        Recusado por: {h.recusadoPor ?? '—'}
+                        Registrado por: {h.recusadoPor ?? '—'}
                       </p>
                     </td>
                   </tr>

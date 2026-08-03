@@ -75,13 +75,15 @@ type HistoricoItem = {
   motivo: string
   recusadoPor: string | null
   recusadoPorId: string | null
+  status: string
+  criadoEm: string
   recusadoEm: string
 }
 
 function daysAgo(dateStr: string) {
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24))
 }
-const isFinalizado = (s: string) => ['convertido','aprovado','descartado','reprovado','cancelado'].includes(s)
+const isFinalizado = (s: string) => ['convertido','aprovado','descartado','reprovado','cancelado','excluido'].includes(s)
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   pendente:           { label: 'Pendente',      color: 'bg-yellow-100 text-yellow-700' },
@@ -266,19 +268,25 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     const tipo   = formData.get('tipo') as string
     const id     = formData.get('id') as string
     const reason = (formData.get('reason') as string)?.trim()
+    // 'recusa' = candidato avaliado e não aceito; 'exclusao' = o cadastro em
+    // si é que está errado (duplicata, engano) — motivos diferentes, então
+    // status diferente, mas o resto do fluxo (motivo obrigatório, cancela
+    // pendência de hospedagem, vai pro histórico) é o mesmo.
+    const kind   = (formData.get('kind') as string) === 'exclusao' ? 'exclusao' : 'recusa'
     const decisionNote = (formData.get('decision_note') as string | null)?.trim() || null
     const decisionNoteShared = formData.get('decision_note_shared') === 'on'
     if (!reason) return
     const now = new Date().toISOString()
     if (tipo === 'pre_inscricao') {
+      const status = kind === 'exclusao' ? 'excluido' : 'descartado'
       const { data: row, error } = await db.from('school_interest_forms')
-        .update({ status: 'descartado', refusal_reason: reason, responded_at: now, reviewed_at: now, reviewed_by: user?.id ?? null, decision_note: decisionNote, decision_note_shared: decisionNoteShared })
+        .update({ status, refusal_reason: reason, responded_at: now, reviewed_at: now, reviewed_by: user?.id ?? null, decision_note: decisionNote, decision_note_shared: decisionNoteShared })
         .eq('id', id)
         .select('email, full_name, school_id, schools(name, contact_email)')
         .single()
       if (error?.code === 'PGRST204') {
         await db.from('school_interest_forms')
-          .update({ status: 'descartado', refusal_reason: reason, responded_at: now })
+          .update({ status, refusal_reason: reason, responded_at: now })
           .eq('id', id)
       }
       const escola = row?.schools as unknown as { name: string; contact_email: string | null } | null
@@ -303,11 +311,11 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       }
     } else if (tipo === 'pre_inscricao_obreiro') {
       await db.from('staff_interest_forms')
-        .update({ status: 'descartado', refusal_reason: reason, responded_at: now, reviewed_at: now, reviewed_by: user?.id ?? null })
+        .update({ status: kind === 'exclusao' ? 'excluido' : 'descartado', refusal_reason: reason, responded_at: now, reviewed_at: now, reviewed_by: user?.id ?? null })
         .eq('id', id)
     } else if (tipo === 'aluno') {
       const { data: row } = await db.from('student_applications')
-        .update({ status: 'reprovado', refusal_reason: reason, reviewed_at: now, reviewed_by: user?.id ?? null, decision_note: decisionNote, decision_note_shared: decisionNoteShared })
+        .update({ status: kind === 'exclusao' ? 'excluido' : 'reprovado', refusal_reason: reason, reviewed_at: now, reviewed_by: user?.id ?? null, decision_note: decisionNote, decision_note_shared: decisionNoteShared })
         .eq('id', id)
         .select('person_id, school_id, people(full_name), schools(name, contact_email)')
         .single()
@@ -327,12 +335,13 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         }
       }
     } else {
+      const status = kind === 'exclusao' ? 'excluido' : 'reprovado'
       const { error } = await db.from('staff_applications')
-        .update({ status: 'reprovado', refusal_reason: reason, reviewed_at: now, reviewed_by: user?.id ?? null })
+        .update({ status, refusal_reason: reason, reviewed_at: now, reviewed_by: user?.id ?? null })
         .eq('id', id)
       if (error?.code === 'PGRST204') {
         await db.from('staff_applications')
-          .update({ status: 'reprovado', reviewed_at: now, reviewed_by: user?.id ?? null })
+          .update({ status, reviewed_at: now, reviewed_by: user?.id ?? null })
           .eq('id', id)
       }
       // Pessoa saiu do processo de entrada — cancela a pendência de
@@ -1156,6 +1165,8 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           motivo: r.refusal_reason,
           recusadoPor: null,
           recusadoPorId: r.reviewed_by ?? null,
+          status: r.status,
+          criadoEm: r.created_at,
           recusadoEm: r.responded_at ?? r.created_at,
         })
       } else {
@@ -1201,6 +1212,8 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           motivo: r.refusal_reason,
           recusadoPor: null,
           recusadoPorId: r.reviewed_by ?? null,
+          status: r.status,
+          criadoEm: r.applied_at,
           recusadoEm: r.reviewed_at ?? r.applied_at,
         })
       } else {
@@ -1258,6 +1271,8 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           motivo: r.refusal_reason,
           recusadoPor: null,
           recusadoPorId: r.reviewed_by ?? null,
+          status: r.status,
+          criadoEm: r.created_at,
           recusadoEm: r.responded_at ?? r.created_at,
         })
       } else if (!appJaEnviada) {
@@ -1348,6 +1363,8 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           motivo: r.refusal_reason,
           recusadoPor: null,
           recusadoPorId: r.reviewed_by ?? null,
+          status: r.status,
+          criadoEm: r.applied_at,
           recusadoEm: r.reviewed_at ?? r.applied_at,
         })
       } else {
