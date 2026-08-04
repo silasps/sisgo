@@ -1,6 +1,6 @@
 # SISGO — Arquitetura do Sistema
 
-**Atualizado:** 30 de julho de 2026 (fix de middleware em Server Actions; overlay de modal corrigido para sidebar recolhida; confirmação de envio de formulário com escolha de idioma; edição rápida de pré-inscrição)
+**Atualizado:** 3 de agosto de 2026 (busca global de conteúdo real no painel "Ver tudo"; status `excluido` distinto de recusa em inscrições)
 **Produção:** https://www.sisgomission.com (Vercel)
 
 ---
@@ -128,6 +128,35 @@ qualquer usuário logado) · `hospedagem` (quartos/camas, agenda, **lavanderia**
   em que um usuário aluno está matriculado (via `student_profiles`/
   `person_contacts`/`class_students`/`student_applications`), usado para
   filtrar os eventos de escola que aparecem no início dele.
+- **Busca global** (painel "Ver tudo", `src/components/layout/AllAppsMenu.tsx`
+  + `src/lib/search/global-search.ts`): duas camadas independentes, não uma só.
+  1. **Atalho de menu** — filtro client-side sobre a lista de navegação, com
+     match tolerante a acento e letra fora de ordem (`matchesLabel`, tipo
+     busca de comando de editor) mais um dicionário curado de sinônimo por
+     ícone (`ICON_KEYWORDS`, ex. "lavadoura"/"lavadora" → Lavanderia,
+     "ausência"/"chamada" → Presença) — necessário porque o nome de uma
+     funcionalidade (ex. "Declarar ausência") não é registro de banco, não
+     tem como "buscar de verdade". Usa a lista *completa* de atalhos
+     (`searchNavItems`, calculada em `layout.tsx` sem o filtro de complemento
+     que a grade de navegação aplica), não só o que falta na sidebar atual —
+     senão um atalho já fixo na sidebar ficaria invisível pra busca.
+  2. **Conteúdo real** — server action `globalSearch(slug, query)`, dispara a
+     partir de 2 caracteres (debounce 300ms). Resolve o papel do usuário com
+     `getCurrentOrganizationRole` (o mesmo helper de `/escolas`,
+     `/ministerios`, `/calendario` — nunca confia em nada vindo do cliente) e
+     busca por nome/título/conteúdo em Pessoas, Escolas, Turmas, Ministérios,
+     Inscrições, Calendário (`base_calendar_events`/`school_calendar_events`/
+     `ministry_calendar_events`/`personal_calendar_notes`), Reservas,
+     Solicitações (`service_requests`, escopado por
+     `organizations.department_assignments`) e Mensagens de mural
+     (`ministry_messages`) — cada bloco só roda e só é visível se aquele
+     papel já teria acesso àquela tela, escopado (escola do líder de ETED,
+     ministério do líder de ministério, departamento da hospitalidade/
+     manutenção/secretaria etc.) com o mesmo padrão de `.in('col', ids.length
+     ? ids : ['no-match'])` já usado nas páginas de origem — replicado, nunca
+     reinventado. Sem rota de detalhe por item (reservas, solicitações), o
+     resultado linka pra lista; calendário linka pro ano do evento
+     (`?ano=`); inscrições pré-preenchem a busca da própria página (`?q=`).
 
 ---
 
@@ -152,6 +181,15 @@ qualquer usuário logado) · `hospedagem` (quartos/camas, agenda, **lavanderia**
   push (`push_tokens`).
 - **Regra de ouro:** registros nunca são apagados — inscrições/pessoas são
   **realocadas** ou inativadas, preservando histórico.
+- **Recusa × Exclusão em inscrições:** desde a migration 109, as 4 tabelas de
+  inscrição (`school_interest_forms`, `staff_interest_forms`,
+  `student_applications`, `staff_applications`) aceitam um status `excluido`
+  além do `descartado`/`reprovado` já existente — "Recusar" (candidato
+  avaliado e não aceito) e "Excluir" (cadastro errado, duplicado) são ações
+  distintas na UI (`RecusarModal`/`ExcluirModal` em
+  `src/app/[slug]/(admin)/inscricoes/RecusarModal.tsx`) e agora gravam status
+  diferente — mesma server action (`recusar`, com um campo `kind`), mesmo
+  motivo obrigatório, mesma regra de nunca apagar.
 
 ---
 

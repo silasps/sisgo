@@ -556,12 +556,19 @@ export default async function SlugLayout({ children, params }: Props) {
   const sidebarItems: NavItem[] = navMode === 'administracao'
     ? [...universal, ...sectionize(adminNavItems)]
     : [...universal, ...personalNavItems]
-  // "Ver tudo" mostra só o complemento do que já está na sidebar do modo atual
-  // (ex.: itens do outro modo Pessoal/Administração) — não repete o que já é visível.
+  // A GRADE do "Ver tudo" mostra só o complemento do que já está na sidebar
+  // do modo atual (ex.: itens do outro modo Pessoal/Administração) — não
+  // repete atalho que já é visível. Mas a CAIXA DE BUSCA dentro do mesmo
+  // painel promete "buscar em tudo que o sisgo oferece" — se a busca usasse
+  // só o complemento, um atalho que já está fixo na sidebar (ex. Lavanderia
+  // em modo Pessoal) ficaria invisível pra busca, o que é o oposto do que a
+  // caixa promete. Por isso existe também a lista completa (sem o filtro de
+  // complemento), só pra alimentar a busca — a grade de navegação continua
+  // usando a versão filtrada.
   const sidebarIcons = new Set(sidebarItems.filter((i): i is RegularNavItem => !('divider' in i)).map(i => i.icon))
+  const allNavItemsFull = dropEmptySections(buildAllAppsItems(universal, adminNavItems, personalNavItems))
   const allNavItems = dropEmptySections(
-    buildAllAppsItems(universal, adminNavItems, personalNavItems)
-      .filter(i => 'divider' in i || !sidebarIcons.has(i.icon)),
+    allNavItemsFull.filter(i => 'divider' in i || !sidebarIcons.has(i.icon)),
   )
 
   const myOrgs = userOrgRows
@@ -596,6 +603,7 @@ export default async function SlugLayout({ children, params }: Props) {
         logoUrl={(org as { logo_url?: string | null }).logo_url ?? undefined}
         className="flex flex-1 min-h-0 overflow-hidden"
         allNavItems={allNavItems}
+        searchNavItems={allNavItemsFull}
         account={{
           name: displayName,
           email: user.email ?? '',

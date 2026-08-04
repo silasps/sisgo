@@ -24,6 +24,7 @@ export function AppShell({
   user,
   account,
   allNavItems,
+  searchNavItems,
 }: {
   items: NavItem[]
   bottomBarItems?: BottomBarItem[]
@@ -35,6 +36,7 @@ export function AppShell({
   user?: { name?: string; email: string; badge?: string }
   account?: AccountInfo
   allNavItems?: NavItem[]
+  searchNavItems?: NavItem[]
 }) {
   const [open, setOpen] = useState(false)
   const [allAppsOpen, setAllAppsOpen] = useState(false)
@@ -55,10 +57,11 @@ export function AppShell({
 
   const allAppsValue = useMemo(() => ({
     items: allNavItems ?? [],
+    searchItems: searchNavItems ?? allNavItems ?? [],
     open: allAppsOpen,
     openAllApps: () => setAllAppsOpen(true),
     closeAllApps: () => setAllAppsOpen(false),
-  }), [allNavItems, allAppsOpen])
+  }), [allNavItems, searchNavItems, allAppsOpen])
 
   return (
     <AccountCtx.Provider value={account ?? null}>
