@@ -1,6 +1,6 @@
 # SISGO — Arquitetura do Sistema
 
-**Atualizado:** 3 de agosto de 2026 (busca global de conteúdo real no painel "Ver tudo"; status `excluido` distinto de recusa em inscrições)
+**Atualizado:** 4 de agosto de 2026 (hospedagem reestruturada — hierarquia Bloco › Andar › Quarto › Cama, navegação em camadas e reserva de bloco/andar/quarto inteiro; unificação de Reservas com Hospedagem)
 **Produção:** https://www.sisgomission.com (Vercel)
 
 ---
@@ -162,7 +162,7 @@ qualquer usuário logado) · `hospedagem` (quartos/camas, agenda, **lavanderia**
 
 ## 5. Banco de Dados
 
-- **Migrations:** `supabase/migrations/NNN_nome.sql`, numeradas (001→108+),
+- **Migrations:** `supabase/migrations/NNN_nome.sql`, numeradas (001→112+),
   aplicadas manualmente com `psql "$DATABASE_URL" -f <arquivo>` (a
   `DATABASE_URL` está em `.env.local`). Não há CLI do Supabase configurada.
   Banco único — é produção mesmo, sempre confirmar com o usuário antes de
@@ -193,7 +193,52 @@ qualquer usuário logado) · `hospedagem` (quartos/camas, agenda, **lavanderia**
 
 ---
 
-## 6. Módulo de Lavanderia (IoT)
+## 6. Módulo de Hospedagem
+
+- **Hierarquia real** (migrations 110-112): `blocks` → `floors` (FK
+  `block_id`) → `rooms` (FK `floor_id`) → `beds` (FK `room_id`) — antes
+  "bloco"/"andar" eram texto livre em `rooms.block`/`rooms.floor`; agora são
+  entidades de verdade, renomeáveis num lugar só, com `ON DELETE RESTRICT`
+  (não apaga bloco/andar com filho dentro — a UI em
+  `hospedagem/quartos/page.tsx` já bloqueia isso com mensagem clara antes de
+  chegar no banco). `floors.destination`/`gender_constraint` são só um
+  **padrão** que pré-preenche `rooms` novo ao criar (`RoomForm.tsx`) — cada
+  quarto pode sobrescrever, não é regra travada.
+- **Navegação em 3 camadas** em `/hospedagem` (`view=grid`, a aba "Mapa de
+  Quartos e Camas"), dirigida por `searchParams` (`?block=id&floor=id`, sem
+  rota nova nem estado client): nada selecionado → cards de Bloco
+  (`BlockCard.tsx`); só bloco → cards de Andar do bloco (`FloorCard.tsx`);
+  bloco+andar → `BedGrid.tsx` escopado só aos quartos daquele andar. Cada
+  card mostra ocupação agregada (camas ocupadas hoje / total) e um selo de
+  reserva de espaço (ver abaixo) se houver.
+- **Reserva de bloco/andar/quarto inteiro sem alocar cama** —
+  `space_holds` (migrations 111-112, `scope` em `'block'|'floor'|'room'`,
+  `HoldForm.tsx`/`HoldBanner.tsx`): só um bloqueio/aviso ("Reservado pro
+  Grupo X, de tal a tal data"), **não** aloca cama nenhuma sozinho — a
+  distribuição cama a cama continua vindo de `createAllocation`/
+  `allocateWholeRoom`, sem relação direta. O botão de reservar fica sempre
+  no nível que a pessoa está olhando (bloco na tela de blocos, andar na
+  tela de andares, quarto na tela de quartos) — não no nível de onde ela
+  veio. Cancelar hold pede confirmação + motivo (mesmo padrão de
+  `ConfirmSubmitButton`/passo de confirmação inline usado em Reservas).
+- **Reservas ↔ Hospedagem, ligados**: aprovar uma reserva de quarto em
+  `/reservas` (tipo `quarto`) pode alocar a cama/quarto na hora
+  (`room_allocations.reservation_id` preenchido), evitando digitar o mesmo
+  hóspede duas vezes. Alocação feita direto no mapa de camas (sem reserva
+  formal por trás) também aparece em Reservas como linha "sintética"
+  (`reservation_id is null`), com cancelamento próprio. Aba **Histórico**
+  em Reservas (só gestão/hospitalidade) mostra tudo — qualquer status,
+  qualquer origem — com resumo (total/aprovadas/canceladas/taxa) e filtro
+  de período; é somente leitura (sem botão de ação).
+- **Agenda** (antes rota separada `/hospedagem/agenda`, hoje um toggle
+  "Grade"/"Agenda" dentro da própria Hospedagem — a rota antiga só
+  redireciona) é clicável: célula vazia → aloca ali (quarto+data
+  pré-preenchidos); barra de reserva existente → abre gerenciamento
+  (check-in/check-out/cancelar, com confirmação+motivo).
+
+---
+
+## 7. Módulo de Lavanderia (IoT)
 
 Autosserviço com pagamento por tempo. Cada máquina tem um relé Wi-Fi
 **Shelly 1PM** (Gen3/Gen4) que corta a energia quando o tempo pago acaba.
@@ -240,7 +285,7 @@ Autosserviço com pagamento por tempo. Cada máquina tem um relé Wi-Fi
 
 ---
 
-## 7. Integrações Externas
+## 8. Integrações Externas
 
 | Integração | Uso | Onde |
 |---|---|---|
@@ -253,7 +298,7 @@ Autosserviço com pagamento por tempo. Cada máquina tem um relé Wi-Fi
 
 ---
 
-## 8. Mobile (Capacitor)
+## 9. Mobile (Capacitor)
 
 - Pastas `android/` e `ios/` geradas pelo Capacitor (`npm run cap:sync`).
 - Push nativo, splash/status bar, biometria (`@aparajita/capacitor-biometric-auth`).
@@ -262,7 +307,7 @@ Autosserviço com pagamento por tempo. Cada máquina tem um relé Wi-Fi
 
 ---
 
-## 9. Convenções de Desenvolvimento
+## 10. Convenções de Desenvolvimento
 
 - **Mobile first** em toda tela e formulário.
 - **Cards clicáveis:** padrão de lift (`hover:shadow-md` + `translate-y` +
@@ -284,7 +329,7 @@ Autosserviço com pagamento por tempo. Cada máquina tem um relé Wi-Fi
   componente `Modal` (`@/components/ui/Modal`) já faz isso — prefira
   reaproveitá-lo em vez de montar um overlay próprio.
 
-## 10. Scripts e Operações
+## 11. Scripts e Operações
 
 - `npm run dev` (Turbopack) · `npm run build` · `npm run type-check` · `npm run lint`
 - **Nunca rode `next build` com o dev server aberto** — os dois escrevem em

@@ -46,7 +46,7 @@ function splitNavByMode(navItems: NavItem[]) {
 const NAV_SECTION_BY_ICON: Record<string, string> = {
   pessoas: 'Pessoas & Times', presenca: 'Pessoas & Times', obreiros: 'Pessoas & Times',
   escolas: 'Pessoas & Times', inscricoes: 'Pessoas & Times', ministerios: 'Pessoas & Times',
-  reservas: 'Hospedagem', hospedagem: 'Hospedagem', quartos: 'Hospedagem', agenda: 'Hospedagem', lavanderia: 'Hospedagem',
+  reservas: 'Hospedagem', hospedagem: 'Hospedagem', quartos: 'Hospedagem', lavanderia: 'Hospedagem',
   cozinha: 'Cozinha', estoque: 'Cozinha', receitas: 'Cozinha',
   'estoque-manutencao': 'Manutenção',
   financeiro: 'Financeiro', caixa: 'Financeiro',
@@ -122,7 +122,6 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
     { href: `/${slug}/reservas`,     label: 'Reservas',         icon: 'reservas',      show: canSeeReservas, alert: hasReservationsPending },
     { href: `/${slug}/hospedagem`,   label: 'Hospedagem',       icon: 'hospedagem',    show: canSeeHospedagem },
     { href: `/${slug}/hospedagem/quartos`, label: 'Quartos',    icon: 'quartos',       show: canSeeHospedagem },
-    { href: `/${slug}/hospedagem/agenda`,  label: 'Agenda',     icon: 'agenda',        show: canSeeHospedagem },
     { href: `/${slug}/hospedagem/lavanderia`, label: 'Lavanderia', icon: 'lavanderia', show: canSeeHospedagem && laundryEnabled },
     { href: `/${slug}/refeicoes`,    label: 'Minhas refeições', icon: 'refeicoes',     show: canBuyMeals },
     { href: `/${slug}/cozinha`,      label: 'Cozinha',          icon: 'cozinha',       show: isManagement || is('secretaria') || isCozinha },
@@ -141,7 +140,7 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
   const dropDisabledCard = (items: AllItem[]) => items.filter(i => i.icon !== 'carteirinha' || idCardEnabled)
 
   if (isHospitalidade) {
-    return addPersonalSplit(dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/pessoas', '/reservas', '/hospedagem', '/hospedagem/quartos', '/hospedagem/agenda', '/hospedagem/lavanderia', '/ministerios', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))).map(toItem))
+    return addPersonalSplit(dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/pessoas', '/reservas', '/hospedagem', '/hospedagem/quartos', '/hospedagem/lavanderia', '/ministerios', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))).map(toItem))
   }
 
   if (isCozinha) {

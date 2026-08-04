@@ -6,22 +6,29 @@ import { notFound, redirect } from 'next/navigation'
 import { getRolePreview } from '@/lib/role-preview'
 import { isManagementRole, isOperationalManager, canSeeHospedagem } from '@/lib/auth/permissions'
 import {
-  createAllocation, updateAllocationStatus,
+  createAllocation, updateAllocationStatus, cancelAllocation,
   allocateWholeRoom, checkinWholeRoom, checkoutWholeRoom,
   toggleRoomMaintenance, toggleBedMaintenance, updateAdvanceHours,
+  createHold, cancelHold,
 } from './actions'
 import { BedGrid } from './BedGrid'
+import { ReservationTimeline } from './agenda/ReservationTimeline'
+import { BlockCard } from './BlockCard'
+import { FloorCard } from './FloorCard'
+import { HoldForm } from './HoldForm'
+import { HoldBanner } from './HoldBanner'
 import { Hotel, BedDouble, DoorOpen, LogIn, LogOut } from 'lucide-react'
 import Link from 'next/link'
 
 type Props = {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ msg?: string }>
+  searchParams: Promise<{ msg?: string; view?: string; block?: string; floor?: string }>
 }
 
 export default async function HospedagemPage({ params, searchParams }: Props) {
   const { slug } = await params
-  const { msg } = await searchParams
+  const { msg, view: viewParam, block: blockId, floor: floorId } = await searchParams
+  const view = viewParam === 'timeline' ? 'timeline' : 'grid'
 
   const supabase = await createClient()
   const sbAdmin = createAdminClient()
@@ -48,12 +55,11 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
   // ── Data ────────────────────────────────────────────────────────────────────
   const today = new Date().toISOString().split('T')[0]
 
-  const [{ data: rooms }, { data: beds }, { data: allocations }, { data: schoolsData }] = await Promise.all([
+  const [{ data: rooms }, { data: beds }, { data: allocations }, { data: schoolsData }, { data: blocksData }, { data: floorsData }, { data: holdsData }] = await Promise.all([
     sbAdmin.from('rooms')
-      .select('id, name, floor, block, type, gender_constraint, destination, allocation_mode, capacity, status')
+      .select('id, name, floor_id, type, gender_constraint, destination, allocation_mode, capacity, status, floors(name, block_id, blocks(name))')
       .eq('organization_id', org.id)
       .neq('status', 'inativo')
-      .order('block', { nullsFirst: false })
       .order('display_order')
       .order('name'),
     sbAdmin.from('beds')
@@ -69,16 +75,28 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
       .eq('organization_id', org.id)
       .eq('active', true)
       .order('name'),
+    sbAdmin.from('blocks').select('id, name').eq('organization_id', org.id).order('display_order').order('name'),
+    sbAdmin.from('floors').select('id, block_id, name, destination, gender_constraint').eq('organization_id', org.id).order('display_order').order('name'),
+    sbAdmin.from('space_holds').select('id, scope, block_id, floor_id, group_name, starts_at, ends_at').eq('organization_id', org.id).eq('status', 'ativo'),
   ])
 
-  type RoomRow  = { id: string; name: string; floor: string | null; block: string | null; type: string; gender_constraint: string | null; destination: string; allocation_mode: string; capacity: number; status: string }
+  type RoomRow  = { id: string; name: string; floor_id: string | null; type: string; gender_constraint: string | null; destination: string; allocation_mode: string; capacity: number; status: string; floors: { name: string; block_id: string; blocks: { name: string } | null } | null }
   type BedRow   = { id: string; room_id: string; label: string; type: string; status: string }
   type AllocRow = { id: string; room_id: string; bed_id: string | null; guest_name: string; guest_type: string; check_in: string; check_out: string; status: string; school_id: string | null }
+  type BlockRow = { id: string; name: string }
+  type FloorRow = { id: string; block_id: string; name: string; destination: string | null; gender_constraint: string | null }
+  type HoldRow  = { id: string; scope: string; block_id: string; floor_id: string | null; group_name: string; starts_at: string; ends_at: string }
 
-  const roomsList  = (rooms ?? []) as RoomRow[]
+  const roomsList  = (rooms ?? []) as unknown as RoomRow[]
   const bedsList   = (beds ?? []) as BedRow[]
   const allocsList = (allocations ?? []) as AllocRow[]
   const schools    = (schoolsData ?? []) as Array<{ id: string; name: string }>
+  const blocksList = (blocksData ?? []) as BlockRow[]
+  const floorsList = (floorsData ?? []) as FloorRow[]
+  const holdsList  = (holdsData ?? []) as HoldRow[]
+
+  const holdByBlock = new Map(holdsList.filter(h => h.scope === 'block').map(h => [h.block_id, h]))
+  const holdByFloor = new Map(holdsList.filter(h => h.scope === 'floor' && h.floor_id).map(h => [h.floor_id as string, h]))
 
   // School name map for display
   const schoolMap = new Map(schools.map(s => [s.id, s.name]))
@@ -96,14 +114,43 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
   const arrivalsToday  = allocsList.filter(a => a.check_in === today).length
   const departuresToday = allocsList.filter(a => a.check_out === today).length
 
+  // ── Agregação por Bloco/Andar (pros cards de navegação) ─────────────────────
+  const roomsByFloor = new Map<string, RoomRow[]>()
+  for (const r of roomsList) {
+    if (!r.floor_id) continue
+    const list = roomsByFloor.get(r.floor_id) ?? []
+    list.push(r)
+    roomsByFloor.set(r.floor_id, list)
+  }
+  const floorsByBlock = new Map<string, FloorRow[]>()
+  for (const f of floorsList) {
+    const list = floorsByBlock.get(f.block_id) ?? []
+    list.push(f)
+    floorsByBlock.set(f.block_id, list)
+  }
+  function bedStatsForRooms(roomsIn: RoomRow[]) {
+    const roomIds = new Set(roomsIn.map(r => r.id))
+    const beds = bedsList.filter(b => roomIds.has(b.room_id) && b.status !== 'manutencao')
+    const occupied = beds.filter(b => bedsOccupiedToday.has(b.id)).length
+    return { total: beds.length, occupied }
+  }
+  function floorStats(floorId: string) {
+    return bedStatsForRooms(roomsByFloor.get(floorId) ?? [])
+  }
+  function blockStats(blockIdIn: string) {
+    const blockFloors = floorsByBlock.get(blockIdIn) ?? []
+    const blockRooms = blockFloors.flatMap(f => roomsByFloor.get(f.id) ?? [])
+    return bedStatsForRooms(blockRooms)
+  }
+
   // ── Data for BedGrid ────────────────────────────────────────────────────────
   const roomMap = new Map(roomsList.map(r => [r.id, r]))
 
   const gridRooms = roomsList.map(r => ({
     id: r.id,
     name: r.name,
-    floor: r.floor,
-    block: r.block,
+    floorName: r.floors?.name ?? null,
+    blockName: r.floors?.blocks?.name ?? null,
     gender: r.gender_constraint,
     destination: r.destination,
     allocationMode: r.allocation_mode,
@@ -118,7 +165,8 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
         id: b.id,
         roomId: b.room_id,
         roomName: room.name,
-        roomFloor: room.floor,
+        roomFloorName: room.floors?.name ?? null,
+        roomBlockName: room.floors?.blocks?.name ?? null,
         roomGender: room.gender_constraint,
         label: b.label,
         type: b.type,
@@ -138,6 +186,36 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
       allocStatus: a.status,
       schoolName: a.school_id ? (schoolMap.get(a.school_id) ?? null) : null,
     }))
+
+  // ── Data for ReservationTimeline (visão "Linha do tempo", ex-página Agenda —
+  // mesmos dados do BedGrid acima, só remodelados; não tem ação própria) ──────
+  const bedCountByRoom = new Map<string, number>()
+  for (const b of bedsList) {
+    bedCountByRoom.set(b.room_id, (bedCountByRoom.get(b.room_id) ?? 0) + 1)
+  }
+
+  const timelineRooms = roomsList.map(r => ({
+    id: r.id,
+    name: r.name,
+    blockName: r.floors?.blocks?.name ?? null,
+    floorName: r.floors?.name ?? null,
+    gender: r.gender_constraint,
+    destination: r.destination,
+    allocationMode: r.allocation_mode,
+    bedCount: bedCountByRoom.get(r.id) ?? 0,
+  }))
+
+  const timelineAllocs = allocsList.map(a => ({
+    id: a.id,
+    roomId: a.room_id,
+    bedId: a.bed_id,
+    guestName: a.guest_name,
+    guestType: a.guest_type,
+    checkIn: a.check_in,
+    checkOut: a.check_out,
+    status: a.status,
+    schoolName: a.school_id ? (schoolMap.get(a.school_id) ?? null) : null,
+  }))
 
   // ── Server actions ──────────────────────────────────────────────────────────
   const handleAllocate = async (formData: FormData) => {
@@ -199,6 +277,18 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
     redirect(`/${slug}/hospedagem?msg=checkout`)
   }
 
+  // Cancela uma alocação direto pela Agenda (clicou na barra → gerenciar).
+  const handleCancelAllocation = async (formData: FormData) => {
+    'use server'
+    await cancelAllocation({
+      id: formData.get('id') as string,
+      organizationId: org.id,
+      bedId: (formData.get('bed_id') as string) || null,
+      reason: (formData.get('reason') as string) || null,
+    })
+    redirect(`/${slug}/hospedagem?view=timeline&msg=alocacao_cancelada`)
+  }
+
   const handleCheckinRoom = async (formData: FormData) => {
     'use server'
     await checkinWholeRoom({
@@ -237,6 +327,45 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
     redirect(`/${slug}/hospedagem`)
   }
 
+  const handleCreateHold = async (formData: FormData) => {
+    'use server'
+    const groupName = (formData.get('group_name') as string).trim()
+    const scope = formData.get('scope') as 'block' | 'floor' | 'room'
+    const blockIdForm = formData.get('block_id') as string
+    if (!groupName || !blockIdForm) return
+    const floorIdForm = (formData.get('floor_id') as string) || null
+    const roomIdForm = (formData.get('room_id') as string) || null
+    await createHold({
+      organizationId: org.id,
+      scope,
+      blockId: blockIdForm,
+      floorId: scope !== 'block' ? floorIdForm : null,
+      roomId: scope === 'room' ? roomIdForm : null,
+      groupName,
+      startsAt: formData.get('starts_at') as string,
+      endsAt: formData.get('ends_at') as string,
+      notes: (formData.get('notes') as string)?.trim() || null,
+      createdBy: user.id,
+    })
+    // Fica no mesmo nível de navegação onde o botão foi clicado, pra ver o
+    // selo aparecer no card certo.
+    const backTo = scope === 'block' ? '' : scope === 'floor' ? `block=${blockIdForm}` : `block=${blockIdForm}&floor=${floorIdForm}`
+    redirect(`/${slug}/hospedagem${backTo ? `?${backTo}&msg=hold_criado` : '?msg=hold_criado'}`)
+  }
+
+  const handleCancelHold = async (formData: FormData) => {
+    'use server'
+    await cancelHold({
+      id: formData.get('id') as string,
+      organizationId: org.id,
+      reason: (formData.get('reason') as string) || null,
+    })
+    const backBlockId = (formData.get('back_block') as string) || ''
+    const backFloorId = (formData.get('back_floor') as string) || ''
+    const backTo = backFloorId ? `block=${backBlockId}&floor=${backFloorId}` : backBlockId ? `block=${backBlockId}` : ''
+    redirect(`/${slug}/hospedagem?${backTo}&msg=hold_cancelado`)
+  }
+
   const kpis = [
     { label: 'Quartos',           value: roomsList.length, icon: Hotel,     color: 'text-gray-600' },
     { label: 'Camas Ocupadas',    value: occupiedBeds,     icon: BedDouble, color: 'text-blue-600' },
@@ -258,11 +387,36 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
     checkin:      'Check-in realizado.',
     checkout:     'Check-out realizado. Cama(s) liberada(s).',
     config_salva: 'Configuração atualizada.',
+    alocacao_cancelada: 'Alocação cancelada.',
+    hold_criado: 'Reserva registrada.',
+    hold_cancelado: 'Reserva cancelada.',
   }
+
+  // ── Navegação por camada: sem bloco selecionado → cards de bloco; só
+  // bloco → cards de andar; bloco+andar → mapa de camas escopado a ele ────────
+  const currentBlock = blockId ? blocksList.find(b => b.id === blockId) : null
+  const currentFloor = floorId ? floorsList.find(f => f.id === floorId) : null
+  const currentBlockHold = blockId ? holdByBlock.get(blockId) : undefined
+  const currentFloorHold = floorId ? (holdByFloor.get(floorId) ?? currentBlockHold) : undefined
+  const floorsOfCurrentBlock = blockId ? (floorsByBlock.get(blockId) ?? []) : []
+  const roomIdsOfCurrentFloor = floorId ? new Set((roomsByFloor.get(floorId) ?? []).map(r => r.id)) : null
+  const scopedGridRooms = roomIdsOfCurrentFloor ? gridRooms.filter(r => roomIdsOfCurrentFloor.has(r.id)) : gridRooms
+  const scopedGridBeds = roomIdsOfCurrentFloor ? gridBeds.filter(b => roomIdsOfCurrentFloor.has(b.roomId)) : gridBeds
+  const scopedGridAllocs = roomIdsOfCurrentFloor ? gridAllocs.filter(a => roomIdsOfCurrentFloor.has(a.roomId)) : gridAllocs
 
   return (
     <>
-      <Header title="Hospedagem" />
+      <Header
+        title="Hospedagem"
+        actions={
+          <Link
+            href={`/${slug}/reservas`}
+            className="text-sm text-gray-300 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10 transition-colors"
+          >
+            Ver reservas →
+          </Link>
+        }
+      />
       <main className="p-4 md:p-6 space-y-5 max-w-6xl">
         {msg && msgInfo[msg] && (
           <div className="border rounded-lg px-4 py-3 text-sm bg-blue-50 border-blue-200 text-blue-700">
@@ -338,57 +492,206 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
           )}
         </div>
 
-        {/* Bed Grid */}
+        {/* Bed Grid / Linha do tempo — mesma tela, duas visões dos mesmos dados
+            (a Agenda separada foi unificada aqui, não tinha ação própria) */}
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <h2 className="text-sm font-semibold text-gray-800">Mapa de Quartos e Camas</h2>
-          <div className="flex gap-3">
+          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
             <Link
-              href={`/${slug}/hospedagem/agenda`}
-              className="text-xs font-medium text-brand-500 hover:text-brand-700 transition-colors"
+              href={`/${slug}/hospedagem?view=grid`}
+              className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${view === 'grid' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
             >
-              Agenda de reservas →
+              Mapa de Quartos e Camas
             </Link>
             <Link
-              href={`/${slug}/hospedagem/quartos`}
-              className="text-xs font-medium text-gray-400 hover:text-gray-600 transition-colors"
+              href={`/${slug}/hospedagem?view=timeline`}
+              className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${view === 'timeline' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
             >
-              Gerenciar quartos →
+              Agenda
             </Link>
           </div>
+          <Link
+            href={`/${slug}/hospedagem/quartos`}
+            className="text-xs font-medium text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            Gerenciar quartos →
+          </Link>
         </div>
 
-        {roomsList.length === 0 ? (
+        {view === 'timeline' ? (
+          <ReservationTimeline
+            rooms={timelineRooms}
+            beds={gridBeds}
+            allocs={timelineAllocs}
+            schools={schools}
+            today={today}
+            allocateAction={handleAllocate}
+            allocateRoomAction={handleAllocateRoom}
+            checkinAction={handleCheckin}
+            checkoutAction={handleCheckout}
+            cancelAction={handleCancelAllocation}
+          />
+        ) : roomsList.length === 0 ? (
           <EmptyState
             icon={Hotel}
             title="Nenhum quarto cadastrado"
             description="Cadastre os quartos e camas da base para começar."
             cta={{ label: 'Cadastrar quartos', href: `/${slug}/hospedagem/quartos` }}
           />
-        ) : gridBeds.length === 0 ? (
-          <EmptyState
-            icon={BedDouble}
-            title="Nenhuma cama cadastrada"
-            description="Os quartos existem mas não têm camas. Adicione camas para gerenciar."
-            cta={{ label: 'Ir para quartos', href: `/${slug}/hospedagem/quartos` }}
-          />
+        ) : !blockId ? (
+          /* Nível 1: cards de Bloco */
+          <div className="space-y-4">
+            {canWrite && blocksList.length > 0 && (
+              <div className="flex justify-end">
+                <HoldForm
+                  createAction={handleCreateHold}
+                  scope="block"
+                  label=""
+                  blockOptions={blocksList.map(b => ({ id: b.id, name: b.name }))}
+                />
+              </div>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {blocksList.map(b => {
+              const floorsCount = (floorsByBlock.get(b.id) ?? []).length
+              const roomsCount = (floorsByBlock.get(b.id) ?? []).reduce((sum, f) => sum + (roomsByFloor.get(f.id) ?? []).length, 0)
+              const stats = blockStats(b.id)
+              const hold = holdByBlock.get(b.id)
+              return (
+                <BlockCard
+                  key={b.id}
+                  href={`/${slug}/hospedagem?block=${b.id}`}
+                  name={b.name}
+                  floorCount={floorsCount}
+                  roomCount={roomsCount}
+                  occupiedBeds={stats.occupied}
+                  totalBeds={stats.total}
+                  hold={hold ? { groupName: hold.group_name } : null}
+                />
+              )
+            })}
+            </div>
+          </div>
+        ) : !floorId ? (
+          /* Nível 2: cards de Andar dentro do bloco selecionado */
+          <div className="space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <Link href={`/${slug}/hospedagem`} className="text-sm text-gray-500 hover:text-gray-900 transition-colors">
+                ← Todos os blocos
+              </Link>
+              {canWrite && currentBlock && floorsOfCurrentBlock.length > 0 && (
+                <HoldForm
+                  createAction={handleCreateHold}
+                  scope="floor"
+                  blockId={currentBlock.id}
+                  label={currentBlock.name}
+                  floorOptions={floorsOfCurrentBlock.map(f => ({ id: f.id, name: f.name }))}
+                />
+              )}
+            </div>
+            {currentBlockHold && (
+              <HoldBanner
+                cancelAction={handleCancelHold}
+                holdId={currentBlockHold.id}
+                groupName={currentBlockHold.group_name}
+                startsAt={currentBlockHold.starts_at}
+                endsAt={currentBlockHold.ends_at}
+                scopeLabel="este bloco"
+                backBlockId={blockId}
+              />
+            )}
+            {floorsOfCurrentBlock.length === 0 ? (
+              <EmptyState
+                icon={Hotel}
+                title="Nenhum andar neste bloco"
+                description="Crie um andar em Gerenciar quartos antes de cadastrar quartos aqui."
+                cta={{ label: 'Gerenciar quartos', href: `/${slug}/hospedagem/quartos` }}
+              />
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {floorsOfCurrentBlock.map(f => {
+                  const stats = floorStats(f.id)
+                  const hold = holdByFloor.get(f.id) ?? currentBlockHold
+                  return (
+                    <FloorCard
+                      key={f.id}
+                      href={`/${slug}/hospedagem?block=${blockId}&floor=${f.id}`}
+                      name={f.name}
+                      destination={f.destination}
+                      genderConstraint={f.gender_constraint}
+                      roomCount={(roomsByFloor.get(f.id) ?? []).length}
+                      occupiedBeds={stats.occupied}
+                      totalBeds={stats.total}
+                      hold={hold ? { groupName: hold.group_name } : null}
+                    />
+                  )
+                })}
+              </div>
+            )}
+          </div>
         ) : (
-          <BedGrid
-            rooms={gridRooms}
-            beds={gridBeds}
-            allocs={gridAllocs}
-            schools={schools}
-            today={today}
-            advanceHours={advanceHours}
-            slug={slug}
-            allocateAction={handleAllocate}
-            allocateRoomAction={handleAllocateRoom}
-            checkinAction={handleCheckin}
-            checkoutAction={handleCheckout}
-            checkinRoomAction={handleCheckinRoom}
-            checkoutRoomAction={handleCheckoutRoom}
-            toggleRoomMaintenanceAction={handleToggleRoomMaintenance}
-            toggleBedMaintenanceAction={handleToggleBedMaintenance}
-          />
+          /* Nível 3: mapa de camas escopado a este andar */
+          <div className="space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <Link href={`/${slug}/hospedagem?block=${blockId}`} className="text-sm text-gray-500 hover:text-gray-900 transition-colors">
+                ← {currentBlock?.name ?? 'Voltar'}
+              </Link>
+              {canWrite && currentBlock && currentFloor && scopedGridRooms.length > 0 && (
+                <HoldForm
+                  createAction={handleCreateHold}
+                  scope="room"
+                  blockId={currentBlock.id}
+                  floorId={currentFloor.id}
+                  label={currentFloor.name}
+                  roomOptions={scopedGridRooms.map(r => ({ id: r.id, name: r.name }))}
+                />
+              )}
+            </div>
+            {currentFloorHold && (
+              <HoldBanner
+                cancelAction={handleCancelHold}
+                holdId={currentFloorHold.id}
+                groupName={currentFloorHold.group_name}
+                startsAt={currentFloorHold.starts_at}
+                endsAt={currentFloorHold.ends_at}
+                scopeLabel="este andar"
+                backBlockId={blockId}
+                backFloorId={floorId}
+              />
+            )}
+            {scopedGridRooms.length === 0 ? (
+              <EmptyState
+                icon={Hotel}
+                title="Nenhum quarto neste andar"
+                description="Cadastre um quarto pra este andar em Gerenciar quartos."
+                cta={{ label: 'Gerenciar quartos', href: `/${slug}/hospedagem/quartos` }}
+              />
+            ) : scopedGridBeds.length === 0 && scopedGridRooms.every(r => r.allocationMode === 'cama') ? (
+              <EmptyState
+                icon={BedDouble}
+                title="Nenhuma cama cadastrada"
+                description="Os quartos existem mas não têm camas. Adicione camas para gerenciar."
+                cta={{ label: 'Ir para quartos', href: `/${slug}/hospedagem/quartos` }}
+              />
+            ) : (
+              <BedGrid
+                rooms={scopedGridRooms}
+                beds={scopedGridBeds}
+                allocs={scopedGridAllocs}
+                schools={schools}
+                today={today}
+                advanceHours={advanceHours}
+                slug={slug}
+                allocateAction={handleAllocate}
+                allocateRoomAction={handleAllocateRoom}
+                checkinAction={handleCheckin}
+                checkoutAction={handleCheckout}
+                checkinRoomAction={handleCheckinRoom}
+                checkoutRoomAction={handleCheckoutRoom}
+                toggleRoomMaintenanceAction={handleToggleRoomMaintenance}
+                toggleBedMaintenanceAction={handleToggleBedMaintenance}
+              />
+            )}
+          </div>
         )}
       </main>
     </>

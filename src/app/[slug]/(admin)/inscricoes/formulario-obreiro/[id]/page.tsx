@@ -307,11 +307,12 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
   if (canHandoffHospedagem) {
     const { data: roomRows } = await sb
       .from('rooms')
-      .select('id, name, floor, allocation_mode, beds(id, label, status)')
+      .select('id, name, allocation_mode, beds(id, label, status), floors(name)')
       .eq('organization_id', app.organization_id)
       .eq('status', 'ativo')
       .order('display_order', { ascending: true })
-    rooms = (roomRows ?? []) as unknown as typeof rooms
+    rooms = ((roomRows ?? []) as unknown as Array<{ id: string; name: string; allocation_mode: string; beds: { id: string; label: string; status: string }[]; floors: { name: string } | null }>)
+      .map(r => ({ id: r.id, name: r.name, floor: r.floors?.name ?? null, allocation_mode: r.allocation_mode, beds: r.beds }))
   }
 
   const { data: backgroundChecks } = await sb

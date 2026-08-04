@@ -58,12 +58,28 @@ export default async function RoomDetailPage({ params, searchParams }: Props) {
 
   // ── Fetch room ──────────────────────────────────────────────────────────────
   const { data: room } = await sbAdmin.from('rooms')
-    .select('id, name, floor, block, type, gender_constraint, destination, allocation_mode, capacity, status, notes')
+    .select('id, name, floor_id, type, gender_constraint, destination, allocation_mode, capacity, status, notes, floors(name, blocks(name))')
     .eq('id', roomId)
     .eq('organization_id', org.id)
     .single()
 
   if (!room) notFound()
+
+  const roomFloor = room.floors as unknown as { name: string; blocks: { name: string } | null } | null
+
+  // ── Andares disponíveis (pra trocar o quarto de andar ao editar) ────────────
+  const [{ data: blocksData }, { data: floorsData }] = await Promise.all([
+    sbAdmin.from('blocks').select('id, name').eq('organization_id', org.id).order('name'),
+    sbAdmin.from('floors').select('id, block_id, name, destination, gender_constraint').eq('organization_id', org.id).order('name'),
+  ])
+  const blocksList = (blocksData ?? []) as Array<{ id: string; name: string }>
+  const floorOptions = ((floorsData ?? []) as Array<{ id: string; block_id: string; name: string; destination: string | null; gender_constraint: string | null }>).map(f => ({
+    id: f.id,
+    name: f.name,
+    blockName: blocksList.find(b => b.id === f.block_id)?.name ?? '—',
+    destination: f.destination,
+    genderConstraint: f.gender_constraint,
+  }))
 
   // ── Fetch beds ──────────────────────────────────────────────────────────────
   const { data: bedsRaw } = await sbAdmin.from('beds')
@@ -118,12 +134,13 @@ export default async function RoomDetailPage({ params, searchParams }: Props) {
     'use server'
     const name = (formData.get('name') as string).trim()
     if (!name) return
+    const floorId = formData.get('floor_id') as string
+    if (!floorId) return
     await updateRoom({
       id: roomId,
       organizationId:   org.id,
       name,
-      floor:            (formData.get('floor') as string)?.trim() || null,
-      block:            (formData.get('block') as string)?.trim() || null,
+      floorId,
       type:             formData.get('type') as string,
       genderConstraint: (formData.get('gender_constraint') as string) || null,
       destination:      formData.get('destination') as string ?? 'visita',
@@ -239,7 +256,7 @@ export default async function RoomDetailPage({ params, searchParams }: Props) {
 
   return (
     <>
-      <Header title={room.name} />
+      <Header title={room.name} backHref={`/${slug}/hospedagem/quartos`} />
       <main className="p-4 md:p-6 space-y-6 max-w-3xl">
         {msg && msgInfo[msg] && (
           <div className="border rounded-lg px-4 py-3 text-sm bg-blue-50 border-blue-200 text-blue-700">
@@ -264,8 +281,8 @@ export default async function RoomDetailPage({ params, searchParams }: Props) {
                   </span>
                 )}
               </div>
-              {room.floor && (
-                <p className="text-xs text-gray-400">{room.floor}</p>
+              {roomFloor && (
+                <p className="text-xs text-gray-400">{roomFloor.blocks?.name} — {roomFloor.name}</p>
               )}
               {room.notes && (
                 <p className="text-xs text-gray-500">{room.notes}</p>
@@ -275,7 +292,8 @@ export default async function RoomDetailPage({ params, searchParams }: Props) {
             <RoomForm
               createAction={handleEditRoom}
               editAction={handleEditRoom}
-              room={room}
+              floors={floorOptions}
+              room={{ ...room, floorId: room.floor_id }}
               trigger={
                 <button
                   type="button"

@@ -10,7 +10,8 @@ type BedData = {
   id: string
   roomId: string
   roomName: string
-  roomFloor: string | null
+  roomFloorName: string | null
+  roomBlockName: string | null
   roomGender: string | null
   label: string
   type: string
@@ -32,8 +33,8 @@ type AllocData = {
 type RoomData = {
   id: string
   name: string
-  floor: string | null
-  block: string | null
+  floorName: string | null
+  blockName: string | null
   gender: string | null
   destination: string
   allocationMode: string
@@ -128,6 +129,12 @@ function RoomCard({ room, roomBeds, roomAllocs, today, onClick }: {
         <span className="text-sm font-bold text-gray-800 truncate">{room.name}</span>
         <DestIcon size={14} className={DEST_CLS[room.destination] ?? 'text-gray-400'} />
       </div>
+
+      {(room.blockName || room.floorName) && (
+        <p className="text-[10px] font-medium text-gray-500 truncate">
+          {[room.blockName, room.floorName].filter(Boolean).join(' — ')}
+        </p>
+      )}
 
       <p className="text-[10px] text-gray-400 mb-2">
         {activeBeds.length} cama{activeBeds.length !== 1 ? 's' : ''}
@@ -280,19 +287,23 @@ export function BedGrid({
     bedsByRoom.set(b.roomId, list)
   }
 
-  // Group rooms by block
-  const blocks = new Map<string, RoomData[]>()
+  // Agrupa quarto por Bloco > Andar (hierarquia real, não mais texto solto)
+  const blockMap = new Map<string, Map<string, RoomData[]>>()
   for (const room of rooms) {
-    const key = room.block || 'Sem bloco'
-    const list = blocks.get(key) ?? []
+    const blockKey = room.blockName || 'Sem bloco'
+    const floorKey = room.floorName || 'Sem andar'
+    if (!blockMap.has(blockKey)) blockMap.set(blockKey, new Map())
+    const floorMap = blockMap.get(blockKey)!
+    const list = floorMap.get(floorKey) ?? []
     list.push(room)
-    blocks.set(key, list)
+    floorMap.set(floorKey, list)
   }
-  const blockNames = [...blocks.keys()].sort((a, b) => {
-    if (a === 'Sem bloco') return 1
-    if (b === 'Sem bloco') return -1
+  const sortNames = (names: string[], emptyLabel: string) => names.sort((a, b) => {
+    if (a === emptyLabel) return 1
+    if (b === emptyLabel) return -1
     return a.localeCompare(b)
   })
+  const blockNames = sortNames([...blockMap.keys()], 'Sem bloco')
 
   // Alerts
   const overdueAllocs = allocs.filter(a => daysRemaining(a.checkOut, today) < 0)
@@ -337,9 +348,10 @@ export function BedGrid({
         <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-yellow-400" /> Manutenção</span>
       </div>
 
-      {/* Blocks with rooms/beds */}
+      {/* Blocos > Andares > Quartos/Camas */}
       {blockNames.map(blockName => {
-        const blockRooms = blocks.get(blockName)!
+        const floorMap = blockMap.get(blockName)!
+        const floorNames = sortNames([...floorMap.keys()], 'Sem andar')
         return (
           <div key={blockName} className="space-y-3">
             {blockNames.length > 1 && (
@@ -350,48 +362,66 @@ export function BedGrid({
               </div>
             )}
 
-            {blockRooms.map(room => {
-              const roomBeds = bedsByRoom.get(room.id) ?? []
-              const roomAllocs = allocsByRoom.get(room.id) ?? []
-
-              if (room.allocationMode === 'quarto') {
-                return (
-                  <div key={room.id}>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-                      <RoomCard
-                        room={room}
-                        roomBeds={roomBeds}
-                        roomAllocs={roomAllocs}
-                        today={today}
-                        onClick={() => setSelectedRoom(room)}
-                      />
-                    </div>
-                  </div>
-                )
-              }
-
-              if (roomBeds.length === 0) return null
-
+            {floorNames.map(floorName => {
+              const floorRooms = floorMap.get(floorName)!
               return (
-                <div key={room.id} className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wide">{room.name}</h4>
-                    {room.floor && <span className="text-[10px] text-gray-400">{room.floor}</span>}
-                    {room.gender && <span className={`text-[10px] font-medium ${GENDER_CLS[room.gender]}`}>{GENDER_LABEL[room.gender]}</span>}
-                    <span className={`text-[10px] font-medium ${DEST_CLS[room.destination]}`}>{DEST_LABEL[room.destination]}</span>
-                    {room.status === 'manutencao' && <span className="text-[10px] font-medium text-yellow-600">Manutenção</span>}
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-                    {roomBeds.map(bed => (
-                      <BedCard
-                        key={bed.id}
-                        bed={bed}
-                        alloc={allocByBed.get(bed.id)}
-                        today={today}
-                        onClick={() => setSelectedBed(bed)}
-                      />
-                    ))}
-                  </div>
+                <div key={floorName} className="space-y-3">
+                  {floorNames.length > 1 && (
+                    <div className="flex items-center gap-2 pl-3">
+                      <h4 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{floorName}</h4>
+                      <div className="flex-1 border-t border-gray-100" />
+                    </div>
+                  )}
+
+                  {floorRooms.map(room => {
+                    const roomBeds = bedsByRoom.get(room.id) ?? []
+                    const roomAllocs = allocsByRoom.get(room.id) ?? []
+
+                    if (room.allocationMode === 'quarto') {
+                      return (
+                        <div key={room.id}>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+                            <RoomCard
+                              room={room}
+                              roomBeds={roomBeds}
+                              roomAllocs={roomAllocs}
+                              today={today}
+                              onClick={() => setSelectedRoom(room)}
+                            />
+                          </div>
+                        </div>
+                      )
+                    }
+
+                    if (roomBeds.length === 0) return null
+
+                    return (
+                      <div key={room.id} className="space-y-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wide">{room.name}</h4>
+                          {(room.blockName || room.floorName) && (
+                            <span className="text-[10px] font-medium text-gray-400">
+                              {[room.blockName, room.floorName].filter(Boolean).join(' — ')}
+                            </span>
+                          )}
+                          {room.gender && <span className={`text-[10px] font-medium ${GENDER_CLS[room.gender]}`}>{GENDER_LABEL[room.gender]}</span>}
+                          <span className={`text-[10px] font-medium ${DEST_CLS[room.destination]}`}>{DEST_LABEL[room.destination]}</span>
+                          {room.status === 'manutencao' && <span className="text-[10px] font-medium text-yellow-600">Manutenção</span>}
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+                          {roomBeds.map(bed => (
+                            <BedCard
+                              key={bed.id}
+                              bed={bed}
+                              alloc={allocByBed.get(bed.id)}
+                              today={today}
+                              onClick={() => setSelectedBed(bed)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               )
             })}
@@ -405,7 +435,7 @@ export function BedGrid({
           open
           onClose={() => setSelectedBed(null)}
           title={`${selectedBed.label} — ${selectedBed.roomName}`}
-          subtitle={[selectedBed.roomFloor, selectedBed.roomGender ? GENDER_LABEL[selectedBed.roomGender] : null].filter(Boolean).join(' · ') || undefined}
+          subtitle={[selectedBed.roomBlockName, selectedBed.roomFloorName, selectedBed.roomGender ? GENDER_LABEL[selectedBed.roomGender] : null].filter(Boolean).join(' · ') || undefined}
           hideFooter
         >
           <div className="p-5 space-y-4">
@@ -510,7 +540,7 @@ export function BedGrid({
           open
           onClose={() => setSelectedRoom(null)}
           title={selectedRoom.name}
-          subtitle={[selectedRoom.floor, selectedRoom.gender ? GENDER_LABEL[selectedRoom.gender] : null, DEST_LABEL[selectedRoom.destination]].filter(Boolean).join(' · ') || undefined}
+          subtitle={[selectedRoom.blockName, selectedRoom.floorName, selectedRoom.gender ? GENDER_LABEL[selectedRoom.gender] : null, DEST_LABEL[selectedRoom.destination]].filter(Boolean).join(' · ') || undefined}
           hideFooter
         >
           <div className="p-5 space-y-4">
