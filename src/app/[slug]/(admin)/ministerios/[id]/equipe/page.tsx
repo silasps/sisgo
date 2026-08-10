@@ -12,6 +12,7 @@ import { Suspense } from 'react'
 import { ScrollHighlight } from '@/components/ui/ScrollHighlight'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { EnviarFormularioObreiroDiretoButton } from '@/components/inscricoes/EnviarFormularioObreiroDiretoButton'
+import { SearchableSelectModal } from '@/components/ui/SearchableSelectModal'
 
 type Props = {
   params: Promise<{ slug: string; id: string }>
@@ -340,10 +341,15 @@ export default async function EquipePage({ params, searchParams }: Props) {
           <details className={members.length > 0 ? 'border-t border-gray-100 pt-3' : ''}>
             <summary className="text-sm text-brand-600 cursor-pointer select-none font-medium">+ Adicionar membro</summary>
             <form action={handleAddMember} className="mt-3 flex flex-wrap gap-2">
-              <select name="person_id" required className={`flex-1 min-w-0 ${INPUT}`}>
-                <option value="">Selecionar pessoa...</option>
-                {availablePeople.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
-              </select>
+              <div className="flex-1 min-w-0">
+                <SearchableSelectModal
+                  name="person_id"
+                  options={availablePeople.map(p => ({ id: p.id, label: p.full_name }))}
+                  placeholder="Selecionar pessoa..."
+                  searchPlaceholder="Buscar por nome..."
+                  title="Selecionar pessoa"
+                />
+              </div>
               {ministryRoles.length > 0 && (
                 <select name="role_id" className={INPUT}>
                   <option value="">Sem papel</option>
@@ -360,10 +366,13 @@ export default async function EquipePage({ params, searchParams }: Props) {
           <details className={members.length > 0 ? 'border-t border-gray-100 pt-3' : ''}>
             <summary className="text-sm text-brand-600 cursor-pointer select-none font-medium">+ Solicitar adição de membro</summary>
             <form action={handleRequestAdd} className="mt-3 space-y-2">
-              <select name="person_id" required className={INPUT}>
-                <option value="">Selecionar pessoa...</option>
-                {leaderPeopleList.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
-              </select>
+              <SearchableSelectModal
+                name="person_id"
+                options={leaderPeopleList.map(p => ({ id: p.id, label: p.full_name }))}
+                placeholder="Selecionar pessoa..."
+                searchPlaceholder="Buscar por nome..."
+                title="Selecionar pessoa"
+              />
               {ministryRoles.length > 0 && (
                 <select name="role_id" className={INPUT}>
                   <option value="">Sem papel específico</option>

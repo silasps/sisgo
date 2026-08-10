@@ -12,6 +12,18 @@ export async function assignSchoolLeader(orgId: string, schoolId: string, userId
       .update({ role_id: role.id, updated_at: new Date().toISOString() })
       .eq('user_id', userId).eq('organization_id', orgId)
   }
+
+  // Preenche a área em staff_profiles (mesmo padrão já usado em
+  // confirmTransferAsDH pra transferência entre ministérios) — sem isso o
+  // card em Obreiros/Pessoas fica sem área e o formulário de "Editar função"
+  // nasce com o seletor de área vazio, mesmo com o vínculo já existindo em
+  // school_leaders.
+  const { data: school } = await sb.from('schools').select('name').eq('id', schoolId).single()
+  if (school) {
+    await sb.from('staff_profiles')
+      .update({ area: school.name, role_title: 'Líder', updated_at: new Date().toISOString() })
+      .eq('organization_id', orgId).eq('user_id', userId)
+  }
 }
 
 export async function removeSchoolLeader(schoolId: string) {

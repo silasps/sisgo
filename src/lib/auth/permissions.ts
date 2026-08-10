@@ -27,6 +27,7 @@ export type Role =
   | 'aluno'
   | 'associado'
   | 'pendente_alocacao'
+  | 'comunicacao'
 
 // ── Grupos de papéis ──────────────────────────────────────────────────────────
 

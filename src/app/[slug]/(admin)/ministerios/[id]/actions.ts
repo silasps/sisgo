@@ -2,6 +2,66 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 
+// Quando um ministério tem `linked_role` (Hospitalidade/Secretaria/DH/Cozinha/
+// Manutenção/Comunicação — configurado na criação do ministério) e a pessoa
+// ainda está "Pendente de Alocação" (nunca recebeu uma função real), vira-la
+// membro desse ministério deve tirá-la desse estado: promove o papel dela na
+// base pra o papel vinculado e preenche área/função em staff_profiles. Quem já
+// tem um papel real não é mexido — o acesso extra continua vindo dinamicamente
+// via ministry_members (ver layout.tsx `linkedRoles`), sem sobrescrever o
+// papel principal de quem já está em outra função.
+async function promotePendingIfLinkedRole(
+  sb: ReturnType<typeof createAdminClient>,
+  ministryId: string,
+  personId: string,
+  ministryRoleId: string | null,
+) {
+  const { data: ministry } = await sb
+    .from('ministries')
+    .select('name, linked_role, organization_id')
+    .eq('id', ministryId)
+    .single()
+  if (!ministry?.linked_role) return
+
+  const { data: profile } = await sb
+    .from('staff_profiles')
+    .select('id, user_id')
+    .eq('organization_id', ministry.organization_id)
+    .eq('person_id', personId)
+    .maybeSingle()
+  if (!profile?.user_id) return
+
+  const { data: orgUser } = await sb
+    .from('organization_users')
+    .select('id, roles(name)')
+    .eq('user_id', profile.user_id)
+    .eq('organization_id', ministry.organization_id)
+    .maybeSingle()
+  const currentRoleName = (orgUser?.roles as unknown as { name: string } | null)?.name
+  if (!orgUser || currentRoleName !== 'pendente_alocacao') return
+
+  const { data: linkedRole } = await sb
+    .from('roles')
+    .select('id')
+    .eq('name', ministry.linked_role)
+    .single()
+  if (!linkedRole) return
+
+  let roleTitle: string | null = null
+  if (ministryRoleId) {
+    const { data: mRole } = await sb.from('ministry_roles').select('name').eq('id', ministryRoleId).single()
+    roleTitle = mRole?.name ?? null
+  }
+
+  await sb.from('organization_users')
+    .update({ role_id: linkedRole.id, updated_at: new Date().toISOString() })
+    .eq('id', orgUser.id)
+
+  await sb.from('staff_profiles')
+    .update({ area: ministry.name, role_title: roleTitle, updated_at: new Date().toISOString() })
+    .eq('id', profile.id)
+}
+
 // ── DH: cria ministério ──────────────────────────────────────────────────────
 export async function createMinistry(orgId: string, name: string, description: string | null, linkedRole?: string | null) {
   const sb = createAdminClient()
@@ -68,6 +128,8 @@ export async function addMember(ministryId: string, personId: string, roleId: st
       joined_at: new Date().toISOString(), active: true,
     })
   }
+
+  await promotePendingIfLinkedRole(sb, ministryId, personId, roleId)
 }
 
 // ── DH: remove membro (soft) ─────────────────────────────────────────────────
