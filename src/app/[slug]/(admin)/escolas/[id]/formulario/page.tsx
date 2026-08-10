@@ -56,7 +56,7 @@ const CONFIGURAVEL: { secao: string; key: string; titulo: string; campos: { name
     { name: 'pastor_bloco', label: 'Referência de pastor (bloco inteiro)' },
   ]},
   { secao: 's9', key: 'amigo', titulo: 'Referência de Amigo', campos: [
-    { name: 'oculto', label: 'Ocultar esta etapa inteira (pula no formulário)' },
+    { name: 'oculto', label: 'Etapa inteira aparece no formulário (desative pra pular)' },
     { name: 'ref_nome', label: 'Nome do amigo' },
     { name: 'ref_relacionamento', label: 'Como se conheceram' },
     { name: 'ref_tempo', label: 'Tempo de amizade' },
@@ -75,6 +75,7 @@ const CONFIGURAVEL: { secao: string; key: string; titulo: string; campos: { name
     { name: 'hist_lider_tel', label: 'Telefone do líder' },
   ]},
   { secao: 's11', key: 'espiritual', titulo: 'Espiritual e emocional', campos: [
+    { name: 'oculto', label: 'Etapa inteira aparece no formulário (desative pra pular)' },
     { name: 'psicologico', label: 'Acompanhamento psicológico?' },
     { name: 'diagnostico_emocional', label: 'Diagnóstico/situação emocional' },
     { name: 'recuperacao', label: 'Casa de recuperação?' },
@@ -91,11 +92,13 @@ const CONFIGURAVEL: { secao: string; key: string; titulo: string; campos: { name
     { name: 'plano_saude', label: 'Plano de saúde?' },
   ]},
   { secao: 's13', key: 'legal', titulo: 'Questões legais', campos: [
+    { name: 'oculto', label: 'Etapa inteira aparece no formulário (desative pra pular)' },
     { name: 'antecedente', label: 'Antecedente criminal?' },
     { name: 'pendencia_juridica', label: 'Pendência jurídica?' },
     { name: 'restricao_legal', label: 'Restrição legal?' },
   ]},
   { secao: 's14', key: 'financeiro', titulo: 'Financeiro', campos: [
+    { name: 'oculto', label: 'Etapa inteira aparece no formulário (desative pra pular)' },
     { name: 'apoio_tipo', label: 'Tipo de apoio financeiro' },
     { name: 'ajuda_igreja', label: 'Igreja ajudará financeiramente?' },
     { name: 'pagar_tudo', label: 'Consegue pagar tudo?' },

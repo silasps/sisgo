@@ -42,10 +42,13 @@ export default async function NovaEscolaPage({ params }: Props) {
     const schoolType = formData.get('school_type') as string
 
     // Seminário é bem mais curto que uma escola normal — já nasce com o
-    // formulário enxuto (sem bloco de pastor, sem etapa de referência de
-    // amigo). O admin ainda pode reverter em Configurar formulário.
+    // formulário enxuto: sem bloco de pastor, sem etapa de referência de
+    // amigo, sem espiritual/emocional, legal ou financeiro (vetting de
+    // longo prazo, não cabe num workshop de dias). Fica: identificação,
+    // documentos, igreja (básico), histórico de outra base, saúde física.
+    // O admin ainda pode reverter campo a campo em Configurar formulário.
     const formConfig = schoolType === 'seminario'
-      ? { hidden_fields: ['s8.pastor_bloco', 's9.oculto'] }
+      ? { hidden_fields: ['s8.pastor_bloco', 's9.oculto', 's11.oculto', 's13.oculto', 's14.oculto'] }
       : {}
 
     const { data: escola, error } = await sb.from('schools').insert({
