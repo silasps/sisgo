@@ -6,7 +6,9 @@ corrigido no menu (`buildNav`) e sincronizado com ministérios de função
 vinculada; páginas de Hospedagem paravam de reconhecer papel acumulado
 via ministério e caíam em 404 — `getCurrentOrganizationRole` ganhou
 `linkedRoles`/`allRoles` reaproveitável; líder de escola/seminário ganha
-edição de dados da escola + criar turma; `SearchableSelectModal` — picker
+edição de dados da escola + criar turma; líder de ETED via candidatos a
+"aluno" de escolas que não lidera em Inscrições — filtro de escopo
+esquecia esse tipo; `SearchableSelectModal` — picker
 de usuário/pessoa com busca por nome+e-mail, agora também no Quadro de
 Obreiros do Ministério; `Modal` renderiza via portal pro `<body>`)
 **Nota:** a migration 114 tentou criar um papel `comunicacao` formal por
@@ -208,6 +210,18 @@ qualquer usuário logado) · `hospedagem` (quartos/camas, agenda, **lavanderia**
     lidera). Ficam exclusivos de gestão, por decisão consciente: atribuir/
     trocar/remover o próprio líder da escola, e adicionar obreiro sem
     passar pela aprovação do DH (o líder continua só podendo "solicitar").
+  - **Escopo de `/{slug}/inscricoes` por papel** (`roleFiltered` em
+    `inscricoes/page.tsx`): líder de ETED só devia ver `pre_inscricao`
+    (interesse) e `obreiro`/`pre_inscricao_obreiro` da(s) escola(s) que
+    lidera (`allowedSchoolIds`, de `school_leaders`) — o comentário no
+    código já dizia "aluno e obreiro", mas o filtro nunca checava o tipo
+    `aluno` (candidato com `student_applications` completo), que caía no
+    `return true` final e vazava candidatos de **qualquer** escola da
+    base pra qualquer líder de ETED. Bug pré-existente (não introduzido
+    nas correções desta sessão), só apareceu com a primeira líder de
+    ETED de verdade testando com candidatos de escolas diferentes. Líder
+    de Ministério (`isLiderMinisterio`) já filtrava certo — só não tinha
+    o mesmo espelhamento pro lado de ETED.
 - **RLS:** toda tabela de negócio tem policies por organização e papel. Server
   actions administrativas usam `createAdminClient()` (service role) após checar
   permissão na aplicação.
