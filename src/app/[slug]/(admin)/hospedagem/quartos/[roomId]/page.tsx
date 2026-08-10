@@ -2,8 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/Header'
 import { notFound, redirect } from 'next/navigation'
-import { getRolePreview } from '@/lib/role-preview'
-import { isManagementRole, canSeeHospedagem } from '@/lib/auth/permissions'
+import { isManagementRole, userHasAnyRole, HOSPEDAGEM_ROLES } from '@/lib/auth/permissions'
+import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { updateRoom, createBed, updateBed, removeBed, createAllocation, updateAllocationStatus, cancelAllocation } from '../../actions'
 import { BedManager } from './BedManager'
 import { AllocationManager } from './AllocationManager'
@@ -44,17 +44,9 @@ export default async function RoomDetailPage({ params, searchParams }: Props) {
   ])
   if (!user || !org) notFound()
 
-  const { data: orgUser } = await supabase
-    .from('organization_users')
-    .select('roles(name)')
-    .eq('user_id', user.id)
-    .eq('active', true)
-    .single()
-  const realRole = (orgUser?.roles as unknown as { name: string } | null)?.name ?? ''
-  const preview  = await getRolePreview(realRole)
-  const role     = preview?.role ?? realRole
+  const { role, allRoles } = await getCurrentOrganizationRole(supabase, user.id, org.id)
 
-  if (!isManagementRole(role) && !canSeeHospedagem(role)) notFound()
+  if (!isManagementRole(role) && !userHasAnyRole(allRoles, HOSPEDAGEM_ROLES)) notFound()
 
   // ── Fetch room ──────────────────────────────────────────────────────────────
   const { data: room } = await sbAdmin.from('rooms')

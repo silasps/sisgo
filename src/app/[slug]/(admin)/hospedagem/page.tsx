@@ -3,8 +3,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/Header'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { notFound, redirect } from 'next/navigation'
-import { getRolePreview } from '@/lib/role-preview'
-import { isManagementRole, isOperationalManager, canSeeHospedagem } from '@/lib/auth/permissions'
+import { isManagementRole, isOperationalManager, userHasAnyRole, HOSPEDAGEM_ROLES } from '@/lib/auth/permissions'
+import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import {
   createAllocation, updateAllocationStatus, cancelAllocation,
   allocateWholeRoom, checkinWholeRoom, checkoutWholeRoom,
@@ -39,18 +39,10 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
   ])
   if (!user || !org) notFound()
 
-  const { data: orgUser } = await supabase
-    .from('organization_users')
-    .select('roles(name)')
-    .eq('user_id', user.id)
-    .eq('active', true)
-    .single()
-  const realRole = (orgUser?.roles as unknown as { name: string } | null)?.name ?? ''
-  const preview  = await getRolePreview(realRole)
-  const role     = preview?.role ?? realRole
+  const { role, allRoles } = await getCurrentOrganizationRole(supabase, user.id, org.id)
 
-  if (!isManagementRole(role) && !canSeeHospedagem(role)) notFound()
-  const canWrite = isOperationalManager(role) || role === 'hospitalidade'
+  if (!isManagementRole(role) && !userHasAnyRole(allRoles, HOSPEDAGEM_ROLES)) notFound()
+  const canWrite = isOperationalManager(role) || allRoles.includes('hospitalidade')
 
   // ── Data ────────────────────────────────────────────────────────────────────
   const today = new Date().toISOString().split('T')[0]
