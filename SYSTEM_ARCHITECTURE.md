@@ -1,6 +1,8 @@
 # SISGO — Arquitetura do Sistema
 
-**Atualizado:** 4 de agosto de 2026 (hospedagem reestruturada — hierarquia Bloco › Andar › Quarto › Cama, navegação em camadas e reserva de bloco/andar/quarto inteiro; unificação de Reservas com Hospedagem)
+**Atualizado:** 10 de agosto de 2026 (Seminários em Escolas com formulário
+enxuto por escola; `SearchableSelectModal` — picker de usuário/pessoa com
+busca por nome+e-mail; `Modal` agora renderiza via portal pro `<body>`)
 **Produção:** https://www.sisgomission.com (Vercel)
 
 ---
@@ -190,6 +192,27 @@ qualquer usuário logado) · `hospedagem` (quartos/camas, agenda, **lavanderia**
   `src/app/[slug]/(admin)/inscricoes/RecusarModal.tsx`) e agora gravam status
   diferente — mesma server action (`recusar`, com um campo `kind`), mesmo
   motivo obrigatório, mesma regra de nunca apagar.
+- **`schools.school_type` ≠ `type` nos tipos gerados:** `src/types/database.ts`
+  lista essa coluna como `type`, mas a coluna real no banco é `school_type`
+  (migration 003) — o arquivo de tipos está desatualizado nesse ponto.
+  Confiar nele sem checar `\d schools` já causou um bug real (insert de nova
+  escola em `escolas/nova/page.tsx` gravava numa coluna inexistente e falhava
+  em silêncio, sem nunca redirecionar). Sempre conferir a coluna de verdade
+  (`psql "$DATABASE_URL" -c "\d schools"`) antes de confiar nesse arquivo
+  pra essa tabela especificamente.
+- **Escolas ficam mais leves com "Seminários":** `school_type='seminario'`
+  agora tem grupo e seção próprios em `/escolas` (`schoolTypeGroup`/
+  `schoolTypeShortLabel` em `src/lib/schools.ts`), separado de "Escolas de
+  2º Nível". O formulário de inscrição (`FormularioInscricao.tsx`) fica
+  configurável por escola via `schools.form_config.hidden_fields`
+  (mecanismo já existente, `escolas/[id]/formulario/page.tsx`): além de
+  esconder campo por campo, dois marcadores sintéticos novos permitem
+  esconder blocos inteiros — `s8.pastor_bloco` (some com todo o bloco de
+  referência de pastor, título/aviso incluídos) e `sX.oculto` (pula a etapa
+  X inteira do assistente, ex. `s9.oculto` pra Referência de Amigo). A
+  validação de "e-mail ou telefone do pastor obrigatório" em `handleNext`
+  respeita `s8.pastor_bloco` — não trava mais o envio quando o bloco está
+  escondido.
 
 ---
 
@@ -328,6 +351,24 @@ Autosserviço com pagamento por tempo. Cada máquina tem um relé Wi-Fi
   classe como `` `fixed inset-0 ${sidebarLeftClass} z-50 ...` ``. O
   componente `Modal` (`@/components/ui/Modal`) já faz isso — prefira
   reaproveitá-lo em vez de montar um overlay próprio.
+  **Renderiza via `createPortal(..., document.body)`** — necessário porque
+  um `fixed` nascido dentro de um ancestral com `transform`/`filter` (ex.:
+  a animação de `.animate-stagger`, que deixa um `transform: translateY(0)`
+  residual mesmo depois de terminar, via `animation-fill-mode: both`) vira
+  "fixed" em relação a esse ancestral, não à viewport — o modal aparece
+  preso num canto da tela em vez de centralizado. Mesmo padrão que o painel
+  "Ver tudo" (`AllAppsPanel`) já usava. Ao criar um modal novo, prefira
+  sempre `Modal` em vez de montar um `fixed inset-0` próprio — evita
+  reintroduzir esse bug.
+- **`SearchableSelectModal`** (`@/components/ui/SearchableSelectModal`):
+  substitui `<select>` nativo pra escolher usuário/pessoa numa lista —
+  abre `Modal` com busca (mesmo critério tolerante a acento/cedilha/
+  maiúsculas do "Ver tudo": normaliza como NFD, remove as marcas
+  diacríticas resultantes e aplica `toLowerCase`, aceita digitação fora
+  de ordem). Recebe `options: {id, label, sublabel?}[]`
+  — passe nome em `label` e e-mail em `sublabel` (ou vice-versa) pra buscar
+  por ambos de uma vez. Renderiza um `<input type="hidden">` por baixo, então
+  funciona dentro de `<form action={serverAction}>` sem mudar a action.
 
 ## 11. Scripts e Operações
 

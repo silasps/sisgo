@@ -39,10 +39,20 @@ export default async function NovaEscolaPage({ params }: Props) {
     const { role: actionRole } = await getRole(authClient, actionUser.id, orgRow.id)
     if (!isMgmt(actionRole)) return
 
+    const schoolType = formData.get('school_type') as string
+
+    // Seminário é bem mais curto que uma escola normal — já nasce com o
+    // formulário enxuto (sem bloco de pastor, sem etapa de referência de
+    // amigo). O admin ainda pode reverter em Configurar formulário.
+    const formConfig = schoolType === 'seminario'
+      ? { hidden_fields: ['s8.pastor_bloco', 's9.oculto'] }
+      : {}
+
     const { data: escola, error } = await sb.from('schools').insert({
       organization_id: orgRow.id,
       name: formData.get('name') as string,
-      school_type: formData.get('school_type') as string,
+      school_type: schoolType,
+      form_config: formConfig,
       active: true,
     }).select('id').single()
 
