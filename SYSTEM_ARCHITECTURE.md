@@ -1,8 +1,13 @@
 # SISGO — Arquitetura do Sistema
 
-**Atualizado:** 10 de agosto de 2026 (Seminários em Escolas com formulário
-enxuto por escola; `SearchableSelectModal` — picker de usuário/pessoa com
-busca por nome+e-mail; `Modal` agora renderiza via portal pro `<body>`)
+**Atualizado:** 10 de agosto de 2026 (empurrar usuário sem base pro super
+admin + papel `pendente_alocacao` + notificação ao DH; acúmulo de papéis
+corrigido no menu (`buildNav`) e sincronizado com ministérios de função
+vinculada; `SearchableSelectModal` — picker de usuário/pessoa com busca
+por nome+e-mail, agora também no Quadro de Obreiros do Ministério;
+`Modal` renderiza via portal pro `<body>`)
+**Nota:** a migration 114 tentou criar um papel `comunicacao` formal por
+diagnóstico errado e foi revertida pela 115 no mesmo dia — ver seção 4.
 **Produção:** https://www.sisgomission.com (Vercel)
 
 ---
@@ -91,8 +96,85 @@ qualquer usuário logado) · `hospedagem` (quartos/camas, agenda, **lavanderia**
   Papéis principais: `superadmin`, `supervisor_bases`, `admin_base`, `lider_base`,
   `dh`, `hospitalidade`, `lider_eted`, entre outros. Helpers em
   `src/lib/auth/permissions.ts` (`isManagementRole`, `canSeeHospedagem`, ...).
+- **Usuário sem base → `pendente_alocacao`:** `/superadmin/inscricoes`
+  ("Inscrições Soltas") lista quem criou conta mas nunca ficou vinculado a
+  nenhuma `organization_users`. O botão "→ Nome da Base"
+  (`pushUserToBase` em `superadmin/inscricoes/actions.ts`) cria essa linha
+  com o papel provisório `pendente_alocacao` (sem permissão nenhuma) +
+  `people`/`staff_profiles` (área/função em branco) e enfileira o evento de
+  notificação `staff_assigned` — o DH da base recebe um push pra definir
+  área e função pelo Quadro de Obreiros (`/{slug}/obreiros`), onde a pessoa
+  aparece destacada em âmbar e já com o formulário aberto até isso ser
+  feito. **Antes disso o botão só navegava, sem vincular nada** — era um
+  link decorativo; a atribuição de verdade não existia.
+- **Notificações** (`notification_events` → `notification_logs`, processado
+  por cron a cada minuto em `/api/push/process` → `processNotificationEvents`
+  em `src/lib/notifications/process-events.ts`): destinatários vêm de
+  `getRecipientUserIds` (`src/lib/notifications/recipients.ts`), que resolve
+  gestão (`superadmin`/`admin_base`/`lider_base`/`dh`) e departamentos
+  (`manutencao`/`hospitalidade`/`secretaria`) da organização.
+  **`organization_users.role_id` é `uuid` (FK pra `roles.id`), não o nome do
+  papel** — o filtro `.in('role_id', [...])` precisa primeiro resolver os
+  nomes pra ids via `roles`; comparar direto com strings tipo `'dh'` nunca
+  bate com nada e a notificação nunca chega a ninguém, silenciosamente (bug
+  que existia desde a criação do arquivo — nenhum evento de gestão jamais
+  notificou ninguém até ser corrigido).
 - **Role preview:** administradores podem visualizar o sistema como outro papel
   (`src/lib/role-preview.ts`).
+- **Acúmulo de papéis** — uma pessoa tem UM papel principal
+  (`organization_users.role_id`, o que define "em que trilha" ela está:
+  `lider_eted`, `dh`, `obreiro_ministerio` etc.), mas pode enxergar módulos
+  extras de três formas que se somam, todas resolvidas por request (sem
+  cache) em `getCurrentOrganizationRole`/`layout.tsx`:
+  1. `organizations.role_accumulations` (jsonb `{papel: [papéis...]}`,
+     configurável em `/{slug}/configuracoes`) — regra **da base inteira**,
+     vale pra todo mundo com aquele papel principal.
+  2. `organization_users.extra_roles` (array por pessoa) — "Funções
+     adicionais" no Quadro de Obreiros, editado manualmente pelo DH.
+  3. `ministries.linked_role` — um Ministério (`/{slug}/ministerios/nova`)
+     pode ser "vinculado" a um papel do sistema (`hospitalidade`,
+     `secretaria`, `dh`, `cozinha`, `manutencao`, `comunicacao`); qualquer
+     `ministry_leaders`/`ministry_members` **ativo** daquele ministério
+     ganha esse papel dinamicamente (`linkedRoles` em `layout.tsx`), sem
+     precisar virar o papel principal de ninguém — dá pra ser líder de
+     ETED (principal) e também estar no Ministério de Hospitalidade
+     (linked_role) ao mesmo tempo.
+  - `buildNav` (`src/app/[slug]/(admin)/layout.tsx`) monta o menu a partir
+    de `[role, ...accumulatedRoles, ...extraRoles, ...linkedRoles]`. **Bug
+    corrigido:** as ramificações de menu restrito (Hospitalidade, Cozinha,
+    Manutenção, Obreiro de Ministério, Obreiro de Escola, Aluno/Associado)
+    entravam checando esse conjunto todo (`is(role)`) em vez de só o papel
+    principal — então quem acumulava, digamos, `hospitalidade` por um
+    ministério vinculado caía inteiro no menu estreito de Hospitalidade e
+    **perdia** o menu do próprio papel principal (Escolas, Inscrições...).
+    Essas ramificações agora só entram por `role === '...'` (papel
+    principal exato); o acesso acumulado continua sendo somado no menu
+    completo pelas flags `show:` de cada item, que já usavam o conjunto
+    certo.
+  - **Ministério com `linked_role` não sincronizava nada** — vira membro/
+    líder de um ministério vinculado dava acesso ao módulo (via
+    `linkedRoles`, dinâmico, ponto acima), mas quem ainda estava
+    `pendente_alocacao` continuava aparecendo assim no Quadro de Obreiros/
+    Pessoas, com área em branco. `addMember`
+    (`ministerios/[id]/actions.ts`) agora promove esse caso específico —
+    só quando o papel atual é o placeholder `pendente_alocacao` — pro
+    papel vinculado, preenchendo `staff_profiles.area`/`role_title`; quem
+    já tem um papel real não é tocado (o acesso extra já vem certo via
+    `linkedRoles`). Essa promoção só acontece se existir uma linha em
+    `roles` com esse nome — **não** existe pra `comunicacao` de propósito
+    (ver "Comunicação da Base" abaixo); uma migration 114 tentou criar
+    essa linha por engano (achou que era preciso pro módulo funcionar,
+    quando na verdade já funcionava só com o texto em
+    `ministries.linked_role`) e foi revertida pela 115, porque teria
+    deixado `comunicacao` virar papel principal de quem está
+    `pendente_alocacao` — o oposto do design ministério-escopado.
+  - **`assignSchoolLeader`** (atribuir líder de escola/seminário,
+    `escolas/[id]/actions.ts`) troca o papel principal pra `lider_eted`
+    mas, até essa correção, nunca preenchia `staff_profiles.area` —
+    ficava sem área no card e o seletor de área nascia vazio ao editar a
+    função depois. Agora preenche área (nome da escola) + função
+    ("Líder"), no mesmo padrão que `confirmTransferAsDH` já usava pra
+    transferência entre ministérios.
 - **RLS:** toda tabela de negócio tem policies por organização e papel. Server
   actions administrativas usam `createAdminClient()` (service role) após checar
   permissão na aplicação.
