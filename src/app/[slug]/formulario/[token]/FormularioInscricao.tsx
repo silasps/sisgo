@@ -593,37 +593,37 @@ function S8Igreja({ data }: { data?: Record<string, string> }) {
           </div>
         </>}
 
-        <div className="sm:col-span-2 mt-2 border-t pt-3">
+        <H id="s8.pastor_bloco"><div className="sm:col-span-2 mt-2 border-t pt-3">
           <p className="text-sm font-semibold text-gray-700 mb-3">{d.s8.pastor_section}</p>
-        </div>
-        <Select label={d.s8.conversou_pastor} name="conversou_pastor" required
+        </div></H>
+        <H id="s8.pastor_bloco"><Select label={d.s8.conversou_pastor} name="conversou_pastor" required
           defaultValue={data?.conversou_pastor}
           options={[
             { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
-          ]} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setConversou(e.target.value === 'sim')} />
+          ]} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setConversou(e.target.value === 'sim')} /></H>
         {conversou && (
-          <Select label={d.s8.pastor_concorda} name="pastor_concorda"
+          <H id="s8.pastor_bloco"><Select label={d.s8.pastor_concorda} name="pastor_concorda"
             defaultValue={data?.pastor_concorda}
             options={[
               { value: 'sim', label: d.s8.pastor_pc_sim },
               { value: 'parcialmente', label: d.s8.pastor_pc_parcialmente },
               { value: 'nao', label: d.s8.pastor_pc_nao },
-            ]} />
+            ]} /></H>
         )}
-        <Field label={d.s8.pastor_nome} name="pastor_nome" defaultValue={data?.pastor_nome} required />
-        <Field label={d.s8.pastor_cargo} name="pastor_cargo" defaultValue={data?.pastor_cargo} />
-        <Field label={d.s8.pastor_email} name="pastor_email" type="email" defaultValue={data?.pastor_email} />
-        <InternationalPhoneField phoneName="pastor_telefone" countryName="pastor_telefone_country"
+        <H id="s8.pastor_bloco"><Field label={d.s8.pastor_nome} name="pastor_nome" defaultValue={data?.pastor_nome} required /></H>
+        <H id="s8.pastor_bloco"><Field label={d.s8.pastor_cargo} name="pastor_cargo" defaultValue={data?.pastor_cargo} /></H>
+        <H id="s8.pastor_bloco"><Field label={d.s8.pastor_email} name="pastor_email" type="email" defaultValue={data?.pastor_email} /></H>
+        <H id="s8.pastor_bloco"><InternationalPhoneField phoneName="pastor_telefone" countryName="pastor_telefone_country"
           label={d.s8.pastor_telefone} defaultCountryIso="BR"
-          defaultPhone={data?.pastor_telefone} />
-        <div className="sm:col-span-2">
+          defaultPhone={data?.pastor_telefone} /></H>
+        <H id="s8.pastor_bloco"><div className="sm:col-span-2">
           <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
             {d.s8.pastor_hint}
           </p>
-        </div>
-        <div className="sm:col-span-2">
+        </div></H>
+        <H id="s8.pastor_bloco"><div className="sm:col-span-2">
           <InfoBox>{d.s8.pastor_infobox}</InfoBox>
-        </div>
+        </div></H>
       </div>
     </div>
   )
@@ -1145,6 +1145,8 @@ export function FormularioInscricao({
     { id: 16, component: <S16Aceite data={localData.s16} /> },
   ]
 
+  const visibleSections = sections.filter(s => !hiddenSet.has(`s${s.id}.oculto`))
+
   if (printMode) {
     return (
       <DictCtx.Provider value={d}>
@@ -1161,7 +1163,7 @@ export function FormularioInscricao({
           </button>
         </div>
         <div className="space-y-8">
-          {sections.map(s => (
+          {visibleSections.map(s => (
             <div key={s.id} className="pb-8 border-b border-gray-100 last:border-0 break-inside-avoid-page">
               {s.component}
             </div>
@@ -1173,9 +1175,9 @@ export function FormularioInscricao({
     )
   }
 
-  const currentIndex = sections.findIndex(s => s.id === current)
-  const isLast = currentIndex === sections.length - 1
-  const progress = Math.round(((currentIndex + 1) / sections.length) * 100)
+  const currentIndex = Math.max(0, visibleSections.findIndex(s => s.id === current))
+  const isLast = currentIndex === visibleSections.length - 1
+  const progress = Math.round(((currentIndex + 1) / visibleSections.length) * 100)
 
   async function handleBack() {
     if (currentIndex === 0) return
@@ -1183,10 +1185,10 @@ export function FormularioInscricao({
       const fd = new FormData(formRef.current)
       const dataRecord: Record<string, string> = {}
       fd.forEach((v, k) => { if (typeof v === 'string') dataRecord[k] = v })
-      setLocalData(prev => ({ ...prev, [`s${sections[currentIndex].id}`]: dataRecord }))
-      await salvarSecao(slug, token, sections[currentIndex].id, dataRecord).catch(() => {})
+      setLocalData(prev => ({ ...prev, [`s${visibleSections[currentIndex].id}`]: dataRecord }))
+      await salvarSecao(slug, token, visibleSections[currentIndex].id, dataRecord).catch(() => {})
     }
-    setCurrent(sections[currentIndex - 1].id)
+    setCurrent(visibleSections[currentIndex - 1].id)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -1198,7 +1200,8 @@ export function FormularioInscricao({
       const fd = new FormData(e.currentTarget)
 
       // Validação customizada: seção 8 — pastor email ou telefone obrigatório
-      if (sections[currentIndex].id === 8) {
+      // (só quando o bloco de pastor não foi escondido pela config da escola)
+      if (visibleSections[currentIndex].id === 8 && !hiddenSet.has('s8.pastor_bloco')) {
         const email = (fd.get('pastor_email') as string)?.trim()
         const tel = (fd.get('pastor_telefone') as string)?.trim()
         if (!email && (!tel || tel === '+55')) {
@@ -1209,7 +1212,7 @@ export function FormularioInscricao({
       }
 
       // Atualiza estado de nationalidade após salvar S5
-      if (sections[currentIndex].id === 5) {
+      if (visibleSections[currentIndex].id === 5) {
         setIsBrazilian(fd.get('is_brasileiro') !== 'nao')
       }
 
@@ -1217,9 +1220,9 @@ export function FormularioInscricao({
       fd.forEach((v, k) => { if (typeof v === 'string') dataRecord[k] = v })
       const data: Record<string, unknown> = {}
       fd.forEach((v, k) => { data[k] = v })
-      const saveResult = await salvarSecao(slug, token, sections[currentIndex].id, data)
+      const saveResult = await salvarSecao(slug, token, visibleSections[currentIndex].id, data)
       if (!('error' in saveResult)) {
-        setLocalData(prev => ({ ...prev, [`s${sections[currentIndex].id}`]: dataRecord }))
+        setLocalData(prev => ({ ...prev, [`s${visibleSections[currentIndex].id}`]: dataRecord }))
       }
       if ('error' in saveResult) throw new Error(saveResult.error)
 
@@ -1228,7 +1231,7 @@ export function FormularioInscricao({
         if ('error' in submitResult) throw new Error(submitResult.error)
         setSubmitted(true)
       } else {
-        setCurrent(sections[currentIndex + 1].id)
+        setCurrent(visibleSections[currentIndex + 1].id)
         window.scrollTo({ top: 0, behavior: 'smooth' })
       }
     } catch (err) {
@@ -1256,7 +1259,7 @@ export function FormularioInscricao({
       <div className="mb-8">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-semibold text-gray-500">
-            {t(d.nav.section_of, { n: String(currentIndex + 1), total: String(sections.length) })}
+            {t(d.nav.section_of, { n: String(currentIndex + 1), total: String(visibleSections.length) })}
           </span>
           <span className="text-xs font-semibold text-indigo-600">{progress}%</span>
         </div>
@@ -1267,7 +1270,7 @@ export function FormularioInscricao({
       </div>
 
       <form ref={formRef} onSubmit={handleNext} className="space-y-6">
-        {sections[currentIndex].component}
+        {visibleSections[currentIndex].component}
 
         {error && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">

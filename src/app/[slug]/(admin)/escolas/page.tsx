@@ -50,6 +50,7 @@ export default async function EscolasPage({ params }: Props) {
   const { data } = await escolasQuery
   const escolas = (data ?? []) as School[]
   const eteds = escolas.filter(e => schoolTypeGroup((e as unknown as { school_type: string | null }).school_type) === 'eted')
+  const seminarios = escolas.filter(e => schoolTypeGroup((e as unknown as { school_type: string | null }).school_type) === 'seminario')
   const secondLevelSchools = escolas.filter(e => schoolTypeGroup((e as unknown as { school_type: string | null }).school_type) === 'second_level')
   const otherSchools = escolas.filter(e => schoolTypeGroup((e as unknown as { school_type: string | null }).school_type) === 'other')
 
@@ -88,6 +89,7 @@ export default async function EscolasPage({ params }: Props) {
         ) : (
           <div className="space-y-8 animate-stagger">
             <SchoolSection title="ETED" schools={eteds} slug={slug} />
+            {seminarios.length > 0 && <SchoolSection title="Seminários" schools={seminarios} slug={slug} />}
             <SchoolSection title="Escolas de 2º Nível" schools={secondLevelSchools} slug={slug} />
             {otherSchools.length > 0 && <SchoolSection title="Outras escolas" schools={otherSchools} slug={slug} />}
           </div>

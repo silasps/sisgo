@@ -11,6 +11,7 @@ import {
 } from '../actions'
 import { DeleteTurmaButton } from '../DeleteTurmaButton'
 import { EmbedCodeBox } from '@/components/ui/EmbedCodeBox'
+import { SearchableSelectModal } from '@/components/ui/SearchableSelectModal'
 
 import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
 import { SCHOOL_TYPES } from '@/lib/schools'
@@ -190,7 +191,7 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
     .single()
 
   let leaderEmail: string | null = null
-  let orgUsersForAssignment: Array<{ id: string; email: string }> = []
+  let orgUsersForAssignment: Array<{ id: string; email: string; fullName: string | null }> = []
 
   if (isManagement) {
     if (leaderRow) {
@@ -201,11 +202,18 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
       .from('organization_users').select('user_id').eq('organization_id', org.id).eq('active', true)
     if (orgUsersData?.length) {
       const { data: { users: authUsers } } = await sbAdmin.auth.admin.listUsers({ perPage: 1000 })
+      const { data: staffRows } = await sbAdmin
+        .from('staff_profiles').select('user_id, people(full_name)')
+        .eq('organization_id', org.id).eq('active', true).not('user_id', 'is', null)
+      const namesByUserId = new Map<string, string>()
+      for (const s of (staffRows ?? []) as unknown as Array<{ user_id: string | null; people: { full_name: string } | null }>) {
+        if (s.user_id && s.people?.full_name) namesByUserId.set(s.user_id, s.people.full_name)
+      }
       const orgUserSet = new Set(orgUsersData.map((u: { user_id: string }) => u.user_id))
       orgUsersForAssignment = authUsers
         .filter(u => orgUserSet.has(u.id) && u.id !== (leaderRow?.user_id ?? ''))
-        .map(u => ({ id: u.id, email: u.email ?? u.id }))
-        .sort((a, b) => a.email.localeCompare(b.email))
+        .map(u => ({ id: u.id, email: u.email ?? u.id, fullName: namesByUserId.get(u.id) ?? null }))
+        .sort((a, b) => (a.fullName ?? a.email).localeCompare(b.fullName ?? b.email))
     }
   }
 
@@ -289,6 +297,8 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
       name: formData.get('name') as string,
       year: formData.get('year') ? Number(formData.get('year')) : null,
       semester: formData.get('semester') ? Number(formData.get('semester')) : null,
+      starts_at: (formData.get('starts_at') as string) || null,
+      ends_at: (formData.get('ends_at') as string) || null,
       active: true,
     }).select('id').single()
     if (error || !newClass) redirect(`/${slug}/escolas/${id}`)
@@ -583,7 +593,17 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                       className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
                     <input name="semester" type="number" min="1" max="2" placeholder="Semestre (1 ou 2)"
                       className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                    <button type="submit" className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg transition-colors">
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Início (opcional)</label>
+                      <input name="starts_at" type="date"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Fim (opcional)</label>
+                      <input name="ends_at" type="date"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                    </div>
+                    <button type="submit" className="self-end px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg transition-colors">
                       Criar turma
                     </button>
                   </div>
@@ -614,13 +634,15 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                       {leaderEmail ? 'Trocar líder' : 'Atribuir líder'}
                     </summary>
                     <form action={handleAssignLeader} className="mt-3 space-y-2">
-                      <select name="user_id" required
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
-                        <option value="">Selecionar usuário...</option>
-                        {orgUsersForAssignment.map(u => (
-                          <option key={u.id} value={u.id}>{u.email}</option>
-                        ))}
-                      </select>
+                      <SearchableSelectModal
+                        name="user_id"
+                        options={orgUsersForAssignment.map(u => ({
+                          id: u.id,
+                          label: u.fullName ?? u.email,
+                          sublabel: u.fullName ? u.email : undefined,
+                        }))}
+                        title="Selecionar usuário"
+                      />
                       <p className="text-xs text-gray-400">O papel do usuário será atualizado para Líder de Escola.</p>
                       <button type="submit" className="w-full px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
                         Confirmar
@@ -698,11 +720,13 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                   <details className={(staffMembers.length > 0 || pendingObreiroRequests.length > 0) ? 'border-t border-gray-100 pt-3' : ''}>
                     <summary className="text-sm text-brand-600 cursor-pointer select-none font-medium">+ Adicionar diretamente</summary>
                     <form action={handleAddStaff} className="mt-2 space-y-2">
-                      <select name="person_id" required
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
-                        <option value="">Selecionar pessoa...</option>
-                        {availablePeople.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
-                      </select>
+                      <SearchableSelectModal
+                        name="person_id"
+                        options={availablePeople.map(p => ({ id: p.id, label: p.full_name }))}
+                        placeholder="Selecionar pessoa..."
+                        searchPlaceholder="Buscar por nome..."
+                        title="Selecionar pessoa"
+                      />
                       <div className="flex gap-2">
                         <input name="role" placeholder="Papel" defaultValue="Obreiro"
                           className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
@@ -825,11 +849,13 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
               <details className={staffMembers.length > 0 ? 'border-t border-gray-100 pt-3' : ''}>
                 <summary className="text-sm text-brand-600 cursor-pointer select-none font-medium">+ Solicitar adição de obreiro</summary>
                 <form action={handleRequestObreiro} className="mt-3 space-y-2">
-                  <select name="person_id" required
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
-                    <option value="">Selecionar pessoa...</option>
-                    {availablePeople.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
-                  </select>
+                  <SearchableSelectModal
+                    name="person_id"
+                    options={availablePeople.map(p => ({ id: p.id, label: p.full_name }))}
+                    placeholder="Selecionar pessoa..."
+                    searchPlaceholder="Buscar por nome..."
+                    title="Selecionar pessoa"
+                  />
                   <input name="role" placeholder="Papel (ex: Instrutor, Monitor)" defaultValue="Obreiro"
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
                   <input name="notes" placeholder="Observação (opcional)"

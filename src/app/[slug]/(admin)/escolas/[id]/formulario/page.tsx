@@ -53,8 +53,10 @@ const CONFIGURAVEL: { secao: string; key: string; titulo: string; campos: { name
     { name: 'tem_lideranca', label: 'Tem liderança?' },
     { name: 'lideranca_cargo', label: 'Cargo de liderança' },
     { name: 'responsabilidades_igreja', label: 'Responsabilidades na igreja' },
+    { name: 'pastor_bloco', label: 'Referência de pastor (bloco inteiro)' },
   ]},
   { secao: 's9', key: 'amigo', titulo: 'Referência de Amigo', campos: [
+    { name: 'oculto', label: 'Ocultar esta etapa inteira (pula no formulário)' },
     { name: 'ref_nome', label: 'Nome do amigo' },
     { name: 'ref_relacionamento', label: 'Como se conheceram' },
     { name: 'ref_tempo', label: 'Tempo de amizade' },

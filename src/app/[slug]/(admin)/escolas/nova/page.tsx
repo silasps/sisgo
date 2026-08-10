@@ -39,13 +39,14 @@ export default async function NovaEscolaPage({ params }: Props) {
     const { role: actionRole } = await getRole(authClient, actionUser.id, orgRow.id)
     if (!isMgmt(actionRole)) return
 
-    const { data: escola } = await sb.from('schools').insert({
+    const { data: escola, error } = await sb.from('schools').insert({
       organization_id: orgRow.id,
       name: formData.get('name') as string,
-      type: formData.get('school_type') as string,
+      school_type: formData.get('school_type') as string,
       active: true,
     }).select('id').single()
 
+    if (error) console.error('createSchool', error)
     if (escola) redirect(`/${slug}/escolas/${escola.id}`)
   }
 

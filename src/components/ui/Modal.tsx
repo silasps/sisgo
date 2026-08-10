@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useSidebarLeftClass } from '@/components/layout/account-context'
 
 type Props = {
@@ -30,7 +31,12 @@ export function Modal({ open, onClose, title, subtitle, hideFooter, children }: 
 
   if (!open) return null
 
-  return (
+  // Portal pro <body> — sem isso, um <div fixed> nascido dentro de um
+  // ancestral com transform/filter (ex.: a animação de .animate-stagger,
+  // que deixa um transform: translateY(0) residual mesmo parada) vira
+  // "fixed" em relação a esse ancestral, não à viewport — o modal aparece
+  // preso num canto da tela em vez de centralizado.
+  return createPortal(
     <div className={`fixed inset-0 ${sidebarLeftClass} z-50 flex items-center justify-center p-4`} onClick={onClose}>
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
       <div
@@ -57,6 +63,7 @@ export function Modal({ open, onClose, title, subtitle, hideFooter, children }: 
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
