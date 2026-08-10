@@ -26,6 +26,7 @@ export type Role =
   | 'obreiro_ministerio'
   | 'aluno'
   | 'associado'
+  | 'pendente_alocacao'
 
 // ── Grupos de papéis ──────────────────────────────────────────────────────────
 
