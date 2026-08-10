@@ -1514,8 +1514,8 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
   // Lider Ministério: só vê inscrições de obreiro do seu ministério
   const roleFiltered = isEtedLeader
     ? items.filter(i => {
-        if (i.tipo === 'pre_inscricao' && !i.schoolId) return false
-        if (i.tipo === 'pre_inscricao' && allowedSchoolIds && !allowedSchoolIds.includes(i.schoolId!)) return false
+        if ((i.tipo === 'pre_inscricao' || i.tipo === 'aluno') && !i.schoolId) return false
+        if ((i.tipo === 'pre_inscricao' || i.tipo === 'aluno') && allowedSchoolIds && !allowedSchoolIds.includes(i.schoolId!)) return false
         if ((i.tipo === 'pre_inscricao_obreiro' || i.tipo === 'obreiro')) {
           if (!i.schoolId) return false
           if (allowedSchoolIds && !allowedSchoolIds.includes(i.schoolId)) return false
