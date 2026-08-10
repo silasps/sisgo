@@ -3,9 +3,12 @@
 **Atualizado:** 10 de agosto de 2026 (empurrar usuário sem base pro super
 admin + papel `pendente_alocacao` + notificação ao DH; acúmulo de papéis
 corrigido no menu (`buildNav`) e sincronizado com ministérios de função
-vinculada; `SearchableSelectModal` — picker de usuário/pessoa com busca
-por nome+e-mail, agora também no Quadro de Obreiros do Ministério;
-`Modal` renderiza via portal pro `<body>`)
+vinculada; páginas de Hospedagem paravam de reconhecer papel acumulado
+via ministério e caíam em 404 — `getCurrentOrganizationRole` ganhou
+`linkedRoles`/`allRoles` reaproveitável; líder de escola/seminário ganha
+edição de dados da escola + criar turma; `SearchableSelectModal` — picker
+de usuário/pessoa com busca por nome+e-mail, agora também no Quadro de
+Obreiros do Ministério; `Modal` renderiza via portal pro `<body>`)
 **Nota:** a migration 114 tentou criar um papel `comunicacao` formal por
 diagnóstico errado e foi revertida pela 115 no mesmo dia — ver seção 4.
 **Produção:** https://www.sisgomission.com (Vercel)
@@ -175,6 +178,36 @@ qualquer usuário logado) · `hospedagem` (quartos/camas, agenda, **lavanderia**
     função depois. Agora preenche área (nome da escola) + função
     ("Líder"), no mesmo padrão que `confirmTransferAsDH` já usava pra
     transferência entre ministérios.
+  - **`getCurrentOrganizationRole`** (`src/lib/auth/org-role.ts`) agora
+    também calcula `linkedRoles`/`allRoles` (mesmo cálculo de
+    `ministry_leaders`/`ministry_members` → `ministries.linked_role` que
+    antes só existia dentro de `layout.tsx`, duplicado pro menu). Motivo:
+    as 5 páginas do módulo Hospedagem (`hospedagem`, `hospedagem/quartos`,
+    `hospedagem/quartos/[roomId]`, `hospedagem/lavanderia`,
+    `hospedagem/lavanderia/historico`) tinham cada uma sua própria query
+    ad-hoc em `organization_users` + `canSeeHospedagem(role)` só com o
+    papel principal — então o item "Hospedagem" já aparecia certo no menu
+    pra quem tinha o papel só por acumulação (ex.: líder de ETED que
+    também lidera o Ministério de Hospitalidade vinculado), mas clicar
+    caía em `notFound()`, porque a página nunca soube desse acesso
+    acumulado. As 5 agora usam `getCurrentOrganizationRole` +
+    `userHasAnyRole(allRoles, HOSPEDAGEM_ROLES)`. **Padrão a repetir:**
+    qualquer página nova que faça sua própria query de papel em vez de
+    usar esse helper corre o mesmo risco — nunca reimplementar a checagem
+    de permissão do zero.
+  - **Líder de escola/seminário com acesso mais completo** — a visão de
+    líder de ETED em `escolas/[id]/configuracoes` era deliberadamente
+    mais enxuta que a de gestão: só lia nome/subtítulo/tipo, não criava
+    turma nova, não editava descrição pública/e-mail/visibilidade. Por
+    pedido do usuário (decisão de produto, não bug), o líder passou a ter
+    os mesmos formulários de "Informações gerais", "Conteúdo público",
+    "Visibilidade", "E-mail da escola" e "Nova turma" que a gestão já
+    tinha — reaproveitando as mesmas server actions (`updateSchool`,
+    `updateEmail`, `createTurma`), sem checagem de papel adicional dentro
+    delas (a página já garante que o líder só acessa a escola que
+    lidera). Ficam exclusivos de gestão, por decisão consciente: atribuir/
+    trocar/remover o próprio líder da escola, e adicionar obreiro sem
+    passar pela aprovação do DH (o líder continua só podendo "solicitar").
 - **RLS:** toda tabela de negócio tem policies por organização e papel. Server
   actions administrativas usam `createAdminClient()` (service role) após checar
   permissão na aplicação.
