@@ -16,8 +16,6 @@ export type PendenteModalItem = {
   criadoEm: string
   diasAberto: number
   linkDestino: string
-  overflow: boolean
-  overflowEscola?: string
   email?: string | null
   phone?: string | null
   turma?: string | null
@@ -80,7 +78,7 @@ export function PendentesCardList({ items }: Props) {
               key={`${item.categoria}-${item.id}`}
               type="button"
               onClick={() => setSelected(item)}
-              className={`group w-full text-left flex items-center gap-3 bg-white rounded-xl border px-4 py-3.5 shadow-sm transition-all duration-150 hover:shadow-md hover:-translate-y-0.5 ${item.overflow ? 'border-orange-200 bg-orange-50/30' : 'border-gray-200'}`}
+              className="group w-full text-left flex items-center gap-3 bg-white rounded-xl border border-gray-200 px-4 py-3.5 shadow-sm transition-all duration-150 hover:shadow-md hover:-translate-y-0.5"
             >
               <span className={`flex-shrink-0 inline-flex items-center justify-center min-w-[2.5rem] px-2 py-0.5 rounded-full text-xs font-bold tabular-nums ${urgency.color}`}>
                 {urgency.label}
@@ -96,11 +94,6 @@ export function PendentesCardList({ items }: Props) {
                       <span className="text-gray-300 text-xs">·</span>
                       <span className="text-xs text-gray-400 truncate">{item.escola}</span>
                     </>
-                  )}
-                  {item.overflow && (
-                    <span className="text-xs text-orange-600 font-medium">
-                      · Sem resposta há {item.diasAberto}d
-                    </span>
                   )}
                 </div>
               </div>
