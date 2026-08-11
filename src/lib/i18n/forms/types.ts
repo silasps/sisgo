@@ -55,6 +55,7 @@ export interface FormDict {
     copied: string
     generating: string
     link_hint: string
+    payment_title: string
   }
 
   // ── Section 1 ──────────────────────────────────────────────────────────

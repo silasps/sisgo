@@ -51,6 +51,7 @@ export const enDict: FormDict = {
     copied: '✓ Copied!',
     generating: 'Generating…',
     link_hint: 'Each link is unique and can only be filled out once. Links expire in 30 days.',
+    payment_title: 'Payment information',
   },
 
   s1: {

@@ -51,6 +51,7 @@ type Props = {
   initialSection?: number
   initialData?: Record<string, unknown>
   hiddenFields?: string[]
+  paymentInfo?: string | null
   initialLang?: string
   printMode?: boolean
 }
@@ -1013,8 +1014,8 @@ function S16Aceite({ data }: { data?: Record<string, string> }) {
 
 // ── Tela de sucesso com geração de links ───────────────────────────────────
 
-function SubmittedScreen({ slug, applicationId, schoolName, d }: {
-  slug: string; applicationId: string; schoolName: string; d: FormDict
+function SubmittedScreen({ slug, applicationId, schoolName, paymentInfo, d }: {
+  slug: string; applicationId: string; schoolName: string; paymentInfo?: string | null; d: FormDict
 }) {
   const [pastorLink, setPastorLink] = useState<string | null>(null)
   const [amigoLink, setAmigoLink] = useState<string | null>(null)
@@ -1098,6 +1099,13 @@ function SubmittedScreen({ slug, applicationId, schoolName, d }: {
 
         <p className="text-xs text-gray-400 text-center">{d.submitted.link_hint}</p>
       </div>
+
+      {paymentInfo && (
+        <div className="bg-green-50 border border-green-200 rounded-2xl p-6 text-left max-w-md mx-auto">
+          <h3 className="font-bold text-gray-900 text-center mb-3">{d.submitted.payment_title}</h3>
+          <p className="text-sm text-gray-700 whitespace-pre-wrap">{paymentInfo}</p>
+        </div>
+      )}
     </div>
   )
 }
@@ -1107,7 +1115,7 @@ function SubmittedScreen({ slug, applicationId, schoolName, d }: {
 type SectionDef = { id: number; component: React.ReactNode }
 
 export function FormularioInscricao({
-  slug, token, applicationId, schoolName, className, prefill, initialSection = 1, initialData, hiddenFields, initialLang, printMode
+  slug, token, applicationId, schoolName, className, prefill, initialSection = 1, initialData, hiddenFields, paymentInfo, initialLang, printMode
 }: Props) {
   const hiddenSet = useMemo(() => new Set(hiddenFields ?? []), [hiddenFields])
   const [lang, setLang] = useState<Lang>(normalizeLang(initialLang ?? prefill?.idioma))
@@ -1242,7 +1250,7 @@ export function FormularioInscricao({
   }
 
   if (submitted) {
-    return <SubmittedScreen slug={slug} applicationId={applicationId} schoolName={schoolName} d={d} />
+    return <SubmittedScreen slug={slug} applicationId={applicationId} schoolName={schoolName} paymentInfo={paymentInfo} d={d} />
   }
 
   return (

@@ -51,6 +51,7 @@ export const ptDict: FormDict = {
     copied: '✓ Copiado!',
     generating: 'Gerando…',
     link_hint: 'Cada link é único e só pode ser preenchido uma vez. Os links expiram em 30 dias.',
+    payment_title: 'Informações de pagamento',
   },
 
   s1: {

@@ -70,14 +70,16 @@ export default async function FormularioPage({ params, searchParams }: Props) {
 
   // Busca config de campos da escola
   const hiddenFields: string[] = []
+  let paymentInfo: string | null = null
   if (escola?.id) {
     const { data: schoolConfig } = await sb
       .from('schools')
       .select('form_config')
       .eq('id', escola.id)
       .single()
-    const cfg = (schoolConfig?.form_config as { hidden_fields?: string[] }) ?? {}
+    const cfg = (schoolConfig?.form_config as { hidden_fields?: string[]; payment_info?: string }) ?? {}
     hiddenFields.push(...(cfg.hidden_fields ?? []))
+    paymentInfo = cfg.payment_info ?? null
   }
   const preform = app.school_interest_forms as unknown as {
     full_name?: string; email?: string; phone?: string; language?: string
@@ -135,6 +137,7 @@ export default async function FormularioPage({ params, searchParams }: Props) {
             initialSection={app.current_section ?? 1}
             initialData={formData}
             hiddenFields={hiddenFields}
+            paymentInfo={paymentInfo}
             initialLang={lang ?? prefill.idioma}
             printMode={printMode}
           />

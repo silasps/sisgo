@@ -51,6 +51,7 @@ export const esDict: FormDict = {
     copied: '✓ ¡Copiado!',
     generating: 'Generando…',
     link_hint: 'Cada enlace es único y solo puede completarse una vez. Los enlaces vencen en 30 días.',
+    payment_title: 'Información de pago',
   },
 
   s1: {

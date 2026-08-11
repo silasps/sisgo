@@ -140,8 +140,9 @@ export default async function EscolaFormularioConfigPage({ params }: Props) {
     .single()
   if (!school) notFound()
 
-  const config = (school.form_config as { hidden_fields?: string[] }) ?? {}
+  const config = (school.form_config as { hidden_fields?: string[]; payment_info?: string }) ?? {}
   const hiddenFields = new Set<string>(config.hidden_fields ?? [])
+  const paymentInfo = config.payment_info ?? ''
 
   async function salvarConfig(fd: FormData) {
     'use server'
@@ -157,9 +158,10 @@ export default async function EscolaFormularioConfigPage({ params }: Props) {
     }
 
     const hiddenFields = todosOsCampos.filter(key => fd.get(key) !== 'on')
+    const paymentInfo = (fd.get('payment_info') as string | null)?.trim() || null
 
     await db.from('schools')
-      .update({ form_config: { hidden_fields: hiddenFields } })
+      .update({ form_config: { hidden_fields: hiddenFields, payment_info: paymentInfo } })
       .eq('id', id)
 
     redirect(`/${slug}/escolas/${id}/formulario`)
@@ -194,6 +196,21 @@ export default async function EscolaFormularioConfigPage({ params }: Props) {
         </div>
 
         <form action={salvarConfig} className="space-y-3">
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <h3 className="font-semibold text-gray-900 text-sm mb-1">Informações de pagamento</h3>
+            <p className="text-xs text-gray-400 mb-3">
+              Aparece pro candidato assim que ele termina de enviar a inscrição — chave Pix, dados
+              bancários, cartão etc. Deixe em branco pra não mostrar nada.
+            </p>
+            <textarea
+              name="payment_info"
+              defaultValue={paymentInfo}
+              rows={5}
+              placeholder={'Ex: Pix (CPF): 000.000.000-00 — Fulano de Tal\nOu transferência: Banco X, ag. 0000, cc 00000-0'}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 resize-none"
+            />
+          </div>
+
           {CONFIGURAVEL.map(secao => {
             const ativos = secao.campos.filter(c => !hiddenFields.has(`${secao.secao}.${c.name}`)).length
             return (
