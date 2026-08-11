@@ -10,7 +10,9 @@ edição de dados da escola + criar turma; líder de ETED via candidatos a
 "aluno" de escolas que não lidera em Inscrições — filtro de escopo
 esquecia esse tipo; `SearchableSelectModal` — picker
 de usuário/pessoa com busca por nome+e-mail, agora também no Quadro de
-Obreiros do Ministério; `Modal` renderiza via portal pro `<body>`)
+Obreiros do Ministério; `Modal` renderiza via portal pro `<body>`;
+informações de pagamento configuráveis por escola, mostradas na tela de
+sucesso do formulário de inscrição)
 **Nota:** a migration 114 tentou criar um papel `comunicacao` formal por
 diagnóstico errado e foi revertida pela 115 no mesmo dia — ver seção 4.
 **Produção:** https://www.sisgomission.com (Vercel)
@@ -342,6 +344,22 @@ qualquer usuário logado) · `hospedagem` (quartos/camas, agenda, **lavanderia**
   validação de "e-mail ou telefone do pastor obrigatório" em `handleNext`
   respeita `s8.pastor_bloco` — não trava mais o envio quando o bloco está
   escondido.
+- **Informações de pagamento por escola:** mesma tela
+  (`escolas/[id]/formulario/page.tsx`, mesma permissão — inclui
+  `lider_eted`) ganhou um texto livre salvo em
+  `schools.form_config.payment_info` (chave nova no mesmo jsonb, sem
+  migration). Aparece pro candidato na tela de sucesso do formulário
+  (`FormularioInscricao.tsx` → `SubmittedScreen`) assim que ele termina de
+  enviar — não depende de aprovação, é só informativo (aprovação continua
+  manual). Motivação: seminários são cursos curtos onde, na prática, quase
+  todo mundo que se inscreve é aceito, então faz sentido já adiantar Pix/
+  dados bancários ali — mas o campo vale pra qualquer escola, não só
+  `school_type='seminario'`, e só aparece se o líder preencher.
+  A mesma caixa agora permite anexar um comprovante (imagem ou PDF, até
+  10 MB) depois do envio. A Server Action valida novamente token, base e
+  status, grava no bucket privado `payment-receipts` e salva apenas os
+  metadados/caminho em `school_applications.form_data.payment_receipt`;
+  a equipe abre o arquivo na visualização da inscrição por URL assinada.
 
 ---
 
