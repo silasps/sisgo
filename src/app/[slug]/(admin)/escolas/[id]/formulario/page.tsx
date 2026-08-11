@@ -173,12 +173,21 @@ export default async function EscolaFormularioConfigPage({ params }: Props) {
   return (
     <>
       <div className="h-16 shrink-0 sticky top-0 z-10 bg-white border-b border-gray-200 px-4 md:px-6 flex items-center">
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex w-full items-center justify-between gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
           <Link href={`/${slug}/escolas/${id}`} className="text-sm text-gray-500 hover:text-gray-800">
             ← {school.name}
           </Link>
           <span className="text-gray-300">/</span>
           <span className="text-sm font-semibold text-gray-900">Configurar formulário</span>
+          </div>
+          <Link
+            href={`/${slug}/escolas/${id}/formulario/visualizar`}
+            target="_blank"
+            className="shrink-0 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 transition-colors hover:bg-indigo-100"
+          >
+            Visualizar formulário ↗
+          </Link>
         </div>
       </div>
 

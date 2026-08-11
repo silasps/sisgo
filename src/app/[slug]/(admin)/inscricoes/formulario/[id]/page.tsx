@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getRolePreview } from '@/lib/role-preview'
 import { ReferenceModal } from './ReferenceModal'
-import { Pencil, FileText } from 'lucide-react'
+import { Pencil, FileText, ReceiptText } from 'lucide-react'
 import { PipelineStepper, stagesFromFlags } from '@/components/inscricoes/PipelineStepper'
 import { AvancarEtapaControl, AdvanceHistoryList } from '@/components/inscricoes/AvancarEtapaControl'
 import { getStageAdvances, resolveAdvancerNames } from '@/lib/pipelineStageAdvance'
@@ -309,6 +309,14 @@ export default async function FormularioViewerPage({ params }: Props) {
   const turma = app.school_classes as unknown as { name: string } | null
   const preform = app.school_interest_forms as unknown as { full_name?: string; email?: string; phone?: string } | null
   const nomeCandidato = (formData.s5 as Record<string, string> | undefined)?.nome ?? preform?.full_name ?? '—'
+  const paymentReceipt = formData.payment_receipt as {
+    path?: string; name?: string; uploaded_at?: string
+  } | undefined
+  let paymentReceiptUrl: string | null = null
+  if (paymentReceipt?.path) {
+    const { data } = await sb.storage.from('payment-receipts').createSignedUrl(paymentReceipt.path, 60 * 60)
+    paymentReceiptUrl = data?.signedUrl ?? null
+  }
 
   let editedByName: string | null = null
   if (app.edited_by) {
@@ -409,6 +417,27 @@ export default async function FormularioViewerPage({ params }: Props) {
           {/* Formulário do candidato */}
           <div className="lg:col-span-2 space-y-3">
             <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest px-1">Formulário do Candidato</h2>
+
+            {paymentReceipt?.path && (
+              <div className="flex items-start gap-3 rounded-xl border border-green-200 bg-green-50 px-4 py-3">
+                <ReceiptText className="size-5 shrink-0 text-green-700 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-green-900">Comprovante de pagamento</p>
+                  <p className="truncate text-xs text-green-700">{paymentReceipt.name ?? 'Arquivo enviado pelo candidato'}</p>
+                  {paymentReceipt.uploaded_at && (
+                    <p className="mt-0.5 text-xs text-green-600">
+                      Enviado em {new Date(paymentReceipt.uploaded_at).toLocaleString('pt-BR')}
+                    </p>
+                  )}
+                </div>
+                {paymentReceiptUrl && (
+                  <a href={paymentReceiptUrl} target="_blank" rel="noopener noreferrer"
+                    className="shrink-0 rounded-lg bg-green-700 px-3 py-2 text-xs font-semibold text-white hover:bg-green-800">
+                    Abrir
+                  </a>
+                )}
+              </div>
+            )}
 
             {isExterno && (
               <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">

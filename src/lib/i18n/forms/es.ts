@@ -52,6 +52,11 @@ export const esDict: FormDict = {
     generating: 'Generando…',
     link_hint: 'Cada enlace es único y solo puede completarse una vez. Los enlaces vencen en 30 días.',
     payment_title: 'Información de pago',
+    receipt_label: 'Comprobante de pago',
+    receipt_hint: 'Adjunta una imagen o PDF de hasta 10 MB.',
+    receipt_send: 'Enviar comprobante',
+    receipt_sending: 'Enviando…',
+    receipt_success: '¡Comprobante enviado correctamente!',
   },
 
   s1: {

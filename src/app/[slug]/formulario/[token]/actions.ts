@@ -77,6 +77,54 @@ export async function enviarFormulario(slug: string, token: string) {
   return { success: true }
 }
 
+const RECEIPT_TYPES: Record<string, string> = {
+  'application/pdf': 'pdf',
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+}
+
+export async function anexarComprovante(slug: string, token: string, formData: FormData) {
+  const file = formData.get('comprovante')
+  if (!(file instanceof File) || file.size === 0) return { error: 'Selecione um arquivo.' }
+  if (!RECEIPT_TYPES[file.type]) return { error: 'Envie uma imagem (JPG, PNG ou WebP) ou PDF.' }
+  if (file.size > 10 * 1024 * 1024) return { error: 'O arquivo deve ter no máximo 10 MB.' }
+
+  const sb = createAdminClient()
+  const { data: app } = await sb
+    .from('school_applications')
+    .select('id, organization_id, status, form_data')
+    .eq('token', token)
+    .single()
+
+  if (!app || !['enviado', 'em_analise', 'aprovado'].includes(app.status)) {
+    return { error: 'Envie o formulário antes de anexar o comprovante.' }
+  }
+  const { data: org } = await sb.from('organizations').select('slug, active').eq('id', app.organization_id).single()
+  if (!org?.active || org.slug !== slug) return { error: 'Formulário não encontrado.' }
+
+  const existingData = (app.form_data as Record<string, unknown>) ?? {}
+  const previous = existingData.payment_receipt as { path?: string } | undefined
+  const path = `${app.organization_id}/${app.id}/comprovante-${Date.now()}.${RECEIPT_TYPES[file.type]}`
+  const { error: uploadError } = await sb.storage.from('payment-receipts').upload(path, file, {
+    contentType: file.type,
+    upsert: false,
+  })
+  if (uploadError) return { error: 'Não foi possível enviar o comprovante. Tente novamente.' }
+
+  const paymentReceipt = { path, name: file.name, type: file.type, size: file.size, uploaded_at: new Date().toISOString() }
+  const { error: updateError } = await sb.from('school_applications')
+    .update({ form_data: { ...existingData, payment_receipt: paymentReceipt } })
+    .eq('id', app.id)
+  if (updateError) {
+    await sb.storage.from('payment-receipts').remove([path])
+    return { error: 'Não foi possível vincular o comprovante à inscrição.' }
+  }
+  if (previous?.path) await sb.storage.from('payment-receipts').remove([previous.path])
+
+  return { success: true, fileName: file.name }
+}
+
 export async function gerarLinkReferencia(
   slug: string,
   applicationId: string,

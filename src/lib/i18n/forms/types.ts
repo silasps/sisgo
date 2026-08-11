@@ -56,6 +56,11 @@ export interface FormDict {
     generating: string
     link_hint: string
     payment_title: string
+    receipt_label: string
+    receipt_hint: string
+    receipt_send: string
+    receipt_sending: string
+    receipt_success: string
   }
 
   // ── Section 1 ──────────────────────────────────────────────────────────

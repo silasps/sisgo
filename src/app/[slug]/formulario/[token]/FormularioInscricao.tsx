@@ -30,7 +30,7 @@ function HiddenStyles() {
   }).join(',')
   return <style>{`${selectors}{display:none!important}`}</style>
 }
-import { salvarSecao, enviarFormulario, gerarLinkReferencia } from './actions'
+import { salvarSecao, enviarFormulario, gerarLinkReferencia, anexarComprovante } from './actions'
 import { InternationalPhoneField } from '@/components/ui/InternationalPhoneField'
 import { MaskedInput, useMask } from '@/components/ui/MaskedInput'
 
@@ -1014,14 +1014,29 @@ function S16Aceite({ data }: { data?: Record<string, string> }) {
 
 // ── Tela de sucesso com geração de links ───────────────────────────────────
 
-function SubmittedScreen({ slug, applicationId, schoolName, paymentInfo, d }: {
-  slug: string; applicationId: string; schoolName: string; paymentInfo?: string | null; d: FormDict
+function SubmittedScreen({ slug, token, applicationId, schoolName, paymentInfo, d }: {
+  slug: string; token: string; applicationId: string; schoolName: string; paymentInfo?: string | null; d: FormDict
 }) {
   const [pastorLink, setPastorLink] = useState<string | null>(null)
   const [amigoLink, setAmigoLink] = useState<string | null>(null)
   const [loadingPastor, setLoadingPastor] = useState(false)
   const [loadingAmigo, setLoadingAmigo] = useState(false)
   const [copied, setCopied] = useState<'pastor' | 'amigo' | null>(null)
+  const [receiptStatus, setReceiptStatus] = useState<'idle' | 'sending' | 'sent'>('idle')
+  const [receiptError, setReceiptError] = useState('')
+
+  async function uploadReceipt(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setReceiptStatus('sending')
+    setReceiptError('')
+    const result = await anexarComprovante(slug, token, new FormData(e.currentTarget))
+    if ('error' in result) {
+      setReceiptError(result.error ?? '')
+      setReceiptStatus('idle')
+    } else {
+      setReceiptStatus('sent')
+    }
+  }
 
   async function gerarLink(tipo: 'pastor' | 'amigo') {
     if (tipo === 'pastor') setLoadingPastor(true)
@@ -1101,9 +1116,33 @@ function SubmittedScreen({ slug, applicationId, schoolName, paymentInfo, d }: {
       </div>
 
       {paymentInfo && (
-        <div className="bg-green-50 border border-green-200 rounded-2xl p-6 text-left max-w-md mx-auto">
+        <div className="bg-green-50 border border-green-200 rounded-2xl p-6 text-left max-w-md mx-auto space-y-4">
           <h3 className="font-bold text-gray-900 text-center mb-3">{d.submitted.payment_title}</h3>
           <p className="text-sm text-gray-700 whitespace-pre-wrap">{paymentInfo}</p>
+          <div className="border-t border-green-200 pt-4">
+            {receiptStatus === 'sent' ? (
+              <p className="rounded-xl bg-white px-4 py-3 text-center text-sm font-semibold text-green-700">
+                ✓ {d.submitted.receipt_success}
+              </p>
+            ) : (
+              <form onSubmit={uploadReceipt} className="space-y-3">
+                <div>
+                  <label htmlFor="comprovante" className="block text-sm font-semibold text-gray-800 mb-1">
+                    {d.submitted.receipt_label}
+                  </label>
+                  <input id="comprovante" name="comprovante" type="file" required
+                    accept="application/pdf,image/jpeg,image/png,image/webp"
+                    className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-green-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-green-800 hover:file:bg-green-200" />
+                  <p className="mt-1 text-xs text-gray-500">{d.submitted.receipt_hint}</p>
+                </div>
+                {receiptError && <p className="text-sm text-red-600">{receiptError}</p>}
+                <button type="submit" disabled={receiptStatus === 'sending'}
+                  className="w-full rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-green-700 disabled:opacity-60">
+                  {receiptStatus === 'sending' ? d.submitted.receipt_sending : d.submitted.receipt_send}
+                </button>
+              </form>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -1250,7 +1289,7 @@ export function FormularioInscricao({
   }
 
   if (submitted) {
-    return <SubmittedScreen slug={slug} applicationId={applicationId} schoolName={schoolName} paymentInfo={paymentInfo} d={d} />
+    return <SubmittedScreen slug={slug} token={token} applicationId={applicationId} schoolName={schoolName} paymentInfo={paymentInfo} d={d} />
   }
 
   return (

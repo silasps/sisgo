@@ -52,6 +52,11 @@ export const enDict: FormDict = {
     generating: 'Generating…',
     link_hint: 'Each link is unique and can only be filled out once. Links expire in 30 days.',
     payment_title: 'Payment information',
+    receipt_label: 'Payment receipt',
+    receipt_hint: 'Attach an image or PDF up to 10 MB.',
+    receipt_send: 'Upload receipt',
+    receipt_sending: 'Uploading…',
+    receipt_success: 'Receipt uploaded successfully!',
   },
 
   s1: {

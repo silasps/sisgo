@@ -52,6 +52,11 @@ export const ptDict: FormDict = {
     generating: 'Gerando…',
     link_hint: 'Cada link é único e só pode ser preenchido uma vez. Os links expiram em 30 dias.',
     payment_title: 'Informações de pagamento',
+    receipt_label: 'Comprovante de pagamento',
+    receipt_hint: 'Anexe uma imagem ou PDF de até 10 MB.',
+    receipt_send: 'Enviar comprovante',
+    receipt_sending: 'Enviando…',
+    receipt_success: 'Comprovante enviado com sucesso!',
   },
 
   s1: {
