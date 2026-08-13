@@ -1281,9 +1281,9 @@ export function FormularioInscricao({
                 <label className="block text-sm font-semibold text-gray-800 mb-1">
                   {d.submitted.receipt_label} <span className="text-red-500">*</span>
                 </label>
-                <input type="file" disabled
+                <input type="file"
                   accept="application/pdf,image/jpeg,image/png,image/webp"
-                  className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-green-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-green-800 disabled:opacity-60" />
+                  className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-green-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-green-800 hover:file:bg-green-200 cursor-pointer" />
                 <p className="mt-1 text-xs text-gray-500">{d.submitted.receipt_hint}</p>
               </div>
               <button type="button" disabled
@@ -1291,8 +1291,8 @@ export function FormularioInscricao({
                 {d.submitted.receipt_send}
               </button>
               <p className="text-xs text-gray-400 text-center">
-                Botão ilustrativo — só funciona de verdade quando um candidato preenche o
-                formulário real (esta é só uma pré-visualização).
+                Envio desativado aqui — só funciona de verdade quando um candidato preenche o
+                formulário real (esta é só uma pré-visualização, sem inscrição de verdade por trás).
               </p>
             </div>
           </div>
