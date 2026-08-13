@@ -73,6 +73,8 @@ type HistoricoItem = {
   tipo: string
   nome: string
   escola: string | null
+  schoolId: string | null
+  ministryId: string | null
   motivo: string
   recusadoPor: string | null
   recusadoPorId: string | null
@@ -1133,6 +1135,8 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         historico.push({
           id: r.id, tipo: 'Pré-inscrição', nome: r.full_name,
           escola: escola?.name ?? null,
+          schoolId: escola?.id ?? null,
+          ministryId: null,
           motivo: r.refusal_reason,
           recusadoPor: null,
           recusadoPorId: r.reviewed_by ?? null,
@@ -1180,6 +1184,8 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         historico.push({
           id: r.id, tipo: 'Candidato a Aluno', nome: pessoa?.full_name ?? '—',
           escola: escola?.name ?? null,
+          schoolId: escola?.id ?? null,
+          ministryId: null,
           motivo: r.refusal_reason,
           recusadoPor: null,
           recusadoPorId: r.reviewed_by ?? null,
@@ -1239,6 +1245,8 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         historico.push({
           id: r.id, tipo: 'Pré-inscrição Obreiro', nome: r.full_name,
           escola: ministry?.name ?? school?.name ?? null,
+          schoolId: r.school_id ?? null,
+          ministryId: r.ministry_id ?? null,
           motivo: r.refusal_reason,
           recusadoPor: null,
           recusadoPorId: r.reviewed_by ?? null,
@@ -1331,6 +1339,8 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         historico.push({
           id: r.id, tipo: 'Candidato a Obreiro', nome: pessoa?.full_name ?? '—',
           escola: ministry?.name ?? school?.name ?? null,
+          schoolId: r.school_id ?? null,
+          ministryId: r.ministry_id ?? null,
           motivo: r.refusal_reason,
           recusadoPor: null,
           recusadoPorId: r.reviewed_by ?? null,
@@ -1505,7 +1515,27 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
   roleFiltered.sort((a, b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime())
   const quota = await getEmailQuota()
 
-  const reviewerIds = [...new Set(historico.map(item => item.recusadoPorId).filter((id): id is string => Boolean(id)))]
+  // Mesma regra de escopo do roleFiltered acima, aplicada ao histórico de
+  // recusas/exclusões — sem isso, líder de ETED/escola/seminário via o
+  // histórico de TODAS as escolas/ministérios da organização.
+  const historicoRoleFiltered = isEtedLeader
+    ? historico.filter(h => {
+        if (h.tipo === 'Pré-inscrição' || h.tipo === 'Candidato a Aluno' || h.tipo === 'Pré-inscrição Obreiro' || h.tipo === 'Candidato a Obreiro') {
+          if (!h.schoolId) return false
+          if (allowedSchoolIds && !allowedSchoolIds.includes(h.schoolId)) return false
+        }
+        return true
+      })
+    : isLiderMinisterio && leaderMinistryId
+    ? historico.filter(h => {
+        if (h.tipo === 'Pré-inscrição' || h.tipo === 'Candidato a Aluno') return false
+        if ((h.tipo === 'Pré-inscrição Obreiro' || h.tipo === 'Candidato a Obreiro') && h.ministryId && h.ministryId !== leaderMinistryId) return false
+        if (h.tipo === 'Pré-inscrição Obreiro' && !h.ministryId) return false
+        return true
+      })
+    : historico
+
+  const reviewerIds = [...new Set(historicoRoleFiltered.map(item => item.recusadoPorId).filter((id): id is string => Boolean(id)))]
   const reviewerNames = new Map<string, string>()
 
   await Promise.all(reviewerIds.map(async (id) => {
@@ -1514,7 +1544,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     if (displayName) reviewerNames.set(id, displayName)
   }))
 
-  for (const item of historico) {
+  for (const item of historicoRoleFiltered) {
     item.recusadoPor = item.recusadoPorId ? reviewerNames.get(item.recusadoPorId) ?? null : null
   }
 
@@ -1541,7 +1571,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
   }
 
   // Histórico: max 30, mais recentes primeiro
-  const historicoTab = historico
+  const historicoTab = historicoRoleFiltered
     .sort((a, b) => new Date(b.recusadoEm).getTime() - new Date(a.recusadoEm).getTime())
     .slice(0, 30)
 
