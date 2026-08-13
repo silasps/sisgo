@@ -1,20 +1,14 @@
 # SISGO — Arquitetura do Sistema
 
-**Atualizado:** 10 de agosto de 2026 (empurrar usuário sem base pro super
-admin + papel `pendente_alocacao` + notificação ao DH; acúmulo de papéis
-corrigido no menu (`buildNav`) e sincronizado com ministérios de função
-vinculada; páginas de Hospedagem paravam de reconhecer papel acumulado
-via ministério e caíam em 404 — `getCurrentOrganizationRole` ganhou
-`linkedRoles`/`allRoles` reaproveitável; líder de escola/seminário ganha
-edição de dados da escola + criar turma; líder de ETED via candidatos a
-"aluno" de escolas que não lidera em Inscrições — filtro de escopo
-esquecia esse tipo; `SearchableSelectModal` — picker
-de usuário/pessoa com busca por nome+e-mail, agora também no Quadro de
-Obreiros do Ministério; `Modal` renderiza via portal pro `<body>`;
-informações de pagamento configuráveis por escola, mostradas na tela de
-sucesso do formulário de inscrição)
-**Nota:** a migration 114 tentou criar um papel `comunicacao` formal por
-diagnóstico errado e foi revertida pela 115 no mesmo dia — ver seção 4.
+**Atualizado:** 10 de agosto de 2026 — sessão longa de correções de escopo/
+permissão (empurrar usuário sem base + `pendente_alocacao`; acúmulo de
+papéis no menu e em Hospedagem; líder de ETED vendo candidatos/inscrições
+de escolas que não lidera; líder de escola/seminário com mais edição) e do
+formulário de escola/seminário (informações de pagamento + comprovante
+obrigatório antes do envio; toggles de campo da seção 5 que não faziam
+nada; data/horário de saída; documento único obrigatório). Detalhes nas
+seções 4 e 5. **Nota:** a migration 114 tentou criar um papel `comunicacao`
+formal por diagnóstico errado e foi revertida pela 115 no mesmo dia.
 **Produção:** https://www.sisgomission.com (Vercel)
 
 ---
@@ -344,22 +338,57 @@ qualquer usuário logado) · `hospedagem` (quartos/camas, agenda, **lavanderia**
   validação de "e-mail ou telefone do pastor obrigatório" em `handleNext`
   respeita `s8.pastor_bloco` — não trava mais o envio quando o bloco está
   escondido.
-- **Informações de pagamento por escola:** mesma tela
+- **Informações de pagamento + comprovante obrigatório:** mesma tela
   (`escolas/[id]/formulario/page.tsx`, mesma permissão — inclui
   `lider_eted`) ganhou um texto livre salvo em
   `schools.form_config.payment_info` (chave nova no mesmo jsonb, sem
-  migration). Aparece pro candidato na tela de sucesso do formulário
-  (`FormularioInscricao.tsx` → `SubmittedScreen`) assim que ele termina de
-  enviar — não depende de aprovação, é só informativo (aprovação continua
-  manual). Motivação: seminários são cursos curtos onde, na prática, quase
-  todo mundo que se inscreve é aceito, então faz sentido já adiantar Pix/
-  dados bancários ali — mas o campo vale pra qualquer escola, não só
-  `school_type='seminario'`, e só aparece se o líder preencher.
-  A mesma caixa agora permite anexar um comprovante (imagem ou PDF, até
-  10 MB) depois do envio. A Server Action valida novamente token, base e
-  status, grava no bucket privado `payment-receipts` e salva apenas os
-  metadados/caminho em `school_applications.form_data.payment_receipt`;
-  a equipe abre o arquivo na visualização da inscrição por URL assinada.
+  migration) — vale pra qualquer escola, não só `school_type='seminario'`,
+  e só aparece se o líder preencher. Quando preenchido, o comprovante de
+  pagamento passa a ser **obrigatório antes do envio de verdade**: ao
+  terminar a última seção visível, se `payment_info` existir, o
+  componente (`FormularioInscricao.tsx`) não chama `enviarFormulario`
+  ainda — mostra `PaymentGateScreen` (informações de pagamento + upload
+  `required` de imagem/PDF até 10MB); só depois do upload dar certo é que
+  `enviarFormulario` é chamado e a inscrição é marcada `status='enviado'`.
+  `anexarComprovante` (`actions.ts`) por isso aceita aplicação ainda em
+  `'rascunho'` (não só `'enviado'+`) — o comprovante é anexado ANTES do
+  status mudar. Valida token/base/tipo/tamanho, grava no bucket privado
+  `payment-receipts` e salva metadados/caminho em
+  `school_applications.form_data.payment_receipt`; a equipe abre o
+  arquivo na visualização da inscrição por URL assinada (1h). Escolas sem
+  `payment_info` configurado não passam por essa tela — comportamento
+  idêntico ao de antes (envia direto).
+- **Toggles de campo da seção 5 não faziam nada — bug real, corrigido:**
+  a tela de configuração (`escolas/[id]/formulario/page.tsx`) sempre
+  listou `estado_civil`, `servico_militar`, `rg`, `cpf`, `passaporte`,
+  `trabalha`, `experiencias`, `habilidades`, `instagram`, `facebook`,
+  `linkedin`, `outros_links` como campos ocultáveis, mas o componente do
+  formulário (`FormularioInscricao.tsx`) nunca tinha o wrapper `<H id="...">`
+  correspondente pra a maioria deles — desmarcar o checkbox na config não
+  tinha efeito nenhum no formulário público. Corrigido campo a campo.
+  Endereço e redes sociais viraram blocos inteiros ocultáveis de uma vez
+  (`s5.endereco_bloco`, `s5.redes_bloco`, mesmo padrão de `s8.pastor_bloco`)
+  em vez de campo a campo. Documento passa a exigir só **um** entre
+  RG/CPF/Passaporte (antes RG+CPF eram os dois obrigatórios pra
+  brasileiro) — validação customizada em `handleNext`, que também respeita
+  quais desses três a escola escondeu (se os três estiverem escondidos,
+  não exige nada). O upload de documentos (seção 15) passa a pedir só
+  o(s) documento(s) que a pessoa de fato preencheu na seção 5, em vez de
+  todos com base só em nacionalidade. Seções 6 (Histórico pessoal) e 7
+  (Família) ganham suporte a `oculto` (etapa inteira) — reaproveita o
+  filtro genérico por número de seção que 9/11/13/14 já tinham, sem
+  precisar mexer nos componentes `S6Historia`/`S7Familia`. Seção 4 ganha
+  "Data prevista de saída"/"Horário previsto de saída" ao lado da "Data
+  de chegada" que já existia (e que, por sinal, também nunca tinha
+  aparecido na tela de configuração até essa correção).
+- **Itens do Termo de compromisso (seção 3) configuráveis por escola:**
+  os 10 itens de `d.s3.terms` agora podem ser escondidos individualmente
+  (`s3.termo_1`...`s3.termo_10`, novo grupo em `CONFIGURAVEL`).
+  `S3Termo` filtra pelo `HiddenCtx` **antes** de numerar, pra não deixar
+  buraco na numeração exibida (pula de "8." pra "9." corretamente quando
+  um item do meio é escondido) — usa `useContext(HiddenCtx)` direto em
+  vez do wrapper `<H>`, já que aqui precisa saber quais itens sobraram
+  pra recalcular o índice.
 
 ---
 
