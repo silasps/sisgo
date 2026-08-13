@@ -32,7 +32,7 @@ export async function getRecipientUserIds(
   for (const m of managers ?? []) userIds.add(m.user_id)
 
   // School-scoped events → notify school leaders
-  if (schoolId && ['interest_form', 'student_application', 'staff_application', 'student_auto_enrolled'].includes(eventType)) {
+  if (schoolId && ['interest_form', 'student_application', 'staff_application'].includes(eventType)) {
     const { data: leaders } = await supabase
       .from('school_leaders')
       .select('user_id')

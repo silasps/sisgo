@@ -2,7 +2,6 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { headers } from 'next/headers'
-import { enrollStudent } from '@/lib/students/enrollStudent'
 
 const EDITABLE_SECTIONS = new Set([1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16])
 
@@ -116,25 +115,34 @@ export async function enviarFormulario(slug: string, token: string) {
       .update({ status: 'em_analise' })
       .eq('id', appFull.interest_form_id)
   } else if (appFull?.class_id) {
-    // Sem pré-inscrição prévia = matrícula direta (hoje só pra seminário):
-    // a inscrição já É a matrícula, sem etapa manual de aprovação do DH.
-    const { data: school } = await sb.from('schools').select('name, school_type').eq('id', appFull.school_id).single()
+    // Sem pré-inscrição prévia = veio do link único de matrícula direta
+    // (hoje só seminário): o candidato nunca preenche um formulário curto
+    // separado, mas a partir daqui o fluxo é IDÊNTICO ao de uma ETED —
+    // aparece em Inscrições e precisa do DH/líder clicar "Aceitar aluno"
+    // pra virar aluno de fato. Por isso cria o interest_form só agora, na
+    // hora do envio, e linka de volta — reaproveita a mesma tela/ação de
+    // aprovação já existente (aprovar() em inscricoes/page.tsx) sem
+    // precisar duplicar nada.
+    const { data: school } = await sb.from('schools').select('school_type').eq('id', appFull.school_id).single()
     if (school?.school_type === 'seminario') {
-      const person = await findOrCreatePersonFromApplication(sb, appFull.organization_id, (appFull.form_data as Record<string, unknown>) ?? {})
+      const formData = (appFull.form_data as Record<string, unknown>) ?? {}
+      const person = await findOrCreatePersonFromApplication(sb, appFull.organization_id, formData)
       if (person) {
-        await enrollStudent({ organizationId: appFull.organization_id, personId: person.personId, classId: appFull.class_id })
-        await sb.from('school_applications').update({ status: 'aprovado' }).eq('id', app.id)
-        await sb.from('notification_events').insert({
-          event_type: 'student_auto_enrolled',
-          payload: {
-            table_name: 'school_applications',
-            operation: 'INSERT',
-            record_id: app.id,
-            organization_id: appFull.organization_id,
-            school_id: appFull.school_id,
-            person_name: person.fullName,
-          },
-        })
+        const s1 = (formData.s1 as Record<string, string> | undefined) ?? {}
+        const s5 = (formData.s5 as Record<string, string> | undefined) ?? {}
+        const { data: interestForm } = await sb.from('school_interest_forms').insert({
+          organization_id: appFull.organization_id,
+          school_id: appFull.school_id,
+          class_id: appFull.class_id,
+          person_id: person.personId,
+          full_name: person.fullName,
+          email: (s1.email ?? '').trim().toLowerCase(),
+          phone: (s5.celular ?? '').trim() || null,
+          status: 'em_analise',
+        }).select('id').single()
+        if (interestForm) {
+          await sb.from('school_applications').update({ interest_form_id: interestForm.id }).eq('id', app.id)
+        }
       }
     }
   }

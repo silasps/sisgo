@@ -60,12 +60,6 @@ const EVENT_LABELS: Record<string, { title: string; bodyFn: (p: NotificationEven
       ? `${p.person_name} foi atribuído(a) à sua base pelo super admin — defina a área e função no Quadro de Obreiros`
       : 'Um usuário foi atribuído à sua base pelo super admin — defina a área e função no Quadro de Obreiros',
   },
-  student_auto_enrolled: {
-    title: 'Matrícula direta',
-    bodyFn: (p) => p.person_name
-      ? `${p.person_name} se matriculou direto pelo link do seminário`
-      : 'Alguém se matriculou direto pelo link do seminário',
-  },
 }
 
 function statusLabel(status?: string | null): string {
