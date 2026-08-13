@@ -63,7 +63,7 @@ export const esDict: FormDict = {
   s1: {
     section: 'Sección 1',
     title: 'Identificación inicial',
-    email: 'Correo electrónico del candidato',
+    nome: 'Nombre completo',
   },
 
   s3: {
@@ -159,6 +159,7 @@ export const esDict: FormDict = {
     pais: 'País',
     zip_placeholder: 'Ej.: 10001',
     celular: 'Celular / WhatsApp',
+    email: 'Correo electrónico',
     redes_section: 'Redes sociales',
     outros_links: 'Otros (sitio web, canal, portafolio)',
     emergencia_section: 'Contacto de emergencia',

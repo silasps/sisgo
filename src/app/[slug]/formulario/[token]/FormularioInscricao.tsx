@@ -128,13 +128,13 @@ function InfoBox({ children }: { children: React.ReactNode }) {
 
 // ── Seções ─────────────────────────────────────────────────────────────────
 
-function S1Email({ prefill, data }: { prefill?: Prefill; data?: Record<string, string> }) {
+function S1Nome({ prefill, data }: { prefill?: Prefill; data?: Record<string, string> }) {
   const d = useContext(DictCtx)
   return (
     <div className="space-y-4">
       <SectionTitle number={d.s1.section} title={d.s1.title} />
-      <Field label={d.s1.email} name="email" type="email"
-        defaultValue={data?.email ?? prefill?.email} required />
+      <Field label={d.s1.nome} name="nome" type="text"
+        defaultValue={data?.nome ?? prefill?.nome} required />
     </div>
   )
 }
@@ -333,9 +333,6 @@ function S5Dados({ prefill, data, onNationalityChange }: {
     <div className="space-y-4">
       <SectionTitle number={d.s5.section} title={d.s5.title} />
       <div className="grid sm:grid-cols-2 gap-4">
-        <div className="sm:col-span-2">
-          <Field label={d.s5.nome} name="nome" defaultValue={data?.nome ?? prefill?.nome} required />
-        </div>
         <Select label={d.s5.sexo} name="sexo" required defaultValue={data?.sexo} options={[
           { value: 'M', label: d.opts.gender_m },
           { value: 'F', label: d.opts.gender_f },
@@ -461,6 +458,8 @@ function S5Dados({ prefill, data, onNationalityChange }: {
         </></H>
         <InternationalPhoneField phoneName="celular" countryName="celular_country"
           label={d.s5.celular} defaultCountryIso="BR" defaultPhone={data?.celular ?? prefill?.telefone} />
+        <Field label={d.s5.email} name="email" type="email"
+          defaultValue={data?.email ?? prefill?.email} required />
 
         {/* Redes sociais */}
         <H id="s5.redes_bloco"><>
@@ -1243,7 +1242,7 @@ export function FormularioInscricao({
   )
 
   const sections: SectionDef[] = [
-    { id: 1,  component: <S1Email prefill={prefill} data={localData.s1} /> },
+    { id: 1,  component: <S1Nome prefill={prefill} data={localData.s1} /> },
     { id: 3,  component: <S3Termo data={localData.s3} /> },
     { id: 4,  component: <S4Escola schoolName={schoolName} className={className} data={localData.s4} /> },
     { id: 5,  component: <S5Dados prefill={prefill} data={localData.s5} onNationalityChange={setIsBrazilian} /> },

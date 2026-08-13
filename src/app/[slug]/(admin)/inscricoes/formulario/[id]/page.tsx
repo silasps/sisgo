@@ -308,7 +308,11 @@ export default async function FormularioViewerPage({ params }: Props) {
   const escola = app.schools as unknown as { name: string } | null
   const turma = app.school_classes as unknown as { name: string } | null
   const preform = app.school_interest_forms as unknown as { full_name?: string; email?: string; phone?: string } | null
-  const nomeCandidato = (formData.s5 as Record<string, string> | undefined)?.nome ?? preform?.full_name ?? '—'
+  // Nome mudou de seção (s5 → s1) numa correção posterior — mantém o fallback
+  // pra continuar lendo certo em inscrições antigas já enviadas antes disso.
+  const nomeCandidato = (formData.s1 as Record<string, string> | undefined)?.nome
+    ?? (formData.s5 as Record<string, string> | undefined)?.nome
+    ?? preform?.full_name ?? '—'
   const paymentReceipt = formData.payment_receipt as {
     path?: string; name?: string; uploaded_at?: string
   } | undefined

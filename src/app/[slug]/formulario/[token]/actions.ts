@@ -7,7 +7,7 @@ const EDITABLE_SECTIONS = new Set([1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 1
 
 // Só usado no fluxo de matrícula direta de seminário (sem pré-inscrição
 // prévia) — resolve/cria a pessoa a partir do que ela mesma preencheu no
-// formulário (s1.email, s5.nome, s5.celular), mesmo padrão de
+// formulário (s1.nome, s5.email, s5.celular), mesmo padrão de
 // submitPreRegistration (escola/[schoolSlug]/actions.ts).
 async function findOrCreatePersonFromApplication(
   sb: ReturnType<typeof createAdminClient>,
@@ -16,8 +16,8 @@ async function findOrCreatePersonFromApplication(
 ): Promise<{ personId: string; fullName: string } | null> {
   const s1 = (formData.s1 as Record<string, string> | undefined) ?? {}
   const s5 = (formData.s5 as Record<string, string> | undefined) ?? {}
-  const email = (s1.email ?? '').trim().toLowerCase()
-  const fullName = (s5.nome ?? '').trim()
+  const email = (s5.email ?? '').trim().toLowerCase()
+  const fullName = (s1.nome ?? '').trim()
   const phone = (s5.celular ?? '').trim()
   if (!email || !fullName) return null
 
@@ -128,7 +128,6 @@ export async function enviarFormulario(slug: string, token: string) {
       const formData = (appFull.form_data as Record<string, unknown>) ?? {}
       const person = await findOrCreatePersonFromApplication(sb, appFull.organization_id, formData)
       if (person) {
-        const s1 = (formData.s1 as Record<string, string> | undefined) ?? {}
         const s5 = (formData.s5 as Record<string, string> | undefined) ?? {}
         const { data: interestForm } = await sb.from('school_interest_forms').insert({
           organization_id: appFull.organization_id,
@@ -136,7 +135,7 @@ export async function enviarFormulario(slug: string, token: string) {
           class_id: appFull.class_id,
           person_id: person.personId,
           full_name: person.fullName,
-          email: (s1.email ?? '').trim().toLowerCase(),
+          email: (s5.email ?? '').trim().toLowerCase(),
           phone: (s5.celular ?? '').trim() || null,
           status: 'em_analise',
         }).select('id').single()

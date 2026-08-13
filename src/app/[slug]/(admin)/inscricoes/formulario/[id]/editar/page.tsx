@@ -10,7 +10,7 @@ type Props = { params: Promise<{ slug: string; id: string }> }
 const SECTION_FIELDS: { key: string; title: string; fields: { label: string; name: string; type?: 'textarea' | 'select'; options?: string[] }[] }[] = [
   {
     key: 's1', title: 'Identificação inicial',
-    fields: [{ label: 'E-mail', name: 'email' }],
+    fields: [{ label: 'Nome completo', name: 'nome' }],
   },
   {
     key: 's4', title: 'Escola de interesse',
@@ -27,7 +27,6 @@ const SECTION_FIELDS: { key: string; title: string; fields: { label: string; nam
   {
     key: 's5', title: 'Informações pessoais',
     fields: [
-      { label: 'Nome completo', name: 'nome' },
       { label: 'Sexo', name: 'sexo', type: 'select', options: ['M', 'F'] },
       { label: 'Data de nascimento', name: 'data_nascimento' },
       { label: 'Estado civil', name: 'estado_civil', type: 'select', options: ['solteiro', 'casado', 'divorciado', 'viuvo', 'uniao_estavel'] },
@@ -52,8 +51,8 @@ const SECTION_FIELDS: { key: string; title: string; fields: { label: string; nam
       { label: 'Cidade', name: 'cidade' },
       { label: 'Estado', name: 'estado' },
       { label: 'País', name: 'pais' },
-      { label: 'E-mail de contato', name: 'email_contato' },
       { label: 'Celular', name: 'celular' },
+      { label: 'E-mail', name: 'email' },
       { label: 'Instagram', name: 'instagram' },
       { label: 'Facebook', name: 'facebook' },
       { label: 'LinkedIn', name: 'linkedin' },
@@ -247,7 +246,7 @@ export default async function FormularioEditorPage({ params }: Props) {
 
   const formData = (app.form_data as Record<string, Record<string, string>>) ?? {}
   const preform = app.school_interest_forms as unknown as { full_name?: string } | null
-  const nomeCandidato = formData.s5?.nome ?? preform?.full_name ?? '—'
+  const nomeCandidato = formData.s1?.nome ?? formData.s5?.nome ?? preform?.full_name ?? '—'
 
   function get(section: string, field: string) {
     return formData[section]?.[field] ?? ''

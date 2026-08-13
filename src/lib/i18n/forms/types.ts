@@ -68,7 +68,7 @@ export interface FormDict {
   s1: {
     section: string
     title: string
-    email: string
+    nome: string
   }
 
   // ── Section 3 ──────────────────────────────────────────────────────────
@@ -153,6 +153,7 @@ export interface FormDict {
     pais: string
     zip_placeholder: string
     celular: string
+    email: string
     // Social
     redes_section: string
     outros_links: string

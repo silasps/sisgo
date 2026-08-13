@@ -63,7 +63,7 @@ export const enDict: FormDict = {
   s1: {
     section: 'Section 1',
     title: 'Initial identification',
-    email: 'Applicant email',
+    nome: 'Full name',
   },
 
   s3: {
@@ -159,6 +159,7 @@ export const enDict: FormDict = {
     pais: 'Country',
     zip_placeholder: 'e.g.: 10001',
     celular: 'Cell / WhatsApp',
+    email: 'Email',
     redes_section: 'Social media',
     outros_links: 'Other (website, channel, portfolio)',
     emergencia_section: 'Emergency contact',

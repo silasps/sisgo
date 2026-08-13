@@ -63,7 +63,7 @@ export const ptDict: FormDict = {
   s1: {
     section: 'Seção 1',
     title: 'Identificação inicial',
-    email: 'E-mail do candidato',
+    nome: 'Nome completo',
   },
 
   s3: {
@@ -159,6 +159,7 @@ export const ptDict: FormDict = {
     pais: 'País',
     zip_placeholder: 'Ex: 10001',
     celular: 'Celular / WhatsApp',
+    email: 'E-mail',
     redes_section: 'Redes sociais',
     outros_links: 'Outros (site, canal, portfólio)',
     emergencia_section: 'Contato de emergência',
