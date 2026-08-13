@@ -1268,6 +1268,16 @@ export function FormularioInscricao({
             </div>
           ))}
         </div>
+        {paymentInfo && (
+          <div className="mt-8 bg-green-50 border border-green-200 rounded-2xl p-6 break-inside-avoid-page">
+            <h3 className="font-bold text-gray-900 mb-1">{d.submitted.payment_title}</h3>
+            <p className="text-xs text-gray-500 mb-3">
+              Ao enviar a inscrição pelo site, o candidato vê esta mensagem e precisa anexar o
+              comprovante de pagamento — é obrigatório, a inscrição só é registrada depois disso.
+            </p>
+            <p className="text-sm text-gray-700 whitespace-pre-wrap">{paymentInfo}</p>
+          </div>
+        )}
       </div>
       </HiddenCtx.Provider>
       </DictCtx.Provider>
