@@ -531,7 +531,7 @@ export default async function BaseDashboard({ params }: Props) {
         .in('school_id', scopedSchoolIds)
         .in('status', ['pendente', 'em_analise']),
       supabase.from('school_classes')
-        .select('id, name, year, semester, starts_at, ends_at, max_students, schools(name)')
+        .select('id, school_id, name, year, semester, starts_at, ends_at, max_students, schools(name)')
         .in('school_id', scopedSchoolIds)
         .gte('ends_at', today)
         .order('starts_at', { ascending: true })
@@ -562,9 +562,10 @@ export default async function BaseDashboard({ params }: Props) {
                     ? new Date(c.ends_at).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })
                     : null
                   return (
-                    <div key={c.id} className="flex items-start justify-between py-2.5">
+                    <Link key={c.id} href={`/${slug}/escolas/${c.school_id}/turmas/${c.id}`}
+                      className="flex items-start justify-between py-2.5 px-2 -mx-2 rounded-lg hover:bg-brand-50 transition-colors group">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-800 truncate">{school?.name ?? 'Escola'}</p>
+                        <p className="text-sm font-medium text-gray-800 group-hover:text-brand-700 transition-colors truncate">{school?.name ?? 'Escola'}</p>
                         <p className="text-xs text-gray-400 mt-0.5">
                           {c.name}{start && end && ` · ${start} – ${end}`}
                         </p>
@@ -572,7 +573,7 @@ export default async function BaseDashboard({ params }: Props) {
                       <span className="ml-2 shrink-0 text-xs bg-green-50 text-green-700 border border-green-100 px-2 py-0.5 rounded-full font-medium">
                         ativa
                       </span>
-                    </div>
+                    </Link>
                   )
                 })}
               </div>
@@ -629,7 +630,7 @@ export default async function BaseDashboard({ params }: Props) {
     sbAdmin.from('reservations').select('*', { count: 'exact', head: true }).eq('organization_id', orgId).eq('status', 'pendente'),
     supabase
       .from('school_classes')
-      .select('id, name, year, semester, starts_at, ends_at, max_students, schools!inner(name, organization_id)')
+      .select('id, school_id, name, year, semester, starts_at, ends_at, max_students, schools!inner(name, organization_id)')
       .eq('schools.organization_id', orgId)
       .gte('ends_at', today)
       .order('starts_at', { ascending: true })
@@ -922,9 +923,10 @@ export default async function BaseDashboard({ params }: Props) {
                     ? new Date(c.ends_at).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })
                     : null
                   return (
-                    <div key={c.id} className="flex items-start justify-between py-2.5">
+                    <Link key={c.id} href={`/${slug}/escolas/${c.school_id}/turmas/${c.id}`}
+                      className="flex items-start justify-between py-2.5 px-2 -mx-2 rounded-lg hover:bg-brand-50 transition-colors group">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-800 truncate">{school?.name}</p>
+                        <p className="text-sm font-medium text-gray-800 group-hover:text-brand-700 transition-colors truncate">{school?.name}</p>
                         <p className="text-xs text-gray-400 mt-0.5">
                           {c.name}{start && end && ` · ${start} – ${end}`}
                         </p>
@@ -932,7 +934,7 @@ export default async function BaseDashboard({ params }: Props) {
                       <span className="ml-2 shrink-0 text-xs bg-green-50 text-green-700 border border-green-100 px-2 py-0.5 rounded-full font-medium">
                         ativa
                       </span>
-                    </div>
+                    </Link>
                   )
                 })}
               </div>
