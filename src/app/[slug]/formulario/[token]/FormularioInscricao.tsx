@@ -1118,9 +1118,12 @@ function PaymentGateScreen({ slug, token, paymentInfo, onComplete, d }: {
 
 // ── Tela de sucesso com geração de links ───────────────────────────────────
 
-function SubmittedScreen({ slug, applicationId, schoolName, d }: {
-  slug: string; applicationId: string; schoolName: string; d: FormDict
+function SubmittedScreen({ slug, applicationId, schoolName, hiddenSet, d }: {
+  slug: string; applicationId: string; schoolName: string; hiddenSet: Set<string>; d: FormDict
 }) {
+  const showPastorLink = !hiddenSet.has('s8.pastor_bloco')
+  const showAmigoLink = !hiddenSet.has('s9.oculto')
+  const showReferences = showPastorLink || showAmigoLink
   const [pastorLink, setPastorLink] = useState<string | null>(null)
   const [amigoLink, setAmigoLink] = useState<string | null>(null)
   const [loadingPastor, setLoadingPastor] = useState(false)
@@ -1161,48 +1164,54 @@ function SubmittedScreen({ slug, applicationId, schoolName, d }: {
         </p>
       </div>
 
-      <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-6 text-left max-w-md mx-auto space-y-4">
-        <h3 className="font-bold text-gray-900 text-center">{d.submitted.next_title}</h3>
-        <p className="text-sm text-gray-600 text-center">{d.submitted.next_body}</p>
+      {showReferences && (
+        <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-6 text-left max-w-md mx-auto space-y-4">
+          <h3 className="font-bold text-gray-900 text-center">{d.submitted.next_title}</h3>
+          <p className="text-sm text-gray-600 text-center">{d.submitted.next_body}</p>
 
-        {/* Pastor */}
-        <div className="space-y-2">
-          <button onClick={() => gerarLink('pastor')} disabled={loadingPastor}
-            className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors text-sm">
-            {loadingPastor ? d.submitted.generating : pastorLink ? d.submitted.new_pastor : d.submitted.gen_pastor}
-          </button>
-          {pastorLink && (
-            <div className="flex items-center gap-2 bg-white border border-indigo-200 rounded-xl px-3 py-2">
-              <input readOnly value={pastorLink}
-                className="flex-1 text-xs text-gray-600 bg-transparent outline-none truncate" />
-              <button onClick={() => copyLink(pastorLink, 'pastor')}
-                className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 whitespace-nowrap">
-                {copied === 'pastor' ? d.submitted.copied : d.submitted.copy}
+          {/* Pastor */}
+          {showPastorLink && (
+            <div className="space-y-2">
+              <button onClick={() => gerarLink('pastor')} disabled={loadingPastor}
+                className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors text-sm">
+                {loadingPastor ? d.submitted.generating : pastorLink ? d.submitted.new_pastor : d.submitted.gen_pastor}
               </button>
+              {pastorLink && (
+                <div className="flex items-center gap-2 bg-white border border-indigo-200 rounded-xl px-3 py-2">
+                  <input readOnly value={pastorLink}
+                    className="flex-1 text-xs text-gray-600 bg-transparent outline-none truncate" />
+                  <button onClick={() => copyLink(pastorLink, 'pastor')}
+                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 whitespace-nowrap">
+                    {copied === 'pastor' ? d.submitted.copied : d.submitted.copy}
+                  </button>
+                </div>
+              )}
             </div>
           )}
-        </div>
 
-        {/* Amigo */}
-        <div className="space-y-2">
-          <button onClick={() => gerarLink('amigo')} disabled={loadingAmigo}
-            className="w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors text-sm">
-            {loadingAmigo ? d.submitted.generating : amigoLink ? d.submitted.new_friend : d.submitted.gen_friend}
-          </button>
-          {amigoLink && (
-            <div className="flex items-center gap-2 bg-white border border-purple-200 rounded-xl px-3 py-2">
-              <input readOnly value={amigoLink}
-                className="flex-1 text-xs text-gray-600 bg-transparent outline-none truncate" />
-              <button onClick={() => copyLink(amigoLink, 'amigo')}
-                className="text-xs font-semibold text-purple-600 hover:text-purple-800 whitespace-nowrap">
-                {copied === 'amigo' ? d.submitted.copied : d.submitted.copy}
+          {/* Amigo */}
+          {showAmigoLink && (
+            <div className="space-y-2">
+              <button onClick={() => gerarLink('amigo')} disabled={loadingAmigo}
+                className="w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors text-sm">
+                {loadingAmigo ? d.submitted.generating : amigoLink ? d.submitted.new_friend : d.submitted.gen_friend}
               </button>
+              {amigoLink && (
+                <div className="flex items-center gap-2 bg-white border border-purple-200 rounded-xl px-3 py-2">
+                  <input readOnly value={amigoLink}
+                    className="flex-1 text-xs text-gray-600 bg-transparent outline-none truncate" />
+                  <button onClick={() => copyLink(amigoLink, 'amigo')}
+                    className="text-xs font-semibold text-purple-600 hover:text-purple-800 whitespace-nowrap">
+                    {copied === 'amigo' ? d.submitted.copied : d.submitted.copy}
+                  </button>
+                </div>
+              )}
             </div>
           )}
-        </div>
 
-        <p className="text-xs text-gray-400 text-center">{d.submitted.link_hint}</p>
-      </div>
+          <p className="text-xs text-gray-400 text-center">{d.submitted.link_hint}</p>
+        </div>
+      )}
     </div>
   )
 }
@@ -1421,7 +1430,7 @@ export function FormularioInscricao({
   }
 
   if (submitted) {
-    return <SubmittedScreen slug={slug} applicationId={applicationId} schoolName={schoolName} d={d} />
+    return <SubmittedScreen slug={slug} applicationId={applicationId} schoolName={schoolName} hiddenSet={hiddenSet} d={d} />
   }
 
   return (
