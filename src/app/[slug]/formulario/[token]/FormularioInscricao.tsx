@@ -1276,6 +1276,25 @@ export function FormularioInscricao({
               comprovante de pagamento — é obrigatório, a inscrição só é registrada depois disso.
             </p>
             <p className="text-sm text-gray-700 whitespace-pre-wrap">{paymentInfo}</p>
+            <div className="border-t border-green-200 mt-4 pt-4 space-y-3 print:hidden">
+              <div>
+                <label className="block text-sm font-semibold text-gray-800 mb-1">
+                  {d.submitted.receipt_label} <span className="text-red-500">*</span>
+                </label>
+                <input type="file" disabled
+                  accept="application/pdf,image/jpeg,image/png,image/webp"
+                  className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-green-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-green-800 disabled:opacity-60" />
+                <p className="mt-1 text-xs text-gray-500">{d.submitted.receipt_hint}</p>
+              </div>
+              <button type="button" disabled
+                className="w-full rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white opacity-60 cursor-not-allowed">
+                {d.submitted.receipt_send}
+              </button>
+              <p className="text-xs text-gray-400 text-center">
+                Botão ilustrativo — só funciona de verdade quando um candidato preenche o
+                formulário real (esta é só uma pré-visualização).
+              </p>
+            </div>
           </div>
         )}
       </div>
