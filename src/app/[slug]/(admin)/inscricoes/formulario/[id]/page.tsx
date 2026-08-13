@@ -291,7 +291,7 @@ export default async function FormularioViewerPage({ params }: Props) {
     .select(`
       id, status, form_data, created_at, edited_by, edited_at,
       organization_id,
-      schools(name),
+      schools(name, form_config),
       school_classes(name),
       school_interest_forms(full_name, email, phone)
     `)
@@ -304,7 +304,10 @@ export default async function FormularioViewerPage({ params }: Props) {
   const formData = (app.form_data as Record<string, unknown>) ?? {}
   const isExterno = (formData as Record<string, unknown>).source === 'externo'
     || (Object.keys(formData).every(k => ['source', 'prefill'].includes(k)))
-  const escola = app.schools as unknown as { name: string } | null
+  const escola = app.schools as unknown as { name: string; form_config: { hidden_fields?: string[] } | null } | null
+  const hiddenFieldsSet = new Set(escola?.form_config?.hidden_fields ?? [])
+  const showPastorRef = !hiddenFieldsSet.has('s8.pastor_bloco')
+  const showAmigoRef = !hiddenFieldsSet.has('s9.oculto')
   const turma = app.school_classes as unknown as { name: string } | null
   const preform = app.school_interest_forms as unknown as { full_name?: string; email?: string; phone?: string } | null
   // Nome mudou de seção (s5 → s1) numa correção posterior — mantém o fallback
@@ -433,9 +436,9 @@ export default async function FormularioViewerPage({ params }: Props) {
         </div>
 
         {/* Tabs: Candidato / Referências */}
-        <div className="grid lg:grid-cols-3 gap-5">
+        <div className={`grid gap-5 ${(showPastorRef || showAmigoRef) ? 'lg:grid-cols-3' : ''}`}>
           {/* Formulário do candidato */}
-          <div className="lg:col-span-2 space-y-3">
+          <div className={`space-y-3 ${(showPastorRef || showAmigoRef) ? 'lg:col-span-2' : ''}`}>
             <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest px-1">Formulário do Candidato</h2>
 
             {paymentReceipt?.path && (
@@ -547,23 +550,29 @@ export default async function FormularioViewerPage({ params }: Props) {
           </div>
 
           {/* Painel lateral: referências */}
-          <div className="space-y-3">
-            <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest px-1">Referências</h2>
-            <ReferenceModal
-              tipo="pastor"
-              data={pastorRef?.form_data as Record<string, string> | null}
-              status={(pastorRef?.status ?? 'pendente') as 'pendente' | 'enviado'}
-              slug={slug}
-              applicationId={id}
-            />
-            <ReferenceModal
-              tipo="amigo"
-              data={amigoRef?.form_data as Record<string, string> | null}
-              status={(amigoRef?.status ?? 'pendente') as 'pendente' | 'enviado'}
-              slug={slug}
-              applicationId={id}
-            />
-          </div>
+          {(showPastorRef || showAmigoRef) && (
+            <div className="space-y-3">
+              <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest px-1">Referências</h2>
+              {showPastorRef && (
+                <ReferenceModal
+                  tipo="pastor"
+                  data={pastorRef?.form_data as Record<string, string> | null}
+                  status={(pastorRef?.status ?? 'pendente') as 'pendente' | 'enviado'}
+                  slug={slug}
+                  applicationId={id}
+                />
+              )}
+              {showAmigoRef && (
+                <ReferenceModal
+                  tipo="amigo"
+                  data={amigoRef?.form_data as Record<string, string> | null}
+                  status={(amigoRef?.status ?? 'pendente') as 'pendente' | 'enviado'}
+                  slug={slug}
+                  applicationId={id}
+                />
+              )}
+            </div>
+          )}
         </div>
 
       </main>
