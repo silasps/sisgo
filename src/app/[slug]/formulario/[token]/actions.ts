@@ -2,8 +2,51 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { headers } from 'next/headers'
+import { enrollStudent } from '@/lib/students/enrollStudent'
 
 const EDITABLE_SECTIONS = new Set([1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16])
+
+// Só usado no fluxo de matrícula direta de seminário (sem pré-inscrição
+// prévia) — resolve/cria a pessoa a partir do que ela mesma preencheu no
+// formulário (s1.email, s5.nome, s5.celular), mesmo padrão de
+// submitPreRegistration (escola/[schoolSlug]/actions.ts).
+async function findOrCreatePersonFromApplication(
+  sb: ReturnType<typeof createAdminClient>,
+  organizationId: string,
+  formData: Record<string, unknown>,
+): Promise<{ personId: string; fullName: string } | null> {
+  const s1 = (formData.s1 as Record<string, string> | undefined) ?? {}
+  const s5 = (formData.s5 as Record<string, string> | undefined) ?? {}
+  const email = (s1.email ?? '').trim().toLowerCase()
+  const fullName = (s5.nome ?? '').trim()
+  const phone = (s5.celular ?? '').trim()
+  if (!email || !fullName) return null
+
+  const { data: existingPerson } = await sb
+    .from('people')
+    .select('id, person_contacts!inner(type, value)')
+    .eq('organization_id', organizationId)
+    .eq('person_contacts.type', 'email')
+    .eq('person_contacts.value', email)
+    .maybeSingle()
+
+  if (existingPerson) return { personId: existingPerson.id, fullName }
+
+  const { data: newPerson } = await sb
+    .from('people')
+    .insert({ organization_id: organizationId, full_name: fullName })
+    .select('id')
+    .single()
+  if (!newPerson) return null
+
+  const contacts: { person_id: string; type: string; value: string; is_primary: boolean }[] = [
+    { person_id: newPerson.id, type: 'email', value: email, is_primary: true },
+  ]
+  if (phone) contacts.push({ person_id: newPerson.id, type: 'phone', value: phone, is_primary: false })
+  await sb.from('person_contacts').insert(contacts)
+
+  return { personId: newPerson.id, fullName }
+}
 
 async function getEditableApplication(token: string, slug: string) {
   const sb = createAdminClient()
@@ -64,7 +107,7 @@ export async function enviarFormulario(slug: string, token: string) {
   // Atualiza pré-inscrição para "em_analise" para visibilidade no admin
   const { data: appFull } = await sb
     .from('school_applications')
-    .select('interest_form_id')
+    .select('interest_form_id, organization_id, school_id, class_id, form_data')
     .eq('id', app.id)
     .single()
 
@@ -72,6 +115,28 @@ export async function enviarFormulario(slug: string, token: string) {
     await sb.from('school_interest_forms')
       .update({ status: 'em_analise' })
       .eq('id', appFull.interest_form_id)
+  } else if (appFull?.class_id) {
+    // Sem pré-inscrição prévia = matrícula direta (hoje só pra seminário):
+    // a inscrição já É a matrícula, sem etapa manual de aprovação do DH.
+    const { data: school } = await sb.from('schools').select('name, school_type').eq('id', appFull.school_id).single()
+    if (school?.school_type === 'seminario') {
+      const person = await findOrCreatePersonFromApplication(sb, appFull.organization_id, (appFull.form_data as Record<string, unknown>) ?? {})
+      if (person) {
+        await enrollStudent({ organizationId: appFull.organization_id, personId: person.personId, classId: appFull.class_id })
+        await sb.from('school_applications').update({ status: 'aprovado' }).eq('id', app.id)
+        await sb.from('notification_events').insert({
+          event_type: 'student_auto_enrolled',
+          payload: {
+            table_name: 'school_applications',
+            operation: 'INSERT',
+            record_id: app.id,
+            organization_id: appFull.organization_id,
+            school_id: appFull.school_id,
+            person_name: person.fullName,
+          },
+        })
+      }
+    }
   }
 
   return { success: true }

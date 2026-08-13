@@ -12,6 +12,7 @@ import { getRolePreview } from '@/lib/role-preview'
 import { Suspense } from 'react'
 import { ScrollHighlight } from '@/components/ui/ScrollHighlight'
 import { SCHOOL_APPLICATION_TYPES } from '@/lib/schools'
+import { enrollStudent } from '@/lib/students/enrollStudent'
 import { ServirLinkCard } from './ServirLinkCard'
 import { InscricaoLinkCard } from './InscricaoLinkCard'
 import { MinistryLinkCard } from './MinistryLinkCard'
@@ -423,38 +424,8 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         .eq('type', 'email').eq('value', email).maybeSingle()
       personId = contact?.person_id ?? null
     }
-    if (personId) {
-      const { data: existing } = await db.from('student_profiles').select('id').eq('person_id', personId).maybeSingle()
-      if (!existing) {
-        const { error } = await db.from('student_profiles').insert({
-          organization_id: orgIdForm,
-          person_id: personId,
-          active: true,
-          accepted_by: actingUser?.id ?? null,
-          accepted_at: now,
-        })
-        if (error?.code === 'PGRST204') {
-          await db.from('student_profiles').insert({ organization_id: orgIdForm, person_id: personId, active: true })
-        }
-      } else {
-        const { error } = await db.from('student_profiles')
-          .update({ accepted_by: actingUser?.id ?? null, accepted_at: now })
-          .eq('id', existing.id)
-        if (error?.code === 'PGRST204') {
-          await db.from('student_profiles')
-            .update({ active: true })
-            .eq('id', existing.id)
-        }
-      }
-      await db.from('people').update({ source: null }).eq('id', personId)
-
-      if (classId) {
-        await db.from('class_students').upsert({
-          class_id: classId,
-          person_id: personId,
-          status: 'ativo',
-        }, { onConflict: 'class_id,person_id' })
-      }
+    if (personId && classId) {
+      await enrollStudent({ organizationId: orgIdForm, personId, classId, acceptedBy: actingUser?.id ?? null })
     }
     if (tipo === 'pre_inscricao') {
       const { error } = await db.from('school_interest_forms')

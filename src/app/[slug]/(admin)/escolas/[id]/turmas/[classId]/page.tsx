@@ -3,6 +3,7 @@ import { Header } from '@/components/layout/Header'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { AtividadesExtrasSection } from './AtividadesExtrasSection'
+import { DirectEnrollLinkBox } from './DirectEnrollLinkBox'
 
 type Props = { params: Promise<{ slug: string; id: string; classId: string }> }
 
@@ -15,7 +16,7 @@ export default async function EditarTurmaPage({ params }: Props) {
 
   const { data: escola } = await supabase
     .from('schools')
-    .select('id, name, slug')
+    .select('id, name, slug, school_type, is_public')
     .eq('id', id)
     .eq('organization_id', org.id)
     .single()
@@ -257,6 +258,29 @@ export default async function EditarTurmaPage({ params }: Props) {
             </button>
           </div>
         </form>
+
+        {escola.school_type === 'seminario' && (
+          <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+            <div>
+              <h2 className="font-semibold text-gray-900">Link de matrícula direta</h2>
+              <p className="text-xs text-gray-500 mt-1">
+                Diferente das outras escolas, o Seminário não tem pré-inscrição — este link único
+                já abre o formulário completo desta turma. Ao enviar, a pessoa é matriculada
+                automaticamente (sem passar por aprovação manual). Compartilhe no WhatsApp ou
+                coloque num site. Só funciona com &ldquo;Inscrições abertas&rdquo; ligado acima.
+              </p>
+            </div>
+            {escola.is_public && turma.registrations_open ? (
+              <DirectEnrollLinkBox path={`/${slug}/escola/${escola.slug ?? escola.id}/turma/${classId}/matricula`} />
+            ) : (
+              <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                {!escola.is_public
+                  ? 'A escola precisa estar com "Página pública ativa" (em Configurações) pra esse link funcionar.'
+                  : 'Ative "Inscrições abertas" acima pra esse link funcionar.'}
+              </p>
+            )}
+          </section>
+        )}
 
         <AtividadesExtrasSection
           programs={(allPrograms ?? []).map(p => ({
