@@ -29,6 +29,7 @@ const CONFIGURAVEL: { secao: string; key: string; titulo: string; campos: { name
     { name: 'conversou_com_quem', label: 'Com quem conversou' },
     { name: 'motivacao', label: 'Motivação' },
     { name: 'data_chegada', label: 'Data prevista de chegada' },
+    { name: 'horario_chegada', label: 'Horário previsto de chegada' },
     { name: 'data_saida', label: 'Data prevista de saída' },
     { name: 'horario_saida', label: 'Horário previsto de saída' },
   ]},

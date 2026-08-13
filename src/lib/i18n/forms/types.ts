@@ -100,6 +100,7 @@ export interface FormDict {
     conversou_nao: string
     data_chegada: string
     data_chegada_hint: string
+    horario_chegada: string
     data_saida: string
     horario_saida: string
   }

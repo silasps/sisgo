@@ -104,6 +104,7 @@ export const esDict: FormDict = {
     conversou_nao: 'No',
     data_chegada: 'Fecha prevista de llegada',
     data_chegada_hint: 'Si ya sabes cuándo planeas llegar, indícalo aquí — esto ayuda al equipo a prepararse con antelación.',
+    horario_chegada: 'Hora prevista de llegada',
     data_saida: 'Fecha prevista de salida',
     horario_saida: 'Hora prevista de salida',
   },

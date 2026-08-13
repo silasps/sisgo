@@ -104,6 +104,7 @@ export const ptDict: FormDict = {
     conversou_nao: 'Não',
     data_chegada: 'Data prevista de chegada',
     data_chegada_hint: 'Se você já sabe quando pretende chegar, informe aqui — isso ajuda a equipe a se preparar com antecedência.',
+    horario_chegada: 'Horário previsto de chegada',
     data_saida: 'Data prevista de saída',
     horario_saida: 'Horário previsto de saída',
   },

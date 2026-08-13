@@ -104,6 +104,7 @@ export const enDict: FormDict = {
     conversou_nao: 'No',
     data_chegada: 'Expected arrival date',
     data_chegada_hint: 'If you already know when you plan to arrive, let us know — this helps the team prepare in advance.',
+    horario_chegada: 'Expected arrival time',
     data_saida: 'Expected departure date',
     horario_saida: 'Expected departure time',
   },
