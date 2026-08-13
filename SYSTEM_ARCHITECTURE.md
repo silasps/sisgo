@@ -7,10 +7,11 @@ de escolas que não lidera; líder de escola/seminário com mais edição) e do
 formulário de escola/seminário (informações de pagamento + comprovante
 obrigatório antes do envio; toggles de campo da seção 5 que não faziam
 nada; data/horário de saída/chegada; documento único obrigatório) e
-**matrícula direta pra Seminário** — link único por turma, sem
-pré-inscrição, sem aprovação manual do DH (`enrollStudent`, nova rota
-`/escola/{schoolSlug}/turma/{classId}/matricula`). Detalhes nas seções 4 e
-5. **Nota:** a migration 114 tentou criar um papel `comunicacao` formal
+**link único de matrícula pra Seminário** — pula só a pré-inscrição
+(candidato vai direto pro formulário completo, nova rota
+`/escola/{schoolSlug}/turma/{classId}/matricula`); a aprovação continua
+manual, igual ETED (`enrollStudent`, botão "Aceitar aluno"). Detalhes nas
+seções 4 e 5. **Nota:** a migration 114 tentou criar um papel `comunicacao` formal
 por diagnóstico errado e foi revertida pela 115 no mesmo dia.
 **Produção:** https://www.sisgomission.com (Vercel)
 
@@ -412,26 +413,30 @@ qualquer usuário logado) · `hospedagem` (quartos/camas, agenda, **lavanderia**
   como "Candidato a Aluno"/tipo `aluno`, mas nenhum `INSERT` acontece
   nela em lugar nenhum do código atual; sempre vazio na prática. Não
   confundir com `school_applications` (é outra tabela).
-- **Matrícula direta pra Seminário — pula pré-inscrição e aprovação
-  manual:** só pra `schools.school_type = 'seminario'`. Nova rota pública
-  `/escola/{schoolSlug}/turma/{classId}/matricula` (sem token na URL,
-  reaproveitável — o líder gera um link por turma na tela da turma,
+- **Link único de matrícula pra Seminário — pula só a pré-inscrição, não
+  a aprovação:** só pra `schools.school_type = 'seminario'`. Nova rota
+  pública `/escola/{schoolSlug}/turma/{classId}/matricula` (sem token na
+  URL, reaproveitável — o líder gera um link por turma na tela da turma,
   `DirectEnrollLinkBox`, só aparece se a turma tiver `registrations_open`
   e a escola for pública): cada acesso cria uma `school_applications`
   nova (`rascunho`, **sem** `interest_form_id`) e redireciona pro
   `FormularioInscricao.tsx` de sempre — reaproveita 100% da UI e da
-  validação, sem rota/página duplicada. A diferença toda está em
-  `enviarFormulario`: quando `interest_form_id` é nulo (não veio de
-  pré-inscrição) e a escola é `seminario`, ele mesmo resolve/cria a
-  pessoa a partir do que ela preencheu (`form_data.s1.email` +
-  `form_data.s5.nome`/`celular` — só tem esse jeito de saber quem é, já
-  que não existe `school_interest_forms` por trás pra linkar), chama
-  `enrollStudent` (`src/lib/students/enrollStudent.ts` — extraído de
-  dentro de `aprovar`, hoje reaproveitado pelos dois caminhos), marca
-  `school_applications.status='aprovado'` (primeiro lugar do código que
-  efetivamente usa esse valor) e dispara notificação
-  `student_auto_enrolled` pro DH/líder da escola. Sem passar pelo botão
-  "Aceitar aluno" em nenhum momento.
+  validação, sem rota/página duplicada. Diferente do fluxo de ETED, o
+  candidato nunca preenche um formulário curto separado antes — vai
+  direto pro completo. **A partir do envio, porém, o fluxo volta a ser
+  idêntico ao de ETED**: `enviarFormulario` detecta `interest_form_id`
+  nulo + escola `seminario` e, só nesse momento (não antes), cria o
+  `school_interest_forms` (já com `status='em_analise'`, resolvendo/
+  criando a pessoa a partir do que ela mesma preencheu —
+  `form_data.s1.email` + `form_data.s5.nome`/`celular`, já que não existe
+  pré-inscrição por trás pra linkar) e liga de volta em
+  `school_applications.interest_form_id`. Isso faz o INSERT dessa
+  `school_interest_forms` disparar sozinho a notificação "Nova
+  pré-inscrição" já existente (trigger da migration 066) e faz a pessoa
+  aparecer em `/inscricoes` exatamente como uma pré-inscrição normal —
+  **precisa do DH/líder clicar "✓ Aceitar aluno" pra virar aluno de
+  verdade**, mesmo `aprovar()`/`enrollStudent` de sempre, nada de
+  matrícula automática.
 
 ---
 
