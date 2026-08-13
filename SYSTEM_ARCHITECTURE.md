@@ -23,7 +23,11 @@ visualização nas duas telas de inscrição; painel de Referências
 (pastor/amigo) também corrigido pra não aparecer em escolas/seminários
 que escondem essas seções do formulário; e "Histórico de recusas e
 exclusões" em `/inscricoes` (que não tinha o mesmo escopo por
-escola/ministério da lista principal) corrigido do mesmo jeito.
+escola/ministério da lista principal) corrigido do mesmo jeito; e menu
+lateral dos papéis restritos (hospitalidade/cozinha/manutenção/
+obreiro_ministério/obreiro_eted/aluno/associado) passa a crescer
+conforme a pessoa acumula novas funções, em vez de ficar travado na
+lista fixa do papel principal.
 **Produção:** https://www.sisgomission.com (Vercel)
 
 ---
@@ -167,6 +171,23 @@ qualquer usuário logado) · `hospedagem` (quartos/camas, agenda, **lavanderia**
     principal exato); o acesso acumulado continua sendo somado no menu
     completo pelas flags `show:` de cada item, que já usavam o conjunto
     certo.
+  - **13 de agosto — a lista fixa dessas ramificações restritas não
+    crescia com papéis acumulados:** o `pick(...)` de cada ramificação
+    (Hospitalidade, Cozinha, Manutenção, Obreiro de Ministério, Obreiro de
+    Escola, Aluno/Associado) filtra `all` só por href, ignorando o `show:`
+    de cada item — então mesmo sendo o papel principal certo, se a pessoa
+    acumulasse depois uma função nova (ex.: virar membro de um ministério
+    com `linked_role`), o item que aquela função libera nunca entrava,
+    porque não estava na lista fixa. **Confirmado em produção:** um
+    obreiro de ministério (papel principal) que também é membro do
+    Ministério "Comunicação" (`linked_role='comunicacao'`) nunca via o
+    item "Comunicação" no menu, apesar de `is('comunicacao')` já dar
+    `true` pra ele. Corrigido com `withAccumulatedExtras(narrow)` — soma
+    ao final da lista fixa qualquer item de `all` cujo `show` seja `true`
+    e que ainda não esteja nela; os itens amplos (Pessoas, Financeiro,
+    Configurações) continuam de fora pra papel restrito puro porque seus
+    `show:` dependem de `isManagement` (calculado só a partir do papel
+    principal) ou de papéis específicos, não do acúmulo em si.
   - **Ministério com `linked_role` não sincronizava nada** — vira membro/
     líder de um ministério vinculado dava acesso ao módulo (via
     `linkedRoles`, dinâmico, ponto acima), mas quem ainda estava

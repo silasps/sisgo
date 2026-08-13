@@ -139,36 +139,50 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
 
   const dropDisabledCard = (items: AllItem[]) => items.filter(i => i.icon !== 'carteirinha' || idCardEnabled)
 
-  // Estas ramificações dão um menu restrito e fixo — só fazem sentido quando
-  // o papel abaixo é o PAPEL PRINCIPAL da pessoa (role), não quando ele veio
-  // só como acumulado/vinculado (ministério com linked_role, extra_roles,
-  // role_accumulations). Alguém que já é lider_eted e também acumulou
-  // hospitalidade (por ex. via ministério) precisa do menu completo do seu
-  // papel principal + o acesso extra — não do menu estreito de hospitalidade
-  // sozinho, senão perde Escolas/Inscrições/etc.
+  // Ramificações abaixo dão um menu restrito e fixo pro que o PAPEL PRINCIPAL
+  // da pessoa (role) precisa — mas se ela também acumulou outras funções
+  // (ministério com linked_role, extra_roles, role_accumulations), os itens
+  // que essas funções liberam (i.show já considera o allRoles inteiro) são
+  // somados ao final, sem repetir o que a lista restrita já tem. Assim o
+  // menu cresce junto com as novas funções, mas continua evitando os itens
+  // amplos (Pessoas, Financeiro, Configurações…) que o papel restrito sozinho
+  // não deveria ter — esses só entram via os próprios show flags, que checam
+  // isManagement (baseado só no papel principal) ou papéis específicos.
+  const withAccumulatedExtras = (narrow: AllItem[]) => {
+    const seen = new Set(narrow.map(i => i.href))
+    const extras = all.filter(i => i.show && !seen.has(i.href))
+    return [...narrow, ...extras]
+  }
+
   if (role === 'hospitalidade') {
-    return addPersonalSplit(dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/pessoas', '/reservas', '/hospedagem', '/hospedagem/quartos', '/hospedagem/lavanderia', '/ministerios', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))).map(toItem))
+    const narrow = all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/pessoas', '/reservas', '/hospedagem', '/hospedagem/quartos', '/hospedagem/lavanderia', '/ministerios', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))
+    return addPersonalSplit(dropDisabledCard(withAccumulatedExtras(narrow)).map(toItem))
   }
 
   if (role === 'cozinha') {
-    return addPersonalSplit(dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/cozinha', '/cozinha/estoque', '/cozinha/receitas', '/ministerios', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))).map(toItem))
+    const narrow = all.filter(pick('/dashboard', '/calendario', '/pendentes', '/cozinha', '/cozinha/estoque', '/cozinha/receitas', '/ministerios', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))
+    return addPersonalSplit(dropDisabledCard(withAccumulatedExtras(narrow)).map(toItem))
   }
 
   if (role === 'manutencao') {
-    return addPersonalSplit(dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/manutencao', '/manutencao/estoque', '/ministerios', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))).map(toItem))
+    const narrow = all.filter(pick('/dashboard', '/calendario', '/pendentes', '/manutencao', '/manutencao/estoque', '/ministerios', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))
+    return addPersonalSplit(dropDisabledCard(withAccumulatedExtras(narrow)).map(toItem))
   }
 
   if (role === 'obreiro_ministerio') {
-    return addPersonalSplit(dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/ministerios', '/reservas', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))).map(toItem))
+    const narrow = all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/ministerios', '/reservas', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))
+    return addPersonalSplit(dropDisabledCard(withAccumulatedExtras(narrow)).map(toItem))
   }
 
   if (role === 'obreiro_eted') {
-    return addPersonalSplit(dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/escolas', '/reservas', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))).map(toItem))
+    const narrow = all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/escolas', '/reservas', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))
+    return addPersonalSplit(dropDisabledCard(withAccumulatedExtras(narrow)).map(toItem))
   }
 
   if (role === 'aluno' || role === 'associado') {
+    const narrow = all.filter(pick('/dashboard', '/calendario', '/pendentes', '/reservas', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))
     return addPersonalSplit(
-      dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/reservas', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))).map(toItem),
+      dropDisabledCard(withAccumulatedExtras(narrow)).map(toItem),
       new Set(['reservas', 'refeicoes', 'contas', 'carteirinha', 'minha-lavanderia']),
     )
   }
