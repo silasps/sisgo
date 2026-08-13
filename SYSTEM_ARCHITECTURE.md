@@ -21,7 +21,9 @@ o arquivo em vez de salvar — corrigido com buckets próprios
 migration 119) igual ao comprovante de pagamento, com card de
 visualização nas duas telas de inscrição; painel de Referências
 (pastor/amigo) também corrigido pra não aparecer em escolas/seminários
-que escondem essas seções do formulário.
+que escondem essas seções do formulário; e "Histórico de recusas e
+exclusões" em `/inscricoes` (que não tinha o mesmo escopo por
+escola/ministério da lista principal) corrigido do mesmo jeito.
 **Produção:** https://www.sisgomission.com (Vercel)
 
 ---
