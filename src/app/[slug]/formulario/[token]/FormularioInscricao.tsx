@@ -311,6 +311,7 @@ function S5Dados({ prefill, data, onNationalityChange }: {
   onNationalityChange?: (isBrazilian: boolean) => void
 }) {
   const d = useContext(DictCtx)
+  const hidden = useContext(HiddenCtx)
   const [estrangeiro, setEstrangeiro] = useState(data?.is_brasileiro === 'nao')
   const [estudando, setEstudando] = useState(data?.estudando === 'sim')
 
@@ -319,6 +320,14 @@ function S5Dados({ prefill, data, onNationalityChange }: {
     setEstrangeiro(isForeigner)
     onNationalityChange?.(!isForeigner)
   }
+
+  // Se a escola escondeu os documentos que apareceriam nesse ramo (RG/CPF/
+  // Passaporte pra brasileiro, só Passaporte pra estrangeiro), não sobra
+  // nada pra pedir — some com a seção inteira em vez de mostrar o título e
+  // o aviso "preencha ao menos um" sem nenhum campo embaixo.
+  const showDocumentos = estrangeiro
+    ? !hidden.has('s5.passaporte')
+    : !hidden.has('s5.rg') || !hidden.has('s5.cpf') || !hidden.has('s5.passaporte')
 
   return (
     <div className="space-y-4">
@@ -416,19 +425,21 @@ function S5Dados({ prefill, data, onNationalityChange }: {
           defaultValue={data?.outro_idioma} placeholder={d.s5.outro_idioma_placeholder} />
 
         {/* Documentos */}
-        <div className="sm:col-span-2 mt-2">
-          <p className="text-sm font-semibold text-gray-700 border-t pt-3">{d.s5.documentos_section}</p>
-          {!estrangeiro && <p className="text-xs text-gray-400 mt-1">{d.s5.documentos_hint}</p>}
-        </div>
-        {!estrangeiro ? (<>
-          <H id="s5.rg"><MaskedInput mask="rg" name="rg" label={d.s5.rg} defaultValue={data?.rg} /></H>
-          <H id="s5.cpf"><MaskedInput mask="cpf" name="cpf" label={d.s5.cpf} defaultValue={data?.cpf} /></H>
-          <H id="s5.passaporte"><Field label={d.s5.passaporte_opcional} name="passaporte" defaultValue={data?.passaporte} maxLength={20} /></H>
-        </>) : (<>
-          <H id="s5.passaporte"><div className="sm:col-span-2">
-            <Field label={d.s5.passaporte_required} name="passaporte" defaultValue={data?.passaporte}
-              required maxLength={20} placeholder="Ex: AB123456" />
-          </div></H>
+        {showDocumentos && (<>
+          <div className="sm:col-span-2 mt-2">
+            <p className="text-sm font-semibold text-gray-700 border-t pt-3">{d.s5.documentos_section}</p>
+            {!estrangeiro && <p className="text-xs text-gray-400 mt-1">{d.s5.documentos_hint}</p>}
+          </div>
+          {!estrangeiro ? (<>
+            <H id="s5.rg"><MaskedInput mask="rg" name="rg" label={d.s5.rg} defaultValue={data?.rg} /></H>
+            <H id="s5.cpf"><MaskedInput mask="cpf" name="cpf" label={d.s5.cpf} defaultValue={data?.cpf} /></H>
+            <H id="s5.passaporte"><Field label={d.s5.passaporte_opcional} name="passaporte" defaultValue={data?.passaporte} maxLength={20} /></H>
+          </>) : (<>
+            <H id="s5.passaporte"><div className="sm:col-span-2">
+              <Field label={d.s5.passaporte_required} name="passaporte" defaultValue={data?.passaporte}
+                required maxLength={20} placeholder="Ex: AB123456" />
+            </div></H>
+          </>)}
         </>)}
         <H id="s5.servico_militar">
           <Select label={d.s5.servico_militar} name="servico_militar"
