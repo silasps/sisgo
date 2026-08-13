@@ -30,7 +30,7 @@ function HiddenStyles() {
   }).join(',')
   return <style>{`${selectors}{display:none!important}`}</style>
 }
-import { salvarSecao, enviarFormulario, gerarLinkReferencia, anexarComprovante } from './actions'
+import { salvarSecao, enviarFormulario, gerarLinkReferencia, anexarComprovante, anexarDocumentos } from './actions'
 import { InternationalPhoneField } from '@/components/ui/InternationalPhoneField'
 import { MaskedInput, useMask } from '@/components/ui/MaskedInput'
 
@@ -1237,7 +1237,7 @@ export function FormularioInscricao({
     (initialData ?? {}) as Record<string, Record<string, string>>
   )
 
-  const [isBrazilian, setIsBrazilian] = useState(
+  const [, setIsBrazilian] = useState(
     (localData.s5 as Record<string, string> | undefined)?.is_brasileiro !== 'nao'
   )
 
@@ -1328,7 +1328,11 @@ export function FormularioInscricao({
 
   async function handleBack() {
     if (currentIndex === 0) return
-    if (formRef.current) {
+    // Seção 15 é só arquivo — não tem texto pra guardar em dataRecord (viraria
+    // {} e apagaria os documentos já enviados via anexarDocumentos). Os
+    // arquivos já ficam salvos assim que a pessoa avança por lá; nada a
+    // fazer aqui além de navegar.
+    if (formRef.current && visibleSections[currentIndex].id !== 15) {
       const fd = new FormData(formRef.current)
       const dataRecord: Record<string, string> = {}
       fd.forEach((v, k) => { if (typeof v === 'string') dataRecord[k] = v })
@@ -1385,13 +1389,22 @@ export function FormularioInscricao({
 
       const dataRecord: Record<string, string> = {}
       fd.forEach((v, k) => { if (typeof v === 'string') dataRecord[k] = v })
-      const data: Record<string, unknown> = {}
-      fd.forEach((v, k) => { data[k] = v })
-      const saveResult = await salvarSecao(slug, token, visibleSections[currentIndex].id, data)
-      if (!('error' in saveResult)) {
-        setLocalData(prev => ({ ...prev, [`s${visibleSections[currentIndex].id}`]: dataRecord }))
+
+      // Seção 15 é só upload de arquivo — salvarSecao não serve pra isso (o
+      // File nunca vira nada útil dentro de um jsonb); usa a action dedicada
+      // que sobe os arquivos pro Storage de verdade.
+      if (visibleSections[currentIndex].id === 15) {
+        const uploadResult = await anexarDocumentos(slug, token, fd)
+        if ('error' in uploadResult) throw new Error(uploadResult.error)
+      } else {
+        const data: Record<string, unknown> = {}
+        fd.forEach((v, k) => { data[k] = v })
+        const saveResult = await salvarSecao(slug, token, visibleSections[currentIndex].id, data)
+        if (!('error' in saveResult)) {
+          setLocalData(prev => ({ ...prev, [`s${visibleSections[currentIndex].id}`]: dataRecord }))
+        }
+        if ('error' in saveResult) throw new Error(saveResult.error)
       }
-      if ('error' in saveResult) throw new Error(saveResult.error)
 
       if (isLast) {
         // Se a escola configurou informações de pagamento, o envio de verdade

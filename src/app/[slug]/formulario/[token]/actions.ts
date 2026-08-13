@@ -197,6 +197,58 @@ export async function anexarComprovante(slug: string, token: string, formData: F
   return { success: true, fileName: file.name }
 }
 
+const DOCUMENT_KEYS = ['doc_foto', 'doc_rg_frente', 'doc_rg_verso', 'doc_cpf', 'doc_passaporte'] as const
+const DOCUMENT_TYPES: Record<string, string> = {
+  'application/pdf': 'pdf',
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+}
+
+// Seção 15 (upload de documentos) é só campos de arquivo — salvarSecao não
+// serve pra ela, porque tentava gravar o File direto no jsonb (virava
+// objeto vazio, nada era enviado de verdade pro Storage). Faz o upload de
+// cada arquivo presente no formData e grava só os metadados
+// (path/name/type/size) em form_data.s15, igual ao padrão de
+// anexarComprovante.
+export async function anexarDocumentos(slug: string, token: string, formData: FormData) {
+  const result = await getEditableApplication(token, slug)
+  if ('error' in result) return { error: result.error }
+  const { app, sb } = result
+
+  const existing = (app.form_data as Record<string, unknown>) ?? {}
+  const existingS15 = (existing.s15 as Record<string, { path?: string }>) ?? {}
+  const updatedS15: Record<string, unknown> = { ...existingS15 }
+  const toRemove: string[] = []
+
+  for (const key of DOCUMENT_KEYS) {
+    const file = formData.get(key)
+    if (!(file instanceof File) || file.size === 0) continue
+    if (!DOCUMENT_TYPES[file.type]) return { error: 'Envie imagens (JPG, PNG ou WebP) ou PDF nos documentos.' }
+    if (file.size > 10 * 1024 * 1024) return { error: 'Cada arquivo deve ter no máximo 10 MB.' }
+
+    const path = `${app.organization_id}/${app.id}/${key}-${Date.now()}.${DOCUMENT_TYPES[file.type]}`
+    const { error: uploadError } = await sb.storage.from('application-documents').upload(path, file, {
+      contentType: file.type,
+      upsert: false,
+    })
+    if (uploadError) return { error: `Não foi possível enviar "${key}". Tente novamente.` }
+
+    const previous = existingS15[key]
+    updatedS15[key] = { path, name: file.name, type: file.type, size: file.size, uploaded_at: new Date().toISOString() }
+    if (previous?.path) toRemove.push(previous.path)
+  }
+
+  await sb.from('school_applications').update({
+    form_data: { ...existing, s15: updatedS15 },
+    current_section: Math.max(app.current_section ?? 1, 15),
+  }).eq('id', app.id)
+
+  if (toRemove.length) await sb.storage.from('application-documents').remove(toRemove)
+
+  return { success: true }
+}
+
 export async function gerarLinkReferencia(
   slug: string,
   applicationId: string,

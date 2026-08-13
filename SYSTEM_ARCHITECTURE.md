@@ -12,7 +12,12 @@ nada; data/horário de saída/chegada; documento único obrigatório) e
 `/escola/{schoolSlug}/turma/{classId}/matricula`); a aprovação continua
 manual, igual ETED (`enrollStudent`, botão "Aceitar aluno"). Detalhes nas
 seções 4 e 5. **Nota:** a migration 114 tentou criar um papel `comunicacao` formal
-por diagnóstico errado e foi revertida pela 115 no mesmo dia.
+por diagnóstico errado e foi revertida pela 115 no mesmo dia. **13 de
+agosto:** Seção 1 passa a pedir Nome (era e-mail) e o e-mail migrou pra
+Seção 5, ao lado do celular; upload de documentos (Seção 15) tinha um bug
+antigo que descartava o arquivo em vez de salvar — corrigido com bucket
+próprio (`application-documents`, migration 118) igual ao comprovante de
+pagamento, com card de visualização na tela da inscrição.
 **Produção:** https://www.sisgomission.com (Vercel)
 
 ---
@@ -428,7 +433,7 @@ qualquer usuário logado) · `hospedagem` (quartos/camas, agenda, **lavanderia**
   nulo + escola `seminario` e, só nesse momento (não antes), cria o
   `school_interest_forms` (já com `status='em_analise'`, resolvendo/
   criando a pessoa a partir do que ela mesma preencheu —
-  `form_data.s1.email` + `form_data.s5.nome`/`celular`, já que não existe
+  `form_data.s1.nome` + `form_data.s5.email`/`celular`, já que não existe
   pré-inscrição por trás pra linkar) e liga de volta em
   `school_applications.interest_form_id`. Isso faz o INSERT dessa
   `school_interest_forms` disparar sozinho a notificação "Nova
@@ -437,6 +442,36 @@ qualquer usuário logado) · `hospedagem` (quartos/camas, agenda, **lavanderia**
   **precisa do DH/líder clicar "✓ Aceitar aluno" pra virar aluno de
   verdade**, mesmo `aprovar()`/`enrollStudent` de sempre, nada de
   matrícula automática.
+- **Seção 1 pede Nome, Seção 5 pede E-mail (era o contrário):** a Seção 1
+  isolada só com campo de e-mail, logo antes da Seção 5 (que já pedia
+  Nome completo) parecia pedir "e-mail duas vezes" pro candidato. Trocado:
+  `S1Nome` (era `S1Email`) agora pede nome (`s1.nome`), e o e-mail saiu da
+  Seção 1 e entrou na Seção 5 logo após o campo Celular (`s5.email`,
+  `FormularioInscricao.tsx`). `findOrCreatePersonFromApplication`
+  (`actions.ts`) e as duas telas administrativas de visualizar/editar
+  inscrição (`inscricoes/formulario/[id]/page.tsx` e `.../editar/page.tsx`)
+  foram atualizadas pra ler dos campos novos, com fallback pro campo antigo
+  (`s1.email`/`s5.nome`) nas inscrições enviadas antes da troca.
+- **Upload de documentos (Seção 15) nunca era salvo de verdade — bug
+  antigo, não desta sessão:** `salvarSecao` grava a Seção genérica inteira
+  como jsonb a partir do `FormData`, mas um `File` vira `{}` vazio nesse
+  processo — a seção de documentos (foto do rosto, RG frente/verso, CPF,
+  passaporte) sempre "enviava com sucesso" sem nunca persistir o arquivo
+  em lugar nenhum. Corrigido com o mesmo padrão do comprovante de
+  pagamento: nova Server Action `anexarDocumentos` (`actions.ts`) faz
+  upload de cada arquivo presente pro bucket privado novo
+  `application-documents` (migration 118, 10MB, pdf/jpg/png/webp) e grava
+  só metadados (`path`/`name`/`type`/`size`) em `form_data.s15`, apagando o
+  arquivo antigo do Storage se a pessoa reenviar o mesmo documento.
+  `handleNext` (`FormularioInscricao.tsx`) chama `anexarDocumentos` em vez
+  de `salvarSecao` só quando a seção atual é a 15; `handleBack` foi
+  corrigido pra **não** chamar `salvarSecao(..., 15, {})` ao voltar da
+  seção 15 (isso zerava `form_data.s15` de volta pra `{}`, já que o
+  `FormData` capturado no `handleBack` só pega campos string, não File). A
+  visualização da inscrição (`inscricoes/formulario/[id]/page.tsx`) ganhou
+  um card "Documentos enviados" ao lado do comprovante de pagamento —
+  miniatura pra imagem, ícone de arquivo pra PDF, cada um com URL assinada
+  (1h) do bucket `application-documents`.
 
 ---
 
