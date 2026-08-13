@@ -52,6 +52,7 @@ export const ptDict: FormDict = {
     generating: 'Gerando…',
     link_hint: 'Cada link é único e só pode ser preenchido uma vez. Os links expiram em 30 dias.',
     payment_title: 'Informações de pagamento',
+    payment_gate_hint: 'Falta só um passo: anexe o comprovante para concluir sua inscrição.',
     receipt_label: 'Comprovante de pagamento',
     receipt_hint: 'Anexe uma imagem ou PDF de até 10 MB.',
     receipt_send: 'Enviar comprovante',
@@ -103,6 +104,8 @@ export const ptDict: FormDict = {
     conversou_nao: 'Não',
     data_chegada: 'Data prevista de chegada',
     data_chegada_hint: 'Se você já sabe quando pretende chegar, informe aqui — isso ajuda a equipe a se preparar com antecedência.',
+    data_saida: 'Data prevista de saída',
+    horario_saida: 'Horário previsto de saída',
   },
 
   s5: {
@@ -137,6 +140,7 @@ export const ptDict: FormDict = {
     outro_idioma: 'Outro idioma e nível',
     outro_idioma_placeholder: 'Ex: Francês — Intermediário',
     documentos_section: 'Documentos',
+    documentos_hint: 'Preencha ao menos um: RG, CPF ou Passaporte.',
     rg: 'RG',
     cpf: 'CPF',
     passaporte_opcional: 'Passaporte (se possuir)',
@@ -352,7 +356,7 @@ export const ptDict: FormDict = {
     doc_foto: 'Foto recente (rosto visível)',
     doc_rg_frente_br: 'RG — frente',
     doc_rg_verso_br: 'RG — verso',
-    doc_cpf: 'CPF (se não constar no RG)',
+    doc_cpf: 'CPF',
     doc_passaporte_br: 'Passaporte (se possuir)',
     doc_passaporte_estrangeiro: 'Passaporte',
     doc_id_frente: 'Outro documento de identificação — frente',

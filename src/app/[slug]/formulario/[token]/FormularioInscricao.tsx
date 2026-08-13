@@ -207,6 +207,12 @@ function S4Escola({ schoolName, className, data }: { schoolName: string; classNa
           <Field label={d.s4.data_chegada} name="data_chegada" type="date" defaultValue={data?.data_chegada} />
           <p className="text-xs text-gray-400 mt-1">{d.s4.data_chegada_hint}</p>
         </div></H>
+        <H id="s4.data_saida">
+          <Field label={d.s4.data_saida} name="data_saida" type="date" defaultValue={data?.data_saida} />
+        </H>
+        <H id="s4.horario_saida">
+          <Field label={d.s4.horario_saida} name="horario_saida" type="time" defaultValue={data?.horario_saida} />
+        </H>
       </div>
     </div>
   )
@@ -316,13 +322,15 @@ function S5Dados({ prefill, data, onNationalityChange }: {
         ]} />
         <Field label={d.s5.data_nascimento} name="data_nascimento" type="date"
           defaultValue={data?.data_nascimento} required />
-        <Select label={d.s5.estado_civil} name="estado_civil" required defaultValue={data?.estado_civil} options={[
-          { value: 'solteiro', label: d.s5.solteiro },
-          { value: 'casado', label: d.s5.casado },
-          { value: 'comprometido', label: d.s5.comprometido },
-          { value: 'divorciado', label: d.s5.divorciado },
-          { value: 'viuvo', label: d.s5.viuvo },
-        ]} />
+        <H id="s5.estado_civil">
+          <Select label={d.s5.estado_civil} name="estado_civil" required defaultValue={data?.estado_civil} options={[
+            { value: 'solteiro', label: d.s5.solteiro },
+            { value: 'casado', label: d.s5.casado },
+            { value: 'comprometido', label: d.s5.comprometido },
+            { value: 'divorciado', label: d.s5.divorciado },
+            { value: 'viuvo', label: d.s5.viuvo },
+          ]} />
+        </H>
         <Select label={d.s5.is_brasileiro} name="is_brasileiro" required
           defaultValue={data?.is_brasileiro}
           options={[
@@ -359,17 +367,19 @@ function S5Dados({ prefill, data, onNationalityChange }: {
           )}
         </H>
         <Field label={d.s5.profissao} name="profissao" defaultValue={data?.profissao} />
-        <Select label={d.s5.trabalha} name="trabalha" required defaultValue={data?.trabalha} options={[
-          { value: 'sim', label: d.opts.yes },
-          { value: 'nao', label: d.opts.no },
-        ]} />
-        <div className="sm:col-span-2">
+        <H id="s5.trabalha">
+          <Select label={d.s5.trabalha} name="trabalha" required defaultValue={data?.trabalha} options={[
+            { value: 'sim', label: d.opts.yes },
+            { value: 'nao', label: d.opts.no },
+          ]} />
+        </H>
+        <H id="s5.experiencias"><div className="sm:col-span-2">
           <TextArea label={d.s5.experiencias} name="experiencias"
             defaultValue={data?.experiencias} rows={3} />
-        </div>
-        <div className="sm:col-span-2">
+        </div></H>
+        <H id="s5.habilidades"><div className="sm:col-span-2">
           <TextArea label={d.s5.habilidades} name="habilidades" defaultValue={data?.habilidades} rows={3} />
-        </div>
+        </div></H>
 
         {/* Idiomas — field names are fixed (DB keys), only labels are translated */}
         <div className="sm:col-span-2 mt-2"><p className="text-sm font-semibold text-gray-700 border-t pt-3">{d.s5.idiomas_section}</p></div>
@@ -395,43 +405,52 @@ function S5Dados({ prefill, data, onNationalityChange }: {
           defaultValue={data?.outro_idioma} placeholder={d.s5.outro_idioma_placeholder} />
 
         {/* Documentos */}
-        <div className="sm:col-span-2 mt-2"><p className="text-sm font-semibold text-gray-700 border-t pt-3">{d.s5.documentos_section}</p></div>
+        <div className="sm:col-span-2 mt-2">
+          <p className="text-sm font-semibold text-gray-700 border-t pt-3">{d.s5.documentos_section}</p>
+          {!estrangeiro && <p className="text-xs text-gray-400 mt-1">{d.s5.documentos_hint}</p>}
+        </div>
         {!estrangeiro ? (<>
-          <MaskedInput mask="rg" name="rg" label={d.s5.rg} defaultValue={data?.rg} required />
-          <MaskedInput mask="cpf" name="cpf" label={d.s5.cpf} defaultValue={data?.cpf} required />
-          <Field label={d.s5.passaporte_opcional} name="passaporte" defaultValue={data?.passaporte} maxLength={20} />
+          <H id="s5.rg"><MaskedInput mask="rg" name="rg" label={d.s5.rg} defaultValue={data?.rg} /></H>
+          <H id="s5.cpf"><MaskedInput mask="cpf" name="cpf" label={d.s5.cpf} defaultValue={data?.cpf} /></H>
+          <H id="s5.passaporte"><Field label={d.s5.passaporte_opcional} name="passaporte" defaultValue={data?.passaporte} maxLength={20} /></H>
         </>) : (<>
-          <div className="sm:col-span-2">
+          <H id="s5.passaporte"><div className="sm:col-span-2">
             <Field label={d.s5.passaporte_required} name="passaporte" defaultValue={data?.passaporte}
               required maxLength={20} placeholder="Ex: AB123456" />
-          </div>
+          </div></H>
         </>)}
-        <Select label={d.s5.servico_militar} name="servico_militar"
-          defaultValue={data?.servico_militar}
-          options={[
-            { value: 'sim', label: d.s5.sm_sim },
-            { value: 'nao', label: d.s5.sm_nao },
-            { value: 'nao_aplicavel', label: d.s5.sm_na },
-          ]} />
+        <H id="s5.servico_militar">
+          <Select label={d.s5.servico_militar} name="servico_militar"
+            defaultValue={data?.servico_militar}
+            options={[
+              { value: 'sim', label: d.s5.sm_sim },
+              { value: 'nao', label: d.s5.sm_nao },
+              { value: 'nao_aplicavel', label: d.s5.sm_na },
+            ]} />
+        </H>
 
         {/* Endereço */}
-        {!estrangeiro
-          ? <CepAddressFields data={data} />
-          : <ZipAddressFields data={data} />
-        }
-        <Field label={d.s5.pais} name="pais" defaultValue={data?.pais ?? (estrangeiro ? '' : 'Brasil')} required />
+        <H id="s5.endereco_bloco"><>
+          {!estrangeiro
+            ? <CepAddressFields data={data} />
+            : <ZipAddressFields data={data} />
+          }
+          <Field label={d.s5.pais} name="pais" defaultValue={data?.pais ?? (estrangeiro ? '' : 'Brasil')} required />
+        </></H>
         <InternationalPhoneField phoneName="celular" countryName="celular_country"
           label={d.s5.celular} defaultCountryIso="BR" defaultPhone={data?.celular ?? prefill?.telefone} />
 
         {/* Redes sociais */}
-        <div className="sm:col-span-2 mt-2"><p className="text-sm font-semibold text-gray-700 border-t pt-3">{d.s5.redes_section}</p></div>
-        <Field label="Instagram" name="instagram" defaultValue={data?.instagram} placeholder="@usuario" />
-        <Field label="Facebook" name="facebook" defaultValue={data?.facebook} />
-        <Field label="TikTok" name="tiktok" defaultValue={data?.tiktok} />
-        <Field label="LinkedIn" name="linkedin" defaultValue={data?.linkedin} />
-        <div className="sm:col-span-2">
-          <Field label={d.s5.outros_links} name="outros_links" defaultValue={data?.outros_links} />
-        </div>
+        <H id="s5.redes_bloco"><>
+          <div className="sm:col-span-2 mt-2"><p className="text-sm font-semibold text-gray-700 border-t pt-3">{d.s5.redes_section}</p></div>
+          <Field label="Instagram" name="instagram" defaultValue={data?.instagram} placeholder="@usuario" />
+          <Field label="Facebook" name="facebook" defaultValue={data?.facebook} />
+          <Field label="TikTok" name="tiktok" defaultValue={data?.tiktok} />
+          <Field label="LinkedIn" name="linkedin" defaultValue={data?.linkedin} />
+          <div className="sm:col-span-2">
+            <Field label={d.s5.outros_links} name="outros_links" defaultValue={data?.outros_links} />
+          </div>
+        </></H>
 
         {/* Emergência */}
         <div className="sm:col-span-2 mt-2"><p className="text-sm font-semibold text-gray-700 border-t pt-3">{d.s5.emergencia_section}</p></div>
@@ -952,26 +971,27 @@ function S14Financeiro({ data }: { data?: Record<string, string> }) {
   )
 }
 
-function S15Documentos({ isBrazilian }: { isBrazilian: boolean }) {
+function S15Documentos({ hasRg, hasCpf, hasPassaporte }: { hasRg: boolean; hasCpf: boolean; hasPassaporte: boolean }) {
   const d = useContext(DictCtx)
+  // Só pede upload do(s) documento(s) que a pessoa de fato preencheu na seção 5
+  // (lá é exigido pelo menos um entre RG/CPF/Passaporte) — se por algum motivo
+  // nenhum dos três estiver disponível (ex: todos escondidos pela escola),
+  // não força upload de documento nenhum.
+  const docs = [
+    { name: 'doc_foto', label: d.s15.doc_foto, required: true },
+    ...(hasRg ? [
+      { name: 'doc_rg_frente', label: d.s15.doc_rg_frente_br, required: true },
+      { name: 'doc_rg_verso', label: d.s15.doc_rg_verso_br, required: true },
+    ] : []),
+    ...(hasCpf ? [{ name: 'doc_cpf', label: d.s15.doc_cpf, required: true }] : []),
+    ...(hasPassaporte ? [{ name: 'doc_passaporte', label: d.s15.doc_passaporte_estrangeiro, required: true }] : []),
+  ]
   return (
     <div className="space-y-4">
       <SectionTitle number={d.s15.section} title={d.s15.title} />
       <InfoBox>{d.s15.infobox}</InfoBox>
       <div className="grid gap-4">
-        {[
-          { name: 'doc_foto', label: d.s15.doc_foto, required: true },
-          ...(isBrazilian ? [
-            { name: 'doc_rg_frente', label: d.s15.doc_rg_frente_br, required: true },
-            { name: 'doc_rg_verso', label: d.s15.doc_rg_verso_br, required: true },
-            { name: 'doc_cpf', label: d.s15.doc_cpf, required: false },
-            { name: 'doc_passaporte', label: d.s15.doc_passaporte_br, required: false },
-          ] : [
-            { name: 'doc_passaporte', label: d.s15.doc_passaporte_estrangeiro, required: true },
-            { name: 'doc_rg_frente', label: d.s15.doc_id_frente, required: false },
-            { name: 'doc_rg_verso', label: d.s15.doc_id_verso, required: false },
-          ]),
-        ].map(doc => (
+        {docs.map(doc => (
           <div key={doc.name}>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               {doc.label}{doc.required && <span className="text-red-500 ml-0.5"> *</span>}
@@ -1012,31 +1032,75 @@ function S16Aceite({ data }: { data?: Record<string, string> }) {
   )
 }
 
+// ── Tela intermediária obrigatória: pagamento + comprovante ────────────────
+// Fica ENTRE a última seção do formulário e o envio de verdade — o formulário
+// só é marcado como enviado depois que o comprovante é anexado com sucesso.
+// Só aparece quando a escola configurou informações de pagamento.
+
+function PaymentGateScreen({ slug, token, paymentInfo, onComplete, d }: {
+  slug: string; token: string; paymentInfo: string; onComplete: () => void; d: FormDict
+}) {
+  const [status, setStatus] = useState<'idle' | 'sending'>('idle')
+  const [error, setError] = useState('')
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setStatus('sending')
+    setError('')
+    const receiptResult = await anexarComprovante(slug, token, new FormData(e.currentTarget))
+    if ('error' in receiptResult) {
+      setError(receiptResult.error ?? '')
+      setStatus('idle')
+      return
+    }
+    const submitResult = await enviarFormulario(slug, token)
+    if ('error' in submitResult) {
+      setError(submitResult.error ?? '')
+      setStatus('idle')
+      return
+    }
+    onComplete()
+  }
+
+  return (
+    <div className="py-10 px-4 max-w-md mx-auto">
+      <div className="text-center mb-6">
+        <h2 className="text-2xl font-black text-gray-900 mb-2">{d.submitted.payment_title}</h2>
+        <p className="text-sm text-gray-500">{d.submitted.payment_gate_hint}</p>
+      </div>
+      <div className="bg-green-50 border border-green-200 rounded-2xl p-6 text-left space-y-4">
+        <p className="text-sm text-gray-700 whitespace-pre-wrap">{paymentInfo}</p>
+        <form onSubmit={handleSubmit} className="space-y-3 border-t border-green-200 pt-4">
+          <div>
+            <label htmlFor="comprovante" className="block text-sm font-semibold text-gray-800 mb-1">
+              {d.submitted.receipt_label} <span className="text-red-500">*</span>
+            </label>
+            <input id="comprovante" name="comprovante" type="file" required
+              accept="application/pdf,image/jpeg,image/png,image/webp"
+              className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-green-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-green-800 hover:file:bg-green-200" />
+            <p className="mt-1 text-xs text-gray-500">{d.submitted.receipt_hint}</p>
+          </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <button type="submit" disabled={status === 'sending'}
+            className="w-full rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-green-700 disabled:opacity-60">
+            {status === 'sending' ? d.submitted.receipt_sending : d.submitted.receipt_send}
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 // ── Tela de sucesso com geração de links ───────────────────────────────────
 
-function SubmittedScreen({ slug, token, applicationId, schoolName, paymentInfo, d }: {
-  slug: string; token: string; applicationId: string; schoolName: string; paymentInfo?: string | null; d: FormDict
+function SubmittedScreen({ slug, applicationId, schoolName, d }: {
+  slug: string; applicationId: string; schoolName: string; d: FormDict
 }) {
   const [pastorLink, setPastorLink] = useState<string | null>(null)
   const [amigoLink, setAmigoLink] = useState<string | null>(null)
   const [loadingPastor, setLoadingPastor] = useState(false)
   const [loadingAmigo, setLoadingAmigo] = useState(false)
   const [copied, setCopied] = useState<'pastor' | 'amigo' | null>(null)
-  const [receiptStatus, setReceiptStatus] = useState<'idle' | 'sending' | 'sent'>('idle')
-  const [receiptError, setReceiptError] = useState('')
-
-  async function uploadReceipt(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setReceiptStatus('sending')
-    setReceiptError('')
-    const result = await anexarComprovante(slug, token, new FormData(e.currentTarget))
-    if ('error' in result) {
-      setReceiptError(result.error ?? '')
-      setReceiptStatus('idle')
-    } else {
-      setReceiptStatus('sent')
-    }
-  }
 
   async function gerarLink(tipo: 'pastor' | 'amigo') {
     if (tipo === 'pastor') setLoadingPastor(true)
@@ -1114,37 +1178,6 @@ function SubmittedScreen({ slug, token, applicationId, schoolName, paymentInfo, 
 
         <p className="text-xs text-gray-400 text-center">{d.submitted.link_hint}</p>
       </div>
-
-      {paymentInfo && (
-        <div className="bg-green-50 border border-green-200 rounded-2xl p-6 text-left max-w-md mx-auto space-y-4">
-          <h3 className="font-bold text-gray-900 text-center mb-3">{d.submitted.payment_title}</h3>
-          <p className="text-sm text-gray-700 whitespace-pre-wrap">{paymentInfo}</p>
-          <div className="border-t border-green-200 pt-4">
-            {receiptStatus === 'sent' ? (
-              <p className="rounded-xl bg-white px-4 py-3 text-center text-sm font-semibold text-green-700">
-                ✓ {d.submitted.receipt_success}
-              </p>
-            ) : (
-              <form onSubmit={uploadReceipt} className="space-y-3">
-                <div>
-                  <label htmlFor="comprovante" className="block text-sm font-semibold text-gray-800 mb-1">
-                    {d.submitted.receipt_label}
-                  </label>
-                  <input id="comprovante" name="comprovante" type="file" required
-                    accept="application/pdf,image/jpeg,image/png,image/webp"
-                    className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-green-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-green-800 hover:file:bg-green-200" />
-                  <p className="mt-1 text-xs text-gray-500">{d.submitted.receipt_hint}</p>
-                </div>
-                {receiptError && <p className="text-sm text-red-600">{receiptError}</p>}
-                <button type="submit" disabled={receiptStatus === 'sending'}
-                  className="w-full rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-green-700 disabled:opacity-60">
-                  {receiptStatus === 'sending' ? d.submitted.receipt_sending : d.submitted.receipt_send}
-                </button>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
@@ -1163,6 +1196,7 @@ export function FormularioInscricao({
   const [current, setCurrent] = useState(initialSection)
   const [saving, setSaving] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [awaitingPayment, setAwaitingPayment] = useState(false)
   const [error, setError] = useState('')
   const formRef = useRef<HTMLFormElement>(null)
 
@@ -1188,7 +1222,11 @@ export function FormularioInscricao({
     { id: 12, component: <S12Saude data={localData.s12} /> },
     { id: 13, component: <S13Legal data={localData.s13} /> },
     { id: 14, component: <S14Financeiro data={localData.s14} /> },
-    { id: 15, component: <S15Documentos isBrazilian={isBrazilian} /> },
+    { id: 15, component: <S15Documentos
+        hasRg={!!localData.s5?.rg?.trim()}
+        hasCpf={!!localData.s5?.cpf?.trim()}
+        hasPassaporte={!!localData.s5?.passaporte?.trim()}
+      /> },
     { id: 16, component: <S16Aceite data={localData.s16} /> },
   ]
 
@@ -1246,6 +1284,26 @@ export function FormularioInscricao({
     try {
       const fd = new FormData(e.currentTarget)
 
+      // Validação customizada: seção 5 — ao menos um documento (RG, CPF ou
+      // Passaporte) obrigatório entre os que a escola não escondeu; estrangeiro
+      // só tem o campo de passaporte, que já é required no próprio input.
+      // Se a escola escondeu os três, não há nada pra exigir aqui.
+      if (visibleSections[currentIndex].id === 5 && fd.get('is_brasileiro') !== 'nao') {
+        const rgVisible = !hiddenSet.has('s5.rg')
+        const cpfVisible = !hiddenSet.has('s5.cpf')
+        const passaporteVisible = !hiddenSet.has('s5.passaporte')
+        if (rgVisible || cpfVisible || passaporteVisible) {
+          const rg = rgVisible ? (fd.get('rg') as string)?.trim() : ''
+          const cpf = cpfVisible ? (fd.get('cpf') as string)?.trim() : ''
+          const passaporte = passaporteVisible ? (fd.get('passaporte') as string)?.trim() : ''
+          if (!rg && !cpf && !passaporte) {
+            setError(d.s5.documentos_hint)
+            setSaving(false)
+            return
+          }
+        }
+      }
+
       // Validação customizada: seção 8 — pastor email ou telefone obrigatório
       // (só quando o bloco de pastor não foi escondido pela config da escola)
       if (visibleSections[currentIndex].id === 8 && !hiddenSet.has('s8.pastor_bloco')) {
@@ -1274,9 +1332,17 @@ export function FormularioInscricao({
       if ('error' in saveResult) throw new Error(saveResult.error)
 
       if (isLast) {
-        const submitResult = await enviarFormulario(slug, token)
-        if ('error' in submitResult) throw new Error(submitResult.error)
-        setSubmitted(true)
+        // Se a escola configurou informações de pagamento, o envio de verdade
+        // só acontece depois que o comprovante for anexado (PaymentGateScreen)
+        // — sem isso não tem como tornar o comprovante obrigatório, já que a
+        // tela de pagamento hoje só aparece depois do formulário enviado.
+        if (paymentInfo) {
+          setAwaitingPayment(true)
+        } else {
+          const submitResult = await enviarFormulario(slug, token)
+          if ('error' in submitResult) throw new Error(submitResult.error)
+          setSubmitted(true)
+        }
       } else {
         setCurrent(visibleSections[currentIndex + 1].id)
         window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -1288,8 +1354,20 @@ export function FormularioInscricao({
     }
   }
 
+  if (awaitingPayment && paymentInfo) {
+    return (
+      <PaymentGateScreen
+        slug={slug}
+        token={token}
+        paymentInfo={paymentInfo}
+        onComplete={() => { setAwaitingPayment(false); setSubmitted(true) }}
+        d={d}
+      />
+    )
+  }
+
   if (submitted) {
-    return <SubmittedScreen slug={slug} token={token} applicationId={applicationId} schoolName={schoolName} paymentInfo={paymentInfo} d={d} />
+    return <SubmittedScreen slug={slug} applicationId={applicationId} schoolName={schoolName} d={d} />
   }
 
   return (

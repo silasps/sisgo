@@ -16,6 +16,9 @@ const CONFIGURAVEL: { secao: string; key: string; titulo: string; campos: { name
     { name: 'conversou_equipe', label: 'Conversou com alguém da escola?' },
     { name: 'conversou_com_quem', label: 'Com quem conversou' },
     { name: 'motivacao', label: 'Motivação' },
+    { name: 'data_chegada', label: 'Data prevista de chegada' },
+    { name: 'data_saida', label: 'Data prevista de saída' },
+    { name: 'horario_saida', label: 'Horário previsto de saída' },
   ]},
   { secao: 's5', key: 'dados_pessoais', titulo: 'Informações pessoais', campos: [
     { name: 'estado_civil', label: 'Estado civil' },
@@ -27,12 +30,11 @@ const CONFIGURAVEL: { secao: string; key: string; titulo: string; campos: { name
     { name: 'trabalha', label: 'Trabalha atualmente?' },
     { name: 'experiencias', label: 'Experiências profissionais' },
     { name: 'habilidades', label: 'Habilidades' },
-    { name: 'instagram', label: 'Instagram' },
-    { name: 'facebook', label: 'Facebook' },
-    { name: 'linkedin', label: 'LinkedIn' },
-    { name: 'outros_links', label: 'Outros links' },
+    { name: 'endereco_bloco', label: 'Endereço (bloco inteiro)' },
+    { name: 'redes_bloco', label: 'Redes sociais (bloco inteiro)' },
   ]},
   { secao: 's6', key: 'historico_pessoal', titulo: 'Histórico pessoal', campos: [
+    { name: 'oculto', label: 'Etapa inteira aparece no formulário (desative pra pular)' },
     { name: 'sobre_voce', label: 'Sobre você' },
     { name: 'processo_decisao', label: 'Processo de decisão' },
     { name: 'expectativas', label: 'Expectativas' },
@@ -40,6 +42,7 @@ const CONFIGURAVEL: { secao: string; key: string; titulo: string; campos: { name
     { name: 'responsabilidades', label: 'Responsabilidades assumidas' },
   ]},
   { secao: 's7', key: 'familia', titulo: 'Informações familiares', campos: [
+    { name: 'oculto', label: 'Etapa inteira aparece no formulário (desative pra pular)' },
     { name: 'situacao_familiar', label: 'Situação familiar' },
     { name: 'tem_filhos', label: 'Tem filhos?' },
     { name: 'filhos_dados', label: 'Dados dos filhos' },

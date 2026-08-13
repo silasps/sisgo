@@ -97,8 +97,8 @@ export async function anexarComprovante(slug: string, token: string, formData: F
     .eq('token', token)
     .single()
 
-  if (!app || !['enviado', 'em_analise', 'aprovado'].includes(app.status)) {
-    return { error: 'Envie o formulário antes de anexar o comprovante.' }
+  if (!app || !['rascunho', 'enviado', 'em_analise', 'aprovado'].includes(app.status)) {
+    return { error: 'Formulário não encontrado.' }
   }
   const { data: org } = await sb.from('organizations').select('slug, active').eq('id', app.organization_id).single()
   if (!org?.active || org.slug !== slug) return { error: 'Formulário não encontrado.' }

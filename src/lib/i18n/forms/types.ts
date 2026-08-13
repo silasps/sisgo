@@ -56,6 +56,7 @@ export interface FormDict {
     generating: string
     link_hint: string
     payment_title: string
+    payment_gate_hint: string
     receipt_label: string
     receipt_hint: string
     receipt_send: string
@@ -99,6 +100,8 @@ export interface FormDict {
     conversou_nao: string
     data_chegada: string
     data_chegada_hint: string
+    data_saida: string
+    horario_saida: string
   }
 
   // ── Section 5 ──────────────────────────────────────────────────────────
@@ -132,6 +135,7 @@ export interface FormDict {
     outro_idioma: string
     outro_idioma_placeholder: string
     documentos_section: string
+    documentos_hint: string
     rg: string
     cpf: string
     passaporte_opcional: string

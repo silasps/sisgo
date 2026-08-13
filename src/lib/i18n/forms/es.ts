@@ -52,6 +52,7 @@ export const esDict: FormDict = {
     generating: 'Generando…',
     link_hint: 'Cada enlace es único y solo puede completarse una vez. Los enlaces vencen en 30 días.',
     payment_title: 'Información de pago',
+    payment_gate_hint: 'Falta un paso: adjunta el comprobante para completar tu inscripción.',
     receipt_label: 'Comprobante de pago',
     receipt_hint: 'Adjunta una imagen o PDF de hasta 10 MB.',
     receipt_send: 'Enviar comprobante',
@@ -103,6 +104,8 @@ export const esDict: FormDict = {
     conversou_nao: 'No',
     data_chegada: 'Fecha prevista de llegada',
     data_chegada_hint: 'Si ya sabes cuándo planeas llegar, indícalo aquí — esto ayuda al equipo a prepararse con antelación.',
+    data_saida: 'Fecha prevista de salida',
+    horario_saida: 'Hora prevista de salida',
   },
 
   s5: {
@@ -137,6 +140,7 @@ export const esDict: FormDict = {
     outro_idioma: 'Otro idioma y nivel',
     outro_idioma_placeholder: 'Ej.: Francés — Intermedio',
     documentos_section: 'Documentos',
+    documentos_hint: 'Completa al menos uno: RG, CPF o Pasaporte.',
     rg: 'Documento de identidad',
     cpf: 'ID fiscal (CPF)',
     passaporte_opcional: 'Pasaporte (si tienes)',
@@ -352,7 +356,7 @@ export const esDict: FormDict = {
     doc_foto: 'Foto reciente (rostro visible)',
     doc_rg_frente_br: 'Documento de identidad — frente',
     doc_rg_verso_br: 'Documento de identidad — reverso',
-    doc_cpf: 'ID fiscal (CPF) si no figura en el documento',
+    doc_cpf: 'ID fiscal (CPF)',
     doc_passaporte_br: 'Pasaporte (si tienes)',
     doc_passaporte_estrangeiro: 'Pasaporte',
     doc_id_frente: 'Otro documento de identidad — frente',

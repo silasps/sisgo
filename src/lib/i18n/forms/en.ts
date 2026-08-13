@@ -52,6 +52,7 @@ export const enDict: FormDict = {
     generating: 'Generating…',
     link_hint: 'Each link is unique and can only be filled out once. Links expire in 30 days.',
     payment_title: 'Payment information',
+    payment_gate_hint: 'Just one more step: attach the receipt to complete your enrollment.',
     receipt_label: 'Payment receipt',
     receipt_hint: 'Attach an image or PDF up to 10 MB.',
     receipt_send: 'Upload receipt',
@@ -103,6 +104,8 @@ export const enDict: FormDict = {
     conversou_nao: 'No',
     data_chegada: 'Expected arrival date',
     data_chegada_hint: 'If you already know when you plan to arrive, let us know — this helps the team prepare in advance.',
+    data_saida: 'Expected departure date',
+    horario_saida: 'Expected departure time',
   },
 
   s5: {
@@ -137,6 +140,7 @@ export const enDict: FormDict = {
     outro_idioma: 'Other language and level',
     outro_idioma_placeholder: 'e.g.: French — Intermediate',
     documentos_section: 'Documents',
+    documentos_hint: 'Fill in at least one: ID, national tax ID (CPF) or Passport.',
     rg: 'Government ID',
     cpf: 'Tax ID (CPF)',
     passaporte_opcional: 'Passport (if available)',
@@ -352,7 +356,7 @@ export const enDict: FormDict = {
     doc_foto: 'Recent photo (face visible)',
     doc_rg_frente_br: 'Government ID — front',
     doc_rg_verso_br: 'Government ID — back',
-    doc_cpf: 'Tax ID (CPF) if not on the ID',
+    doc_cpf: 'Tax ID (CPF)',
     doc_passaporte_br: 'Passport (if available)',
     doc_passaporte_estrangeiro: 'Passport',
     doc_id_frente: 'Other ID document — front',
