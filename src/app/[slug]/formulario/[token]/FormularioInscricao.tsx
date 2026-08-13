@@ -209,12 +209,14 @@ function S4Escola({ schoolName, className, data }: { schoolName: string; classNa
           <TextArea label={d.s4.motivacao} name="motivacao"
             defaultValue={data?.motivacao} required rows={4} />
         </div></H>
-        <H id="s4.data_chegada"><div className="sm:col-span-2">
+        <H id="s4.data_chegada">
           <Field label={d.s4.data_chegada} name="data_chegada" type="date" defaultValue={data?.data_chegada} />
-          <p className="text-xs text-gray-400 mt-1">{d.s4.data_chegada_hint}</p>
-        </div></H>
+        </H>
         <H id="s4.horario_chegada">
           <Field label={d.s4.horario_chegada} name="horario_chegada" type="time" defaultValue={data?.horario_chegada} />
+        </H>
+        <H id="s4.data_chegada">
+          <p className="sm:col-span-2 text-xs text-gray-400 -mt-2">{d.s4.data_chegada_hint}</p>
         </H>
         <H id="s4.data_saida">
           <Field label={d.s4.data_saida} name="data_saida" type="date" defaultValue={data?.data_saida} />
@@ -832,6 +834,7 @@ function S11Espiritual({ data }: { data?: Record<string, string> }) {
 function S12Saude({ data }: { data?: Record<string, string> }) {
   const d = useContext(DictCtx)
   const [usaMed, setUsaMed] = useState(data?.usa_medicamento === 'sim')
+  const [planoSaude, setPlanoSaude] = useState(data?.plano_saude === 'sim')
   return (
     <div className="space-y-4">
       <SectionTitle number={d.s12.section} title={d.s12.title} />
@@ -843,17 +846,17 @@ function S12Saude({ data }: { data?: Record<string, string> }) {
         <Field label={d.s12.alergias} name="alergias" defaultValue={data?.alergias} />
         <Field label={d.s12.restricao_alimentar} name="restricao_alimentar" defaultValue={data?.restricao_alimentar} />
         <Field label={d.s12.limitacao_fisica} name="limitacao_fisica" defaultValue={data?.limitacao_fisica} />
-        <div className="sm:col-span-2">
+        <H id="s12.cirurgias"><div className="sm:col-span-2">
           <Field label={d.s12.cirurgias} name="cirurgias" defaultValue={data?.cirurgias} />
-        </div>
+        </div></H>
 
-        <div className="sm:col-span-2 mt-2 border-t pt-3">
+        <H id="s12.usa_medicamento"><div className="sm:col-span-2 mt-2 border-t pt-3">
           <Select label={d.s12.usa_medicamento} name="usa_medicamento" required
             defaultValue={data?.usa_medicamento}
             options={[
               { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
             ]} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setUsaMed(e.target.value === 'sim')} />
-        </div>
+        </div></H>
         {usaMed && <>
           <Field label={d.s12.med_nome} name="med_nome" defaultValue={data?.med_nome} />
           <Field label={d.s12.med_motivo} name="med_motivo" defaultValue={data?.med_motivo} />
@@ -863,12 +866,14 @@ function S12Saude({ data }: { data?: Record<string, string> }) {
           ]} />
         </>}
 
-        <div className="sm:col-span-2 mt-2 border-t pt-3">
+        <H id="s12.plano_saude"><div className="sm:col-span-2 mt-2 border-t pt-3">
           <Select label={d.s12.plano_saude} name="plano_saude" defaultValue={data?.plano_saude} options={[
             { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
-          ]} />
-        </div>
-        <Field label={d.s12.plano_saude_qual} name="plano_saude_qual" defaultValue={data?.plano_saude_qual} />
+          ]} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setPlanoSaude(e.target.value === 'sim')} />
+        </div></H>
+        {planoSaude && (
+          <Field label={d.s12.plano_saude_qual} name="plano_saude_qual" defaultValue={data?.plano_saude_qual} />
+        )}
         <div className="sm:col-span-2">
           <TextArea label={d.s12.emergencia_medica} name="emergencia_medica"
             defaultValue={data?.emergencia_medica} rows={2} />
