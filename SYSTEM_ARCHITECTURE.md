@@ -14,10 +14,14 @@ manual, igual ETED (`enrollStudent`, botão "Aceitar aluno"). Detalhes nas
 seções 4 e 5. **Nota:** a migration 114 tentou criar um papel `comunicacao` formal
 por diagnóstico errado e foi revertida pela 115 no mesmo dia. **13 de
 agosto:** Seção 1 passa a pedir Nome (era e-mail) e o e-mail migrou pra
-Seção 5, ao lado do celular; upload de documentos (Seção 15) tinha um bug
-antigo que descartava o arquivo em vez de salvar — corrigido com bucket
-próprio (`application-documents`, migration 118) igual ao comprovante de
-pagamento, com card de visualização na tela da inscrição.
+Seção 5, ao lado do celular; upload de documentos (Seção 15, e também
+Seções 03/10 do formulário de obreiro) tinha um bug antigo que descartava
+o arquivo em vez de salvar — corrigido com buckets próprios
+(`application-documents` migration 118, `staff-application-documents`
+migration 119) igual ao comprovante de pagamento, com card de
+visualização nas duas telas de inscrição; painel de Referências
+(pastor/amigo) também corrigido pra não aparecer em escolas/seminários
+que escondem essas seções do formulário.
 **Produção:** https://www.sisgomission.com (Vercel)
 
 ---
@@ -471,7 +475,32 @@ qualquer usuário logado) · `hospedagem` (quartos/camas, agenda, **lavanderia**
   visualização da inscrição (`inscricoes/formulario/[id]/page.tsx`) ganhou
   um card "Documentos enviados" ao lado do comprovante de pagamento —
   miniatura pra imagem, ícone de arquivo pra PDF, cada um com URL assinada
-  (1h) do bucket `application-documents`.
+  (1h) do bucket `application-documents`. **Mesmo bug existia no
+  formulário de obreiro** (`formulario-obreiro/[token]/`), em duas seções
+  que misturam texto com arquivo: Seção 03 (Família — certidão de
+  casamento, só quando casado) e Seção 10 (Documentos e Aceite Final —
+  foto, RG frente/verso ou passaporte). Corrigido com o mesmo padrão, mas
+  numa única action reaproveitável pras duas seções —
+  `salvarSecaoObreiroComArquivos` (bucket `staff-application-documents`,
+  migration 119) — que faz upload de qualquer `File` presente no
+  `FormData` e mantém como string qualquer outro campo, preservando o
+  metadado já salvo quando a seção é reenviada sem escolher o arquivo de
+  novo (inclusive no botão "Voltar", que antes zerava esses campos). A
+  visualização (`inscricoes/formulario-obreiro/[id]/page.tsx`) ganhou o
+  mesmo card "Documentos enviados", juntando o que foi anexado nas duas
+  seções.
+- **Painel de Referências (pastor/amigo) na visualização da inscrição
+  aparecia mesmo em escolas que escondem essas seções:** o card
+  "Aguardando — Pastor/Líder" / "Aguardando — Amigo/Referência"
+  (`inscricoes/formulario/[id]/page.tsx`) era mostrado sempre, mesmo
+  quando `schools.form_config.hidden_fields` esconde `s8.pastor_bloco`/
+  `s9.oculto` do formulário do candidato (comum em seminários) — como o
+  candidato nunca vê o botão pra gerar o link nesse caso, o card ficava
+  "aguardando" pra sempre, sem nunca poder ser resolvido. Corrigido lendo
+  o mesmo `hidden_fields` da escola (que a tela não buscava antes) e só
+  renderizando cada card se o bloco correspondente não estiver escondido;
+  o painel lateral inteiro some (e o formulário volta a ocupar a largura
+  toda) quando os dois se aplicam.
 
 ---
 

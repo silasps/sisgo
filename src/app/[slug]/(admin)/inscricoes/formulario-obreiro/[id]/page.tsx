@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getRolePreview } from '@/lib/role-preview'
-import { Pencil } from 'lucide-react'
+import { Pencil, FileText, ImageIcon } from 'lucide-react'
 import { PipelineStepper, stagesFromFlags } from '@/components/inscricoes/PipelineStepper'
 import { AvancarEtapaControl, AdvanceHistoryList } from '@/components/inscricoes/AvancarEtapaControl'
 import { getStageAdvances, resolveAdvancerNames } from '@/lib/pipelineStageAdvance'
@@ -273,6 +273,25 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
   const pessoa = app.people as unknown as { full_name: string } | null
   const nomeCandidato = (formData.s2 as Record<string, string> | undefined)?.nome ?? preform?.full_name ?? pessoa?.full_name ?? '—'
 
+  const DOCUMENT_LABELS: Record<string, string> = {
+    doc_foto: 'Foto pessoal',
+    doc_rg_frente: 'RG (frente)',
+    doc_rg_verso: 'RG (verso)',
+    doc_passaporte: 'Passaporte',
+    doc_certidao_casamento: 'Certidão de casamento',
+    doc_certidao_casamento_s10: 'Certidão de casamento',
+  }
+  const s3Docs = (formData.s3 as Record<string, { path?: string; name?: string; type?: string }> | undefined) ?? {}
+  const s10Docs = (formData.s10 as Record<string, { path?: string; name?: string; type?: string }> | undefined) ?? {}
+  const documentEntries = await Promise.all(
+    [...Object.entries(s3Docs), ...Object.entries(s10Docs)]
+      .filter(([, doc]) => !!doc?.path)
+      .map(async ([key, doc]) => {
+        const { data } = await sb.storage.from('staff-application-documents').createSignedUrl(doc.path!, 60 * 60)
+        return { key, label: DOCUMENT_LABELS[key] ?? key, doc, url: data?.signedUrl ?? null }
+      })
+  )
+
   const { data: refs } = await sb
     .from('reference_forms')
     .select('type, status, form_data')
@@ -414,6 +433,33 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
             </SectionCard>
           )
         })}
+
+        {documentEntries.length > 0 && (
+          <SectionCard title="Documentos enviados">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-3">
+              {documentEntries.map(({ key, label, doc, url }) => {
+                const isImage = doc.type?.startsWith('image/')
+                return (
+                  <a key={key} href={url ?? '#'} target="_blank" rel="noopener noreferrer"
+                    className={`group rounded-lg border border-gray-200 overflow-hidden hover:border-indigo-300 transition-colors ${!url ? 'pointer-events-none opacity-60' : ''}`}>
+                    {isImage && url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={url} alt={label} className="h-24 w-full object-cover bg-gray-50" />
+                    ) : (
+                      <div className="h-24 w-full flex items-center justify-center bg-gray-50">
+                        <FileText className="size-8 text-gray-400" />
+                      </div>
+                    )}
+                    <div className="px-2 py-1.5 flex items-center gap-1.5">
+                      {isImage ? <ImageIcon className="size-3 shrink-0 text-gray-400" /> : <FileText className="size-3 shrink-0 text-gray-400" />}
+                      <p className="truncate text-xs font-medium text-gray-700 group-hover:text-indigo-700">{label}</p>
+                    </div>
+                  </a>
+                )
+              })}
+            </div>
+          </SectionCard>
+        )}
 
         {/* Referências */}
         {(pastorRef || amigoRef || liderancaRef || app.pastor_reference_skip_reason) && (

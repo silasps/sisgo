@@ -2,7 +2,9 @@
 
 import { useRef, useState, useContext, createContext } from 'react'
 import { HeartHandshake } from 'lucide-react'
-import { salvarSecaoObreiro, enviarFormularioObreiro, gerarLinkReferenciaObreiro } from './actions'
+import { salvarSecaoObreiro, salvarSecaoObreiroComArquivos, enviarFormularioObreiro, gerarLinkReferenciaObreiro } from './actions'
+
+const SECTIONS_COM_ARQUIVO = new Set([3, 10])
 import { InternationalPhoneField } from '@/components/ui/InternationalPhoneField'
 import { MaskedInput, useMask } from '@/components/ui/MaskedInput'
 import { LangSwitcher } from '@/components/ui/LangSwitcher'
@@ -907,7 +909,11 @@ export function FormularioObreiro({
       const dataRecord: Record<string, string> = {}
       fd.forEach((v, k) => { if (typeof v === 'string') dataRecord[k] = v })
       setLocalData(prev => ({ ...prev, [`s${sections[currentIndex].id}`]: dataRecord }))
-      await salvarSecaoObreiro(slug, token, sections[currentIndex].id, dataRecord).catch(() => {})
+      if (SECTIONS_COM_ARQUIVO.has(sections[currentIndex].id)) {
+        await salvarSecaoObreiroComArquivos(slug, token, sections[currentIndex].id, fd).catch(() => {})
+      } else {
+        await salvarSecaoObreiro(slug, token, sections[currentIndex].id, dataRecord).catch(() => {})
+      }
     }
     setCurrent(sections[currentIndex - 1].id)
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -936,9 +942,9 @@ export function FormularioObreiro({
 
       const dataRecord: Record<string, string> = {}
       fd.forEach((v, k) => { if (typeof v === 'string') dataRecord[k] = v })
-      const data: Record<string, unknown> = {}
-      fd.forEach((v, k) => { data[k] = v })
-      const saveResult = await salvarSecaoObreiro(slug, token, sections[currentIndex].id, data)
+      const saveResult = SECTIONS_COM_ARQUIVO.has(sections[currentIndex].id)
+        ? await salvarSecaoObreiroComArquivos(slug, token, sections[currentIndex].id, fd)
+        : await salvarSecaoObreiro(slug, token, sections[currentIndex].id, dataRecord)
       if (!('error' in saveResult)) {
         setLocalData(prev => ({ ...prev, [`s${sections[currentIndex].id}`]: dataRecord }))
       }
