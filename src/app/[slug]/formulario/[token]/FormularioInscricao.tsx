@@ -141,14 +141,20 @@ function S1Email({ prefill, data }: { prefill?: Prefill; data?: Record<string, s
 
 function S3Termo({ data }: { data?: Record<string, string> }) {
   const d = useContext(DictCtx)
+  const hidden = useContext(HiddenCtx)
+  // Filtra antes de numerar, pra não deixar buraco na numeração quando a
+  // escola esconde um item específico (ex: pular direto de "8." pra "9.").
+  const visibleTerms = d.s3.terms
+    .map((term, i) => ({ term, key: `termo_${i + 1}` }))
+    .filter(({ key }) => !hidden.has(`s3.${key}`))
   return (
     <div className="space-y-5">
       <SectionTitle number={d.s3.section} title={d.s3.title} />
       <div className="space-y-2">
-        {d.s3.terms.map((term, i) => (
-          <label key={i} className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 hover:border-indigo-200 cursor-pointer">
-            <input type="checkbox" name={`termo_${i + 1}`} value="sim"
-              defaultChecked={data?.[`termo_${i + 1}`] === 'sim'} required
+        {visibleTerms.map(({ term, key }, i) => (
+          <label key={key} className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 hover:border-indigo-200 cursor-pointer">
+            <input type="checkbox" name={key} value="sim"
+              defaultChecked={data?.[key] === 'sim'} required
               className="mt-0.5 accent-indigo-600 flex-shrink-0" />
             <span className="text-sm text-gray-700">{i + 1}. {term}</span>
           </label>
