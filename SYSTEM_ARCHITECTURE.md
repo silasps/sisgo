@@ -394,6 +394,35 @@ qualquer usuário logado) · `hospedagem` (quartos/camas, agenda, **lavanderia**
   arquivo na visualização da inscrição por URL assinada (1h). Escolas sem
   `payment_info` configurado não passam por essa tela — comportamento
   idêntico ao de antes (envia direto).
+  - **24 de agosto — bug real, achado investigando "inscrições não estão
+    chegando" no Seminário de Hospitalidade:** `awaitingPayment` (o que
+    decide se `PaymentGateScreen` aparece) era só `useState(false)` — client
+    state, não persistido em lugar nenhum. Quem terminava a última seção do
+    formulário, entrava na tela de pagamento e depois perdia a conexão,
+    fechava a aba ou tinha o navegador recarregado em segundo plano (comum
+    em celular) voltava, ao reabrir o mesmo link, pra ÚLTIMA SEÇÃO do
+    formulário (já toda preenchida) em vez da tela de pagamento — confuso o
+    bastante pra a pessoa desistir sem entender que faltava um passo.
+    **Confirmado em produção:** duas candidatas reais (Suelen Waltrick,
+    Micheli Karal Tondin) preencheram o formulário inteiro até a Seção 16
+    (aceite final, todos os checkboxes marcados) mas nunca tiveram
+    `form_data.payment_receipt` nem `enviarFormulario` chamado —
+    `school_applications.status` ficou em `'rascunho'` pra sempre, então
+    nunca vira uma `school_interest_forms`/aparece em `/inscricoes` (só é
+    criada dentro de `enviarFormulario`). Corrigido inicializando
+    `awaitingPayment` a partir do estado salvo: se `payment_info` existe,
+    não tem `form_data.payment_receipt` ainda, e `current_section` já é a
+    última seção visível, a tela de pagamento aparece direto ao reabrir o
+    link — sem precisar preencher nada de novo. Os links dessas duas
+    candidatas ainda são válidos (expiram só em setembro), então elas
+    conseguem terminar reabrindo o mesmo link, sem reenviar nada.
+  - **Observação separada, não corrigida ainda:** a rota pública do link
+    único de matrícula (`/escola/{schoolSlug}/turma/{classId}/matricula`)
+    cria uma `school_applications` nova a CADA acesso, sem distinguir
+    visita real de crawler de preview de link (WhatsApp/Telegram/etc. —
+    comuns quando o líder compartilha o link em grupo). No caso do
+    Seminário de Hospitalidade isso gerou ~64 rascunhos travados na Seção 1
+    (nunca preenchidos) — não afeta candidatos reais, só suja o banco.
 - **Toggles de campo da seção 5 não faziam nada — bug real, corrigido:**
   a tela de configuração (`escolas/[id]/formulario/page.tsx`) sempre
   listou `estado_civil`, `servico_militar`, `rg`, `cpf`, `passaporte`,

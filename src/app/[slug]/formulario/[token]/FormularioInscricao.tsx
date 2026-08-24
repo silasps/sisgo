@@ -1229,7 +1229,6 @@ export function FormularioInscricao({
   const [current, setCurrent] = useState(initialSection)
   const [saving, setSaving] = useState(false)
   const [submitted, setSubmitted] = useState(false)
-  const [awaitingPayment, setAwaitingPayment] = useState(false)
   const [error, setError] = useState('')
   const formRef = useRef<HTMLFormElement>(null)
 
@@ -1264,6 +1263,18 @@ export function FormularioInscricao({
   ]
 
   const visibleSections = sections.filter(s => !hiddenSet.has(`s${s.id}.oculto`))
+
+  // Se a pessoa já preencheu até a última seção mas nunca terminou de anexar
+  // o comprovante (fechou a aba, perdeu conexão, o navegador recarregou a
+  // página em segundo plano...), reabrir o mesmo link deve voltar direto pra
+  // tela de pagamento — não pra última seção do formulário de novo, que já
+  // está toda preenchida e só confunde quem já passou por ali sem entender
+  // que falta um passo.
+  const lastSectionId = visibleSections[visibleSections.length - 1]?.id
+  const [awaitingPayment, setAwaitingPayment] = useState(
+    !!paymentInfo && !(initialData as Record<string, unknown> | undefined)?.payment_receipt
+      && !!lastSectionId && initialSection >= lastSectionId
+  )
 
   if (printMode) {
     return (
