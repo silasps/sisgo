@@ -2,6 +2,8 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { headers } from 'next/headers'
+import { basicImageSanity } from '@/lib/documents/basicImageSanity'
+import { classifyDocument, type DocumentKind } from '@/lib/documents/classifyDocument'
 
 const EDITABLE_SECTIONS = new Set([1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16])
 
@@ -162,6 +164,12 @@ export async function anexarComprovante(slug: string, token: string, formData: F
   if (!RECEIPT_TYPES[file.type]) return { error: 'Envie uma imagem (JPG, PNG ou WebP) ou PDF.' }
   if (file.size > 10 * 1024 * 1024) return { error: 'O arquivo deve ter no máximo 10 MB.' }
 
+  const fileBuffer = Buffer.from(await file.arrayBuffer())
+  const sanity = await basicImageSanity(fileBuffer, file.type)
+  if (!sanity.valid) return { error: sanity.reason }
+  const classification = await classifyDocument(fileBuffer, file.type, 'comprovante_pagamento')
+  if (!classification.valid) return { error: classification.reason ?? 'Essa imagem não parece um comprovante de pagamento.' }
+
   const sb = createAdminClient()
   const { data: app } = await sb
     .from('school_applications')
@@ -178,7 +186,7 @@ export async function anexarComprovante(slug: string, token: string, formData: F
   const existingData = (app.form_data as Record<string, unknown>) ?? {}
   const previous = existingData.payment_receipt as { path?: string } | undefined
   const path = `${app.organization_id}/${app.id}/comprovante-${Date.now()}.${RECEIPT_TYPES[file.type]}`
-  const { error: uploadError } = await sb.storage.from('payment-receipts').upload(path, file, {
+  const { error: uploadError } = await sb.storage.from('payment-receipts').upload(path, fileBuffer, {
     contentType: file.type,
     upsert: false,
   })
@@ -198,6 +206,13 @@ export async function anexarComprovante(slug: string, token: string, formData: F
 }
 
 const DOCUMENT_KEYS = ['doc_foto', 'doc_rg_frente', 'doc_rg_verso', 'doc_cpf', 'doc_passaporte'] as const
+const DOCUMENT_KIND_BY_KEY: Record<typeof DOCUMENT_KEYS[number], DocumentKind> = {
+  doc_foto: 'foto',
+  doc_rg_frente: 'rg_frente',
+  doc_rg_verso: 'rg_verso',
+  doc_cpf: 'cpf',
+  doc_passaporte: 'passaporte',
+}
 const DOCUMENT_TYPES: Record<string, string> = {
   'application/pdf': 'pdf',
   'image/jpeg': 'jpg',
@@ -227,8 +242,14 @@ export async function anexarDocumentos(slug: string, token: string, formData: Fo
     if (!DOCUMENT_TYPES[file.type]) return { error: 'Envie imagens (JPG, PNG ou WebP) ou PDF nos documentos.' }
     if (file.size > 10 * 1024 * 1024) return { error: 'Cada arquivo deve ter no máximo 10 MB.' }
 
+    const fileBuffer = Buffer.from(await file.arrayBuffer())
+    const sanity = await basicImageSanity(fileBuffer, file.type)
+    if (!sanity.valid) return { error: sanity.reason }
+    const classification = await classifyDocument(fileBuffer, file.type, DOCUMENT_KIND_BY_KEY[key])
+    if (!classification.valid) return { error: classification.reason ?? `A imagem enviada não parece ser o documento pedido ("${key}").` }
+
     const path = `${app.organization_id}/${app.id}/${key}-${Date.now()}.${DOCUMENT_TYPES[file.type]}`
-    const { error: uploadError } = await sb.storage.from('application-documents').upload(path, file, {
+    const { error: uploadError } = await sb.storage.from('application-documents').upload(path, fileBuffer, {
       contentType: file.type,
       upsert: false,
     })
