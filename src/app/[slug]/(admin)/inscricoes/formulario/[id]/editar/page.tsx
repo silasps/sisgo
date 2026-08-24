@@ -256,8 +256,8 @@ export default async function FormularioEditorPage({ params }: Props) {
 
   const escola = app.schools as unknown as { form_config: { payment_info?: string } | null } | null
   const paymentInfo = escola?.form_config?.payment_info ?? null
-  const s15 = (app.form_data as Record<string, unknown> | null)?.s15 as Record<string, { name?: string }> | undefined
-  const paymentReceipt = (app.form_data as Record<string, unknown> | null)?.payment_receipt as { name?: string } | undefined
+  const s15 = (app.form_data as Record<string, unknown> | null)?.s15 as Record<string, { path?: string; name?: string; type?: string }> | undefined
+  const paymentReceipt = (app.form_data as Record<string, unknown> | null)?.payment_receipt as { path?: string; name?: string; type?: string } | undefined
 
   const DOCUMENT_UPLOADS = [
     { key: 'doc_foto', label: 'Foto do rosto' },
@@ -266,6 +266,24 @@ export default async function FormularioEditorPage({ params }: Props) {
     { key: 'doc_cpf', label: 'CPF' },
     { key: 'doc_passaporte', label: 'Passaporte' },
   ]
+
+  const documentEntries = await Promise.all(
+    DOCUMENT_UPLOADS.map(async doc => {
+      const meta = s15?.[doc.key]
+      let url: string | null = null
+      if (meta?.path) {
+        const { data } = await sb.storage.from('application-documents').createSignedUrl(meta.path, 60 * 60)
+        url = data?.signedUrl ?? null
+      }
+      return { ...doc, meta, url }
+    })
+  )
+
+  let paymentReceiptUrl: string | null = null
+  if (paymentReceipt?.path) {
+    const { data } = await sb.storage.from('payment-receipts').createSignedUrl(paymentReceipt.path, 60 * 60)
+    paymentReceiptUrl = data?.signedUrl ?? null
+  }
 
   async function salvar(fd: FormData) {
     'use server'
@@ -345,11 +363,13 @@ export default async function FormularioEditorPage({ params }: Props) {
             <p className="text-xs text-gray-400 -mt-1 mb-2">
               Anexe (ou substitua) direto aqui caso o candidato não tenha conseguido enviar pelo próprio formulário.
             </p>
-            {DOCUMENT_UPLOADS.map(doc => (
+            {documentEntries.map(doc => (
               <AdminFileUpload
                 key={doc.key}
                 label={doc.label}
-                currentName={s15?.[doc.key]?.name ?? null}
+                currentName={doc.meta?.name ?? null}
+                currentUrl={doc.url}
+                currentType={doc.meta?.type ?? null}
                 onUpload={anexarDocumentoAdmin.bind(null, { slug, organizationId: app.organization_id, applicationId: id, key: doc.key })}
               />
             ))}
@@ -357,6 +377,8 @@ export default async function FormularioEditorPage({ params }: Props) {
               <AdminFileUpload
                 label="Comprovante de pagamento"
                 currentName={paymentReceipt?.name ?? null}
+                currentUrl={paymentReceiptUrl}
+                currentType={paymentReceipt?.type ?? null}
                 onUpload={anexarComprovanteAdmin.bind(null, { slug, organizationId: app.organization_id, applicationId: id })}
               />
             )}
