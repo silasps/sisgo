@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { getRolePreview } from '@/lib/role-preview'
+import { AdminFileUpload } from './AdminFileUpload'
+import { anexarDocumentoAdmin, anexarComprovanteAdmin } from './actions'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
@@ -238,7 +240,7 @@ export default async function FormularioEditorPage({ params }: Props) {
 
   const { data: app } = await sb
     .from('school_applications')
-    .select('id, status, form_data, organization_id, school_interest_forms(full_name)')
+    .select('id, status, form_data, organization_id, school_interest_forms(full_name), schools(form_config)')
     .eq('id', id)
     .eq('organization_id', org.id)
     .single()
@@ -251,6 +253,19 @@ export default async function FormularioEditorPage({ params }: Props) {
   function get(section: string, field: string) {
     return formData[section]?.[field] ?? ''
   }
+
+  const escola = app.schools as unknown as { form_config: { payment_info?: string } | null } | null
+  const paymentInfo = escola?.form_config?.payment_info ?? null
+  const s15 = (app.form_data as Record<string, unknown> | null)?.s15 as Record<string, { name?: string }> | undefined
+  const paymentReceipt = (app.form_data as Record<string, unknown> | null)?.payment_receipt as { name?: string } | undefined
+
+  const DOCUMENT_UPLOADS = [
+    { key: 'doc_foto', label: 'Foto do rosto' },
+    { key: 'doc_rg_frente', label: 'RG — Frente' },
+    { key: 'doc_rg_verso', label: 'RG — Verso' },
+    { key: 'doc_cpf', label: 'CPF' },
+    { key: 'doc_passaporte', label: 'Passaporte' },
+  ]
 
   async function salvar(fd: FormData) {
     'use server'
@@ -317,7 +332,37 @@ export default async function FormularioEditorPage({ params }: Props) {
         </div>
       </div>
 
-      <main className="p-4 md:p-6 max-w-3xl mx-auto">
+      <main className="p-4 md:p-6 max-w-3xl mx-auto space-y-4">
+
+        {/* Documentos e comprovante — fora do <form> de texto (upload é
+            enviado na hora, por action própria, não no "Salvar formulário") */}
+        <details className="group bg-white rounded-xl border border-gray-200 overflow-hidden" open>
+          <summary className="flex items-center justify-between px-5 py-4 cursor-pointer select-none list-none hover:bg-gray-50">
+            <h3 className="font-semibold text-gray-900 text-sm">Documentos</h3>
+            <span className="text-gray-400 text-xs transition-transform group-open:rotate-180">▼</span>
+          </summary>
+          <div className="px-5 pb-5 border-t border-gray-100 pt-4 space-y-2">
+            <p className="text-xs text-gray-400 -mt-1 mb-2">
+              Anexe (ou substitua) direto aqui caso o candidato não tenha conseguido enviar pelo próprio formulário.
+            </p>
+            {DOCUMENT_UPLOADS.map(doc => (
+              <AdminFileUpload
+                key={doc.key}
+                label={doc.label}
+                currentName={s15?.[doc.key]?.name ?? null}
+                onUpload={anexarDocumentoAdmin.bind(null, { slug, organizationId: app.organization_id, applicationId: id, key: doc.key })}
+              />
+            ))}
+            {paymentInfo && (
+              <AdminFileUpload
+                label="Comprovante de pagamento"
+                currentName={paymentReceipt?.name ?? null}
+                onUpload={anexarComprovanteAdmin.bind(null, { slug, organizationId: app.organization_id, applicationId: id })}
+              />
+            )}
+          </div>
+        </details>
+
         <form action={salvar} className="space-y-4">
 
           {SECTION_FIELDS.map(section => (
