@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getRolePreview } from '@/lib/role-preview'
 import { ReferenceModal } from './ReferenceModal'
+import { IncompleteFormLinkCard } from './IncompleteFormLinkCard'
 import { Pencil, FileText, ReceiptText, ImageIcon } from 'lucide-react'
 import { PipelineStepper, stagesFromFlags } from '@/components/inscricoes/PipelineStepper'
 import { AvancarEtapaControl, AdvanceHistoryList } from '@/components/inscricoes/AvancarEtapaControl'
@@ -304,10 +305,23 @@ export default async function FormularioViewerPage({ params }: Props) {
   const formData = (app.form_data as Record<string, unknown>) ?? {}
   const isExterno = (formData as Record<string, unknown>).source === 'externo'
     || (Object.keys(formData).every(k => ['source', 'prefill'].includes(k)))
-  const escola = app.schools as unknown as { name: string; form_config: { hidden_fields?: string[] } | null } | null
+  const escola = app.schools as unknown as { name: string; form_config: { hidden_fields?: string[]; payment_info?: string } | null } | null
   const hiddenFieldsSet = new Set(escola?.form_config?.hidden_fields ?? [])
   const showPastorRef = !hiddenFieldsSet.has('s8.pastor_bloco')
   const showAmigoRef = !hiddenFieldsSet.has('s9.oculto')
+  const schoolPaymentInfo = escola?.form_config?.payment_info ?? null
+
+  // Formulário "incompleto": ou nunca chegou a ser enviado (ainda rascunho —
+  // inclui os casos criados manualmente pra recuperar candidatos presos na
+  // tela de pagamento, ver SYSTEM_ARCHITECTURE.md 24/08), ou foi enviado mas
+  // a escola exige comprovante de pagamento e ele nunca foi anexado. Nos dois
+  // casos o líder precisa poder reenviar o link pra pessoa terminar.
+  let incompleteReason: string | null = null
+  if (app.status === 'rascunho') {
+    incompleteReason = 'O formulário ainda não foi enviado — a pessoa parou em algum ponto do preenchimento.'
+  } else if (schoolPaymentInfo && !(formData.payment_receipt as { path?: string } | undefined)?.path) {
+    incompleteReason = 'O formulário foi preenchido, mas o comprovante de pagamento ainda não foi anexado.'
+  }
   const turma = app.school_classes as unknown as { name: string } | null
   const preform = app.school_interest_forms as unknown as { full_name?: string; email?: string; phone?: string } | null
   // Nome mudou de seção (s5 → s1) numa correção posterior — mantém o fallback
@@ -574,6 +588,15 @@ export default async function FormularioViewerPage({ params }: Props) {
             </div>
           )}
         </div>
+
+        {incompleteReason && (
+          <IncompleteFormLinkCard
+            slug={slug}
+            organizationId={app.organization_id}
+            applicationId={id}
+            reason={incompleteReason}
+          />
+        )}
 
       </main>
     </>

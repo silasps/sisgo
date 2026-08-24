@@ -93,6 +93,41 @@ export async function solicitarHospedagemAluno(params: {
   revalidatePath(`/${params.slug}/pendentes`)
 }
 
+// Devolve o link do formulário pro líder reenviar — se o token ainda for
+// válido, devolve o mesmo (o formulário já preenchido continua lá, a pessoa
+// só termina de onde parou); se expirou, gera um novo token/prazo na mesma
+// school_applications, sem apagar nada do que já foi respondido.
+export async function reenviarLinkFormulario(params: {
+  slug: string
+  organizationId: string
+  applicationId: string
+}) {
+  await assertCanRequestHospedagem(params.organizationId)
+  const sb = createAdminClient()
+
+  const { data: app } = await sb
+    .from('school_applications')
+    .select('id, token, token_expires_at')
+    .eq('id', params.applicationId)
+    .eq('organization_id', params.organizationId)
+    .single()
+  if (!app) throw new Error('Inscrição não encontrada.')
+
+  if (new Date(app.token_expires_at) > new Date()) {
+    return { token: app.token }
+  }
+
+  const { randomBytes } = await import('crypto')
+  const token = randomBytes(32).toString('hex')
+  const tokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+
+  await sb.from('school_applications')
+    .update({ token, token_expires_at: tokenExpiresAt })
+    .eq('id', app.id)
+
+  return { token }
+}
+
 export async function avancarEtapaAluno(params: {
   applicationId: string
   organizationId: string
