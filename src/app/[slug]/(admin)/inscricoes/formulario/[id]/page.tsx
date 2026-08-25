@@ -5,7 +5,8 @@ import Link from 'next/link'
 import { getRolePreview } from '@/lib/role-preview'
 import { ReferenceModal } from './ReferenceModal'
 import { IncompleteFormLinkCard } from './IncompleteFormLinkCard'
-import { Pencil, FileText, ReceiptText, ImageIcon } from 'lucide-react'
+import { DocumentPreviewGrid } from './DocumentPreviewGrid'
+import { Pencil, FileText, ReceiptText } from 'lucide-react'
 import { PipelineStepper, stagesFromFlags } from '@/components/inscricoes/PipelineStepper'
 import { AvancarEtapaControl, AdvanceHistoryList } from '@/components/inscricoes/AvancarEtapaControl'
 import { getStageAdvances, resolveAdvancerNames } from '@/lib/pipelineStageAdvance'
@@ -479,28 +480,11 @@ export default async function FormularioViewerPage({ params }: Props) {
             {documentEntries.length > 0 && (
               <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
                 <p className="text-sm font-semibold text-gray-900 mb-2.5">Documentos enviados</p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {documentEntries.map(({ key, label, doc, url }) => {
-                    const isImage = doc.type?.startsWith('image/')
-                    return (
-                      <a key={key} href={url ?? '#'} target="_blank" rel="noopener noreferrer"
-                        className={`group rounded-lg border border-gray-200 overflow-hidden hover:border-indigo-300 transition-colors ${!url ? 'pointer-events-none opacity-60' : ''}`}>
-                        {isImage && url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={url} alt={label} className="h-24 w-full object-cover bg-gray-50" />
-                        ) : (
-                          <div className="h-24 w-full flex items-center justify-center bg-gray-50">
-                            <FileText className="size-8 text-gray-400" />
-                          </div>
-                        )}
-                        <div className="px-2 py-1.5 flex items-center gap-1.5">
-                          {isImage ? <ImageIcon className="size-3 shrink-0 text-gray-400" /> : <FileText className="size-3 shrink-0 text-gray-400" />}
-                          <p className="truncate text-xs font-medium text-gray-700 group-hover:text-indigo-700">{label}</p>
-                        </div>
-                      </a>
-                    )
-                  })}
-                </div>
+                <DocumentPreviewGrid
+                  documents={documentEntries.map(({ key, label, doc, url }) => ({
+                    key, label, url, isImage: !!doc.type?.startsWith('image/'),
+                  }))}
+                />
               </div>
             )}
 
