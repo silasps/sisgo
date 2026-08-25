@@ -451,6 +451,29 @@ qualquer usuário logado) · `hospedagem` (quartos/camas, agenda, **lavanderia**
     `editar/actions.ts` novo (`anexarDocumentoObreiroAdmin`, grava sempre
     em `form_data.s10` — a seção que sempre existe, ao contrário da 03
     que só mostra certidão quando casado) e a seção "Documentos" na tela.
+  - **25 de agosto — lista de `/inscricoes` agrupada por escola/ministério
+    e turma** (`InscricoesList.tsx`): antes era uma sequência única
+    ordenada por data — com mais de uma turma aberta na mesma escola
+    (ex.: DTS + Seminário de Hospitalidade), ficava difícil saber de onde
+    vinha cada inscrição sem abrir uma por uma. Os itens já filtrados
+    (abas Todas/Alunos/Obreiros + etapa + busca continuam existindo,
+    filtrando antes do agrupamento) passam por duas camadas de `Map`:
+    primeiro por `schoolId` ou, na falta dele, `ministryId` (obreiro pode
+    estar vinculado a um ou outro); dentro de cada grupo, por `classId`
+    — só quando existe (obreiro nunca tem turma, cai direto sem esse
+    nível; aluno sem turma ainda vai pra um bucket "Outras inscrições"
+    ao lado das turmas de verdade, só quando o grupo também tem alguma
+    turma). Sem escola/ministério (aguardando encaminhamento) cai num
+    grupo final "Sem escola/ministério vinculado". Cada grupo é um
+    `<details open>` recolhível (mesmo padrão do Histórico de recusas
+    logo abaixo), usando *named groups* do Tailwind (`group/escola`,
+    `group/turma`) pra cada nível animar sua própria seta sem os dois
+    girarem juntos — o unnamed `group` do Tailwind casa com qualquer
+    ancestral, não só o mais próximo. O corpo de renderização de cada
+    item (grande — steppers, formulários, ações) não mudou nada por
+    dentro, só virou uma função (`renderItem`) chamada de dentro de cada
+    grupo/subgrupo em vez de inline num `.map()` só, pra poder ser
+    reaproveitado nos três pontos onde um item pode aparecer agora.
 - **Toggles de campo da seção 5 não faziam nada — bug real, corrigido:**
   a tela de configuração (`escolas/[id]/formulario/page.tsx`) sempre
   listou `estado_civil`, `servico_militar`, `rg`, `cpf`, `passaporte`,
