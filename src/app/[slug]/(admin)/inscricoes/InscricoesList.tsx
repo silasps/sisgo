@@ -110,6 +110,8 @@ type Props = {
   encaminharParaEscola: (formData: FormData) => Promise<void>
   encaminharParaMinisterio: (formData: FormData) => Promise<void>
   reencaminharObreiro: (formData: FormData) => Promise<void>
+  solicitarTransferenciaEscola: (formData: FormData) => Promise<{ error?: string; success?: boolean }>
+  solicitarTransferenciaObreiro: (formData: FormData) => Promise<{ error?: string; success?: boolean }>
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -405,6 +407,64 @@ function ActionModalButton({ label, subtitle, tone = 'violet', children }: {
   )
 }
 
+// Formulário de SOLICITAR (não executar direto) — usado por líder de ETED/
+// ministério dentro dos mesmos modais de encaminhar que o DH usa, mas em vez
+// de mudar escola/ministério na hora, cria uma service_requests pro DH
+// decidir em /pendentes. Precisa de feedback próprio (useTransition) porque,
+// diferente da action de encaminhar direto do DH (que faz redirect), essa só
+// devolve {success}/{error} — o modal continua aberto até a pessoa ver a
+// confirmação.
+function SolicitarTransferenciaForm({ action, hiddenFields, destinationField, motivoPlaceholder }: {
+  action: (formData: FormData) => Promise<{ error?: string; success?: boolean }>
+  hiddenFields: Record<string, string>
+  destinationField: ReactNode
+  motivoPlaceholder?: string
+}) {
+  const [done, setDone] = useState(false)
+  const [error, setError] = useState('')
+  const [pending, startTransition] = useTransition()
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const fd = new FormData(e.currentTarget)
+    setError('')
+    startTransition(async () => {
+      const result = await action(fd)
+      if (result?.error) setError(result.error)
+      else setDone(true)
+    })
+  }
+
+  if (done) {
+    return (
+      <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2.5">
+        ✓ Solicitação enviada — o DH vai revisar e decidir o encaminhamento.
+      </p>
+    )
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-2">
+      {Object.entries(hiddenFields).map(([name, value]) => (
+        <input key={name} type="hidden" name={name} value={value} />
+      ))}
+      {destinationField}
+      <textarea
+        name="motivo"
+        required
+        rows={3}
+        placeholder={motivoPlaceholder ?? 'Explique o motivo da transferência — o DH vai ler isso pra decidir'}
+        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-300"
+      />
+      {error && <p className="text-xs text-red-600">{error}</p>}
+      <button type="submit" disabled={pending}
+        className="w-full text-sm px-3 py-2.5 bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-60 rounded-xl transition-colors font-semibold">
+        {pending ? 'Enviando…' : 'Solicitar transferência'}
+      </button>
+    </form>
+  )
+}
+
 export function InscricoesList({
   items,
   historico,
@@ -439,6 +499,8 @@ export function InscricoesList({
   encaminharParaEscola,
   encaminharParaMinisterio,
   reencaminharObreiro,
+  solicitarTransferenciaEscola,
+  solicitarTransferenciaObreiro,
 }: Props) {
   const [tab, setTab] = useState(initialTab)
   const [etapa, setEtapa] = useState(initialEtapa)
@@ -827,29 +889,51 @@ export function InscricoesList({
                                 </form>
                               </ActionModalButton>
                             </div>
-                            {canWrite && (
+                            {canWriteObreiro && (
                               <div className="border-t border-gray-100 pt-1.5">
-                                <ActionModalButton label="Encaminhar para outro ministério/escola">
-                                  <form action={reencaminharObreiro} className="space-y-2">
-                                    <input type="hidden" name="staff_application_id" value={item.id} />
-                                    <select name="destination" required defaultValue="" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-violet-300">
-                                      <option value="" disabled>Selecione o destino</option>
-                                      {allMinistries.length > 0 && (
-                                        <optgroup label="Ministérios">
-                                          {allMinistries.map(m => <option key={m.id} value={`ministry:${m.id}`}>{m.name}</option>)}
-                                        </optgroup>
-                                      )}
-                                      {allSchools.length > 0 && (
-                                        <optgroup label="Escolas">
-                                          {allSchools.map(s => <option key={s.id} value={`school:${s.id}`}>{s.name}</option>)}
-                                        </optgroup>
-                                      )}
-                                    </select>
-                                    <p className="text-xs text-amber-700">Confira se pendências de hospedagem/antecedentes ligadas ao vínculo atual ainda fazem sentido depois de mudar.</p>
-                                    <button type="submit" className="w-full text-sm px-3 py-2.5 bg-violet-600 text-white hover:bg-violet-700 rounded-xl transition-colors font-semibold">
-                                      Encaminhar
-                                    </button>
-                                  </form>
+                                <ActionModalButton label={canWrite ? 'Encaminhar para outro ministério/escola' : 'Solicitar transferência de ministério/escola'}>
+                                  {canWrite ? (
+                                    <form action={reencaminharObreiro} className="space-y-2">
+                                      <input type="hidden" name="staff_application_id" value={item.id} />
+                                      <select name="destination" required defaultValue="" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-violet-300">
+                                        <option value="" disabled>Selecione o destino</option>
+                                        {allMinistries.length > 0 && (
+                                          <optgroup label="Ministérios">
+                                            {allMinistries.map(m => <option key={m.id} value={`ministry:${m.id}`}>{m.name}</option>)}
+                                          </optgroup>
+                                        )}
+                                        {allSchools.length > 0 && (
+                                          <optgroup label="Escolas">
+                                            {allSchools.map(s => <option key={s.id} value={`school:${s.id}`}>{s.name}</option>)}
+                                          </optgroup>
+                                        )}
+                                      </select>
+                                      <p className="text-xs text-amber-700">Confira se pendências de hospedagem/antecedentes ligadas ao vínculo atual ainda fazem sentido depois de mudar.</p>
+                                      <button type="submit" className="w-full text-sm px-3 py-2.5 bg-violet-600 text-white hover:bg-violet-700 rounded-xl transition-colors font-semibold">
+                                        Encaminhar
+                                      </button>
+                                    </form>
+                                  ) : (
+                                    <SolicitarTransferenciaForm
+                                      action={solicitarTransferenciaObreiro}
+                                      hiddenFields={{ staff_application_id: item.id }}
+                                      destinationField={
+                                        <select name="destination" required defaultValue="" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-300">
+                                          <option value="" disabled>Transferir para qual ministério ou escola?</option>
+                                          {allMinistries.length > 0 && (
+                                            <optgroup label="Ministérios">
+                                              {allMinistries.map(m => <option key={m.id} value={`ministry:${m.id}`}>{m.name}</option>)}
+                                            </optgroup>
+                                          )}
+                                          {allSchools.length > 0 && (
+                                            <optgroup label="Escolas">
+                                              {allSchools.map(s => <option key={s.id} value={`school:${s.id}`}>{s.name}</option>)}
+                                            </optgroup>
+                                          )}
+                                        </select>
+                                      }
+                                    />
+                                  )}
                                 </ActionModalButton>
                               </div>
                             )}
@@ -956,46 +1040,89 @@ export function InscricoesList({
 
                       <div className="col-span-2 h-px bg-gray-100" />
 
-                      {canWrite && item.tipo === 'pre_inscricao' && (
-                        <ActionModalButton label={item.schoolId ? 'Encaminhar para outra escola' : 'Sem preferência — encaminhar para escola'}>
-                          <form action={encaminharParaEscola} className="space-y-2">
-                            <input type="hidden" name="interest_id" value={item.id} />
-                            {item.applicationId && (
-                              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                                ⚠ Já existe um formulário enviado pra {item.escola ?? 'a escola atual'} — ele não será apagado, mas fica vinculado a ela. Envie um novo formulário pra escola nova depois de encaminhar.
-                              </p>
-                            )}
-                            <select name="school_id" required defaultValue="" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300">
-                              <option value="" disabled>Encaminhar para qual escola?</option>
-                              {allSchools.filter(s => s.id !== item.schoolId).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                            </select>
-                            <button type="submit" className="w-full text-sm px-3 py-2.5 bg-blue-600 text-white hover:bg-blue-700 rounded-xl transition-colors font-semibold">
-                              Encaminhar para escola
-                            </button>
-                          </form>
+                      {(canWrite || canWriteEted) && item.tipo === 'pre_inscricao' && (
+                        <ActionModalButton label={
+                          canWrite
+                            ? (item.schoolId ? 'Encaminhar para outra escola' : 'Sem preferência — encaminhar para escola')
+                            : 'Solicitar transferência de escola'
+                        }>
+                          {canWrite ? (
+                            <form action={encaminharParaEscola} className="space-y-2">
+                              <input type="hidden" name="interest_id" value={item.id} />
+                              {item.applicationId && (
+                                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                                  ⚠ Já existe um formulário enviado pra {item.escola ?? 'a escola atual'} — ele não será apagado, mas fica vinculado a ela. Envie um novo formulário pra escola nova depois de encaminhar.
+                                </p>
+                              )}
+                              <select name="school_id" required defaultValue="" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300">
+                                <option value="" disabled>Encaminhar para qual escola?</option>
+                                {allSchools.filter(s => s.id !== item.schoolId).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                              </select>
+                              <button type="submit" className="w-full text-sm px-3 py-2.5 bg-blue-600 text-white hover:bg-blue-700 rounded-xl transition-colors font-semibold">
+                                Encaminhar para escola
+                              </button>
+                            </form>
+                          ) : (
+                            <SolicitarTransferenciaForm
+                              action={solicitarTransferenciaEscola}
+                              hiddenFields={{ interest_id: item.id }}
+                              destinationField={
+                                <select name="school_id" required defaultValue="" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-300">
+                                  <option value="" disabled>Transferir para qual escola?</option>
+                                  {allSchools.filter(s => s.id !== item.schoolId).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                </select>
+                              }
+                            />
+                          )}
                         </ActionModalButton>
                       )}
-                      {canWrite && item.tipo === 'pre_inscricao_obreiro' && (
-                        <ActionModalButton label={(item.ministryId || item.schoolId) ? 'Encaminhar para outro ministério/escola' : 'Sem preferência — encaminhar'}>
-                          <form action={encaminharParaMinisterio} className="space-y-2">
-                            <input type="hidden" name="interest_id" value={item.id} />
-                            <select name="destination" required defaultValue="" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-violet-300">
-                              <option value="" disabled>Encaminhar para qual ministério ou escola?</option>
-                              {allMinistries.length > 0 && (
-                                <optgroup label="Ministérios">
-                                  {allMinistries.map(m => <option key={m.id} value={`ministry:${m.id}`}>{m.name}</option>)}
-                                </optgroup>
-                              )}
-                              {allSchools.length > 0 && (
-                                <optgroup label="Escolas">
-                                  {allSchools.map(s => <option key={s.id} value={`school:${s.id}`}>{s.name}</option>)}
-                                </optgroup>
-                              )}
-                            </select>
-                            <button type="submit" className="w-full text-sm px-3 py-2.5 bg-violet-600 text-white hover:bg-violet-700 rounded-xl transition-colors font-semibold">
-                              Encaminhar
-                            </button>
-                          </form>
+                      {canWriteObreiro && item.tipo === 'pre_inscricao_obreiro' && (
+                        <ActionModalButton label={
+                          canWrite
+                            ? ((item.ministryId || item.schoolId) ? 'Encaminhar para outro ministério/escola' : 'Sem preferência — encaminhar')
+                            : 'Solicitar transferência de ministério/escola'
+                        }>
+                          {canWrite ? (
+                            <form action={encaminharParaMinisterio} className="space-y-2">
+                              <input type="hidden" name="interest_id" value={item.id} />
+                              <select name="destination" required defaultValue="" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-violet-300">
+                                <option value="" disabled>Encaminhar para qual ministério ou escola?</option>
+                                {allMinistries.length > 0 && (
+                                  <optgroup label="Ministérios">
+                                    {allMinistries.map(m => <option key={m.id} value={`ministry:${m.id}`}>{m.name}</option>)}
+                                  </optgroup>
+                                )}
+                                {allSchools.length > 0 && (
+                                  <optgroup label="Escolas">
+                                    {allSchools.map(s => <option key={s.id} value={`school:${s.id}`}>{s.name}</option>)}
+                                  </optgroup>
+                                )}
+                              </select>
+                              <button type="submit" className="w-full text-sm px-3 py-2.5 bg-violet-600 text-white hover:bg-violet-700 rounded-xl transition-colors font-semibold">
+                                Encaminhar
+                              </button>
+                            </form>
+                          ) : (
+                            <SolicitarTransferenciaForm
+                              action={solicitarTransferenciaObreiro}
+                              hiddenFields={{ interest_id: item.id }}
+                              destinationField={
+                                <select name="destination" required defaultValue="" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-300">
+                                  <option value="" disabled>Transferir para qual ministério ou escola?</option>
+                                  {allMinistries.length > 0 && (
+                                    <optgroup label="Ministérios">
+                                      {allMinistries.map(m => <option key={m.id} value={`ministry:${m.id}`}>{m.name}</option>)}
+                                    </optgroup>
+                                  )}
+                                  {allSchools.length > 0 && (
+                                    <optgroup label="Escolas">
+                                      {allSchools.map(s => <option key={s.id} value={`school:${s.id}`}>{s.name}</option>)}
+                                    </optgroup>
+                                  )}
+                                </select>
+                              }
+                            />
+                          )}
                         </ActionModalButton>
                       )}
 

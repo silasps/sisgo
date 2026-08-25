@@ -1114,7 +1114,6 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     const { redirect: redir } = await import('next/navigation')
     redir(`/${slug}/inscricoes?tab=obreiro&flash_success=${encodeURIComponent('Inscrição encaminhada.')}`)
   }
-
   // ── Queries ────────────────────────────────────────────────────────────────
 
   const [{ data: allSchoolsRaw }, { data: allMinistriesRaw }, { data: publicSchoolsRaw }, { data: publicMinistriesRaw }] = await Promise.all([
@@ -1127,6 +1126,122 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
   const allMinistries = (allMinistriesRaw ?? []) as Array<{ id: string; name: string }>
   const publicSchools = (publicSchoolsRaw ?? []).filter((s: { slug: string | null }) => s.slug) as Array<{ id: string; name: string; slug: string }>
   const publicMinistries = (publicMinistriesRaw ?? []).filter((m: { slug: string | null }) => m.slug) as Array<{ id: string; name: string; slug: string }>
+
+  // Líder de ETED/escola e líder de ministério não encaminham direto (só o
+  // DH faz isso) — eles SOLICITAM, via service_requests (mesma tabela já
+  // usada pra hospedagem), e o DH resolve depois em /pendentes usando o
+  // encaminhar que já existe. Mesmo nível de checagem de papel que
+  // assertCanRequestHospedagem já usa nos arquivos irmãos (só papel, sem
+  // verificar posse do item específico — createAdminClient ignora RLS, então
+  // sem isso qualquer usuário autenticado poderia forjar uma solicitação).
+  async function assertCanRequestTransfer(organizationId: string) {
+    const authClient = await createClient()
+    const { data: { user: actingUser } } = await authClient.auth.getUser()
+    if (!actingUser) throw new Error('unauthorized')
+    const { data: orgUsersRows } = await authClient
+      .from('organization_users')
+      .select('organization_id, roles(name)')
+      .eq('user_id', actingUser.id)
+      .eq('active', true)
+    const memberships = (orgUsersRows ?? []) as unknown as Array<{ organization_id: string | null; roles: { name: string } | null }>
+    const role = memberships.find(m => m.roles?.name === 'superadmin')?.roles?.name
+      ?? memberships.find(m => m.organization_id === organizationId)?.roles?.name
+      ?? ''
+    if (!['superadmin', 'admin_base', 'lider_base', 'dh', 'lider_eted', 'lider_ministerio'].includes(role)) throw new Error('forbidden')
+    return { userId: actingUser.id, role }
+  }
+
+  async function solicitarTransferenciaEscola(formData: FormData) {
+    'use server'
+    const { userId, role } = await assertCanRequestTransfer(orgId)
+    const { createAdminClient: adm } = await import('@/lib/supabase/admin')
+    const db = adm()
+    const interestId = formData.get('interest_id') as string
+    const schoolId = formData.get('school_id') as string
+    const motivo = ((formData.get('motivo') as string) || '').trim()
+    if (!interestId || !schoolId || !motivo) return { error: 'Preencha o destino e o motivo.' }
+
+    const { data: interestForm } = await db.from('school_interest_forms').select('full_name').eq('id', interestId).single()
+    const schoolName = allSchools.find(s => s.id === schoolId)?.name ?? 'escola selecionada'
+
+    const { data: existing } = await db.from('service_requests')
+      .select('id')
+      .eq('school_interest_form_id', interestId)
+      .eq('request_type', 'transferencia_aluno')
+      .in('status', ['pendente', 'em_analise'])
+      .maybeSingle()
+
+    const payload = {
+      organization_id: orgId,
+      requester_id: userId,
+      requester_role: role,
+      target_department: 'dh',
+      request_type: 'transferencia_aluno',
+      subject: `Transferência solicitada — ${interestForm?.full_name ?? 'candidato'}`,
+      description: `Motivo: ${motivo}\n\nEscola solicitada: ${schoolName}`,
+      school_interest_form_id: interestId,
+      status: 'pendente',
+    }
+    if (existing) await db.from('service_requests').update(payload).eq('id', existing.id)
+    else await db.from('service_requests').insert(payload)
+
+    const { revalidatePath: reval } = await import('next/cache')
+    reval(`/${slug}/inscricoes`)
+    return { success: true }
+  }
+
+  async function solicitarTransferenciaObreiro(formData: FormData) {
+    'use server'
+    const { userId, role } = await assertCanRequestTransfer(orgId)
+    const { createAdminClient: adm } = await import('@/lib/supabase/admin')
+    const db = adm()
+    const interestId = (formData.get('interest_id') as string) || null
+    const staffApplicationId = (formData.get('staff_application_id') as string) || null
+    const destination = (formData.get('destination') as string) || ''
+    const motivo = ((formData.get('motivo') as string) || '').trim()
+    const [destType, destId] = destination.includes(':') ? destination.split(':') : [null, null]
+    if ((!interestId && !staffApplicationId) || !destId || !motivo) return { error: 'Preencha o destino e o motivo.' }
+
+    const destName = destType === 'ministry'
+      ? allMinistries.find(m => m.id === destId)?.name
+      : allSchools.find(s => s.id === destId)?.name
+    const destLabel = destType === 'ministry' ? 'Ministério' : 'Escola'
+
+    let nome = 'candidato'
+    if (interestId) {
+      const { data } = await db.from('staff_interest_forms').select('full_name').eq('id', interestId).single()
+      nome = data?.full_name ?? nome
+    } else if (staffApplicationId) {
+      const { data } = await db.from('staff_applications').select('people(full_name)').eq('id', staffApplicationId).single()
+      nome = (data?.people as unknown as { full_name?: string } | null)?.full_name ?? nome
+    }
+
+    const { data: existing } = await db.from('service_requests')
+      .select('id')
+      .eq('request_type', 'transferencia_obreiro')
+      .in('status', ['pendente', 'em_analise'])
+      .match(interestId ? { staff_interest_form_id: interestId } : { staff_application_id: staffApplicationId as string })
+      .maybeSingle()
+
+    const payload = {
+      organization_id: orgId,
+      requester_id: userId,
+      requester_role: role,
+      target_department: 'dh',
+      request_type: 'transferencia_obreiro',
+      subject: `Transferência solicitada — ${nome}`,
+      description: `Motivo: ${motivo}\n\n${destLabel} solicitado(a): ${destName ?? 'destino selecionado'}`,
+      staff_interest_form_id: interestId,
+      staff_application_id: staffApplicationId,
+      status: 'pendente',
+    }
+    if (existing) await db.from('service_requests').update(payload).eq('id', existing.id)
+    else await db.from('service_requests').insert(payload)
+
+    const { revalidatePath: reval } = await import('next/cache')
+    reval(`/${slug}/inscricoes`)
+    return { success: true }
+  }
 
   const items: InscricaoItem[] = []
   const historico: HistoricoItem[] = []
@@ -1716,6 +1831,8 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           encaminharParaEscola={encaminharParaEscola}
           encaminharParaMinisterio={encaminharParaMinisterio}
           reencaminharObreiro={reencaminharObreiro}
+          solicitarTransferenciaEscola={solicitarTransferenciaEscola}
+          solicitarTransferenciaObreiro={solicitarTransferenciaObreiro}
         />
         </Suspense>
 
