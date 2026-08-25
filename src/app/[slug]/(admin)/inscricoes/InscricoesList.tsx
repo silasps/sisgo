@@ -375,20 +375,26 @@ function InformarChegadaButton(props: Parameters<typeof DataChegadaField>[0]) {
   )
 }
 
-// Botão que abre um modal com o formulário de encaminhamento — reaproveitado
-// pelos três casos (pré-inscrição de aluno, pré-inscrição de obreiro,
-// obreiro já convertido), em vez de um <select>/formulário sempre visível
-// ocupando espaço permanente no card.
-function EncaminharModalButton({ label, subtitle, children }: {
+const ACTION_BUTTON_TONES = {
+  violet: 'bg-violet-50 text-violet-700 hover:bg-violet-100 border-violet-200',
+  blue: 'bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200',
+}
+
+// Botão que abre um modal com um formulário dentro — reaproveitado sempre
+// que um formulário secundário (encaminhar, palavra ao obreiro, etc.)
+// ocuparia espaço permanente no card só de existir; assim fica escondido
+// atrás de um botão até a pessoa realmente precisar dele.
+function ActionModalButton({ label, subtitle, tone = 'violet', children }: {
   label: string
   subtitle?: string
+  tone?: keyof typeof ACTION_BUTTON_TONES
   children: ReactNode
 }) {
   const [open, setOpen] = useState(false)
   return (
     <div className="col-span-2">
       <button type="button" onClick={() => setOpen(true)}
-        className="w-full text-xs px-3 py-2 bg-violet-50 text-violet-700 hover:bg-violet-100 border border-violet-200 rounded-lg transition-colors font-medium">
+        className={`w-full text-xs px-3 py-2 border rounded-lg transition-colors font-medium ${ACTION_BUTTON_TONES[tone]}`}>
         {label}
       </button>
       <Modal open={open} onClose={() => setOpen(false)} title={label} subtitle={subtitle}>
@@ -800,26 +806,29 @@ export function InscricoesList({
                         <details className="col-span-2 text-xs">
                           <summary className="cursor-pointer text-gray-400 select-none py-1">Mais ações</summary>
                           <div className="mt-1.5 space-y-1.5">
-                            <form action={salvarPalavraLider} className="space-y-1.5 border-t border-gray-100 pt-1.5">
-                              <input type="hidden" name="id" value={item.id} />
-                              <p className="text-gray-500">Palavra sobre receber este obreiro (opcional)</p>
-                              <textarea
-                                name="leader_word"
-                                rows={2}
-                                placeholder="A palavra que Deus deu sobre receber esta pessoa, se houver..."
-                                className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-700"
-                              />
-                              <label className="flex items-start gap-2 text-gray-600">
-                                <input type="checkbox" name="leader_word_shared" className="mt-0.5" />
-                                Enviar esta palavra ao obreiro, se for aceito
-                              </label>
-                              <button type="submit" className="w-full text-xs px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg transition-colors font-semibold">
-                                Salvar palavra
-                              </button>
-                            </form>
+                            <div>
+                              <ActionModalButton label="Palavra sobre receber este obreiro" tone="blue">
+                                <form action={salvarPalavraLider} className="space-y-2">
+                                  <input type="hidden" name="id" value={item.id} />
+                                  <textarea
+                                    name="leader_word"
+                                    rows={3}
+                                    placeholder="A palavra que Deus deu sobre receber esta pessoa, se houver..."
+                                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                  />
+                                  <label className="flex items-start gap-2 text-sm text-gray-600">
+                                    <input type="checkbox" name="leader_word_shared" className="mt-0.5" />
+                                    Enviar esta palavra ao obreiro, se for aceito
+                                  </label>
+                                  <button type="submit" className="w-full text-sm px-3 py-2.5 bg-blue-600 text-white hover:bg-blue-700 rounded-xl transition-colors font-semibold">
+                                    Salvar palavra
+                                  </button>
+                                </form>
+                              </ActionModalButton>
+                            </div>
                             {canWrite && (
                               <div className="border-t border-gray-100 pt-1.5">
-                                <EncaminharModalButton label="Encaminhar para outro ministério/escola">
+                                <ActionModalButton label="Encaminhar para outro ministério/escola">
                                   <form action={reencaminharObreiro} className="space-y-2">
                                     <input type="hidden" name="staff_application_id" value={item.id} />
                                     <select name="destination" required defaultValue="" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-violet-300">
@@ -840,7 +849,7 @@ export function InscricoesList({
                                       Encaminhar
                                     </button>
                                   </form>
-                                </EncaminharModalButton>
+                                </ActionModalButton>
                               </div>
                             )}
                           </div>
@@ -947,7 +956,7 @@ export function InscricoesList({
                       <div className="col-span-2 h-px bg-gray-100" />
 
                       {canWrite && item.tipo === 'pre_inscricao' && (
-                        <EncaminharModalButton label={item.schoolId ? 'Encaminhar para outra escola' : 'Sem preferência — encaminhar para escola'}>
+                        <ActionModalButton label={item.schoolId ? 'Encaminhar para outra escola' : 'Sem preferência — encaminhar para escola'}>
                           <form action={encaminharParaEscola} className="space-y-2">
                             <input type="hidden" name="interest_id" value={item.id} />
                             {item.applicationId && (
@@ -963,10 +972,10 @@ export function InscricoesList({
                               Encaminhar para escola
                             </button>
                           </form>
-                        </EncaminharModalButton>
+                        </ActionModalButton>
                       )}
                       {canWrite && item.tipo === 'pre_inscricao_obreiro' && (
-                        <EncaminharModalButton label={(item.ministryId || item.schoolId) ? 'Encaminhar para outro ministério/escola' : 'Sem preferência — encaminhar'}>
+                        <ActionModalButton label={(item.ministryId || item.schoolId) ? 'Encaminhar para outro ministério/escola' : 'Sem preferência — encaminhar'}>
                           <form action={encaminharParaMinisterio} className="space-y-2">
                             <input type="hidden" name="interest_id" value={item.id} />
                             <select name="destination" required defaultValue="" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-violet-300">
@@ -986,7 +995,7 @@ export function InscricoesList({
                               Encaminhar
                             </button>
                           </form>
-                        </EncaminharModalButton>
+                        </ActionModalButton>
                       )}
 
                       {canWriteItem(item) && item.tipo === 'pre_inscricao' && item.applicationId && !finalizado && !item.hospedagemResolved && (
