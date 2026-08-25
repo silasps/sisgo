@@ -423,6 +423,34 @@ qualquer usuário logado) · `hospedagem` (quartos/camas, agenda, **lavanderia**
     comuns quando o líder compartilha o link em grupo). No caso do
     Seminário de Hospitalidade isso gerou ~64 rascunhos travados na Seção 1
     (nunca preenchidos) — não afeta candidatos reais, só suja o banco.
+  - **25 de agosto — mesmo padrão levado pro fluxo de obreiro
+    (`staff_applications`), de forma compartilhada em vez de duplicada:**
+    `DocumentPreviewGrid`/`AdminFileUpload`/`IncompleteFormLinkCard`
+    (já eram presentacionais, sem dependência de tabela) mudaram de
+    `inscricoes/formulario/[id]/` pra `src/components/inscricoes/`, ao
+    lado de `PipelineStepper`/`AvancarEtapaControl` que já eram
+    compartilhados entre escola e obreiro. `IncompleteFormLinkCard`
+    trocou o import direto de `reenviarLinkFormulario` (escola) por
+    injeção de dependência — recebe `onGenerateLink`/`formPathPrefix`
+    por prop, mesmo padrão que `AdminFileUpload.onUpload` já usava — e
+    `src/lib/inscricoes/resendLink.ts` (`getOrRegenerateToken`) extrai a
+    lógica de "devolve o token válido ou gera um novo" pra um helper só,
+    parametrizado por tabela (`school_applications`/`staff_applications`,
+    mesmo formato de `token`/`token_expires_at` nas duas); cada domínio
+    mantém sua própria checagem de papel (já eram diferentes). Do lado
+    obreiro: `salvarSecaoObreiroComArquivos` passa a validar cada
+    documento antes do upload (mesmo `basicImageSanity`/
+    `classifyDocument`, novo `DocumentKind` `certidao_casamento`); a
+    visualização (`inscricoes/formulario-obreiro/[id]/page.tsx`) trocou
+    o grid antigo (`<a target="_blank">`) pelo `DocumentPreviewGrid` e o
+    banner estático de "não preenchido" pelo card de reenvio de link de
+    verdade (só quando `status='rascunho'` — obreiro não tem conceito de
+    comprovante de pagamento, então a condição de "incompleto" é mais
+    simples que a de escola); a edição de obreiro (que nunca teve upload
+    de arquivo nenhum — a Seção 10 de documentos nem aparecia lá) ganhou
+    `editar/actions.ts` novo (`anexarDocumentoObreiroAdmin`, grava sempre
+    em `form_data.s10` — a seção que sempre existe, ao contrário da 03
+    que só mostra certidão quando casado) e a seção "Documentos" na tela.
 - **Toggles de campo da seção 5 não faziam nada — bug real, corrigido:**
   a tela de configuração (`escolas/[id]/formulario/page.tsx`) sempre
   listou `estado_civil`, `servico_militar`, `rg`, `cpf`, `passaporte`,
@@ -658,7 +686,7 @@ Autosserviço com pagamento por tempo. Cada máquina tem um relé Wi-Fi
 | Brevo (API REST v3, não SMTP) | E-mails transacionais (formulário de inscrição, verificação de e-mail da ETED) | `src/lib/email/sendFormEmail.ts` chama `POST https://api.brevo.com/v3/smtp/email` direto (nome do endpoint é do Brevo, mas é a API transacional, não SMTP). Domínio `centralmidiajocum.com.br` verificado — envio funcionando. Autenticação é por `BREVO_API_KEY` (`.env.local` local / env var na Vercel para produção — **duas cópias independentes**, atualizar as duas se a chave for regenerada no painel do Brevo). Se `sendFormEmail` começar a falhar com "Key not found", teste a chave direto: `curl -H "api-key: $BREVO_API_KEY" https://api.brevo.com/v3/account` — se der unauthorized, a chave foi revogada/regenerada no Brevo e precisa gerar uma nova (Configurações → Chaves SMTP e API → aba **"Chaves de API"**, não a de SMTP). E-mail suporta 3 idiomas (`src/lib/i18n/emails/`) — quem envia escolhe o idioma no modal de confirmação (`DisponibilizarFormularioButton`), que embute `?lang=xx` no link para o formulário abrir no mesmo idioma do e-mail; a página lê isso em `searchParams.lang` como `initialLang`. |
 | bible-api.com | Versículo do dia (início do aluno) | `src/lib/votd.ts` — usar sempre o endpoint de capítulo (`/data/almeida/{USFM}/{capítulo}`), **nunca** o de referência única (`/{livro} {cap}:{vers}?translation=almeida`), que retorna 404 falso-negativo para várias referências válidas na tradução "almeida"; cache de 12h evita o rate limit (429 após ~10 req/s) |
 | Site institucional | Consome `/api/public/[slug]/*` | projeto separado `jocumat-site` (Next 16 + Tailwind v4) |
-| Anthropic (Claude) — **desligada por padrão, custo zero** | Validação por IA de que a imagem anexada (foto, RG, CPF, passaporte, comprovante) é mesmo o documento pedido, não bloqueio automático de imagem errada só por script | `src/lib/documents/classifyDocument.ts` — só chama a API se `DOCUMENT_AI_VALIDATION=1` **e** `ANTHROPIC_API_KEY` estiverem setados; sem isso sempre aprova (`{valid: true}`), sem gastar nada. Usa `claude-haiku-4-5` (mais barato, suficiente pra essa classificação simples — ~US$0,002/imagem). Pra ligar: adicionar `ANTHROPIC_API_KEY` (console.anthropic.com) e `DOCUMENT_AI_VALIDATION=1` no `.env.local`/Vercel — nenhuma mudança de código necessária. Sempre roda antes (e independente) uma checagem 100% local e sem custo via `basicImageSanity.ts` (usa `sharp`, já dependência do projeto) — rejeita imagem corrompida, minúscula demais ou com proporção absurda pra um documento; não entende o *conteúdo* da imagem, só descarta os casos mais óbvios enquanto a validação por IA estiver desligada. As duas rodam em toda seção de documentos (`anexarDocumentos`/`anexarComprovante` no formulário do candidato, `anexarDocumentoAdmin`/`anexarComprovanteAdmin` na edição pelo líder) antes do upload pro Storage. |
+| Anthropic (Claude) — **desligada por padrão, custo zero** | Validação por IA de que a imagem anexada (foto, RG, CPF, passaporte, comprovante) é mesmo o documento pedido, não bloqueio automático de imagem errada só por script | `src/lib/documents/classifyDocument.ts` — só chama a API se `DOCUMENT_AI_VALIDATION=1` **e** `ANTHROPIC_API_KEY` estiverem setados; sem isso sempre aprova (`{valid: true}`), sem gastar nada. Usa `claude-haiku-4-5` (mais barato, suficiente pra essa classificação simples — ~US$0,002/imagem). Pra ligar: adicionar `ANTHROPIC_API_KEY` (console.anthropic.com) e `DOCUMENT_AI_VALIDATION=1` no `.env.local`/Vercel — nenhuma mudança de código necessária. Sempre roda antes (e independente) uma checagem 100% local e sem custo via `basicImageSanity.ts` (usa `sharp`, já dependência do projeto) — rejeita imagem corrompida, minúscula demais ou com proporção absurda pra um documento; não entende o *conteúdo* da imagem, só descarta os casos mais óbvios enquanto a validação por IA estiver desligada. As duas rodam em toda seção de documentos, tanto do lado escola (`anexarDocumentos`/`anexarComprovante` no formulário, `anexarDocumentoAdmin`/`anexarComprovanteAdmin` na edição) quanto obreiro (`salvarSecaoObreiroComArquivos` no formulário, `anexarDocumentoObreiroAdmin` na edição) antes do upload pro Storage. |
 
 ---
 
