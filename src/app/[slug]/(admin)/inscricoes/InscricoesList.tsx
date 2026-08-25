@@ -378,6 +378,7 @@ function InformarChegadaButton(props: Parameters<typeof DataChegadaField>[0]) {
 const ACTION_BUTTON_TONES = {
   violet: 'bg-violet-50 text-violet-700 hover:bg-violet-100 border-violet-200',
   blue: 'bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200',
+  green: 'bg-green-600 text-white hover:bg-green-700 border-green-600 font-semibold',
 }
 
 // Botão que abre um modal com um formulário dentro — reaproveitado sempre
@@ -1134,39 +1135,40 @@ export function InscricoesList({
                               )}
                             </div>
                           )}
-                          <form action={finalizarObreiro} className="col-span-2 space-y-1.5 rounded-lg border border-amber-100 bg-amber-50 p-2">
-                            <input type="hidden" name="id" value={item.id} />
-                            <input type="hidden" name="org_id" value={orgId} />
-                            <input type="hidden" name="person_id" value={item.personId} />
-                            <input type="hidden" name="ministry_id" value={item.ministryId ?? ''} />
-                            <input type="hidden" name="name" value={item.nome} />
-                            <p className="text-xs font-semibold text-amber-800">Criar acesso à plataforma e aprovar</p>
-                            <input
-                              name="email"
-                              type="email"
-                              defaultValue={item.email ?? ''}
-                              required
-                              placeholder="E-mail de login"
-                              className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-300"
-                            />
-                            <input
-                              name="password"
-                              type="password"
-                              required
-                              minLength={6}
-                              placeholder="Senha temporária"
-                              className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-300"
-                            />
-                            {(bgConcern || bgPending) && (
-                              <label className="flex items-start gap-2 text-xs text-amber-800">
-                                <input type="checkbox" required className="mt-0.5" />
-                                Estou ciente do alerta de antecedentes e assumo a decisão de finalizar mesmo assim.
-                              </label>
-                            )}
-                            <button type="submit" className="w-full text-xs px-3 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg transition-colors font-semibold">
-                              Finalizar obreiro
-                            </button>
-                          </form>
+                          <ActionModalButton label="Criar acesso à plataforma e aprovar" tone="green" subtitle={item.nome}>
+                            <form action={finalizarObreiro} className="space-y-2">
+                              <input type="hidden" name="id" value={item.id} />
+                              <input type="hidden" name="org_id" value={orgId} />
+                              <input type="hidden" name="person_id" value={item.personId} />
+                              <input type="hidden" name="ministry_id" value={item.ministryId ?? ''} />
+                              <input type="hidden" name="name" value={item.nome} />
+                              <input
+                                name="email"
+                                type="email"
+                                defaultValue={item.email ?? ''}
+                                required
+                                placeholder="E-mail de login"
+                                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-300"
+                              />
+                              <input
+                                name="password"
+                                type="password"
+                                required
+                                minLength={6}
+                                placeholder="Senha temporária"
+                                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-300"
+                              />
+                              {(bgConcern || bgPending) && (
+                                <label className="flex items-start gap-2 text-sm text-amber-800">
+                                  <input type="checkbox" required className="mt-0.5" />
+                                  Estou ciente do alerta de antecedentes e assumo a decisão de finalizar mesmo assim.
+                                </label>
+                              )}
+                              <button type="submit" className="w-full text-sm px-3 py-2.5 bg-green-600 text-white hover:bg-green-700 rounded-xl transition-colors font-semibold">
+                                Finalizar obreiro
+                              </button>
+                            </form>
+                          </ActionModalButton>
                         </>
                       )}
                       {((item.tipo === 'pre_inscricao_obreiro' || item.tipo === 'obreiro') ? canWriteObreiro : canWriteItem(item)) && (
