@@ -88,6 +88,35 @@ function daysAgo(dateStr: string) {
 }
 const isFinalizado = (s: string) => ['convertido','aprovado','descartado','reprovado','cancelado','excluido'].includes(s)
 
+// Líder de ETED/escola e líder de ministério não encaminham direto (só o
+// DH faz isso) — eles SOLICITAM, via service_requests (mesma tabela já
+// usada pra hospedagem), e o DH resolve depois em /pendentes usando o
+// encaminhar que já existe. Mesmo nível de checagem de papel que
+// assertCanRequestHospedagem já usa nos arquivos irmãos (só papel, sem
+// verificar posse do item específico — createAdminClient ignora RLS, então
+// sem isso qualquer usuário autenticado poderia forjar uma solicitação).
+// Precisa ficar no nível do módulo (fora do componente da página): uma
+// função aninhada chamada de dentro de uma 'use server' action é tratada
+// como valor de closure a serializar pro client, e como ela mesma não é
+// 'use server', o Next.js quebra com "Functions cannot be passed directly
+// to Client Components".
+async function assertCanRequestTransfer(organizationId: string) {
+  const authClient = await createClient()
+  const { data: { user: actingUser } } = await authClient.auth.getUser()
+  if (!actingUser) throw new Error('unauthorized')
+  const { data: orgUsersRows } = await authClient
+    .from('organization_users')
+    .select('organization_id, roles(name)')
+    .eq('user_id', actingUser.id)
+    .eq('active', true)
+  const memberships = (orgUsersRows ?? []) as unknown as Array<{ organization_id: string | null; roles: { name: string } | null }>
+  const role = memberships.find(m => m.roles?.name === 'superadmin')?.roles?.name
+    ?? memberships.find(m => m.organization_id === organizationId)?.roles?.name
+    ?? ''
+  if (!['superadmin', 'admin_base', 'lider_base', 'dh', 'lider_eted', 'lider_ministerio'].includes(role)) throw new Error('forbidden')
+  return { userId: actingUser.id, role }
+}
+
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   pendente:           { label: 'Pendente',      color: 'bg-yellow-100 text-yellow-700' },
   formulario_enviado: { label: 'Form. enviado', color: 'bg-blue-100 text-blue-700' },
@@ -1126,30 +1155,6 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
   const allMinistries = (allMinistriesRaw ?? []) as Array<{ id: string; name: string }>
   const publicSchools = (publicSchoolsRaw ?? []).filter((s: { slug: string | null }) => s.slug) as Array<{ id: string; name: string; slug: string }>
   const publicMinistries = (publicMinistriesRaw ?? []).filter((m: { slug: string | null }) => m.slug) as Array<{ id: string; name: string; slug: string }>
-
-  // Líder de ETED/escola e líder de ministério não encaminham direto (só o
-  // DH faz isso) — eles SOLICITAM, via service_requests (mesma tabela já
-  // usada pra hospedagem), e o DH resolve depois em /pendentes usando o
-  // encaminhar que já existe. Mesmo nível de checagem de papel que
-  // assertCanRequestHospedagem já usa nos arquivos irmãos (só papel, sem
-  // verificar posse do item específico — createAdminClient ignora RLS, então
-  // sem isso qualquer usuário autenticado poderia forjar uma solicitação).
-  async function assertCanRequestTransfer(organizationId: string) {
-    const authClient = await createClient()
-    const { data: { user: actingUser } } = await authClient.auth.getUser()
-    if (!actingUser) throw new Error('unauthorized')
-    const { data: orgUsersRows } = await authClient
-      .from('organization_users')
-      .select('organization_id, roles(name)')
-      .eq('user_id', actingUser.id)
-      .eq('active', true)
-    const memberships = (orgUsersRows ?? []) as unknown as Array<{ organization_id: string | null; roles: { name: string } | null }>
-    const role = memberships.find(m => m.roles?.name === 'superadmin')?.roles?.name
-      ?? memberships.find(m => m.organization_id === organizationId)?.roles?.name
-      ?? ''
-    if (!['superadmin', 'admin_base', 'lider_base', 'dh', 'lider_eted', 'lider_ministerio'].includes(role)) throw new Error('forbidden')
-    return { userId: actingUser.id, role }
-  }
 
   async function solicitarTransferenciaEscola(formData: FormData) {
     'use server'
