@@ -482,7 +482,7 @@ export default async function FormularioViewerPage({ params }: Props) {
                 <p className="text-sm font-semibold text-gray-900 mb-2.5">Documentos enviados</p>
                 <DocumentPreviewGrid
                   documents={documentEntries.map(({ key, label, doc, url }) => ({
-                    key, label, url, isImage: !!doc.type?.startsWith('image/'),
+                    key, label, url, isImage: !!doc.type?.startsWith('image/'), fileName: doc.name ?? null,
                   }))}
                 />
               </div>

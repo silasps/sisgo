@@ -1,12 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { FileText, ImageIcon, X } from 'lucide-react'
+import { Download, FileText, ImageIcon, X } from 'lucide-react'
 
-type DocEntry = { key: string; label: string; url: string | null; isImage: boolean }
+type DocEntry = { key: string; label: string; url: string | null; isImage: boolean; fileName: string | null }
 
 export function DocumentPreviewGrid({ documents }: { documents: DocEntry[] }) {
   const [open, setOpen] = useState<DocEntry | null>(null)
+  const [downloading, setDownloading] = useState(false)
 
   // Trava o scroll da página por trás enquanto o modal está aberto — sem
   // isso, uma imagem maior que a tela deixava a página "vazar" por baixo
@@ -17,6 +18,32 @@ export function DocumentPreviewGrid({ documents }: { documents: DocEntry[] }) {
     document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = previous }
   }, [open])
+
+  async function handleDownload() {
+    if (!open?.url) return
+    setDownloading(true)
+    try {
+      // Baixa via blob em vez de <a href download> direto: o arquivo vem
+      // de outra origem (Storage assinado), e navegadores costumam ignorar
+      // o atributo download em link cross-origin (abre em nova aba em vez
+      // de salvar). Um blob: é sempre same-origin, então o download sempre
+      // funciona com o nome de arquivo certo.
+      const res = await fetch(open.url)
+      const blob = await res.blob()
+      const blobUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = blobUrl
+      a.download = open.fileName || open.label
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(blobUrl)
+    } catch {
+      // silencioso — pior caso, a pessoa tenta de novo
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   return (
     <>
@@ -50,23 +77,40 @@ export function DocumentPreviewGrid({ documents }: { documents: DocEntry[] }) {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
           onClick={() => setOpen(null)}
         >
-          <div className="max-w-3xl w-full flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-3 shrink-0">
-              <p className="text-sm font-semibold text-white">{open.label}</p>
-              <button type="button" onClick={() => setOpen(null)} className="text-white/80 hover:text-white">
-                <X className="size-5" />
-              </button>
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100 shrink-0">
+              <p className="text-sm font-semibold text-gray-900 truncate">{open.label}</p>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleDownload}
+                  disabled={downloading}
+                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-60"
+                >
+                  <Download className="size-3.5" />
+                  {downloading ? 'Baixando…' : 'Baixar'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOpen(null)}
+                  className="text-gray-400 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
             </div>
-            {open.isImage && open.url ? (
-              // Altura em vh direto na imagem, não em max-h-full: o pai é
-              // flex com altura "auto" (só max-height), e porcentagem de
-              // altura contra um pai "auto" é ignorada pelo navegador — a
-              // imagem renderizava no tamanho natural, maior que a tela.
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={open.url} alt={open.label} className="w-full max-h-[75vh] object-contain rounded-lg bg-white" />
-            ) : open.url ? (
-              <iframe src={open.url} title={open.label} className="w-full h-[75vh] rounded-lg bg-white" />
-            ) : null}
+
+            <div className="flex-1 min-h-0 overflow-auto bg-gray-50 flex items-center justify-center p-4">
+              {open.isImage && open.url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={open.url} alt={open.label} className="max-w-full max-h-[70vh] object-contain rounded-lg" />
+              ) : open.url ? (
+                <iframe src={open.url} title={open.label} className="w-full h-[70vh] rounded-lg bg-white" />
+              ) : null}
+            </div>
           </div>
         </div>
       )}
