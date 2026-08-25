@@ -474,6 +474,31 @@ qualquer usuário logado) · `hospedagem` (quartos/camas, agenda, **lavanderia**
     dentro, só virou uma função (`renderItem`) chamada de dentro de cada
     grupo/subgrupo em vez de inline num `.map()` só, pra poder ser
     reaproveitado nos três pontos onde um item pode aparecer agora.
+  - **25 de agosto — reencaminhar inscrição pra outra escola/ministério a
+    qualquer momento** (`page.tsx`/`InscricoesList.tsx`): antes só dava
+    pra encaminhar pré-inscrição **sem preferência nenhuma**
+    (`school_id`/`ministry_id` nulo); descoberto no meio do processo que
+    o obreiro serve é em outro ministério, ou o aluno quer trocar de
+    escola, não tinha como sem editar direto no banco.
+    `encaminharParaEscola`/`encaminharParaMinisterio`
+    (`school_interest_forms`/`staff_interest_forms`) passam a funcionar
+    mesmo quando já tem escola/ministério — só viram um `<details>`
+    recolhido ("Encaminhar para outra escola/ministério") em vez do
+    bloco sempre visível "Sem preferência", que continua igual pra quem
+    de fato não tem nada definido ainda. `encaminharParaEscola` agora
+    limpa `class_id` quando a escola muda de verdade (turma da escola
+    antiga não faz sentido continuar vinculada); se já existe
+    `school_applications` (formulário enviado) pra escola antiga, mostra
+    um aviso — não bloqueia — de que o formulário antigo fica lá, precisa
+    mandar um novo pra escola nova. Nova `reencaminharObreiro`, pro
+    obreiro já convertido (`staff_applications`) — não tinha *nenhum*
+    jeito de mudar ministério/escola depois de aprovado; mesmo padrão de
+    `ministry_id`/`school_id` sempre escritos juntos que
+    `encaminharParaMinisterio` já usava, dentro do "Mais ações" já
+    existente pra esse tipo. **`tipo: 'aluno'`
+    (`student_applications`) ficou de fora de propósito** — confirmado
+    no banco (`select count(*)` = 0) que essa tabela nunca recebe
+    `INSERT`, é código morto documentado desde antes desta sessão.
 - **Toggles de campo da seção 5 não faziam nada — bug real, corrigido:**
   a tela de configuração (`escolas/[id]/formulario/page.tsx`) sempre
   listou `estado_civil`, `servico_militar`, `rg`, `cpf`, `passaporte`,
