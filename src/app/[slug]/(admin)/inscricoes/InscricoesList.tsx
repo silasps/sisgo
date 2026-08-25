@@ -449,6 +449,40 @@ export function InscricoesList({
   const currentLinks = tab === 'aluno' ? linksAluno : tab === 'obreiro' ? linksObreiro : null
   const visibleTipoTabs = hideAlunoTipo ? TIPO_TABS.filter(t => t.key !== 'aluno') : TIPO_TABS
 
+  // Agrupa por escola (ou, na falta de escola, por ministério — obreiro pode
+  // estar vinculado a um ou outro) e, dentro de cada grupo, por turma — uma
+  // escola pode ter mais de uma turma aberta ao mesmo tempo, e misturar tudo
+  // numa lista só dificultava enxergar de onde vem cada inscrição.
+  const groups = (() => {
+    const map = new Map<string, { label: string; items: InscricaoItem[] }>()
+    for (const item of filtered) {
+      const key = item.schoolId ? `escola:${item.schoolId}` : item.ministryId ? `ministerio:${item.ministryId}` : 'outro'
+      const label = (item.schoolId || item.ministryId) ? (item.escola ?? '—') : 'Sem escola/ministério vinculado'
+      if (!map.has(key)) map.set(key, { label, items: [] })
+      map.get(key)!.items.push(item)
+    }
+    return Array.from(map.entries())
+      .map(([key, { label, items }]) => ({ key, label, items }))
+      .sort((a, b) => (a.key === 'outro' ? 1 : b.key === 'outro' ? -1 : a.label.localeCompare(b.label, 'pt-BR')))
+  })()
+
+  function turmaSubgroups(groupItems: InscricaoItem[]) {
+    const map = new Map<string, { label: string; items: InscricaoItem[] }>()
+    const semTurma: InscricaoItem[] = []
+    for (const item of groupItems) {
+      if (item.classId && item.turma) {
+        if (!map.has(item.classId)) map.set(item.classId, { label: item.turma, items: [] })
+        map.get(item.classId)!.items.push(item)
+      } else {
+        semTurma.push(item)
+      }
+    }
+    const subgroups = Array.from(map.entries())
+      .map(([key, { label, items }]) => ({ key, label, items }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'))
+    return { subgroups, semTurma }
+  }
+
   return (
     <div className="space-y-4">
       {/* Tabs: tipo de pessoa (quem) — some se só houver um tipo possível (ex: líder de ministério só vê obreiros) */}
@@ -540,8 +574,11 @@ export function InscricoesList({
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {filtered.map(item => {
+        <div className="space-y-4">
+          {groups.map(group => {
+            const { subgroups, semTurma } = turmaSubgroups(group.items)
+            const hasSubgroups = subgroups.length > 0
+            const renderItem = (item: InscricaoItem) => {
             const statusInfo = item.tipo === 'pre_inscricao_obreiro' && item.status === 'pendente'
               ? { label: 'Aguardando contato', color: 'bg-yellow-100 text-yellow-700' }
               : STATUS_CONFIG[item.status] ?? { label: item.status, color: 'bg-gray-100 text-gray-500' }
@@ -1078,6 +1115,48 @@ export function InscricoesList({
                 </div>
                 )}
               </div>
+            )
+            }
+            return (
+              <details key={group.key} className="group/escola" open>
+                <summary className="cursor-pointer flex items-center gap-2 py-1.5 select-none list-none">
+                  <span className="text-gray-400 transition-transform group-open/escola:rotate-90">▶</span>
+                  <span className="text-sm font-bold text-gray-800">{group.label}</span>
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{group.items.length}</span>
+                </summary>
+                <div className="pl-4 sm:pl-5 mt-2 space-y-4 border-l-2 border-gray-100">
+                  {hasSubgroups ? (
+                    <>
+                      {subgroups.map(sg => (
+                        <details key={sg.key} className="group/turma" open>
+                          <summary className="cursor-pointer flex items-center gap-2 py-1 select-none list-none">
+                            <span className="text-gray-300 transition-transform group-open/turma:rotate-90 text-xs">▶</span>
+                            <span className="text-xs font-semibold text-gray-600">{sg.label}</span>
+                            <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-full bg-gray-50 text-gray-400">{sg.items.length}</span>
+                          </summary>
+                          <div className="mt-1.5 space-y-3">
+                            {sg.items.map(renderItem)}
+                          </div>
+                        </details>
+                      ))}
+                      {semTurma.length > 0 && (
+                        <details className="group/turma" open>
+                          <summary className="cursor-pointer flex items-center gap-2 py-1 select-none list-none">
+                            <span className="text-gray-300 transition-transform group-open/turma:rotate-90 text-xs">▶</span>
+                            <span className="text-xs font-semibold text-gray-600">Outras inscrições</span>
+                            <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-full bg-gray-50 text-gray-400">{semTurma.length}</span>
+                          </summary>
+                          <div className="mt-1.5 space-y-3">
+                            {semTurma.map(renderItem)}
+                          </div>
+                        </details>
+                      )}
+                    </>
+                  ) : (
+                    <div className="space-y-3">{group.items.map(renderItem)}</div>
+                  )}
+                </div>
+              </details>
             )
           })}
         </div>
