@@ -1055,6 +1055,11 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     return result
   }
 
+  // Também usada pra REencaminhar (não só pra quem ainda não tem escola) —
+  // se a escola realmente mudar, limpa class_id: uma turma da escola antiga
+  // não faz sentido continuar vinculada depois da troca. O formulário já
+  // enviado (school_applications), se existir, não é tocado — fica com a
+  // escola antiga; a UI já avisa disso antes de encaminhar.
   async function encaminharParaEscola(formData: FormData) {
     'use server'
     const { createAdminClient: adm } = await import('@/lib/supabase/admin')
@@ -1062,11 +1067,18 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     const interestId = formData.get('interest_id') as string
     const schoolId = formData.get('school_id') as string
     if (!interestId || !schoolId) return
-    await db.from('school_interest_forms').update({ school_id: schoolId }).eq('id', interestId)
+    const { data: current } = await db.from('school_interest_forms').select('school_id').eq('id', interestId).single()
+    const changed = current?.school_id !== schoolId
+    await db.from('school_interest_forms').update({
+      school_id: schoolId,
+      ...(changed ? { class_id: null } : {}),
+    }).eq('id', interestId)
     const { redirect: redir } = await import('next/navigation')
     redir(`/${slug}/inscricoes?flash_success=${encodeURIComponent('Inscrição encaminhada para a escola.')}`)
   }
 
+  // ministry_id/school_id sempre são gravados juntos (um null, outro com o
+  // id) — já é seguro reusar pra REencaminhar quem já tinha um dos dois.
   async function encaminharParaMinisterio(formData: FormData) {
     'use server'
     const { createAdminClient: adm } = await import('@/lib/supabase/admin')
@@ -1079,6 +1091,26 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       ministry_id: destType === 'ministry' ? destId : null,
       school_id: destType === 'school' ? destId : null,
     }).eq('id', interestId)
+    const { redirect: redir } = await import('next/navigation')
+    redir(`/${slug}/inscricoes?tab=obreiro&flash_success=${encodeURIComponent('Inscrição encaminhada.')}`)
+  }
+
+  // Mesma ideia de encaminharParaMinisterio, mas pro obreiro já convertido
+  // (staff_applications) em vez da pré-inscrição (staff_interest_forms) —
+  // cobre o caso "descobrimos no meio do processo que ele serve é em outro
+  // ministério".
+  async function reencaminharObreiro(formData: FormData) {
+    'use server'
+    const { createAdminClient: adm } = await import('@/lib/supabase/admin')
+    const db = adm()
+    const staffApplicationId = formData.get('staff_application_id') as string
+    const destination = (formData.get('destination') as string) || ''
+    const [destType, destId] = destination.includes(':') ? destination.split(':') : [null, null]
+    if (!staffApplicationId || !destId) return
+    await db.from('staff_applications').update({
+      ministry_id: destType === 'ministry' ? destId : null,
+      school_id: destType === 'school' ? destId : null,
+    }).eq('id', staffApplicationId)
     const { redirect: redir } = await import('next/navigation')
     redir(`/${slug}/inscricoes?tab=obreiro&flash_success=${encodeURIComponent('Inscrição encaminhada.')}`)
   }
@@ -1683,6 +1715,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           marcarRecebidoExternamenteObreiro={marcarRecebidoExternamenteObreiro}
           encaminharParaEscola={encaminharParaEscola}
           encaminharParaMinisterio={encaminharParaMinisterio}
+          reencaminharObreiro={reencaminharObreiro}
         />
         </Suspense>
 

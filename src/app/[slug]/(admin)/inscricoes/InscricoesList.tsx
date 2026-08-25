@@ -109,6 +109,7 @@ type Props = {
   marcarRecebidoExternamenteObreiro: (formData: FormData) => Promise<void>
   encaminharParaEscola: (formData: FormData) => Promise<void>
   encaminharParaMinisterio: (formData: FormData) => Promise<void>
+  reencaminharObreiro: (formData: FormData) => Promise<void>
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -407,6 +408,7 @@ export function InscricoesList({
   marcarRecebidoExternamenteObreiro,
   encaminharParaEscola,
   encaminharParaMinisterio,
+  reencaminharObreiro,
 }: Props) {
   const [tab, setTab] = useState(initialTab)
   const [etapa, setEtapa] = useState(initialEtapa)
@@ -792,6 +794,29 @@ export function InscricoesList({
                                 Salvar palavra
                               </button>
                             </form>
+                            {canWrite && (
+                              <form action={reencaminharObreiro} className="space-y-1.5 border-t border-gray-100 pt-1.5">
+                                <input type="hidden" name="staff_application_id" value={item.id} />
+                                <p className="text-gray-500">Encaminhar para outro ministério/escola</p>
+                                <select name="destination" required defaultValue="" className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-700">
+                                  <option value="" disabled>Selecione o destino</option>
+                                  {allMinistries.length > 0 && (
+                                    <optgroup label="Ministérios">
+                                      {allMinistries.map(m => <option key={m.id} value={`ministry:${m.id}`}>{m.name}</option>)}
+                                    </optgroup>
+                                  )}
+                                  {allSchools.length > 0 && (
+                                    <optgroup label="Escolas">
+                                      {allSchools.map(s => <option key={s.id} value={`school:${s.id}`}>{s.name}</option>)}
+                                    </optgroup>
+                                  )}
+                                </select>
+                                <p className="text-[11px] text-amber-700">Confira se pendências de hospedagem/antecedentes ligadas ao vínculo atual ainda fazem sentido depois de mudar.</p>
+                                <button type="submit" className="w-full text-xs px-3 py-1.5 bg-violet-50 text-violet-700 hover:bg-violet-100 rounded-lg transition-colors font-semibold">
+                                  Encaminhar
+                                </button>
+                              </form>
+                            )}
                           </div>
                         </details>
                       )}
@@ -895,40 +920,86 @@ export function InscricoesList({
 
                       <div className="col-span-2 h-px bg-gray-100" />
 
-                      {canWrite && item.tipo === 'pre_inscricao' && !item.schoolId && (
-                        <form action={encaminharParaEscola} className="col-span-2 space-y-1.5 rounded-lg border border-blue-100 bg-blue-50 p-2.5">
-                          <input type="hidden" name="interest_id" value={item.id} />
-                          <p className="text-xs font-semibold text-blue-800">Sem preferência de escola</p>
-                          <select name="school_id" required className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300">
-                            <option value="" disabled>Encaminhar para qual escola?</option>
-                            {allSchools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                          </select>
-                          <button type="submit" className="w-full text-xs px-3 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors font-semibold">
-                            Encaminhar para escola
-                          </button>
-                        </form>
+                      {canWrite && item.tipo === 'pre_inscricao' && (
+                        item.schoolId ? (
+                          <details className="col-span-2 text-xs">
+                            <summary className="cursor-pointer text-gray-400 select-none py-1">Encaminhar para outra escola</summary>
+                            <form action={encaminharParaEscola} className="mt-1.5 space-y-1.5 rounded-lg border border-blue-100 bg-blue-50 p-2.5">
+                              <input type="hidden" name="interest_id" value={item.id} />
+                              {item.applicationId && (
+                                <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                                  ⚠ Já existe um formulário enviado pra {item.escola ?? 'a escola atual'} — ele não será apagado, mas fica vinculado a ela. Envie um novo formulário pra escola nova depois de encaminhar.
+                                </p>
+                              )}
+                              <select name="school_id" required defaultValue="" className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300">
+                                <option value="" disabled>Encaminhar para qual escola?</option>
+                                {allSchools.filter(s => s.id !== item.schoolId).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                              </select>
+                              <button type="submit" className="w-full text-xs px-3 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors font-semibold">
+                                Encaminhar para escola
+                              </button>
+                            </form>
+                          </details>
+                        ) : (
+                          <form action={encaminharParaEscola} className="col-span-2 space-y-1.5 rounded-lg border border-blue-100 bg-blue-50 p-2.5">
+                            <input type="hidden" name="interest_id" value={item.id} />
+                            <p className="text-xs font-semibold text-blue-800">Sem preferência de escola</p>
+                            <select name="school_id" required className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300">
+                              <option value="" disabled>Encaminhar para qual escola?</option>
+                              {allSchools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                            </select>
+                            <button type="submit" className="w-full text-xs px-3 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors font-semibold">
+                              Encaminhar para escola
+                            </button>
+                          </form>
+                        )
                       )}
-                      {canWrite && item.tipo === 'pre_inscricao_obreiro' && !item.ministryId && !item.schoolId && (
-                        <form action={encaminharParaMinisterio} className="col-span-2 space-y-1.5 rounded-lg border border-violet-100 bg-violet-50 p-2.5">
-                          <input type="hidden" name="interest_id" value={item.id} />
-                          <p className="text-xs font-semibold text-violet-800">Sem preferência de ministério/escola</p>
-                          <select name="destination" required className="w-full rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-violet-300">
-                            <option value="" disabled>Encaminhar para qual ministério ou escola?</option>
-                            {allMinistries.length > 0 && (
-                              <optgroup label="Ministérios">
-                                {allMinistries.map(m => <option key={m.id} value={`ministry:${m.id}`}>{m.name}</option>)}
-                              </optgroup>
-                            )}
-                            {allSchools.length > 0 && (
-                              <optgroup label="Escolas">
-                                {allSchools.map(s => <option key={s.id} value={`school:${s.id}`}>{s.name}</option>)}
-                              </optgroup>
-                            )}
-                          </select>
-                          <button type="submit" className="w-full text-xs px-3 py-2 bg-violet-600 text-white hover:bg-violet-700 rounded-lg transition-colors font-semibold">
-                            Encaminhar
-                          </button>
-                        </form>
+                      {canWrite && item.tipo === 'pre_inscricao_obreiro' && (
+                        (item.ministryId || item.schoolId) ? (
+                          <details className="col-span-2 text-xs">
+                            <summary className="cursor-pointer text-gray-400 select-none py-1">Encaminhar para outro ministério/escola</summary>
+                            <form action={encaminharParaMinisterio} className="mt-1.5 space-y-1.5 rounded-lg border border-violet-100 bg-violet-50 p-2.5">
+                              <input type="hidden" name="interest_id" value={item.id} />
+                              <select name="destination" required defaultValue="" className="w-full rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-violet-300">
+                                <option value="" disabled>Encaminhar para qual ministério ou escola?</option>
+                                {allMinistries.length > 0 && (
+                                  <optgroup label="Ministérios">
+                                    {allMinistries.map(m => <option key={m.id} value={`ministry:${m.id}`}>{m.name}</option>)}
+                                  </optgroup>
+                                )}
+                                {allSchools.length > 0 && (
+                                  <optgroup label="Escolas">
+                                    {allSchools.map(s => <option key={s.id} value={`school:${s.id}`}>{s.name}</option>)}
+                                  </optgroup>
+                                )}
+                              </select>
+                              <button type="submit" className="w-full text-xs px-3 py-2 bg-violet-600 text-white hover:bg-violet-700 rounded-lg transition-colors font-semibold">
+                                Encaminhar
+                              </button>
+                            </form>
+                          </details>
+                        ) : (
+                          <form action={encaminharParaMinisterio} className="col-span-2 space-y-1.5 rounded-lg border border-violet-100 bg-violet-50 p-2.5">
+                            <input type="hidden" name="interest_id" value={item.id} />
+                            <p className="text-xs font-semibold text-violet-800">Sem preferência de ministério/escola</p>
+                            <select name="destination" required className="w-full rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-violet-300">
+                              <option value="" disabled>Encaminhar para qual ministério ou escola?</option>
+                              {allMinistries.length > 0 && (
+                                <optgroup label="Ministérios">
+                                  {allMinistries.map(m => <option key={m.id} value={`ministry:${m.id}`}>{m.name}</option>)}
+                                </optgroup>
+                              )}
+                              {allSchools.length > 0 && (
+                                <optgroup label="Escolas">
+                                  {allSchools.map(s => <option key={s.id} value={`school:${s.id}`}>{s.name}</option>)}
+                                </optgroup>
+                              )}
+                            </select>
+                            <button type="submit" className="w-full text-xs px-3 py-2 bg-violet-600 text-white hover:bg-violet-700 rounded-lg transition-colors font-semibold">
+                              Encaminhar
+                            </button>
+                          </form>
+                        )
                       )}
 
                       {canWriteItem(item) && item.tipo === 'pre_inscricao' && item.applicationId && !finalizado && !item.hospedagemResolved && (
