@@ -2,6 +2,8 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getOrCreateReferenceForm, buildReferenceUrl } from '@/lib/staff/referenceForms'
+import { basicImageSanity } from '@/lib/documents/basicImageSanity'
+import { classifyDocument, type DocumentKind } from '@/lib/documents/classifyDocument'
 
 const EDITABLE_SECTIONS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
 
@@ -58,6 +60,15 @@ const DOCUMENT_TYPES: Record<string, string> = {
   'image/webp': 'webp',
 }
 
+const DOCUMENT_KIND_BY_KEY: Record<string, DocumentKind> = {
+  doc_foto: 'foto',
+  doc_rg_frente: 'rg_frente',
+  doc_rg_verso: 'rg_verso',
+  doc_passaporte: 'passaporte',
+  doc_certidao_casamento: 'certidao_casamento',
+  doc_certidao_casamento_s10: 'certidao_casamento',
+}
+
 // Igual a salvarSecaoObreiro, mas pra seções que misturam campos de texto
 // com upload de arquivo (03 — Família, quando casado: certidão de
 // casamento; 10 — Documentos e Aceite Final): um File dentro de um
@@ -84,8 +95,17 @@ export async function salvarSecaoObreiroComArquivos(slug: string, token: string,
       if (!DOCUMENT_TYPES[value.type]) return { error: `Envie imagens (JPG, PNG ou WebP) ou PDF em "${key}".` }
       if (value.size > 10 * 1024 * 1024) return { error: 'Cada arquivo deve ter no máximo 10 MB.' }
 
+      const fileBuffer = Buffer.from(await value.arrayBuffer())
+      const sanity = await basicImageSanity(fileBuffer, value.type)
+      if (!sanity.valid) return { error: sanity.reason }
+      const kind = DOCUMENT_KIND_BY_KEY[key]
+      if (kind) {
+        const classification = await classifyDocument(fileBuffer, value.type, kind)
+        if (!classification.valid) return { error: classification.reason ?? `A imagem enviada não parece ser o documento pedido ("${key}").` }
+      }
+
       const path = `${app.organization_id}/${app.id}/${key}-${Date.now()}.${DOCUMENT_TYPES[value.type]}`
-      const { error: uploadError } = await sb.storage.from('staff-application-documents').upload(path, value, {
+      const { error: uploadError } = await sb.storage.from('staff-application-documents').upload(path, fileBuffer, {
         contentType: value.type,
         upsert: false,
       })

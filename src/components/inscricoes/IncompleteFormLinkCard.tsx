@@ -2,10 +2,11 @@
 
 import { useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
-import { reenviarLinkFormulario } from './actions'
 
-export function IncompleteFormLinkCard({ slug, organizationId, applicationId, reason }: {
-  slug: string; organizationId: string; applicationId: string; reason: string
+export function IncompleteFormLinkCard({ reason, formPathPrefix, onGenerateLink }: {
+  reason: string
+  formPathPrefix: string
+  onGenerateLink: () => Promise<{ token: string }>
 }) {
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
   const [link, setLink] = useState('')
@@ -20,8 +21,8 @@ export function IncompleteFormLinkCard({ slug, organizationId, applicationId, re
   async function handleGenerate() {
     setStatus('loading')
     try {
-      const result = await reenviarLinkFormulario({ slug, organizationId, applicationId })
-      const url = `${window.location.origin}/${slug}/formulario/${result.token}`
+      const result = await onGenerateLink()
+      const url = `${window.location.origin}${formPathPrefix}/${result.token}`
       setLink(url)
       setStatus('idle')
       await copy(url)

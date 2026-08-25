@@ -4,13 +4,13 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getRolePreview } from '@/lib/role-preview'
 import { ReferenceModal } from './ReferenceModal'
-import { IncompleteFormLinkCard } from './IncompleteFormLinkCard'
-import { DocumentPreviewGrid } from './DocumentPreviewGrid'
+import { IncompleteFormLinkCard } from '@/components/inscricoes/IncompleteFormLinkCard'
+import { DocumentPreviewGrid } from '@/components/inscricoes/DocumentPreviewGrid'
 import { Pencil, FileText, ReceiptText } from 'lucide-react'
 import { PipelineStepper, stagesFromFlags } from '@/components/inscricoes/PipelineStepper'
 import { AvancarEtapaControl, AdvanceHistoryList } from '@/components/inscricoes/AvancarEtapaControl'
 import { getStageAdvances, resolveAdvancerNames } from '@/lib/pipelineStageAdvance'
-import { avancarEtapaAluno } from './actions'
+import { avancarEtapaAluno, reenviarLinkFormulario } from './actions'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
@@ -575,10 +575,9 @@ export default async function FormularioViewerPage({ params }: Props) {
 
         {incompleteReason && (
           <IncompleteFormLinkCard
-            slug={slug}
-            organizationId={app.organization_id}
-            applicationId={id}
             reason={incompleteReason}
+            formPathPrefix={`/${slug}/formulario`}
+            onGenerateLink={reenviarLinkFormulario.bind(null, { slug, organizationId: app.organization_id, applicationId: id })}
           />
         )}
 

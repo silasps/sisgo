@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { insertStageAdvance } from '@/lib/pipelineStageAdvance'
+import { getOrRegenerateToken } from '@/lib/inscricoes/resendLink'
 
 async function assertDh(organizationId: string) {
   const supabase = await createClient()
@@ -104,28 +105,9 @@ export async function reenviarLinkFormulario(params: {
 }) {
   await assertCanRequestHospedagem(params.organizationId)
   const sb = createAdminClient()
-
-  const { data: app } = await sb
-    .from('school_applications')
-    .select('id, token, token_expires_at')
-    .eq('id', params.applicationId)
-    .eq('organization_id', params.organizationId)
-    .single()
-  if (!app) throw new Error('Inscrição não encontrada.')
-
-  if (new Date(app.token_expires_at) > new Date()) {
-    return { token: app.token }
-  }
-
-  const { randomBytes } = await import('crypto')
-  const token = randomBytes(32).toString('hex')
-  const tokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-
-  await sb.from('school_applications')
-    .update({ token, token_expires_at: tokenExpiresAt })
-    .eq('id', app.id)
-
-  return { token }
+  const result = await getOrRegenerateToken(sb, 'school_applications', params.applicationId, params.organizationId)
+  if ('error' in result) throw new Error(result.error)
+  return result
 }
 
 export async function avancarEtapaAluno(params: {

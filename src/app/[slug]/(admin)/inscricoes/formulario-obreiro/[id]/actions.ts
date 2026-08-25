@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { insertStageAdvance } from '@/lib/pipelineStageAdvance'
+import { getOrRegenerateToken } from '@/lib/inscricoes/resendLink'
 
 async function assertCanManage(organizationId: string) {
   const supabase = await createClient()
@@ -43,6 +44,22 @@ async function assertDh(organizationId: string) {
   if (!['superadmin', 'admin_base', 'dh'].includes(role)) throw new Error('forbidden')
 
   return user.id
+}
+
+// Devolve o link do formulário pro DH/líder reenviar ao obreiro — mesma
+// lógica que a escola já usa (reenviarLinkFormulario), via helper
+// compartilhado, já que staff_applications tem token/token_expires_at no
+// mesmo formato que school_applications.
+export async function reenviarLinkFormularioObreiro(params: {
+  slug: string
+  organizationId: string
+  applicationId: string
+}) {
+  await assertCanManage(params.organizationId)
+  const sb = createAdminClient()
+  const result = await getOrRegenerateToken(sb, 'staff_applications', params.applicationId, params.organizationId)
+  if ('error' in result) throw new Error(result.error)
+  return result
 }
 
 export async function pularReferenciaPastor(params: {

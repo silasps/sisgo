@@ -3,16 +3,18 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getRolePreview } from '@/lib/role-preview'
-import { Pencil, FileText, ImageIcon } from 'lucide-react'
+import { Pencil } from 'lucide-react'
 import { PipelineStepper, stagesFromFlags } from '@/components/inscricoes/PipelineStepper'
 import { AvancarEtapaControl, AdvanceHistoryList } from '@/components/inscricoes/AvancarEtapaControl'
+import { DocumentPreviewGrid } from '@/components/inscricoes/DocumentPreviewGrid'
+import { IncompleteFormLinkCard } from '@/components/inscricoes/IncompleteFormLinkCard'
 import { getStageAdvances, resolveAdvancerNames } from '@/lib/pipelineStageAdvance'
 import BackgroundChecksSection from './BackgroundChecksSection'
 import { PastorReferenceGate } from './PastorReferenceGate'
 import { HospedagemHandoffCard } from './HospedagemHandoffCard'
 import { HospedagemSolicitacaoCard } from './HospedagemSolicitacaoCard'
 import { HospedagemGate } from './HospedagemGate'
-import { avancarEtapaObreiro } from './actions'
+import { avancarEtapaObreiro, reenviarLinkFormularioObreiro } from './actions'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
@@ -409,11 +411,12 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
       </header>
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-4">
-        {Object.keys(formData).length <= 1 && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-center">
-            <p className="text-sm text-amber-800 font-medium">Formulário ainda não preenchido pelo candidato.</p>
-            <p className="text-xs text-amber-600 mt-1">O candidato receberá um link para preencher o formulário completo.</p>
-          </div>
+        {app.status === 'rascunho' && (
+          <IncompleteFormLinkCard
+            reason="O formulário ainda não foi enviado — a pessoa parou em algum ponto do preenchimento."
+            formPathPrefix={`/${slug}/formulario-obreiro`}
+            onGenerateLink={reenviarLinkFormularioObreiro.bind(null, { slug, organizationId: app.organization_id, applicationId: id })}
+          />
         )}
 
         {SECTIONS.map((section, sIdx) => {
@@ -436,27 +439,12 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
 
         {documentEntries.length > 0 && (
           <SectionCard title="Documentos enviados">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-3">
-              {documentEntries.map(({ key, label, doc, url }) => {
-                const isImage = doc.type?.startsWith('image/')
-                return (
-                  <a key={key} href={url ?? '#'} target="_blank" rel="noopener noreferrer"
-                    className={`group rounded-lg border border-gray-200 overflow-hidden hover:border-indigo-300 transition-colors ${!url ? 'pointer-events-none opacity-60' : ''}`}>
-                    {isImage && url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={url} alt={label} className="h-24 w-full object-cover bg-gray-50" />
-                    ) : (
-                      <div className="h-24 w-full flex items-center justify-center bg-gray-50">
-                        <FileText className="size-8 text-gray-400" />
-                      </div>
-                    )}
-                    <div className="px-2 py-1.5 flex items-center gap-1.5">
-                      {isImage ? <ImageIcon className="size-3 shrink-0 text-gray-400" /> : <FileText className="size-3 shrink-0 text-gray-400" />}
-                      <p className="truncate text-xs font-medium text-gray-700 group-hover:text-indigo-700">{label}</p>
-                    </div>
-                  </a>
-                )
-              })}
+            <div className="pt-3">
+              <DocumentPreviewGrid
+                documents={documentEntries.map(({ key, label, doc, url }) => ({
+                  key, label, url, isImage: !!doc.type?.startsWith('image/'), fileName: doc.name ?? null,
+                }))}
+              />
             </div>
           </SectionCard>
         )}

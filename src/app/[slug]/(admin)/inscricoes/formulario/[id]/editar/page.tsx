@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { getRolePreview } from '@/lib/role-preview'
-import { AdminFileUpload } from './AdminFileUpload'
+import { AdminFileUpload } from '@/components/inscricoes/AdminFileUpload'
 import { anexarDocumentoAdmin, anexarComprovanteAdmin } from './actions'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
