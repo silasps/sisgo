@@ -499,6 +499,31 @@ qualquer usuário logado) · `hospedagem` (quartos/camas, agenda, **lavanderia**
     (`student_applications`) ficou de fora de propósito** — confirmado
     no banco (`select count(*)` = 0) que essa tabela nunca recebe
     `INSERT`, é código morto documentado desde antes desta sessão.
+  - **25 de agosto — líder de ETED/ministério pede transferência, DH aprova
+    e encaminha com o que já existe:** os mesmos botões "Encaminhar..."
+    acima ganharam gate mais largo (`canWrite` → `canWrite ||
+    canWriteEted`/`canWriteObreiro`, que já inclui líder de ministério e
+    ETED) — mas o formulário dentro do modal é condicional: DH continua com
+    o form de sempre (encaminha na hora, sem mudança de comportamento);
+    líder vê um `SolicitarTransferenciaForm` novo (destino + motivo
+    obrigatório) que cria uma `service_requests` em vez de mudar
+    `school_id`/`ministry_id` direto. `service_requests` (bucket já usado
+    pra hospedagem — `status` `pendente/em_analise/.../resolvido/rejeitado`,
+    `target_department` já aceita `'dh'`, `request_type` sem CHECK) ganhou
+    `school_interest_form_id`/`staff_interest_form_id` (migration 120) —
+    só tinha as versões pós-conversão `school_application_id`/
+    `staff_application_id` (adicionadas antes pra hospedagem), faltava
+    poder anexar numa pré-inscrição ainda. Motivo e destino pedido vão pro
+    `description`, que o `ServiceRequestsPanel` (`/pendentes`) já
+    renderiza — **nenhuma mudança em `/pendentes`**, por decisão do
+    usuário (reaproveitar 100% em vez de construir uma ponte nova
+    pré-preenchendo o encaminhar do DH). Nova
+    `assertCanRequestTransfer` (`inscricoes/page.tsx`) — como as actions
+    usam `createAdminClient()` (ignora RLS), sem checagem própria
+    qualquer usuário autenticado poderia forjar uma solicitação; mesmo
+    rigor (só papel, sem verificar posse do item específico) que
+    `assertCanRequestHospedagem` já usa nos arquivos irmãos de
+    hospedagem.
 - **Toggles de campo da seção 5 não faziam nada — bug real, corrigido:**
   a tela de configuração (`escolas/[id]/formulario/page.tsx`) sempre
   listou `estado_civil`, `servico_militar`, `rg`, `cpf`, `passaporte`,
