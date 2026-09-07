@@ -558,11 +558,16 @@ export default async function SlugLayout({ children, params }: Props) {
     : [...universal, ...personalNavItems]
   // "Ver tudo" mostra só o complemento do que já está na sidebar do modo atual
   // (ex.: itens do outro modo Pessoal/Administração) — não repete o que já é visível.
+  // No mobile, porém, esse painel também é o "Mais" da barra inferior, que só
+  // expõe 4 ícones — para papéis sem modo Administração (aluno, obreiro etc.),
+  // a sidebar já mostra tudo e o complemento ficaria vazio, escondendo o Mais
+  // por completo. Nesse caso caímos para a lista completa (sem filtrar).
   const sidebarIcons = new Set(sidebarItems.filter((i): i is RegularNavItem => !('divider' in i)).map(i => i.icon))
-  const allNavItems = dropEmptySections(
-    buildAllAppsItems(universal, adminNavItems, personalNavItems)
-      .filter(i => 'divider' in i || !sidebarIcons.has(i.icon)),
+  const fullAllAppsItems = dropEmptySections(buildAllAppsItems(universal, adminNavItems, personalNavItems))
+  const allAppsComplement = dropEmptySections(
+    fullAllAppsItems.filter(i => 'divider' in i || !sidebarIcons.has(i.icon)),
   )
+  const allNavItems = allAppsComplement.some(i => !('divider' in i)) ? allAppsComplement : fullAllAppsItems
 
   const myOrgs = userOrgRows
     .map(r => r.organizations)

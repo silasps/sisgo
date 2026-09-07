@@ -243,4 +243,42 @@ export interface StaffFormDict {
     lgpd_text: string
     finals: string[]          // final declaration checkboxes
   }
+
+  // ── Chrome da landing de "servir" (servir/page.tsx e variantes) ────────
+  servirChrome: {
+    hero_badge: string
+    hero_title: string
+    hero_subtitle: string
+    cta_serve_here: string
+    about_eyebrow: string
+    opportunities_title: string
+    learn_more: string
+    no_ministry_hint: string
+    registration_eyebrow: string
+    registration_title: string
+    registration_subtitle: string
+    footer_tagline: string
+    footer_other_opportunities: string
+    footer_rights: string
+  }
+
+  // ── Chrome das páginas curtas de pré-inscrição (standalone/embed) ──────
+  standaloneChrome: {
+    badge: string
+    learn_more: string
+    powered_by: string
+  }
+
+  // ── Chrome do formulário grande pós-aceite (formulario-obreiro/[token]) ─
+  bigFormChrome: {
+    title: string
+    link_expired_title: string
+    link_expired_body: string
+    already_sent_title: string
+    already_sent_body: string
+    welcome_title: string
+    welcome_body_print: string
+    welcome_body_online: string
+    footer_contact: string
+  }
 }

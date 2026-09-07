@@ -237,4 +237,39 @@ export const ptDict: StaffFormDict = {
       'Estou ciente de que a aprovação está sujeita à análise da liderança da base.',
     ],
   },
+
+  servirChrome: {
+    hero_badge: 'Venha servir',
+    hero_title: 'Faça parte da nossa equipe',
+    hero_subtitle: 'Preencha o formulário abaixo para demonstrar seu interesse em servir na base. Nossa equipe entrará em contato.',
+    cta_serve_here: 'Quero servir aqui',
+    about_eyebrow: 'Sobre',
+    opportunities_title: 'Oportunidades para servir',
+    learn_more: 'Saiba mais →',
+    no_ministry_hint: 'Ainda não sabe qual ministério combina com você? Envie uma pré-inscrição geral abaixo.',
+    registration_eyebrow: 'Pré-inscrição',
+    registration_title: 'Dê o primeiro passo',
+    registration_subtitle: 'Preencha abaixo e nossa equipe entrará em contato com mais detalhes.',
+    footer_tagline: 'Jovens Com Uma Missão',
+    footer_other_opportunities: 'Ver outras oportunidades →',
+    footer_rights: 'Todos os direitos reservados',
+  },
+
+  standaloneChrome: {
+    badge: 'Pré-inscrição',
+    learn_more: 'Saiba mais sobre o ministério →',
+    powered_by: 'Powered by',
+  },
+
+  bigFormChrome: {
+    title: 'Inscrição de Obreiro',
+    link_expired_title: 'Link expirado',
+    link_expired_body: 'Este link de formulário expirou. Entre em contato com a equipe da base para solicitar um novo link.',
+    already_sent_title: 'Formulário já enviado',
+    already_sent_body: 'Seu formulário já foi enviado e está em análise. A equipe entrará em contato em breve.',
+    welcome_title: 'Bem-vindo(a) ao formulário de inscrição!',
+    welcome_body_print: 'Esta é a versão em branco para preenchimento à mão, caso não seja possível preencher pela internet.',
+    welcome_body_online: 'Este formulário faz parte do processo de avaliação para servir na base. Responda com atenção e sinceridade. Seu progresso é salvo automaticamente a cada seção. Tempo estimado: 20 a 30 minutos.',
+    footer_contact: 'Dúvidas? Entre em contato com a equipe responsável pela base.',
+  },
 }

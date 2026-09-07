@@ -31,15 +31,17 @@ export function AccountMenu() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="relative w-8 h-8 rounded-full bg-brand-50 border border-brand-100 flex items-center justify-center text-brand-600 text-xs font-bold uppercase shrink-0 hover:bg-brand-100 transition-colors overflow-hidden"
+        className="relative w-8 h-8 shrink-0"
         aria-label={`Minha conta — modo ${account.mode === 'administracao' ? 'Administração' : 'Pessoal'}`}
       >
-        {account.avatarUrl
-          ? <img src={account.avatarUrl} alt="" className="w-full h-full object-cover" />
-          : initial}
+        <span className="flex w-full h-full rounded-full bg-brand-50 border border-brand-100 items-center justify-center text-brand-600 text-xs font-bold uppercase overflow-hidden hover:bg-brand-100 transition-colors">
+          {account.avatarUrl
+            ? <img src={account.avatarUrl} alt="" className="w-full h-full object-cover" />
+            : initial}
+        </span>
         {account.canSwitchMode && (
           <span
-            className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-white flex items-center justify-center ${
+            className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white flex items-center justify-center ${
               account.mode === 'administracao' ? 'bg-brand-500' : 'bg-gray-400'
             }`}
           >

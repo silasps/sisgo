@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { GerarLinkRefBtn } from './GerarLinkRefBtn'
 import { ReferenceAnswers } from '../../ReferenceAnswers'
+import { useSidebarOffsetClass } from '@/components/layout/account-context'
 
 type Props = {
   tipo: 'pastor' | 'amigo'
@@ -15,6 +16,7 @@ type Props = {
 
 export function ReferenceModal({ tipo, data, status, slug, applicationId, isStaff }: Props) {
   const [open, setOpen] = useState(false)
+  const offsetClass = useSidebarOffsetClass()
   const tipoLabel = tipo === 'pastor' ? 'Pastor / Líder' : 'Amigo / Referência'
   const isPending = status === 'pendente' || !data
 
@@ -32,7 +34,7 @@ export function ReferenceModal({ tipo, data, status, slug, applicationId, isStaf
 
       {open && (
         <div
-          className="fixed inset-0 md:left-60 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          className={`fixed inset-0 ${offsetClass} z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm`}
           onClick={() => setOpen(false)}
         >
           <div

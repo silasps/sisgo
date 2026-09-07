@@ -360,6 +360,8 @@ export interface FormDict {
     form_type_amigo: string
     form_type_lideranca_experiencia: string
     ref_for: string    // "Referência para" — name added by component
+    org_label: string
+    form_title_prefix: string   // "Formulário" — prefixa o tipo (ex.: "Formulário Pastoral")
     // Pastor form
     pastor_intro: string  // {name} placeholder
     pastor_nome: string
@@ -443,5 +445,73 @@ export interface FormDict {
     success_body: string
     contact_consent: string
     error_fallback: string
+  }
+
+  // ── Chrome da landing da escola (escola/[schoolSlug]/page.tsx) ─────────
+  landingChrome: {
+    nav_about: string
+    nav_programs: string
+    nav_next_class: string
+    nav_cta: string
+    hero_cta_primary: string
+    hero_cta_secondary: string
+    about_eyebrow: string
+    about_fallback_description: string
+    about_target_audience_label: string
+    stat_duration_label: string
+    stat_theory_label: string
+    stat_theory_value: string
+    stat_field_label: string
+    stat_field_value: string
+    stat_type_label: string
+    structure_eyebrow: string
+    structure_title: string
+    phase1_title: string
+    phase1_weeks: string
+    phase1_description: string
+    phase2_title: string
+    phase2_weeks: string
+    phase2_description: string
+    programs_eyebrow: string
+    programs_title: string
+    programs_subtitle: string
+    prerequisites_eyebrow: string
+    prerequisites_title: string
+    next_class_eyebrow: string
+    info_starts: string
+    info_ends: string
+    info_location: string
+    info_investment: string
+    registrations_open_cta: string
+    registrations_soon: string
+    registrations_soon_hint: string
+    registration_eyebrow: string
+    registration_title: string
+    registration_subtitle: string
+    footer_tagline: string
+    footer_home: string
+    footer_other_schools: string
+    footer_rights: string
+  }
+
+  // ── Chrome das páginas curtas de pré-inscrição (standalone/embed) ──────
+  standaloneChrome: {
+    badge: string
+    learn_more: string
+    powered_by: string
+  }
+
+  // ── Chrome do formulário grande pós-aceite (formulario/[token]) ────────
+  bigFormChrome: {
+    org_label: string
+    fallback_title: string
+    link_expired_title: string
+    link_expired_body: string
+    already_sent_title: string
+    already_sent_body: string
+    welcome_title: string
+    welcome_body_print: string
+    welcome_body_online: string
+    footer_contact: string
   }
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { submitStaffPreRegistration } from './actions'
 import { PHONE_COUNTRIES, LANGUAGES, formatPhoneByDialCode, guessLanguageCode } from '@/lib/i18n/phoneCountries'
 import { PartyPopper } from 'lucide-react'
@@ -37,8 +38,18 @@ export function StaffRegistrationForm({
   lockedMinistryId?: string
   lockedMinistryName?: string
 }) {
-  const [lang, setLang] = useState<Lang>(normalizeLang(initialLang))
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const [lang, setLangState] = useState<Lang>(normalizeLang(initialLang))
   const d = getFormDict(lang)
+
+  function setLang(l: Lang) {
+    setLangState(l)
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('lang', l)
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }
 
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState('')

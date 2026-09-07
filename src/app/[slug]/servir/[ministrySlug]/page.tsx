@@ -1,7 +1,11 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
+import { headers } from 'next/headers'
 import { StaffRegistrationForm } from '../StaffRegistrationForm'
 import { HeartHandshake } from 'lucide-react'
+import { getStaffFormDict, normalizeStaffLang } from '@/lib/i18n/staff-forms'
+import { detectLangFromHeader } from '@/lib/i18n/forms'
+import { resolveLocalizedText } from '@/lib/i18n/resolveLocalizedText'
 
 type Props = {
   params: Promise<{ slug: string; ministrySlug: string }>
@@ -11,6 +15,9 @@ type Props = {
 export default async function MinistryPublicPage({ params, searchParams }: Props) {
   const { slug, ministrySlug } = await params
   const { lang: langParam } = await searchParams
+  const acceptLanguage = (await headers()).get('accept-language')
+  const lang = normalizeStaffLang(langParam ?? detectLangFromHeader(acceptLanguage))
+  const d = getStaffFormDict(lang)
 
   const supabase = await createClient()
 
@@ -28,7 +35,7 @@ export default async function MinistryPublicPage({ params, searchParams }: Props
 
   const query = supabase
     .from('ministries')
-    .select('id, name, slug, subtitle, description, hero_image_url')
+    .select('id, name, slug, subtitle, subtitle_translations, description, description_translations, hero_image_url')
     .eq('organization_id', org.id)
     .eq('is_public', true)
     .eq('active', true)
@@ -57,20 +64,20 @@ export default async function MinistryPublicPage({ params, searchParams }: Props
         <div className="relative z-10 text-center px-5 sm:px-6 max-w-3xl mx-auto py-20">
           <span className="inline-flex items-center gap-2 mb-4 sm:mb-6 text-xs font-bold uppercase tracking-[0.2em] text-amber-400 bg-amber-500/10 border border-amber-500/30 px-4 py-1.5 rounded-full">
             <HeartHandshake className="size-3.5" />
-            Venha servir
+            {d.servirChrome.hero_badge}
           </span>
           <h1 className="text-3xl sm:text-5xl font-black text-white leading-tight mb-3 sm:mb-4">
             {ministry.name}
           </h1>
           {ministry.subtitle && (
-            <p className="text-lg sm:text-xl text-white/70 max-w-2xl mx-auto">{ministry.subtitle}</p>
+            <p className="text-lg sm:text-xl text-white/70 max-w-2xl mx-auto">{resolveLocalizedText(ministry.subtitle, ministry.subtitle_translations, lang)}</p>
           )}
           <div className="mt-8">
             <a
               href="#inscricao"
               className="inline-block bg-amber-500 hover:bg-amber-400 text-white font-bold px-8 py-3.5 rounded-2xl text-base sm:text-lg transition-all hover:scale-105 shadow-lg shadow-amber-500/30"
             >
-              Quero servir aqui
+              {d.servirChrome.cta_serve_here}
             </a>
           </div>
         </div>
@@ -80,9 +87,9 @@ export default async function MinistryPublicPage({ params, searchParams }: Props
       {ministry.description && (
         <section className="py-14 sm:py-20 px-5 sm:px-6 bg-white">
           <div className="max-w-2xl mx-auto text-center">
-            <span className="text-amber-500 font-bold text-sm uppercase tracking-widest">Sobre</span>
+            <span className="text-amber-500 font-bold text-sm uppercase tracking-widest">{d.servirChrome.about_eyebrow}</span>
             <h2 className="text-2xl sm:text-3xl font-black text-gray-950 mt-2 mb-6">{ministry.name}</h2>
-            <p className="text-gray-600 text-lg leading-relaxed whitespace-pre-line">{ministry.description}</p>
+            <p className="text-gray-600 text-lg leading-relaxed whitespace-pre-line">{resolveLocalizedText(ministry.description, ministry.description_translations, lang)}</p>
           </div>
         </section>
       )}
@@ -91,10 +98,10 @@ export default async function MinistryPublicPage({ params, searchParams }: Props
       <section id="inscricao" className="py-14 sm:py-20 px-5 sm:px-6 bg-gray-50">
         <div className="max-w-2xl mx-auto">
           <div className="text-center mb-8 sm:mb-10">
-            <span className="text-amber-500 font-bold text-sm uppercase tracking-widest">Pré-inscrição</span>
-            <h2 className="text-2xl sm:text-3xl font-black text-gray-950 mt-2">Dê o primeiro passo</h2>
+            <span className="text-amber-500 font-bold text-sm uppercase tracking-widest">{d.servirChrome.registration_eyebrow}</span>
+            <h2 className="text-2xl sm:text-3xl font-black text-gray-950 mt-2">{d.servirChrome.registration_title}</h2>
             <p className="text-gray-500 mt-3 text-sm sm:text-base">
-              Preencha abaixo e nossa equipe entrará em contato com mais detalhes.
+              {d.servirChrome.registration_subtitle}
             </p>
           </div>
           <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 sm:p-8">
@@ -102,7 +109,7 @@ export default async function MinistryPublicPage({ params, searchParams }: Props
               slug={slug}
               ministries={[]}
               communicationLanguages={communicationLanguages}
-              initialLang={langParam}
+              initialLang={lang}
               lockedMinistryId={ministry.id}
               lockedMinistryName={ministry.name}
             />
@@ -114,9 +121,9 @@ export default async function MinistryPublicPage({ params, searchParams }: Props
       <footer className="bg-gray-950 text-white px-5 py-10">
         <div className="max-w-2xl mx-auto text-center">
           <p className="font-bold">{org.name}</p>
-          <p className="text-gray-500 text-sm mt-1">Jovens Com Uma Missão</p>
+          <p className="text-gray-500 text-sm mt-1">{d.servirChrome.footer_tagline}</p>
           <a href={`/${slug}/servir`} className="inline-block mt-4 text-sm text-amber-400 hover:text-amber-300 transition-colors">
-            Ver outras oportunidades →
+            {d.servirChrome.footer_other_opportunities}
           </a>
         </div>
       </footer>

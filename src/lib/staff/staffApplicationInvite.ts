@@ -3,7 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { headers as nextHeaders } from 'next/headers'
 
-export type StaffInviteResult = { url?: string; error?: string; emailWarning?: string }
+export type StaffInviteResult = { url?: string; error?: string; emailWarning?: string; emailErrorDetail?: string }
 
 type SendFormLinkParams = {
   slug: string
@@ -28,6 +28,7 @@ async function sendFormLink(params: SendFormLinkParams): Promise<StaffInviteResu
   const formUrl = `${protocol}://${host}/${params.slug}/formulario-obreiro/${params.token}`
 
   let emailWarning: string | undefined
+  let emailErrorDetail: string | undefined
   if (params.email) {
     const { data: orgRow } = await db.from('organizations').select('name, email').eq('id', params.organizationId).maybeSingle()
     let ministryName: string | null = null
@@ -48,12 +49,13 @@ async function sendFormLink(params: SendFormLinkParams): Promise<StaffInviteResu
     })
     if (!emailResult.success) {
       emailWarning = emailResult.error === 'quota_atingida' ? 'quota_atingida' : 'email_falhou'
+      emailErrorDetail = emailResult.error
     }
   } else {
     emailWarning = 'sem_email_candidato'
   }
 
-  return { url: formUrl, emailWarning }
+  return { url: formUrl, emailWarning, emailErrorDetail }
 }
 
 // Reenvia o link de um formulário já disponibilizado antes (reaproveita o

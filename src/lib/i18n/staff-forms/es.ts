@@ -237,4 +237,39 @@ export const esDict: StaffFormDict = {
       'Estoy consciente de que la aprobación está sujeta al análisis del liderazgo de la base.',
     ],
   },
+
+  servirChrome: {
+    hero_badge: 'Ven a servir',
+    hero_title: 'Únete a nuestro equipo',
+    hero_subtitle: 'Completa el formulario abajo para mostrar tu interés en servir en la base. Nuestro equipo se pondrá en contacto.',
+    cta_serve_here: 'Quiero servir aquí',
+    about_eyebrow: 'Sobre',
+    opportunities_title: 'Oportunidades para servir',
+    learn_more: 'Saber más →',
+    no_ministry_hint: '¿Aún no sabes qué ministerio te queda mejor? Envía una preinscripción general abajo.',
+    registration_eyebrow: 'Preinscripción',
+    registration_title: 'Da el primer paso',
+    registration_subtitle: 'Completa el formulario abajo y nuestro equipo se pondrá en contacto con más detalles.',
+    footer_tagline: 'Jóvenes Con Una Misión',
+    footer_other_opportunities: 'Ver otras oportunidades →',
+    footer_rights: 'Todos los derechos reservados',
+  },
+
+  standaloneChrome: {
+    badge: 'Preinscripción',
+    learn_more: 'Saber más sobre el ministerio →',
+    powered_by: 'Powered by',
+  },
+
+  bigFormChrome: {
+    title: 'Inscripción de Obrero',
+    link_expired_title: 'Enlace vencido',
+    link_expired_body: 'Este enlace de formulario ha vencido. Ponte en contacto con el equipo de la base para solicitar un nuevo enlace.',
+    already_sent_title: 'Formulario ya enviado',
+    already_sent_body: 'Tu formulario ya fue enviado y está en análisis. El equipo se pondrá en contacto pronto.',
+    welcome_title: '¡Bienvenido(a) al formulario de inscripción!',
+    welcome_body_print: 'Esta es la versión en blanco para completar a mano, en caso de que no puedas completarla por internet.',
+    welcome_body_online: 'Este formulario es parte del proceso de evaluación para servir en la base. Responde con atención y sinceridad. Tu progreso se guarda automáticamente en cada sección. Tiempo estimado: 20 a 30 minutos.',
+    footer_contact: '¿Dudas? Ponte en contacto con el equipo responsable de la base.',
+  },
 }

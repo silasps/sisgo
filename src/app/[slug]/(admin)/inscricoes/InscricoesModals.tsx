@@ -9,6 +9,8 @@ import { gerarLinkReferenciaObreiro } from '@/app/[slug]/formulario-obreiro/[tok
 import { Link as LinkIcon, RefreshCw, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { ReferenceAnswers } from './ReferenceAnswers'
+import { PublicLinkButtons, type PublicLinkEntry } from './PublicLinkButtons'
+import { useSidebarOffsetClass } from '@/components/layout/account-context'
 
 type RefEntry = { status: string; data: Record<string, string> | null }
 type RefSummary = { pastor: RefEntry | null; amigo: RefEntry | null }
@@ -50,14 +52,22 @@ function DestinationSelect({ ministries, schools, defaultValue, className }: {
 // ── Nova pré-inscrição manual ──────────────────────────────────────────────
 
 export function NovaPreInscricaoButton({
-  openClasses, criarAction, slug,
+  openClasses, criarAction, slug, publicSchools,
+  open: openProp, onOpenChange, hideTrigger,
 }: {
   openClasses: ClassOption[]
   criarAction: CriarAction
   slug: string
+  publicSchools?: Array<{ slug: string; name: string }>
+  /** Controle externo do modal (ex.: disparado por outro botão) — quando omitido, o componente gerencia seu próprio estado e mostra o botão "+ Aluno". */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  hideTrigger?: boolean
 }) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
+  const [openState, setOpenState] = useState(false)
+  const open = openProp ?? openState
+  const setOpen = onOpenChange ?? setOpenState
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -71,15 +81,26 @@ export function NovaPreInscricaoButton({
     router.refresh()
   }
 
+  const linkEntries: PublicLinkEntry[] = (publicSchools ?? []).map(school => ({
+    key: school.slug,
+    label: school.name,
+    path: `/${slug}/escola/${school.slug}/inscricao`,
+    embedPath: `/${slug}/escola/${school.slug}/embed`,
+    embedKind: 'form',
+  }))
+
   return (
     <>
-      <button onClick={() => setOpen(true)}
-        className="px-3 py-2 text-xs font-semibold text-white bg-brand-500 hover:bg-brand-600 rounded-lg transition-colors whitespace-nowrap">
-        + Aluno
-      </button>
+      {!hideTrigger && (
+        <button onClick={() => setOpen(true)}
+          className="px-3 py-2 text-xs font-semibold text-white bg-brand-500 hover:bg-brand-600 rounded-lg transition-colors whitespace-nowrap">
+          + Aluno
+        </button>
+      )}
 
       <Modal open={open} onClose={() => setOpen(false)} title="Nova pré-inscrição manual"
-        subtitle="Somente nome obrigatório — restante é opcional">
+        subtitle="Somente nome obrigatório — restante é opcional"
+        headerExtra={<PublicLinkButtons entries={linkEntries} accent="indigo" />}>
         <form onSubmit={handleSubmit} className="space-y-4 p-5">
           <input type="hidden" name="slug" value={slug} />
 
@@ -138,15 +159,23 @@ export function NovaPreInscricaoButton({
 // ── Nova pré-inscrição de obreiro ─────────────────────────────────────────
 
 export function NovaPreInscricaoObreiroButton({
-  ministries, schools, criarAction, slug,
+  ministries, schools, criarAction, slug, publicMinistries,
+  open: openProp, onOpenChange, hideTrigger,
 }: {
   ministries: MinistryOption[]
   schools: SchoolOption[]
   criarAction: CriarAction
   slug: string
+  publicMinistries?: Array<{ slug: string; name: string }>
+  /** Controle externo do modal (ex.: disparado por outro botão) — quando omitido, o componente gerencia seu próprio estado e mostra o botão "+ Obreiro". */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  hideTrigger?: boolean
 }) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
+  const [openState, setOpenState] = useState(false)
+  const open = openProp ?? openState
+  const setOpen = onOpenChange ?? setOpenState
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -160,15 +189,35 @@ export function NovaPreInscricaoObreiroButton({
     router.refresh()
   }
 
+  const linkEntries: PublicLinkEntry[] = [
+    {
+      key: 'geral',
+      label: 'Página geral de obreiros',
+      path: `/${slug}/servir`,
+      embedPath: `/${slug}/servir/embed`,
+      embedKind: 'servir',
+    },
+    ...(publicMinistries ?? []).map(ministry => ({
+      key: ministry.slug,
+      label: ministry.name,
+      path: `/${slug}/servir/${ministry.slug}/inscricao`,
+      embedPath: `/${slug}/servir/${ministry.slug}/embed`,
+      embedKind: 'form' as const,
+    })),
+  ]
+
   return (
     <>
-      <button onClick={() => setOpen(true)}
-        className="px-3 py-2 text-xs font-semibold text-white bg-violet-500 hover:bg-violet-600 rounded-lg transition-colors whitespace-nowrap">
-        + Obreiro
-      </button>
+      {!hideTrigger && (
+        <button onClick={() => setOpen(true)}
+          className="px-3 py-2 text-xs font-semibold text-white bg-violet-500 hover:bg-violet-600 rounded-lg transition-colors whitespace-nowrap">
+          + Obreiro
+        </button>
+      )}
 
       <Modal open={open} onClose={() => setOpen(false)} title="Nova pré-inscrição de obreiro"
-        subtitle="Somente nome obrigatório — restante é opcional">
+        subtitle="Somente nome obrigatório — restante é opcional"
+        headerExtra={<PublicLinkButtons entries={linkEntries} accent="violet" />}>
         <form onSubmit={handleSubmit} className="space-y-4 p-5">
           <input type="hidden" name="slug" value={slug} />
 
@@ -484,6 +533,7 @@ export function LinksReferenciaAdminButton({
   const [copied, setCopied] = useState<'pastor' | 'amigo' | null>(null)
   const [showRespostas, setShowRespostas] = useState<'pastor' | 'amigo' | null>(null)
   const [confirmTipo, setConfirmTipo] = useState<'pastor' | 'amigo' | null>(null)
+  const offsetClass = useSidebarOffsetClass()
   const anyRespondido = refSummary?.pastor?.status === 'enviado' || refSummary?.amigo?.status === 'enviado'
 
   async function gerar(tipo: 'pastor' | 'amigo') {
@@ -573,7 +623,7 @@ export function LinksReferenciaAdminButton({
 
       {confirmTipo && (
         <div
-          className="fixed inset-0 md:left-60 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          className={`fixed inset-0 ${offsetClass} z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm`}
           onClick={() => setConfirmTipo(null)}
         >
           <div

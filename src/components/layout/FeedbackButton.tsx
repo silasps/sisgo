@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { saveFeedback } from '@/lib/feedback/saveFeedback'
 import { Lightbulb } from 'lucide-react'
+import { useSidebarOffsetClass } from '@/components/layout/account-context'
 
 const PAGE_LABELS: Record<string, string> = {
   dashboard: 'Dashboard',
@@ -37,6 +38,7 @@ export function FeedbackButton() {
   const [err, setErr] = useState('')
   const pathname = usePathname()
   const label = getLabel(pathname)
+  const offsetClass = useSidebarOffsetClass()
 
   async function handleSend() {
     if (!text.trim()) return
@@ -80,7 +82,7 @@ export function FeedbackButton() {
 
       {open && (
         <div
-          className="fixed inset-0 md:left-60 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          className={`fixed inset-0 ${offsetClass} z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm`}
           onClick={handleClose}
         >
           <div

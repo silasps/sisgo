@@ -1,11 +1,13 @@
 'use client'
 
 import { useRef, useState, useContext, createContext } from 'react'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { HeartHandshake } from 'lucide-react'
 import { salvarSecaoObreiro, enviarFormularioObreiro, gerarLinkReferenciaObreiro } from './actions'
 import { InternationalPhoneField } from '@/components/ui/InternationalPhoneField'
 import { MaskedInput, useMask } from '@/components/ui/MaskedInput'
 import { LangSwitcher } from '@/components/ui/LangSwitcher'
+import { normalizeLang } from '@/lib/i18n/forms'
 
 // ── i18n stub — will use staff-forms dict when ready, fallback to inline PT ──
 
@@ -843,7 +845,18 @@ export function FormularioObreiro({
   slug, token, applicationId, orgName, ministryName, ministryId, ministries,
   prefill, initialSection = 1, initialData, initialLang, printMode
 }: Props) {
-  const [lang, setLang] = useState<Lang>((initialLang as Lang) ?? 'pt')
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const [lang, setLangState] = useState<Lang>(normalizeLang(initialLang))
+
+  function setLang(l: Lang) {
+    setLangState(l)
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('lang', l)
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }
+
   const [current, setCurrent] = useState(initialSection)
   const [saving, setSaving] = useState(false)
   const [submitted, setSubmitted] = useState(false)

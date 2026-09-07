@@ -1,20 +1,23 @@
 'use client'
 
-import { useState, useTransition, type ReactNode } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useFormStatus } from 'react-dom'
-import { Search, ClipboardList, Mail, MessageCircle, ChevronDown, Link2, Loader2 } from 'lucide-react'
+import { Search, ClipboardList, Mail, MessageCircle, ChevronDown, Loader2, RefreshCw } from 'lucide-react'
 import { RecusarModal } from './RecusarModal'
 import { DisponibilizarFormularioButton } from './DisponibilizarFormularioButton'
 import { PipelineStepper, stagesFromFlags } from '@/components/inscricoes/PipelineStepper'
 import BackgroundChecksSection, { type BackgroundCheck } from './formulario-obreiro/[id]/BackgroundChecksSection'
 import { solicitarHospedagemObreiro } from './formulario-obreiro/[id]/actions'
 import { solicitarHospedagemAluno } from './formulario/[id]/actions'
+import { checkInscricoesUpdates } from './actions'
 import {
   EditarPreInscricaoButton,
   EditarPreInscricaoObreiroButton,
   MarcarRecebidoExternoButton,
 } from './InscricoesModals'
+import { Tooltip } from '@/components/ui/Tooltip'
+import { useAccount } from '@/components/layout/account-context'
 
 type InscricaoItem = {
   id: string
@@ -81,8 +84,6 @@ type Props = {
   initialTab: string
   initialEtapa: string
   hideAlunoTipo: boolean
-  linksAluno: ReactNode
-  linksObreiro: ReactNode
   openClasses: OpenClassOption[]
   allSchools: Array<{ id: string; name: string }>
   allMinistries: Array<{ id: string; name: string }>
@@ -229,10 +230,10 @@ function StatusDropdown({ item, label, color, options, updateStatus }: {
   )
 }
 
-function AssumirConversaButton() {
+function AssumirConversaButton({ onClick }: { onClick: () => void }) {
   const { pending } = useFormStatus()
   return (
-    <button type="submit" disabled={pending}
+    <button type="submit" disabled={pending} onClick={onClick}
       className="text-xs text-indigo-600 hover:text-indigo-800 underline disabled:opacity-50">
       {pending ? 'Assumindo…' : 'Assumir conversa'}
     </button>
@@ -321,8 +322,6 @@ export function InscricoesList({
   initialTab,
   initialEtapa,
   hideAlunoTipo,
-  linksAluno,
-  linksObreiro,
   openClasses,
   allSchools,
   allMinistries,
@@ -349,9 +348,53 @@ export function InscricoesList({
 }: Props) {
   const [tab, setTab] = useState(initialTab)
   const [etapa, setEtapa] = useState(initialEtapa)
-  const [showLinks, setShowLinks] = useState(false)
   const [query, setQuery] = useState(initialQuery)
   const searchParams = useSearchParams()
+  const router = useRouter()
+  const [hasUpdates, setHasUpdates] = useState(false)
+  const updatesBaseline = useRef<number | null>(null)
+  const account = useAccount()
+
+  // Feedback visual instantâneo pra ações que hoje dependem de um
+  // round-trip lento ao servidor (recusar, assumir conversa): o item some/
+  // muda na hora, e a reconciliação com o servidor acontece em segundo
+  // plano. Se os dados do servidor mudarem por qualquer outro motivo, esses
+  // estados otimistas ficam obsoletos automaticamente (o item real já reflete
+  // a mudança), então não precisam de limpeza manual.
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set())
+  const [optimisticAssumedIds, setOptimisticAssumedIds] = useState<Set<string>>(new Set())
+
+  // Sempre que os dados do servidor mudam (router.refresh() ou qualquer
+  // server action com revalidatePath), resincroniza o baseline pra não
+  // acusar falso positivo depois de uma ação do próprio admin.
+  useEffect(() => {
+    let cancelled = false
+    checkInscricoesUpdates(orgId)
+      .then(total => {
+        if (cancelled) return
+        updatesBaseline.current = total
+        setHasUpdates(false)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [items, historico, orgId])
+
+  // Polling leve pra detectar novas inscrições (ex.: pré-inscrição
+  // pública enviada enquanto o admin está com a página aberta).
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.hidden || updatesBaseline.current === null) return
+      checkInscricoesUpdates(orgId)
+        .then(total => {
+          if (updatesBaseline.current !== null && total > updatesBaseline.current) {
+            setHasUpdates(true)
+          }
+        })
+        .catch(() => {})
+    }, 30_000)
+    return () => clearInterval(interval)
+  }, [orgId])
+
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => {
     const initial = new Set<string>()
     const highlightId = searchParams.get('highlight')
@@ -378,14 +421,14 @@ export function InscricoesList({
     return false
   }
 
-  const tabEtapaFiltered = items.filter(i => matchesTipo(i, tab) && matchesEtapa(i, etapa))
+  const visibleItems = items.filter(i => !hiddenIds.has(i.id))
+  const tabEtapaFiltered = visibleItems.filter(i => matchesTipo(i, tab) && matchesEtapa(i, etapa))
   const filtered = tabEtapaFiltered.filter(i =>
     !query ||
     i.nome.toLowerCase().includes(query.toLowerCase()) ||
     (i.email ?? '').toLowerCase().includes(query.toLowerCase())
   )
 
-  const currentLinks = tab === 'aluno' ? linksAluno : tab === 'obreiro' ? linksObreiro : null
   const visibleTipoTabs = hideAlunoTipo ? TIPO_TABS.filter(t => t.key !== 'aluno') : TIPO_TABS
 
   return (
@@ -395,7 +438,7 @@ export function InscricoesList({
         {visibleTipoTabs.length > 2 && (
         <div className="flex gap-1 bg-gray-100 p-1 rounded-xl overflow-x-auto scrollbar-none">
           {visibleTipoTabs.map(t => {
-            const count = items.filter(i => matchesTipo(i, t.key) && matchesEtapa(i, etapa)).length
+            const count = visibleItems.filter(i => matchesTipo(i, t.key) && matchesEtapa(i, etapa)).length
             return (
               <button key={t.key} type="button" onClick={() => setTab(t.key)}
                 className={`px-4 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 ${
@@ -418,7 +461,7 @@ export function InscricoesList({
       {/* Chips: etapa do processo (onde) */}
       <div className="flex gap-1.5 overflow-x-auto scrollbar-none">
         {ETAPA_TABS.map(e => {
-          const count = items.filter(i => matchesTipo(i, tab) && matchesEtapa(i, e.key)).length
+          const count = visibleItems.filter(i => matchesTipo(i, tab) && matchesEtapa(i, e.key)).length
           return (
             <button key={e.key} type="button" onClick={() => setEtapa(e.key)}
               className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors border flex items-center gap-1 ${
@@ -433,24 +476,6 @@ export function InscricoesList({
           )
         })}
       </div>
-
-      {/* Links públicos de inscrição — escondidos atrás de um botão, para não poluir a tela */}
-      {currentLinks && (
-        <div>
-          <button type="button" onClick={() => setShowLinks(s => !s)}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-800"
-          >
-            <Link2 className="size-3.5" />
-            {tab === 'aluno' ? 'Link de pré-inscrição pública' : 'Links para servir / ministérios'}
-            <ChevronDown className={`size-3.5 transition-transform ${showLinks ? 'rotate-180' : ''}`} />
-          </button>
-          {showLinks && (
-            <div className="mt-2 space-y-3">
-              {currentLinks}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Search */}
       <div className="relative w-full sm:w-80">
@@ -468,6 +493,17 @@ export function InscricoesList({
         />
       </div>
 
+      {hasUpdates && (
+        <button
+          type="button"
+          onClick={() => { setHasUpdates(false); router.refresh() }}
+          className="w-full flex items-center justify-center gap-2 text-sm font-semibold text-brand-700 bg-brand-50 border border-brand-200 rounded-lg py-2.5 hover:bg-brand-100 transition-colors"
+        >
+          <RefreshCw className="size-4" />
+          Novas inscrições disponíveis — toque para atualizar
+        </button>
+      )}
+
       {/* Lista */}
       {!filtered.length ? (
         <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
@@ -481,14 +517,19 @@ export function InscricoesList({
       ) : (
         <div className="space-y-3">
           {filtered.map(item => {
-            const statusInfo = item.tipo === 'pre_inscricao_obreiro' && item.status === 'pendente'
+            // Assumir conversa já implica em início de contato — reflete isso
+            // na hora, antes mesmo do servidor confirmar (ver assumirPreInscricaoObreiro).
+            const effectiveStatus = item.tipo === 'pre_inscricao_obreiro' && item.status === 'pendente' && optimisticAssumedIds.has(item.id)
+              ? 'em_contato'
+              : item.status
+            const statusInfo = item.tipo === 'pre_inscricao_obreiro' && effectiveStatus === 'pendente'
               ? { label: 'Aguardando contato', color: 'bg-yellow-100 text-yellow-700' }
-              : STATUS_CONFIG[item.status] ?? { label: item.status, color: 'bg-gray-100 text-gray-500' }
+              : STATUS_CONFIG[effectiveStatus] ?? { label: effectiveStatus, color: 'bg-gray-100 text-gray-500' }
             const urgency    = urgencyBadge(item.diasAberto)
-            const finalizado = isFinalizado(item.status)
+            const finalizado = isFinalizado(effectiveStatus)
             const canEditStatus = item.tipo === 'pre_inscricao_obreiro' ? canWriteObreiro : canWriteItem(item)
             const statusOptions: { value: string; label: string }[] =
-              item.status !== 'pendente' ? [] :
+              effectiveStatus !== 'pendente' ? [] :
               item.tipo === 'aluno' ? [{ value: 'em_contato', label: 'Em contato' }, { value: 'em_analise', label: 'Em análise' }] :
               (item.tipo === 'pre_inscricao' || item.tipo === 'pre_inscricao_obreiro') ? [{ value: 'em_contato', label: 'Em contato' }] :
               []
@@ -539,9 +580,9 @@ export function InscricoesList({
                       ) : showStatusPill ? (
                         <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusInfo.color}`}>{statusInfo.label}</span>
                       ) : null}
-                      {item.tipo === 'pre_inscricao_obreiro' && item.ministryId && item.assumedByName && (
+                      {item.tipo === 'pre_inscricao_obreiro' && item.ministryId && (item.assumedByName || optimisticAssumedIds.has(item.id)) && (
                         <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
-                          Assumido pelo DH — {item.assumedByName}
+                          Assumido pelo DH — {item.assumedByName ?? account?.name ?? 'você'}
                         </span>
                       )}
                       {item.tipo === 'pre_inscricao_obreiro' && item.createdByName && (
@@ -568,34 +609,40 @@ export function InscricoesList({
 
                   <div className="flex items-center gap-1.5 shrink-0">
                     {!finalizado && item.email && (
-                      <a
-                        href={`mailto:${item.email}?subject=Sua inscrição - ${item.escola ?? 'JOCUM'}&body=Olá ${item.nome},%0A%0A`}
-                        className="p-1.5 border border-gray-200 text-gray-500 hover:bg-gray-50 rounded-lg transition-colors"
-                        aria-label="Enviar e-mail"
-                      >
-                        <Mail className="size-4" />
-                      </a>
+                      <Tooltip label="Enviar e-mail">
+                        <a
+                          href={`mailto:${item.email}?subject=Sua inscrição - ${item.escola ?? 'JOCUM'}&body=Olá ${item.nome},%0A%0A`}
+                          className="p-1.5 border border-gray-200 text-gray-500 hover:bg-gray-50 rounded-lg transition-colors"
+                          aria-label="Enviar e-mail"
+                        >
+                          <Mail className="size-4" />
+                        </a>
+                      </Tooltip>
                     )}
                     {!finalizado && whatsapp && (
-                      <a
-                        href={whatsapp}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        suppressHydrationWarning
-                        className="p-1.5 border border-green-200 text-green-700 hover:bg-green-50 rounded-lg transition-colors"
-                        aria-label="WhatsApp"
-                      >
-                        <MessageCircle className="size-4" />
-                      </a>
+                      <Tooltip label="WhatsApp">
+                        <a
+                          href={whatsapp}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          suppressHydrationWarning
+                          className="p-1.5 border border-green-200 text-green-700 hover:bg-green-50 rounded-lg transition-colors"
+                          aria-label="WhatsApp"
+                        >
+                          <MessageCircle className="size-4" />
+                        </a>
+                      </Tooltip>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => toggleExpanded(item.id)}
-                      className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition-colors"
-                      aria-label={isOpen ? 'Recolher' : 'Ver detalhes e ações'}
-                    >
-                      <ChevronDown className={`size-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-                    </button>
+                    <Tooltip label={isOpen ? 'Recolher' : 'Ver detalhes e ações'}>
+                      <button
+                        type="button"
+                        onClick={() => toggleExpanded(item.id)}
+                        className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition-colors"
+                        aria-label={isOpen ? 'Recolher' : 'Ver detalhes e ações'}
+                      >
+                        <ChevronDown className={`size-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                      </button>
+                    </Tooltip>
                   </div>
                 </div>
 
@@ -622,6 +669,8 @@ export function InscricoesList({
                     {/* Formulário preenchido, links de recomendação etc. — só em Detalhes (link do stepper) */}
                     <p className="text-xs text-gray-300 mt-1.5">
                       {new Date(item.criadoEm).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      {' às '}
+                      {new Date(item.criadoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                     </p>
 
                   {!finalizado && (
@@ -737,11 +786,13 @@ export function InscricoesList({
                           </div>
                         )
                       )}
-                      {canWrite && item.tipo === 'pre_inscricao_obreiro' && item.ministryId && !item.assumedByName && !finalizado && (
+                      {canWrite && item.tipo === 'pre_inscricao_obreiro' && item.ministryId && !item.assumedByName && !optimisticAssumedIds.has(item.id) && !finalizado && (
                         <form action={assumirPreInscricaoObreiro}>
                           <input type="hidden" name="id" value={item.id} />
                           <input type="hidden" name="org_id" value={orgId} />
-                          <AssumirConversaButton />
+                          <AssumirConversaButton
+                            onClick={() => setOptimisticAssumedIds(prev => new Set(prev).add(item.id))}
+                          />
                         </form>
                       )}
 
@@ -991,7 +1042,13 @@ export function InscricoesList({
                       )}
                       {((item.tipo === 'pre_inscricao_obreiro' || item.tipo === 'obreiro') ? canWriteObreiro : canWriteItem(item)) && (
                         <div className="col-span-2 sm:col-span-1">
-                          <RecusarModal id={item.id} tipo={item.tipo} action={recusar} />
+                          <RecusarModal
+                            id={item.id}
+                            tipo={item.tipo}
+                            action={recusar}
+                            onOptimisticRemove={id => setHiddenIds(prev => new Set(prev).add(id))}
+                            onOptimisticRestore={id => setHiddenIds(prev => { const next = new Set(prev); next.delete(id); return next })}
+                          />
                         </div>
                       )}
                     </div>

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
+import { useSidebarOffsetClass } from '@/components/layout/account-context'
 
 type Props = {
   title?: string
@@ -24,6 +25,7 @@ export function ConfirmDialog({
 }: Props) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const offsetClass = useSidebarOffsetClass()
 
   async function handleConfirm() {
     setLoading(true)
@@ -45,7 +47,7 @@ export function ConfirmDialog({
 
       {open && (
         <div
-          className="fixed inset-0 md:left-60 z-50 flex items-center justify-center bg-black/50 p-4"
+          className={`fixed inset-0 ${offsetClass} z-50 flex items-center justify-center bg-black/50 p-4`}
           onClick={e => { if (e.target === e.currentTarget && !loading) setOpen(false) }}
         >
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">

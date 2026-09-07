@@ -7,6 +7,7 @@ import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { Users, ClipboardList } from 'lucide-react'
 import { MuralClient } from './mural/MuralClient'
+import { LocaleContentTabs } from '@/components/ui/LocaleContentTabs'
 
 type Props = {
   params: Promise<{ slug: string; id: string }>
@@ -43,7 +44,7 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
 
   const { data: ministry } = await supabase
     .from('ministries')
-    .select('id, name, description, active, linked_role, slug, subtitle, hero_image_url, is_public')
+    .select('id, name, description, description_translations, active, linked_role, slug, subtitle, subtitle_translations, hero_image_url, is_public')
     .eq('id', id)
     .eq('organization_id', orgId)
     .single()
@@ -131,12 +132,17 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
   // ── Actions ───────────────────────────────────────────────────────────────────
   const handleUpdate = async (formData: FormData) => {
     'use server'
+    const parseTranslations = (key: string) => {
+      try { return JSON.parse((formData.get(key) as string) || '{}') } catch { return {} }
+    }
     await updateMinistry(ministry.id, {
       name: (formData.get('name') as string).trim(),
       description: (formData.get('description') as string).trim() || null,
+      description_translations: parseTranslations('description_translations'),
       active: formData.get('active') === 'on',
       slug: (formData.get('slug') as string)?.trim() || null,
       subtitle: (formData.get('subtitle') as string)?.trim() || null,
+      subtitle_translations: parseTranslations('subtitle_translations'),
       hero_image_url: (formData.get('hero_image_url') as string)?.trim() || null,
       is_public: formData.get('is_public') === 'on',
     })
@@ -260,7 +266,10 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
               )}
               <form action={handleUpdate} className="space-y-2">
                 <input name="name" defaultValue={ministry.name} required className={`${INPUT} text-xs`} />
-                <textarea name="description" rows={2} defaultValue={ministry.description ?? ''} placeholder="Descrição..." className={`${INPUT} text-xs resize-none`} />
+                <LocaleContentTabs label="Descrição" name="description" rows={2}
+                  defaultValue={ministry.description ?? ''} placeholder="Descrição..."
+                  translationsName="description_translations"
+                  defaultTranslations={(ministry as unknown as { description_translations: Partial<Record<'en' | 'es', string>> | null }).description_translations ?? {}} />
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" name="active" defaultChecked={ministry.active} className="rounded border-gray-300 text-brand-500 h-3.5 w-3.5" />
                   <span className="text-xs text-gray-600">Ativo</span>
@@ -269,7 +278,10 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
                 <div className="border-t border-gray-100 pt-2 mt-2 space-y-2">
                   <h4 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Página pública</h4>
                   <input name="slug" defaultValue={ministry.slug ?? ''} placeholder="Slug (URL pública)" className={`${INPUT} text-xs`} />
-                  <input name="subtitle" defaultValue={ministry.subtitle ?? ''} placeholder="Subtítulo" className={`${INPUT} text-xs`} />
+                  <LocaleContentTabs label="Subtítulo" name="subtitle" rows={2}
+                    defaultValue={ministry.subtitle ?? ''} placeholder="Subtítulo"
+                    translationsName="subtitle_translations"
+                    defaultTranslations={(ministry as unknown as { subtitle_translations: Partial<Record<'en' | 'es', string>> | null }).subtitle_translations ?? {}} />
                   <input name="hero_image_url" defaultValue={ministry.hero_image_url ?? ''} placeholder="URL da imagem hero" className={`${INPUT} text-xs`} />
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" name="is_public" defaultChecked={ministry.is_public} className="rounded border-gray-300 text-brand-500 h-3.5 w-3.5" />

@@ -1,6 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
+import { headers } from 'next/headers'
 import { StaffRegistrationForm } from '../../StaffRegistrationForm'
+import { getStaffFormDict, normalizeStaffLang } from '@/lib/i18n/staff-forms'
+import { detectLangFromHeader } from '@/lib/i18n/forms'
 import type { Metadata } from 'next'
 
 type Props = {
@@ -46,6 +49,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function StandaloneMinistryRegistrationPage({ params, searchParams }: Props) {
   const { slug, ministrySlug } = await params
   const { lang: langParam } = await searchParams
+  const acceptLanguage = (await headers()).get('accept-language')
+  const lang = normalizeStaffLang(langParam ?? detectLangFromHeader(acceptLanguage))
+  const d = getStaffFormDict(lang)
 
   const supabase = await createClient()
 
@@ -80,7 +86,7 @@ export default async function StandaloneMinistryRegistrationPage({ params, searc
           {/* Header */}
           <div className="mb-8 text-center">
             <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 text-amber-700 text-xs font-bold uppercase tracking-widest px-4 py-1.5 rounded-full mb-4">
-              Pré-inscrição
+              {d.standaloneChrome.badge}
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-gray-900 leading-tight">
               {ministry.name}
@@ -94,7 +100,7 @@ export default async function StandaloneMinistryRegistrationPage({ params, searc
               slug={slug}
               ministries={[]}
               communicationLanguages={communicationLanguages}
-              initialLang={langParam}
+              initialLang={lang}
               lockedMinistryId={ministry.id}
               lockedMinistryName={ministry.name}
             />
@@ -106,10 +112,10 @@ export default async function StandaloneMinistryRegistrationPage({ params, searc
               href={`/${slug}/servir/${ministrySlug}`}
               className="inline-block text-sm text-amber-600 hover:text-amber-700 font-medium transition-colors"
             >
-              Saiba mais sobre o ministério &rarr;
+              {d.standaloneChrome.learn_more}
             </a>
             <p className="text-xs text-gray-300">
-              Powered by <span className="font-semibold">SISGO</span>
+              {d.standaloneChrome.powered_by} <span className="font-semibold">SISGO</span>
             </p>
           </div>
         </div>

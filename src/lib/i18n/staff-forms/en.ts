@@ -237,4 +237,39 @@ export const enDict: StaffFormDict = {
       'I understand that approval is subject to review by the base leadership.',
     ],
   },
+
+  servirChrome: {
+    hero_badge: 'Come serve',
+    hero_title: 'Join our team',
+    hero_subtitle: 'Fill out the form below to express your interest in serving at the base. Our team will reach out.',
+    cta_serve_here: 'I want to serve here',
+    about_eyebrow: 'About',
+    opportunities_title: 'Ways to serve',
+    learn_more: 'Learn more →',
+    no_ministry_hint: 'Not sure which ministry fits you yet? Send a general pre-registration below.',
+    registration_eyebrow: 'Pre-registration',
+    registration_title: 'Take the first step',
+    registration_subtitle: 'Fill out the form below and our team will reach out with more details.',
+    footer_tagline: 'Youth With A Mission',
+    footer_other_opportunities: 'See other opportunities →',
+    footer_rights: 'All rights reserved',
+  },
+
+  standaloneChrome: {
+    badge: 'Pre-registration',
+    learn_more: 'Learn more about this ministry →',
+    powered_by: 'Powered by',
+  },
+
+  bigFormChrome: {
+    title: 'Staff Application',
+    link_expired_title: 'Link expired',
+    link_expired_body: 'This form link has expired. Please contact the base team to request a new link.',
+    already_sent_title: 'Form already submitted',
+    already_sent_body: 'Your form has already been submitted and is under review. Our team will be in touch soon.',
+    welcome_title: 'Welcome to the application form!',
+    welcome_body_print: 'This is the blank version for filling out by hand, in case you can’t complete it online.',
+    welcome_body_online: 'This form is part of the evaluation process for serving at the base. Please answer thoughtfully and honestly. Your progress is saved automatically after each section. Estimated time: 20 to 30 minutes.',
+    footer_contact: 'Questions? Contact the team responsible for the base.',
+  },
 }

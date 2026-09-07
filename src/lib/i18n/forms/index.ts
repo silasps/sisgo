@@ -19,6 +19,13 @@ export function normalizeLang(raw?: string | null): Lang {
   return LANG_MAP[raw] ?? LANG_MAP[raw.slice(0, 2)] ?? 'pt'
 }
 
+/** Extrai o idioma preferido do header `Accept-Language` (ex.: "en-US,en;q=0.9,pt;q=0.8")
+ * pra usar como fallback de idioma em páginas públicas quando não há `?lang=`
+ * na URL nem um idioma salvo — repasse o resultado pra `normalizeLang`. */
+export function detectLangFromHeader(acceptLanguage?: string | null): string | undefined {
+  return acceptLanguage?.split(',')[0]?.trim().split(';')[0]
+}
+
 const DICTS: Record<Lang, FormDict> = { pt: ptDict, en: enDict, es: esDict }
 
 export function getFormDict(lang: Lang): FormDict {

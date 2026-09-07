@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { salvarReferencia } from './actions'
 import { InternationalPhoneField } from '@/components/ui/InternationalPhoneField'
 import { HeartHandshake } from 'lucide-react'
@@ -357,8 +358,18 @@ function FormLiderancaExperiencia({ candidatoNome, d, selectPh, isStaff }: {
 }
 
 export function FormularioReferencia({ token, tipo, candidatoNome, escolaNome, initialLang, isStaff }: Props) {
-  const [lang, setLang] = useState<Lang>(normalizeLang(initialLang))
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const [lang, setLangState] = useState<Lang>(normalizeLang(initialLang))
   const d = getFormDict(lang)
+
+  function setLang(l: Lang) {
+    setLangState(l)
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('lang', l)
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }
 
   const [saving, setSaving] = useState(false)
   const [submitted, setSubmitted] = useState(false)

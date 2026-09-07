@@ -8,6 +8,9 @@ import { SearchBar } from '@/components/ui/SearchBar'
 import { Suspense } from 'react'
 import { SCHOOL_APPLICATION_TYPES } from '@/lib/schools'
 import { PESSOAS_ROLES } from '@/lib/auth/permissions'
+import { SkTable } from '@/components/ui/Skeleton'
+import { NovaPessoaButton } from './NovaPessoaButton'
+import { criarPreInscricaoManual, criarPreInscricaoObreiroManual } from '../inscricoes/actions'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -164,8 +167,11 @@ export default async function PessoasPage({ params, searchParams }: Props) {
     allowedSchoolIds = leaderSchools?.map(row => row.school_id) ?? []
   }
 
-  const sbAdmin = createAdminClient()
-  let openClassesQuery = sbAdmin
+  // Dados para o menu "+ Nova pessoa" (Aluno/Obreiro) — sempre visível no
+  // cabeçalho, por isso buscado aqui em vez de dentro da aba específica.
+  const sbAdminHeader = createAdminClient()
+
+  let openClassesQuery = sbAdminHeader
     .from('school_classes')
     .select('id, school_id, name, starts_at, schools!inner(name, organization_id, school_type)')
     .eq('active', true)
@@ -178,15 +184,126 @@ export default async function PessoasPage({ params, searchParams }: Props) {
     openClassesQuery = openClassesQuery.in('school_id', allowedSchoolIds.length > 0 ? allowedSchoolIds : ['no-match'])
   }
 
-  const { data: openClassesRaw } = await openClassesQuery
+  const [{ data: openClassesRaw }, { data: allSchoolsRaw }, { data: allMinistriesRaw }] = await Promise.all([
+    openClassesQuery,
+    supabase.from('schools').select('id, name').eq('organization_id', orgId).eq('active', true).order('name'),
+    supabase.from('ministries').select('id, name').eq('organization_id', orgId).eq('active', true).order('name'),
+  ])
 
-  const openClasses = (openClassesRaw ?? []) as unknown as Array<{
+  const headerOpenClasses = (openClassesRaw ?? []) as unknown as Array<{
     id: string
     school_id: string
     name: string
     starts_at: string | null
     schools: { name: string } | null
   }>
+  const allSchools = (allSchoolsRaw ?? []) as Array<{ id: string; name: string }>
+  const allMinistries = (allMinistriesRaw ?? []) as Array<{ id: string; name: string }>
+
+  return (
+    <>
+      <Header
+        title="Pessoas"
+        actions={
+          <NovaPessoaButton
+            slug={slug}
+            openClasses={headerOpenClasses.map(c => ({
+              id: c.id,
+              school_id: c.school_id,
+              name: c.name,
+              starts_at: c.starts_at,
+              schoolName: c.schools?.name ?? null,
+            }))}
+            ministries={allMinistries}
+            schools={allSchools}
+            criarPreInscricaoManual={criarPreInscricaoManual.bind(null, orgId, slug)}
+            criarPreInscricaoObreiroManual={criarPreInscricaoObreiroManual.bind(null, orgId, slug)}
+          />
+        }
+      />
+      <main className="p-4 md:p-6 space-y-4">
+
+        <p className="text-xs text-gray-400 -mt-2">
+          Diretório geral da base. Vínculos com escola ou ministério (papel, entrada/saída) ficam no Quadro de Obreiros de cada unidade.
+        </p>
+
+        {/* Tabs — ficam fora do Suspense: não recarregam nem piscam ao trocar de aba */}
+        <div className="flex gap-1 bg-gray-100 p-1 rounded-xl overflow-x-auto scrollbar-none">
+          {TABS.map(t => (
+            <Link
+              key={t.key}
+              href={`/${slug}/pessoas?tab=${t.key}`}
+              className={`px-3 sm:px-4 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                tab === t.key
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {t.label}
+            </Link>
+          ))}
+        </div>
+
+        {/* Conteúdo da aba: componente próprio, streamado — só essa área mostra
+            skeleton ao trocar de aba/buscar, em vez da página inteira. */}
+        <Suspense key={`${tab}-${q ?? ''}`} fallback={<SkTable rows={8} cols={4} />}>
+          <PessoasTabContent
+            slug={slug}
+            orgId={orgId}
+            tab={tab}
+            q={q}
+            allowedSchoolIds={allowedSchoolIds}
+            supabase={supabase}
+          />
+        </Suspense>
+      </main>
+    </>
+  )
+}
+
+// ── Conteúdo específico de cada aba ─────────────────────────────────────────
+// Componente assíncrono separado (e streamado via <Suspense> acima) para que
+// trocar de aba não recarregue cabeçalho/abas — só essa parte refaz queries.
+
+async function PessoasTabContent({
+  slug, orgId, tab, q, allowedSchoolIds, supabase,
+}: {
+  slug: string
+  orgId: string
+  tab: string
+  q?: string
+  allowedSchoolIds: string[] | null
+  supabase: Awaited<ReturnType<typeof createClient>>
+}) {
+  const sbAdmin = createAdminClient()
+
+  // openClasses só é usado pelo seletor de turma da aba Alunos — buscar isso
+  // em toda navegação (mesmo em "Todos"/"Obreiros"/etc.) era desperdício.
+  let openClasses: Array<{
+    id: string
+    school_id: string
+    name: string
+    starts_at: string | null
+    schools: { name: string } | null
+  }> = []
+
+  if (tab === 'alunos') {
+    let openClassesQuery = sbAdmin
+      .from('school_classes')
+      .select('id, school_id, name, starts_at, schools!inner(name, organization_id, school_type)')
+      .eq('active', true)
+      .eq('registrations_open', true)
+      .eq('schools.organization_id', orgId)
+      .in('schools.school_type', [...SCHOOL_APPLICATION_TYPES])
+      .order('starts_at', { ascending: true })
+
+    if (allowedSchoolIds) {
+      openClassesQuery = openClassesQuery.in('school_id', allowedSchoolIds.length > 0 ? allowedSchoolIds : ['no-match'])
+    }
+
+    const { data: openClassesRaw } = await openClassesQuery
+    openClasses = (openClassesRaw ?? []) as unknown as typeof openClasses
+  }
 
   async function trocarTurmaAluno(formData: FormData) {
     'use server'
@@ -277,8 +394,6 @@ export default async function PessoasPage({ params, searchParams }: Props) {
   const inscritoItems: InscritoItem[] = []
 
   if (tab === 'inscricoes') {
-    const sbAdmin = createAdminClient()
-
     // Pré-inscrições públicas
     type IFRaw = { id: string; full_name: string; email: string; status: string; created_at: string; schools: { name: string } | null }
     const { data: iforms } = await sbAdmin
@@ -594,212 +709,180 @@ export default async function PessoasPage({ params, searchParams }: Props) {
 
   return (
     <>
-      <Header
-        title="Pessoas"
-        actions={
-          <button className="px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600">
-            + Nova pessoa
-          </button>
-        }
-      />
-      <main className="p-4 md:p-6 space-y-4">
-
-        <p className="text-xs text-gray-400 -mt-2">
-          Diretório geral da base. Vínculos com escola ou ministério (papel, entrada/saída) ficam no Quadro de Obreiros de cada unidade.
-        </p>
-
-        {/* Tabs */}
-        <div className="flex gap-1 bg-gray-100 p-1 rounded-xl overflow-x-auto scrollbar-none">
-          {TABS.map(t => (
-            <Link
-              key={t.key}
-              href={`/${slug}/pessoas?tab=${t.key}`}
-              className={`px-3 sm:px-4 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-                tab === t.key
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {t.label}
-            </Link>
-          ))}
-        </div>
-
-        {/* ── Aba Inscrições ────────────────────────────────────────────────── */}
-        {tab === 'inscricoes' && (
-          <>
-            {!inscritoItems.length ? (
-              <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
-                <p className="text-gray-400 text-sm">Nenhuma inscrição pendente.</p>
-                <Link href={`/${slug}/inscricoes`} className="text-xs text-brand-500 hover:underline mt-2 inline-block">
-                  Ver todas as inscrições →
+      {/* ── Aba Inscrições ────────────────────────────────────────────────── */}
+      {tab === 'inscricoes' && (
+        <>
+          {!inscritoItems.length ? (
+            <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
+              <p className="text-gray-400 text-sm">Nenhuma inscrição pendente.</p>
+              <Link href={`/${slug}/inscricoes`} className="text-xs text-brand-500 hover:underline mt-2 inline-block">
+                Ver todas as inscrições →
+              </Link>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
+                <p className="text-xs text-gray-400">{inscritoItems.length} inscrição{inscritoItems.length !== 1 ? 'ões' : ''} ativa{inscritoItems.length !== 1 ? 's' : ''}</p>
+                <Link href={`/${slug}/inscricoes`} className="text-xs text-brand-500 hover:text-brand-700 font-medium">
+                  Gerenciar todas →
                 </Link>
               </div>
-            ) : (
-              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
-                  <p className="text-xs text-gray-400">{inscritoItems.length} inscrição{inscritoItems.length !== 1 ? 'ões' : ''} ativa{inscritoItems.length !== 1 ? 's' : ''}</p>
-                  <Link href={`/${slug}/inscricoes`} className="text-xs text-brand-500 hover:text-brand-700 font-medium">
-                    Gerenciar todas →
-                  </Link>
-                </div>
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                      <th className="text-left px-4 py-3 font-medium text-gray-600 w-14">Dias</th>
-                      <th className="text-left px-4 py-3 font-medium text-gray-600">Nome</th>
-                      <th className="hidden sm:table-cell text-left px-4 py-3 font-medium text-gray-600">Tipo</th>
-                      <th className="hidden md:table-cell text-left px-4 py-3 font-medium text-gray-600">Escola</th>
-                      <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
-                      <th className="text-right px-4 py-3 font-medium text-gray-600"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {inscritoItems.map(item => {
-                      const urgency = urgencyBadge(item.diasAberto)
-                      const statusInfo = INTEREST_STATUS[item.status] ?? { label: item.status, color: 'bg-gray-100 text-gray-500' }
-                      const tabDestino = item.tipo === 'Pré-inscrição' ? 'pre_inscricao' : item.tipo === 'Candidato a Aluno' ? 'aluno' : 'obreiro'
-                      return (
-                        <tr key={`${item.tipo}-${item.id}`} className="hover:bg-gray-50">
-                          <td className="px-4 py-3">
-                            <span className={`inline-flex items-center justify-center min-w-[2.5rem] px-2 py-0.5 rounded-full text-xs font-bold tabular-nums ${urgency.color}`}>
-                              {urgency.label}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <p className="font-medium text-gray-900">{item.nome}</p>
-                            {item.email && <p className="text-xs text-gray-400">{item.email}</p>}
-                          </td>
-                          <td className="hidden sm:table-cell px-4 py-3">
-                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${item.tipoColor}`}>
-                              {item.tipo}
-                            </span>
-                          </td>
-                          <td className="hidden md:table-cell px-4 py-3 text-xs text-gray-500">
-                            {item.escola ?? '—'}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusInfo.color}`}>
-                              {statusInfo.label}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <Link
-                              href={`/${slug}/inscricoes?tab=${tabDestino}`}
-                              className="text-xs text-brand-500 hover:text-brand-700 font-medium"
-                            >
-                              Gerenciar →
-                            </Link>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* ── Abas padrão ───────────────────────────────────────────────────── */}
-        {tab !== 'inscricoes' && (
-          <>
-            <Suspense>
-              <SearchBar placeholder="Buscar por nome…" className="w-full sm:w-72" />
-            </Suspense>
-            {!filteredRows.length ? (
-              <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
-                <p className="text-gray-400 text-sm">
-                  {q ? `Nenhum resultado para "${q}".` : 'Nenhum registro encontrado nesta categoria.'}
-                </p>
-              </div>
-            ) : (
-              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                      <th className="text-left px-4 py-3 font-medium text-gray-600">Nome</th>
-                      <th className="hidden md:table-cell text-left px-4 py-3 font-medium text-gray-600">{col2Label}</th>
-                      <th className="hidden md:table-cell text-left px-4 py-3 font-medium text-gray-600">{badgeLabel}</th>
-                      {(tab === 'alunos' || tab === 'obreiros') && <th className="hidden md:table-cell px-4 py-3" />}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {filteredRows.map(r => (
-                      <tr key={r.id} className="hover:bg-gray-50">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 w-14">Dias</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">Nome</th>
+                    <th className="hidden sm:table-cell text-left px-4 py-3 font-medium text-gray-600">Tipo</th>
+                    <th className="hidden md:table-cell text-left px-4 py-3 font-medium text-gray-600">Escola</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
+                    <th className="text-right px-4 py-3 font-medium text-gray-600"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {inscritoItems.map(item => {
+                    const urgency = urgencyBadge(item.diasAberto)
+                    const statusInfo = INTEREST_STATUS[item.status] ?? { label: item.status, color: 'bg-gray-100 text-gray-500' }
+                    const tabDestino = item.tipo === 'Pré-inscrição' ? 'pre_inscricao' : item.tipo === 'Candidato a Aluno' ? 'aluno' : 'obreiro'
+                    return (
+                      <tr key={`${item.tipo}-${item.id}`} className="hover:bg-gray-50">
                         <td className="px-4 py-3">
-                          <p className="font-medium text-gray-900">{r.nome}</p>
-                          {r.detalhe && <p className="text-xs text-gray-400">{r.detalhe}</p>}
-                          {r.meta && <p className="text-xs text-gray-500 mt-0.5">{r.meta}</p>}
-                          <div className="md:hidden flex items-center gap-2 mt-1 flex-wrap">
-                            {r.col2 && r.col2 !== '—' && (
-                              <span className="text-xs text-gray-500">{r.col2}</span>
-                            )}
-                            {r.badge && (
-                              <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${r.badge.color}`}>
-                                {r.badge.label}
-                              </span>
-                            )}
-                          </div>
+                          <span className={`inline-flex items-center justify-center min-w-[2.5rem] px-2 py-0.5 rounded-full text-xs font-bold tabular-nums ${urgency.color}`}>
+                            {urgency.label}
+                          </span>
                         </td>
-                        <td className="hidden md:table-cell px-4 py-3 text-gray-500">
-                          {tab === 'alunos' && r.personId ? (
-                            <form action={trocarTurmaAluno} className="flex max-w-md items-center gap-2">
-                              <input type="hidden" name="person_id" value={r.personId} />
-                              <input type="hidden" name="org_id" value={orgId} />
-                              <select
-                                name="class_id"
-                                defaultValue={r.classId ?? ''}
-                                className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-400"
-                              >
-                                <option value="" disabled>Sem turma definida</option>
-                                {r.classId && !openClasses.some(classOption => classOption.id === r.classId) && (
-                                  <option value={r.classId}>{r.col2} · atual</option>
-                                )}
-                                {openClasses.map(classOption => (
-                                  <option key={classOption.id} value={classOption.id}>
-                                    {classOption.schools?.name ?? 'Escola'} · {classOption.name}
-                                    {classOption.starts_at ? ` · ${new Date(classOption.starts_at).toLocaleDateString('pt-BR')}` : ''}
-                                  </option>
-                                ))}
-                              </select>
-                              <button
-                                type="submit"
-                                className="rounded-lg border border-gray-200 px-2.5 py-2 text-xs font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-800"
-                              >
-                                Confirmar
-                              </button>
-                            </form>
-                          ) : (
-                            r.col2
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-gray-900">{item.nome}</p>
+                          {item.email && <p className="text-xs text-gray-400">{item.email}</p>}
+                        </td>
+                        <td className="hidden sm:table-cell px-4 py-3">
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${item.tipoColor}`}>
+                            {item.tipo}
+                          </span>
+                        </td>
+                        <td className="hidden md:table-cell px-4 py-3 text-xs text-gray-500">
+                          {item.escola ?? '—'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusInfo.color}`}>
+                            {statusInfo.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <Link
+                            href={`/${slug}/inscricoes?tab=${tabDestino}`}
+                            className="text-xs text-brand-500 hover:text-brand-700 font-medium"
+                          >
+                            Gerenciar →
+                          </Link>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── Abas padrão ───────────────────────────────────────────────────── */}
+      {tab !== 'inscricoes' && (
+        <>
+          <Suspense>
+            <SearchBar placeholder="Buscar por nome…" className="w-full sm:w-72" />
+          </Suspense>
+          {!filteredRows.length ? (
+            <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
+              <p className="text-gray-400 text-sm">
+                {q ? `Nenhum resultado para "${q}".` : 'Nenhum registro encontrado nesta categoria.'}
+              </p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">Nome</th>
+                    <th className="hidden md:table-cell text-left px-4 py-3 font-medium text-gray-600">{col2Label}</th>
+                    <th className="hidden md:table-cell text-left px-4 py-3 font-medium text-gray-600">{badgeLabel}</th>
+                    {(tab === 'alunos' || tab === 'obreiros') && <th className="hidden md:table-cell px-4 py-3" />}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filteredRows.map(r => (
+                    <tr key={r.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-gray-900">{r.nome}</p>
+                        {r.detalhe && <p className="text-xs text-gray-400">{r.detalhe}</p>}
+                        {r.meta && <p className="text-xs text-gray-500 mt-0.5">{r.meta}</p>}
+                        <div className="md:hidden flex items-center gap-2 mt-1 flex-wrap">
+                          {r.col2 && r.col2 !== '—' && (
+                            <span className="text-xs text-gray-500">{r.col2}</span>
                           )}
-                        </td>
-                        <td className="hidden md:table-cell px-4 py-3">
-                          {r.badge ? (
+                          {r.badge && (
                             <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${r.badge.color}`}>
                               {r.badge.label}
                             </span>
-                          ) : '—'}
-                        </td>
-                        {(tab === 'alunos' || tab === 'obreiros') && r.personId && (
-                          <td className="hidden md:table-cell px-4 py-3 text-right">
-                            <Link
-                              href={`/${slug}/pessoas/${r.personId}`}
-                              className="text-xs text-brand-500 hover:text-brand-700 font-medium hover:underline transition-colors"
+                          )}
+                        </div>
+                      </td>
+                      <td className="hidden md:table-cell px-4 py-3 text-gray-500">
+                        {tab === 'alunos' && r.personId ? (
+                          <form action={trocarTurmaAluno} className="flex max-w-md items-center gap-2">
+                            <input type="hidden" name="person_id" value={r.personId} />
+                            <input type="hidden" name="org_id" value={orgId} />
+                            <select
+                              name="class_id"
+                              defaultValue={r.classId ?? ''}
+                              className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-400"
                             >
-                              Ver perfil →
-                            </Link>
-                          </td>
+                              <option value="" disabled>Sem turma definida</option>
+                              {r.classId && !openClasses.some(classOption => classOption.id === r.classId) && (
+                                <option value={r.classId}>{r.col2} · atual</option>
+                              )}
+                              {openClasses.map(classOption => (
+                                <option key={classOption.id} value={classOption.id}>
+                                  {classOption.schools?.name ?? 'Escola'} · {classOption.name}
+                                  {classOption.starts_at ? ` · ${new Date(classOption.starts_at).toLocaleDateString('pt-BR')}` : ''}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              type="submit"
+                              className="rounded-lg border border-gray-200 px-2.5 py-2 text-xs font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-800"
+                            >
+                              Confirmar
+                            </button>
+                          </form>
+                        ) : (
+                          r.col2
                         )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </>
-        )}
-      </main>
+                      </td>
+                      <td className="hidden md:table-cell px-4 py-3">
+                        {r.badge ? (
+                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${r.badge.color}`}>
+                            {r.badge.label}
+                          </span>
+                        ) : '—'}
+                      </td>
+                      {(tab === 'alunos' || tab === 'obreiros') && r.personId && (
+                        <td className="hidden md:table-cell px-4 py-3 text-right">
+                          <Link
+                            href={`/${slug}/pessoas/${r.personId}`}
+                            className="text-xs text-brand-500 hover:text-brand-700 font-medium hover:underline transition-colors"
+                          >
+                            Ver perfil →
+                          </Link>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
     </>
   )
 }

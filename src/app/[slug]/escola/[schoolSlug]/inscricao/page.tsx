@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
+import { headers } from 'next/headers'
 import { RegistrationForm } from '../RegistrationForm'
+import { getFormDict, normalizeLang, detectLangFromHeader } from '@/lib/i18n/forms'
 import type { Metadata } from 'next'
 
 type Props = {
@@ -46,6 +48,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function StandaloneRegistrationPage({ params, searchParams }: Props) {
   const { slug, schoolSlug } = await params
   const { lang: langParam } = await searchParams
+  const acceptLanguage = (await headers()).get('accept-language')
+  const lang = normalizeLang(langParam ?? detectLangFromHeader(acceptLanguage))
+  const d = getFormDict(lang)
 
   const supabase = await createClient()
 
@@ -87,7 +92,7 @@ export default async function StandaloneRegistrationPage({ params, searchParams 
           {/* Header */}
           <div className="mb-8 text-center">
             <div className="inline-flex items-center gap-2 bg-brand-500/10 border border-brand-500/20 text-brand-600 text-xs font-bold uppercase tracking-widest px-4 py-1.5 rounded-full mb-4">
-              Pré-inscrição
+              {d.standaloneChrome.badge}
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-gray-900 leading-tight">
               {school.name}
@@ -104,7 +109,7 @@ export default async function StandaloneRegistrationPage({ params, searchParams 
                 .filter(c => c.online_applications)
                 .map(c => ({ id: c.id, name: c.name, year: c.year, semester: c.semester }))}
               communicationLanguages={communicationLanguages}
-              initialLang={langParam}
+              initialLang={lang}
             />
           </div>
 
@@ -114,10 +119,10 @@ export default async function StandaloneRegistrationPage({ params, searchParams 
               href={`/${slug}/escola/${schoolSlug}`}
               className="inline-block text-sm text-brand-500 hover:text-brand-600 font-medium transition-colors"
             >
-              Saiba mais sobre a escola &rarr;
+              {d.standaloneChrome.learn_more}
             </a>
             <p className="text-xs text-gray-300">
-              Powered by <span className="font-semibold">SISGO</span>
+              {d.standaloneChrome.powered_by} <span className="font-semibold">SISGO</span>
             </p>
           </div>
         </div>

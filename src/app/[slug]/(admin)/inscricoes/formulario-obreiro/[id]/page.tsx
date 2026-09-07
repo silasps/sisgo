@@ -391,8 +391,8 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-4">
         {Object.keys(formData).length <= 1 && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-center">
-            <p className="text-sm text-amber-800 font-medium">Formulário ainda não preenchido pelo candidato.</p>
-            <p className="text-xs text-amber-600 mt-1">O candidato receberá um link para preencher o formulário completo.</p>
+            <p className="text-sm text-amber-800 font-medium">Formulário já enviado e aguardando preenchimento.</p>
+            <p className="text-xs text-amber-600 mt-1">Foi enviado um link para preenchimento do formulário completo.</p>
           </div>
         )}
 

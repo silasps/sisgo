@@ -2,12 +2,14 @@
 
 import { useState, useTransition, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { AlertTriangle, Link as LinkIcon, ClipboardList, Loader2 } from 'lucide-react'
 
 type ActionResult = {
   url?: string
   error?: string
   emailWarning?: 'sem_email_eted' | 'sem_email_candidato' | 'email_falhou' | 'quota_atingida' | string
+  emailErrorDetail?: string
   schoolId?: string
 }
 
@@ -54,9 +56,11 @@ function CopiedToast({ visible }: { visible: boolean }) {
 }
 
 export function DisponibilizarFormularioButton({ interestFormId, slug, action, schoolId, emailDisabled, emailDisabledReason, label }: Props) {
+  const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [showCopied, setShowCopied] = useState(false)
   const [formUrl, setFormUrl] = useState<string | null>(null)
+  const [sentInfo, setSentInfo] = useState<{ at: Date; emailOk: boolean } | null>(null)
   const [emailNotice, setEmailNotice] = useState<{
     msg: string
     schoolId?: string
@@ -82,6 +86,7 @@ export function DisponibilizarFormularioButton({ interestFormId, slug, action, s
       }
 
       setFormUrl(result.url)
+      setSentInfo({ at: new Date(), emailOk: !result.emailWarning })
 
       // Copia link — sempre
       try { await navigator.clipboard.writeText(result.url) } catch {}
@@ -105,23 +110,37 @@ export function DisponibilizarFormularioButton({ interestFormId, slug, action, s
         })
       } else if (result.emailWarning === 'email_falhou') {
         setEmailNotice({
-          msg: 'E-mail não pôde ser enviado. Envie o link manualmente ao candidato.',
+          msg: `E-mail não pôde ser enviado${result.emailErrorDetail ? ` (${result.emailErrorDetail})` : ''}. Envie o link manualmente ao candidato.`,
         })
       }
+
+      // O item real (staffApplicationId/status) só muda no servidor — atualiza
+      // em segundo plano pra essa tela virar a etapa "Formulário enviado" do
+      // stepper assim que o servidor confirmar, sem travar a ação visível.
+      router.refresh()
     })
   }
 
   return (
     <>
       <div className="flex flex-col gap-1">
-        <button
-          type="button"
-          onClick={handleClick}
-          disabled={isPending}
-          className="inline-flex items-center gap-1 text-xs px-3 py-1.5 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors disabled:opacity-60"
-        >
-          {isPending ? <><Loader2 className="size-3.5 inline -mt-0.5 animate-spin" /> Enviando…</> : <><ClipboardList className="size-3.5 inline -mt-0.5" /> {label ?? 'Enviar formulário por e-mail'}</>}
-        </button>
+        {sentInfo ? (
+          <p className="inline-flex items-center gap-1 text-xs px-3 py-1.5 border border-green-200 text-green-700 bg-green-50 rounded-lg w-fit">
+            <ClipboardList className="size-3.5 inline -mt-0.5" />
+            {sentInfo.emailOk ? 'Enviado' : 'Link gerado'} em{' '}
+            {sentInfo.at.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} às{' '}
+            {sentInfo.at.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+          </p>
+        ) : (
+          <button
+            type="button"
+            onClick={handleClick}
+            disabled={isPending}
+            className="inline-flex items-center gap-1 text-xs px-3 py-1.5 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors disabled:opacity-60"
+          >
+            {isPending ? <><Loader2 className="size-3.5 inline -mt-0.5 animate-spin" /> Enviando…</> : <><ClipboardList className="size-3.5 inline -mt-0.5" /> {label ?? 'Enviar formulário por e-mail'}</>}
+          </button>
+        )}
         <p className="text-xs text-gray-400 leading-tight max-w-[220px]">
           O link também é copiado, caso prefira compartilhar por outro meio.
         </p>

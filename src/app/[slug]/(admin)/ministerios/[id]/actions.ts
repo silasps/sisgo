@@ -24,6 +24,8 @@ export async function updateMinistry(
   data: {
     name?: string; description?: string | null; active?: boolean
     slug?: string | null; subtitle?: string | null; hero_image_url?: string | null; is_public?: boolean
+    description_translations?: Partial<Record<'en' | 'es', string>>
+    subtitle_translations?: Partial<Record<'en' | 'es', string>>
   }
 ) {
   const sb = createAdminClient()

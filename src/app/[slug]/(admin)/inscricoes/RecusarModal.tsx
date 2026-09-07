@@ -3,18 +3,22 @@
 import { useState, useTransition, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { useSidebarOffsetClass } from '@/components/layout/account-context'
 
 type Props = {
   id: string
   tipo: 'pre_inscricao' | 'aluno' | 'obreiro' | 'pre_inscricao_obreiro'
   action: (formData: FormData) => Promise<void>
+  onOptimisticRemove?: (id: string) => void
+  onOptimisticRestore?: (id: string) => void
 }
 
-export function RecusarModal({ id, tipo, action }: Props) {
+export function RecusarModal({ id, tipo, action, onOptimisticRemove, onOptimisticRestore }: Props) {
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
   const formRef = useRef<HTMLFormElement>(null)
+  const offsetClass = useSidebarOffsetClass()
 
   function handleClose() {
     if (isPending) return
@@ -25,10 +29,18 @@ export function RecusarModal({ id, tipo, action }: Props) {
   function handleSubmit(formData: FormData) {
     const reason = (formData.get('reason') as string)?.trim()
     if (!reason) return
+    // Some da lista imediatamente — o registro real (e a reconciliação
+    // com o servidor) acontece em segundo plano, sem travar a tela.
+    setOpen(false)
+    onOptimisticRemove?.(id)
+    toast.success('Recusa registrada')
     startTransition(async () => {
-      await action(formData)
-      setOpen(false)
-      toast.success('Recusa registrada')
+      try {
+        await action(formData)
+      } catch {
+        onOptimisticRestore?.(id)
+        toast.error('Não foi possível registrar a recusa — tente novamente')
+      }
       router.refresh()
     })
   }
@@ -45,7 +57,7 @@ export function RecusarModal({ id, tipo, action }: Props) {
 
       {open && (
         <div
-          className="fixed inset-0 md:left-60 z-50 flex items-center justify-center bg-black/50 p-4"
+          className={`fixed inset-0 ${offsetClass} z-50 flex items-center justify-center bg-black/50 p-4`}
           onClick={e => { if (e.target === e.currentTarget) handleClose() }}
         >
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">

@@ -1,7 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
+import { headers } from 'next/headers'
 import { RegistrationForm } from './RegistrationForm'
 import { schoolTypeShortLabel } from '@/lib/schools'
+import { getFormDict, normalizeLang, detectLangFromHeader } from '@/lib/i18n/forms'
+import { resolveLocalizedText } from '@/lib/i18n/resolveLocalizedText'
 
 type Props = {
   params: Promise<{ slug: string; schoolSlug: string }>
@@ -11,6 +14,9 @@ type Props = {
 export default async function SchoolPublicPage({ params, searchParams }: Props) {
   const { slug, schoolSlug } = await params
   const { lang: langParam } = await searchParams
+  const acceptLanguage = (await headers()).get('accept-language')
+  const lang = normalizeLang(langParam ?? detectLangFromHeader(acceptLanguage))
+  const d = getFormDict(lang)
   const supabase = await createClient()
 
   // Busca org
@@ -30,7 +36,7 @@ export default async function SchoolPublicPage({ params, searchParams }: Props) 
 
   const query = supabase
     .from('schools')
-    .select('id, name, acronym, school_type, subtitle, long_description, objectives, target_audience, duration_description, hero_image_url, promo_video_url, prerequisites, is_public')
+    .select('id, name, acronym, school_type, subtitle, long_description, long_description_translations, objectives, target_audience, target_audience_translations, duration_description, hero_image_url, promo_video_url, prerequisites, is_public')
     .eq('organization_id', org.id)
     .eq('is_public', true)
     .eq('active', true)
@@ -44,7 +50,7 @@ export default async function SchoolPublicPage({ params, searchParams }: Props) 
   // Busca turma ativa mais próxima
   const { data: classes } = await supabase
     .from('school_classes')
-    .select('id, name, year, semester, starts_at, ends_at, base_cost, cost_description, location, public_description, registrations_open, registration_deadline, online_applications')
+    .select('id, name, year, semester, starts_at, ends_at, base_cost, cost_description, cost_description_translations, location, public_description, public_description_translations, registrations_open, registration_deadline, online_applications')
     .eq('school_id', school.id)
     .eq('active', true)
     .order('starts_at', { ascending: true })
@@ -84,17 +90,17 @@ export default async function SchoolPublicPage({ params, searchParams }: Props) 
             {org.name}
           </a>
           <div className="hidden md:flex items-center gap-6 lg:gap-8 text-sm text-white/70 flex-shrink-0">
-            <a href="#sobre" className="hover:text-white transition-colors">Sobre</a>
-            {programs.length > 0 && <a href="#programas" className="hover:text-white transition-colors">Programas</a>}
-            {activeClass && <a href="#turma" className="hover:text-white transition-colors">Próxima turma</a>}
+            <a href="#sobre" className="hover:text-white transition-colors">{d.landingChrome.nav_about}</a>
+            {programs.length > 0 && <a href="#programas" className="hover:text-white transition-colors">{d.landingChrome.nav_programs}</a>}
+            {activeClass && <a href="#turma" className="hover:text-white transition-colors">{d.landingChrome.nav_next_class}</a>}
             <a href="#inscricao" className="bg-brand-500 hover:bg-brand-600 text-white px-5 py-2 rounded-full font-semibold transition-colors">
-              Inscreva-se
+              {d.landingChrome.nav_cta}
             </a>
           </div>
           <div className="md:hidden flex items-center gap-2 flex-shrink-0">
-            <a href="#sobre" className="text-white/70 hover:text-white text-xs px-2 py-1.5 transition-colors">Sobre</a>
+            <a href="#sobre" className="text-white/70 hover:text-white text-xs px-2 py-1.5 transition-colors">{d.landingChrome.nav_about}</a>
             <a href="#inscricao" className="bg-brand-500 hover:bg-brand-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold transition-colors whitespace-nowrap">
-              Inscreva-se
+              {d.landingChrome.nav_cta}
             </a>
           </div>
         </div>
@@ -130,13 +136,13 @@ export default async function SchoolPublicPage({ params, searchParams }: Props) 
               href="#inscricao"
               className="bg-brand-500 hover:bg-brand-400 text-white font-bold px-7 sm:px-8 py-3.5 sm:py-4 rounded-2xl text-base sm:text-lg transition-all hover:scale-105 shadow-lg shadow-brand-500/30"
             >
-              Quero me inscrever
+              {d.landingChrome.hero_cta_primary}
             </a>
             <a
               href="#sobre"
               className="bg-white/10 hover:bg-white/20 text-white font-semibold px-7 sm:px-8 py-3.5 sm:py-4 rounded-2xl text-base sm:text-lg transition-all border border-white/20 backdrop-blur-sm"
             >
-              Saiba mais
+              {d.landingChrome.hero_cta_secondary}
             </a>
           </div>
         </div>
@@ -154,25 +160,25 @@ export default async function SchoolPublicPage({ params, searchParams }: Props) 
         <div className="max-w-6xl mx-auto">
           <div className="grid md:grid-cols-2 gap-10 sm:gap-16 items-center">
             <div>
-              <span className="text-brand-500 font-bold text-sm uppercase tracking-widest">O que é</span>
+              <span className="text-brand-500 font-bold text-sm uppercase tracking-widest">{d.landingChrome.about_eyebrow}</span>
               <h2 className="text-4xl md:text-5xl font-black text-gray-950 mt-2 mb-6 leading-tight">
                 {school.name}
               </h2>
               <p className="text-gray-600 text-lg leading-relaxed">
-                {school.long_description ?? 'Uma escola transformadora de treinamento e discipulado para missões.'}
+                {resolveLocalizedText(school.long_description, school.long_description_translations, lang) ?? d.landingChrome.about_fallback_description}
               </p>
               {school.target_audience && (
                 <div className="mt-6 p-4 bg-brand-50 rounded-2xl border border-brand-100">
-                  <p className="text-xs font-bold text-brand-600 uppercase tracking-widest mb-1">Para quem é</p>
-                  <p className="text-gray-700 text-sm">{school.target_audience}</p>
+                  <p className="text-xs font-bold text-brand-600 uppercase tracking-widest mb-1">{d.landingChrome.about_target_audience_label}</p>
+                  <p className="text-gray-700 text-sm">{resolveLocalizedText(school.target_audience, school.target_audience_translations, lang)}</p>
                 </div>
               )}
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <StatHighlight value={school.duration_description ?? '20 semanas'} label="Duração total" />
-              <StatHighlight value="12 sem." label="Fase teórica" />
-              <StatHighlight value="8 sem." label="Campo missionário" />
-              <StatHighlight value={schoolTypeShortLabel(school.school_type)} label="Tipo de escola" />
+              <StatHighlight value={school.duration_description ?? '20 semanas'} label={d.landingChrome.stat_duration_label} />
+              <StatHighlight value={d.landingChrome.stat_theory_value} label={d.landingChrome.stat_theory_label} />
+              <StatHighlight value={d.landingChrome.stat_field_value} label={d.landingChrome.stat_field_label} />
+              <StatHighlight value={schoolTypeShortLabel(school.school_type)} label={d.landingChrome.stat_type_label} />
             </div>
           </div>
         </div>
@@ -182,22 +188,22 @@ export default async function SchoolPublicPage({ params, searchParams }: Props) 
       <section className="py-16 sm:py-24 px-5 sm:px-6 bg-gray-950 text-white">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-10 sm:mb-16">
-            <span className="text-brand-400 font-bold text-sm uppercase tracking-widest">Estrutura</span>
-            <h2 className="text-3xl sm:text-4xl font-black mt-2">Como funciona o programa</h2>
+            <span className="text-brand-400 font-bold text-sm uppercase tracking-widest">{d.landingChrome.structure_eyebrow}</span>
+            <h2 className="text-3xl sm:text-4xl font-black mt-2">{d.landingChrome.structure_title}</h2>
           </div>
           <div className="grid md:grid-cols-2 gap-4 sm:gap-6">
             <PhaseCard
               number="01"
-              title="Fase Teórica"
-              weeks="12 semanas"
-              description="Aulas diárias com fundamentos bíblicos, evangelismo, intercession, dinâmicas de grupo e formação de caráter. Vivência em comunidade na base."
+              title={d.landingChrome.phase1_title}
+              weeks={d.landingChrome.phase1_weeks}
+              description={d.landingChrome.phase1_description}
               color="brand"
             />
             <PhaseCard
               number="02"
-              title="Campo Missionário"
-              weeks="8 semanas"
-              description="Aplicação prática em equipe: saída missionária nacional ou internacional com evangelismo ativo, discipulado e serviço."
+              title={d.landingChrome.phase2_title}
+              weeks={d.landingChrome.phase2_weeks}
+              description={d.landingChrome.phase2_description}
               color="gray"
             />
           </div>
@@ -209,9 +215,9 @@ export default async function SchoolPublicPage({ params, searchParams }: Props) 
         <section id="programas" className="py-16 sm:py-24 px-5 sm:px-6 bg-white">
           <div className="max-w-6xl mx-auto">
             <div className="text-center mb-10 sm:mb-16">
-              <span className="text-brand-500 font-bold text-sm uppercase tracking-widest">Incluído nesta turma</span>
-              <h2 className="text-3xl sm:text-4xl font-black text-gray-950 mt-2">Programas extras</h2>
-              <p className="text-gray-500 mt-3 max-w-xl mx-auto text-sm sm:text-base">Além das aulas, esta turma conta com experiências complementares que enriquecem ainda mais a formação.</p>
+              <span className="text-brand-500 font-bold text-sm uppercase tracking-widest">{d.landingChrome.programs_eyebrow}</span>
+              <h2 className="text-3xl sm:text-4xl font-black text-gray-950 mt-2">{d.landingChrome.programs_title}</h2>
+              <p className="text-gray-500 mt-3 max-w-xl mx-auto text-sm sm:text-base">{d.landingChrome.programs_subtitle}</p>
             </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {programs.map(program => (
@@ -252,8 +258,8 @@ export default async function SchoolPublicPage({ params, searchParams }: Props) 
         <section className="py-14 sm:py-20 px-5 sm:px-6 bg-gray-50">
           <div className="max-w-3xl mx-auto">
             <div className="text-center mb-8 sm:mb-10">
-              <span className="text-brand-500 font-bold text-sm uppercase tracking-widest">Pré-requisitos</span>
-              <h2 className="text-2xl sm:text-3xl font-black text-gray-950 mt-2">Quem pode participar</h2>
+              <span className="text-brand-500 font-bold text-sm uppercase tracking-widest">{d.landingChrome.prerequisites_eyebrow}</span>
+              <h2 className="text-2xl sm:text-3xl font-black text-gray-950 mt-2">{d.landingChrome.prerequisites_title}</h2>
             </div>
             <ul className="space-y-3">
               {school.prerequisites.map((req: string, i: number) => (
@@ -272,44 +278,44 @@ export default async function SchoolPublicPage({ params, searchParams }: Props) 
         <section id="turma" className="py-16 sm:py-24 px-5 sm:px-6 bg-gray-950 text-white">
           <div className="max-w-4xl mx-auto">
             <div className="text-center mb-8 sm:mb-12">
-              <span className="text-brand-400 font-bold text-sm uppercase tracking-widest">Próxima turma</span>
+              <span className="text-brand-400 font-bold text-sm uppercase tracking-widest">{d.landingChrome.next_class_eyebrow}</span>
               <h2 className="text-3xl sm:text-4xl font-black mt-2">{activeClass.name}</h2>
             </div>
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-10 animate-stagger">
               {activeClass.starts_at && (
-                <InfoTile label="Início" value={formatDate(activeClass.starts_at) ?? '—'} />
+                <InfoTile label={d.landingChrome.info_starts} value={formatDate(activeClass.starts_at) ?? '—'} />
               )}
               {activeClass.ends_at && (
-                <InfoTile label="Término" value={formatDate(activeClass.ends_at) ?? '—'} />
+                <InfoTile label={d.landingChrome.info_ends} value={formatDate(activeClass.ends_at) ?? '—'} />
               )}
               {activeClass.location && (
-                <InfoTile label="Local" value={activeClass.location} />
+                <InfoTile label={d.landingChrome.info_location} value={activeClass.location} />
               )}
               {activeClass.base_cost && (
-                <InfoTile label="Investimento" value={formatCurrency(activeClass.base_cost) ?? '—'} />
+                <InfoTile label={d.landingChrome.info_investment} value={formatCurrency(activeClass.base_cost) ?? '—'} />
               )}
             </div>
 
             {activeClass.cost_description && (
-              <p className="text-gray-400 text-sm text-center mb-8">{activeClass.cost_description}</p>
+              <p className="text-gray-400 text-sm text-center mb-8">{resolveLocalizedText(activeClass.cost_description, activeClass.cost_description_translations, lang)}</p>
             )}
 
             {activeClass.public_description && (
-              <p className="text-gray-300 text-center max-w-2xl mx-auto mb-8">{activeClass.public_description}</p>
+              <p className="text-gray-300 text-center max-w-2xl mx-auto mb-8">{resolveLocalizedText(activeClass.public_description, activeClass.public_description_translations, lang)}</p>
             )}
 
             <div className="flex justify-center">
               {activeClass.registrations_open ? (
                 <a href="#inscricao" className="bg-brand-500 hover:bg-brand-400 text-white font-bold px-10 py-4 rounded-2xl text-lg transition-all hover:scale-105 shadow-lg shadow-brand-500/30">
-                  Inscrições abertas — participar
+                  {d.landingChrome.registrations_open_cta}
                 </a>
               ) : (
                 <div className="text-center">
                   <span className="inline-block bg-white/10 text-white/60 px-6 py-3 rounded-2xl text-sm border border-white/10">
-                    Inscrições em breve
+                    {d.landingChrome.registrations_soon}
                   </span>
-                  <p className="text-gray-500 text-xs mt-3">Preencha o formulário abaixo para receber informações</p>
+                  <p className="text-gray-500 text-xs mt-3">{d.landingChrome.registrations_soon_hint}</p>
                 </div>
               )}
             </div>
@@ -321,9 +327,9 @@ export default async function SchoolPublicPage({ params, searchParams }: Props) 
       <section id="inscricao" className="py-16 sm:py-24 px-5 sm:px-6 bg-white">
         <div className="max-w-2xl mx-auto">
           <div className="text-center mb-8 sm:mb-12">
-            <span className="text-brand-500 font-bold text-sm uppercase tracking-widest">Pré-inscrição</span>
-            <h2 className="text-3xl sm:text-4xl font-black text-gray-950 mt-2">Dê o primeiro passo</h2>
-            <p className="text-gray-500 mt-3 text-sm sm:text-base">Preencha abaixo e nossa equipe entrará em contato com mais detalhes.</p>
+            <span className="text-brand-500 font-bold text-sm uppercase tracking-widest">{d.landingChrome.registration_eyebrow}</span>
+            <h2 className="text-3xl sm:text-4xl font-black text-gray-950 mt-2">{d.landingChrome.registration_title}</h2>
+            <p className="text-gray-500 mt-3 text-sm sm:text-base">{d.landingChrome.registration_subtitle}</p>
           </div>
           <RegistrationForm
             slug={slug}
@@ -332,7 +338,7 @@ export default async function SchoolPublicPage({ params, searchParams }: Props) 
               .filter(c => c.online_applications)
               .map(c => ({ id: c.id, name: c.name, year: c.year, semester: c.semester }))}
             communicationLanguages={communicationLanguages}
-            initialLang={langParam}
+            initialLang={lang}
           />
         </div>
       </section>
@@ -342,16 +348,16 @@ export default async function SchoolPublicPage({ params, searchParams }: Props) 
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 sm:gap-6 text-center md:text-left">
           <div>
             <p className="font-bold text-lg">{org.name}</p>
-            <p className="text-gray-500 text-sm">Jovens Com Uma Missão</p>
+            <p className="text-gray-500 text-sm">{d.landingChrome.footer_tagline}</p>
           </div>
           <div className="flex flex-wrap justify-center gap-4 sm:gap-6 text-sm text-gray-400">
-            <a href={`/${slug}`} className="hover:text-white transition-colors">Início</a>
-            <a href={`/${slug}#escolas`} className="hover:text-white transition-colors">Outras escolas</a>
+            <a href={`/${slug}`} className="hover:text-white transition-colors">{d.landingChrome.footer_home}</a>
+            <a href={`/${slug}#escolas`} className="hover:text-white transition-colors">{d.landingChrome.footer_other_schools}</a>
             {org.email && <a href={`mailto:${org.email}`} className="hover:text-white transition-colors break-all">{org.email}</a>}
           </div>
         </div>
         <div className="max-w-6xl mx-auto mt-6 sm:mt-8 pt-6 border-t border-white/5 text-center text-xs text-gray-600">
-          © {new Date().getFullYear()} {org.name} · JOCUM · Todos os direitos reservados
+          © {new Date().getFullYear()} {org.name} · JOCUM · {d.landingChrome.footer_rights}
         </div>
       </footer>
 

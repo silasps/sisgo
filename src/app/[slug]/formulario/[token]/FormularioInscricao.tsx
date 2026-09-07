@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState, useContext, createContext, useMemo } from 'react'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { getFormDict, normalizeLang, t } from '@/lib/i18n/forms'
 import type { FormDict, Lang } from '@/lib/i18n/forms'
 import { HeartHandshake } from 'lucide-react'
@@ -1110,8 +1111,18 @@ export function FormularioInscricao({
   slug, token, applicationId, schoolName, className, prefill, initialSection = 1, initialData, hiddenFields, initialLang, printMode
 }: Props) {
   const hiddenSet = useMemo(() => new Set(hiddenFields ?? []), [hiddenFields])
-  const [lang, setLang] = useState<Lang>(normalizeLang(initialLang ?? prefill?.idioma))
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const [lang, setLangState] = useState<Lang>(normalizeLang(initialLang ?? prefill?.idioma))
   const d = getFormDict(lang)
+
+  function setLang(l: Lang) {
+    setLangState(l)
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('lang', l)
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }
 
   const [current, setCurrent] = useState(initialSection)
   const [saving, setSaving] = useState(false)

@@ -109,10 +109,10 @@ export default async function ReferenciaPage({ params, searchParams }: Props) {
       <header className="bg-white border-b border-gray-100 px-4 sm:px-6 py-4">
         <div className="max-w-2xl mx-auto">
           <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest">
-            Jovens Com Uma Missão
+            {d.ref.org_label}
           </p>
           <h1 className="text-lg font-bold text-gray-900 mt-0.5">
-            Formulário {tipoLabel}
+            {d.ref.form_title_prefix} {tipoLabel}
           </h1>
           <p className="text-sm text-gray-400">{escolaNome}</p>
         </div>

@@ -11,6 +11,7 @@ import {
 } from '../actions'
 import { DeleteTurmaButton } from '../DeleteTurmaButton'
 import { EmbedCodeBox } from '@/components/ui/EmbedCodeBox'
+import { LocaleContentTabs } from '@/components/ui/LocaleContentTabs'
 
 import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
 import { SCHOOL_TYPES } from '@/lib/schools'
@@ -217,6 +218,9 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
     const sb = mkAdmin()
     const objectives    = (formData.get('objectives') as string ?? '').split('\n').map(s => s.trim()).filter(Boolean)
     const prerequisites = (formData.get('prerequisites') as string ?? '').split('\n').map(s => s.trim()).filter(Boolean)
+    const parseTranslations = (key: string) => {
+      try { return JSON.parse((formData.get(key) as string) || '{}') } catch { return {} }
+    }
     await sb.from('schools').update({
       name: formData.get('name') as string,
       acronym: (formData.get('acronym') as string) || null,
@@ -224,7 +228,9 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
       school_type: formData.get('school_type') as string,
       subtitle: (formData.get('subtitle') as string) || null,
       long_description: (formData.get('long_description') as string) || null,
+      long_description_translations: parseTranslations('long_description_translations'),
       target_audience: (formData.get('target_audience') as string) || null,
+      target_audience_translations: parseTranslations('target_audience_translations'),
       duration_description: (formData.get('duration_description') as string) || null,
       hero_image_url: (formData.get('hero_image_url') as string) || null,
       promo_video_url: (formData.get('promo_video_url') as string) || null,
@@ -429,11 +435,15 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                 <div className="p-5">
                   <h2 className="font-semibold text-gray-900 mb-4">Conteúdo público</h2>
                   <div className="space-y-4">
-                    <TextArea label="Descrição completa" name="long_description"
+                    <LocaleContentTabs label="Descrição completa" name="long_description"
                       defaultValue={(escola as unknown as { long_description: string | null }).long_description ?? ''}
+                      translationsName="long_description_translations"
+                      defaultTranslations={(escola as unknown as { long_description_translations: Partial<Record<'en' | 'es', string>> | null }).long_description_translations ?? {}}
                       placeholder="O que é esta escola? Qual o objetivo do programa?" rows={5} />
-                    <TextArea label="Público-alvo" name="target_audience"
+                    <LocaleContentTabs label="Público-alvo" name="target_audience"
                       defaultValue={(escola as unknown as { target_audience: string | null }).target_audience ?? ''}
+                      translationsName="target_audience_translations"
+                      defaultTranslations={(escola as unknown as { target_audience_translations: Partial<Record<'en' | 'es', string>> | null }).target_audience_translations ?? {}}
                       placeholder="Para quem é indicada esta escola?" rows={3} />
                     <TextArea label="Objetivos (1 por linha)" name="objectives"
                       defaultValue={((escola as unknown as { objectives: string[] | null }).objectives ?? []).join('\n')}
