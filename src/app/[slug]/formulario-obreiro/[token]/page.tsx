@@ -2,7 +2,6 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { notFound } from 'next/navigation'
 import { FormularioObreiro } from './FormularioObreiro'
 import { CheckCircle2 } from 'lucide-react'
-import { getStaffFormDict, normalizeStaffLang } from '@/lib/i18n/staff-forms'
 
 type Props = {
   params: Promise<{ slug: string; token: string }>
@@ -11,7 +10,7 @@ type Props = {
 
 export default async function FormularioObreiroPage({ params, searchParams }: Props) {
   const { slug, token } = await params
-  const { print, lang: langParam } = await searchParams
+  const { print, lang } = await searchParams
   const printMode = print === '1'
   const sb = createAdminClient()
 
@@ -36,20 +35,14 @@ export default async function FormularioObreiroPage({ params, searchParams }: Pr
 
   if (!org?.active || org.slug !== slug) notFound()
 
-  const preform = app.staff_interest_forms as unknown as {
-    full_name?: string; email?: string; phone?: string; language?: string
-  } | null
-  const lang = normalizeStaffLang(langParam ?? preform?.language)
-  const d = getStaffFormDict(lang)
-
   if (new Date(app.token_expires_at!) < new Date()) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
         <div className="bg-white rounded-2xl shadow p-10 max-w-md text-center">
           <p className="text-4xl mb-4">⏰</p>
-          <h1 className="text-xl font-bold text-gray-900 mb-2">{d.bigFormChrome.link_expired_title}</h1>
+          <h1 className="text-xl font-bold text-gray-900 mb-2">Link expirado</h1>
           <p className="text-gray-500 text-sm">
-            {d.bigFormChrome.link_expired_body}
+            Este link de formulário expirou. Entre em contato com a equipe da base para solicitar um novo link.
           </p>
         </div>
       </div>
@@ -61,9 +54,9 @@ export default async function FormularioObreiroPage({ params, searchParams }: Pr
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
         <div className="bg-white rounded-2xl shadow p-10 max-w-md text-center">
           <CheckCircle2 className="size-12 mx-auto mb-4 text-green-500" />
-          <h1 className="text-xl font-bold text-gray-900 mb-2">{d.bigFormChrome.already_sent_title}</h1>
+          <h1 className="text-xl font-bold text-gray-900 mb-2">Formulário já enviado</h1>
           <p className="text-gray-500 text-sm">
-            {d.bigFormChrome.already_sent_body}
+            Seu formulário já foi enviado e está em análise. A equipe entrará em contato em breve.
           </p>
         </div>
       </div>
@@ -71,6 +64,9 @@ export default async function FormularioObreiroPage({ params, searchParams }: Pr
   }
 
   const ministry = app.ministries as unknown as { name: string } | null
+  const preform = app.staff_interest_forms as unknown as {
+    full_name?: string; email?: string; phone?: string; language?: string
+  } | null
 
   const formData = (app.form_data as Record<string, unknown>) ?? {}
   const prefillFromForm = (formData.prefill as Record<string, string | undefined>) ?? {}
@@ -100,7 +96,7 @@ export default async function FormularioObreiroPage({ params, searchParams }: Pr
             {org.name}
           </p>
           <h1 className="text-lg font-bold text-gray-900 mt-0.5">
-            {d.bigFormChrome.title}
+            Inscrição de Obreiro
           </h1>
           {ministry && <p className="text-sm text-gray-400">{ministry.name}</p>}
         </div>
@@ -108,9 +104,13 @@ export default async function FormularioObreiroPage({ params, searchParams }: Pr
 
       <div className="print:hidden max-w-2xl mx-auto px-4 sm:px-6 pt-5 sm:pt-6">
         <div className="bg-amber-600 text-white rounded-2xl p-5 mb-6">
-          <h2 className="font-bold text-base mb-1">{d.bigFormChrome.welcome_title}</h2>
+          <h2 className="font-bold text-base mb-1">Bem-vindo(a) ao formulário de inscrição!</h2>
           <p className="text-sm text-amber-100 leading-relaxed">
-            {printMode ? d.bigFormChrome.welcome_body_print : d.bigFormChrome.welcome_body_online}
+            {printMode
+              ? 'Esta é a versão em branco para preenchimento à mão, caso não seja possível preencher pela internet.'
+              : <>Este formulário faz parte do processo de avaliação para servir na base.
+                Responda com atenção e sinceridade.
+                Seu progresso é salvo automaticamente a cada seção. Tempo estimado: <strong>20 a 30 minutos</strong>.</>}
           </p>
         </div>
       </div>
@@ -128,13 +128,13 @@ export default async function FormularioObreiroPage({ params, searchParams }: Pr
             prefill={prefill}
             initialSection={app.current_section ?? 1}
             initialData={formData}
-            initialLang={lang}
+            initialLang={lang ?? prefill.idioma}
             printMode={printMode}
           />
         </div>
 
         <p className="text-center text-xs text-gray-400 mt-6">
-          {d.bigFormChrome.footer_contact}
+          Dúvidas? Entre em contato com a equipe responsável pela base.
         </p>
       </main>
     </div>

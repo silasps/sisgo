@@ -46,7 +46,7 @@ function splitNavByMode(navItems: NavItem[]) {
 const NAV_SECTION_BY_ICON: Record<string, string> = {
   pessoas: 'Pessoas & Times', presenca: 'Pessoas & Times', obreiros: 'Pessoas & Times',
   escolas: 'Pessoas & Times', inscricoes: 'Pessoas & Times', ministerios: 'Pessoas & Times',
-  reservas: 'Hospedagem', hospedagem: 'Hospedagem', quartos: 'Hospedagem', agenda: 'Hospedagem', lavanderia: 'Hospedagem',
+  reservas: 'Hospedagem', hospedagem: 'Hospedagem', quartos: 'Hospedagem', lavanderia: 'Hospedagem',
   cozinha: 'Cozinha', estoque: 'Cozinha', receitas: 'Cozinha',
   'estoque-manutencao': 'Manutenção',
   financeiro: 'Financeiro', caixa: 'Financeiro',
@@ -122,7 +122,6 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
     { href: `/${slug}/reservas`,     label: 'Reservas',         icon: 'reservas',      show: canSeeReservas, alert: hasReservationsPending },
     { href: `/${slug}/hospedagem`,   label: 'Hospedagem',       icon: 'hospedagem',    show: canSeeHospedagem },
     { href: `/${slug}/hospedagem/quartos`, label: 'Quartos',    icon: 'quartos',       show: canSeeHospedagem },
-    { href: `/${slug}/hospedagem/agenda`,  label: 'Agenda',     icon: 'agenda',        show: canSeeHospedagem },
     { href: `/${slug}/hospedagem/lavanderia`, label: 'Lavanderia', icon: 'lavanderia', show: canSeeHospedagem && laundryEnabled },
     { href: `/${slug}/refeicoes`,    label: 'Minhas refeições', icon: 'refeicoes',     show: canBuyMeals },
     { href: `/${slug}/cozinha`,      label: 'Cozinha',          icon: 'cozinha',       show: isManagement || is('secretaria') || isCozinha },
@@ -140,29 +139,50 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
 
   const dropDisabledCard = (items: AllItem[]) => items.filter(i => i.icon !== 'carteirinha' || idCardEnabled)
 
-  if (isHospitalidade) {
-    return addPersonalSplit(dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/pessoas', '/reservas', '/hospedagem', '/hospedagem/quartos', '/hospedagem/agenda', '/hospedagem/lavanderia', '/ministerios', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))).map(toItem))
+  // Ramificações abaixo dão um menu restrito e fixo pro que o PAPEL PRINCIPAL
+  // da pessoa (role) precisa — mas se ela também acumulou outras funções
+  // (ministério com linked_role, extra_roles, role_accumulations), os itens
+  // que essas funções liberam (i.show já considera o allRoles inteiro) são
+  // somados ao final, sem repetir o que a lista restrita já tem. Assim o
+  // menu cresce junto com as novas funções, mas continua evitando os itens
+  // amplos (Pessoas, Financeiro, Configurações…) que o papel restrito sozinho
+  // não deveria ter — esses só entram via os próprios show flags, que checam
+  // isManagement (baseado só no papel principal) ou papéis específicos.
+  const withAccumulatedExtras = (narrow: AllItem[]) => {
+    const seen = new Set(narrow.map(i => i.href))
+    const extras = all.filter(i => i.show && !seen.has(i.href))
+    return [...narrow, ...extras]
   }
 
-  if (isCozinha) {
-    return addPersonalSplit(dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/cozinha', '/cozinha/estoque', '/cozinha/receitas', '/ministerios', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))).map(toItem))
+  if (role === 'hospitalidade') {
+    const narrow = all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/pessoas', '/reservas', '/hospedagem', '/hospedagem/quartos', '/hospedagem/lavanderia', '/ministerios', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))
+    return addPersonalSplit(dropDisabledCard(withAccumulatedExtras(narrow)).map(toItem))
   }
 
-  if (isManutencao) {
-    return addPersonalSplit(dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/manutencao', '/manutencao/estoque', '/ministerios', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))).map(toItem))
+  if (role === 'cozinha') {
+    const narrow = all.filter(pick('/dashboard', '/calendario', '/pendentes', '/cozinha', '/cozinha/estoque', '/cozinha/receitas', '/ministerios', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))
+    return addPersonalSplit(dropDisabledCard(withAccumulatedExtras(narrow)).map(toItem))
   }
 
-  if (isObreiroMinisterio) {
-    return addPersonalSplit(dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/ministerios', '/reservas', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))).map(toItem))
+  if (role === 'manutencao') {
+    const narrow = all.filter(pick('/dashboard', '/calendario', '/pendentes', '/manutencao', '/manutencao/estoque', '/ministerios', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))
+    return addPersonalSplit(dropDisabledCard(withAccumulatedExtras(narrow)).map(toItem))
   }
 
-  if (isObreiroEted) {
-    return addPersonalSplit(dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/escolas', '/reservas', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))).map(toItem))
+  if (role === 'obreiro_ministerio') {
+    const narrow = all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/ministerios', '/reservas', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))
+    return addPersonalSplit(dropDisabledCard(withAccumulatedExtras(narrow)).map(toItem))
   }
 
-  if (isAluno || isAssociado) {
+  if (role === 'obreiro_eted') {
+    const narrow = all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/escolas', '/reservas', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))
+    return addPersonalSplit(dropDisabledCard(withAccumulatedExtras(narrow)).map(toItem))
+  }
+
+  if (role === 'aluno' || role === 'associado') {
+    const narrow = all.filter(pick('/dashboard', '/calendario', '/pendentes', '/reservas', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))
     return addPersonalSplit(
-      dropDisabledCard(all.filter(pick('/dashboard', '/calendario', '/pendentes', '/reservas', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))).map(toItem),
+      dropDisabledCard(withAccumulatedExtras(narrow)).map(toItem),
       new Set(['reservas', 'refeicoes', 'contas', 'carteirinha', 'minha-lavanderia']),
     )
   }
@@ -556,18 +576,20 @@ export default async function SlugLayout({ children, params }: Props) {
   const sidebarItems: NavItem[] = navMode === 'administracao'
     ? [...universal, ...sectionize(adminNavItems)]
     : [...universal, ...personalNavItems]
-  // "Ver tudo" mostra só o complemento do que já está na sidebar do modo atual
-  // (ex.: itens do outro modo Pessoal/Administração) — não repete o que já é visível.
-  // No mobile, porém, esse painel também é o "Mais" da barra inferior, que só
-  // expõe 4 ícones — para papéis sem modo Administração (aluno, obreiro etc.),
-  // a sidebar já mostra tudo e o complemento ficaria vazio, escondendo o Mais
-  // por completo. Nesse caso caímos para a lista completa (sem filtrar).
+  // A GRADE do "Ver tudo" mostra só o complemento do que já está na sidebar
+  // do modo atual (ex.: itens do outro modo Pessoal/Administração) — não
+  // repete atalho que já é visível. Mas a CAIXA DE BUSCA dentro do mesmo
+  // painel promete "buscar em tudo que o sisgo oferece" — se a busca usasse
+  // só o complemento, um atalho que já está fixo na sidebar (ex. Lavanderia
+  // em modo Pessoal) ficaria invisível pra busca, o que é o oposto do que a
+  // caixa promete. Por isso existe também a lista completa (sem o filtro de
+  // complemento), só pra alimentar a busca — a grade de navegação continua
+  // usando a versão filtrada.
   const sidebarIcons = new Set(sidebarItems.filter((i): i is RegularNavItem => !('divider' in i)).map(i => i.icon))
-  const fullAllAppsItems = dropEmptySections(buildAllAppsItems(universal, adminNavItems, personalNavItems))
-  const allAppsComplement = dropEmptySections(
-    fullAllAppsItems.filter(i => 'divider' in i || !sidebarIcons.has(i.icon)),
+  const allNavItemsFull = dropEmptySections(buildAllAppsItems(universal, adminNavItems, personalNavItems))
+  const allNavItems = dropEmptySections(
+    allNavItemsFull.filter(i => 'divider' in i || !sidebarIcons.has(i.icon)),
   )
-  const allNavItems = allAppsComplement.some(i => !('divider' in i)) ? allAppsComplement : fullAllAppsItems
 
   const myOrgs = userOrgRows
     .map(r => r.organizations)
@@ -601,6 +623,7 @@ export default async function SlugLayout({ children, params }: Props) {
         logoUrl={(org as { logo_url?: string | null }).logo_url ?? undefined}
         className="flex flex-1 min-h-0 overflow-hidden"
         allNavItems={allNavItems}
+        searchNavItems={allNavItemsFull}
         account={{
           name: displayName,
           email: user.email ?? '',

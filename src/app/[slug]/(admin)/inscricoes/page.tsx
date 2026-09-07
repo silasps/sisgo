@@ -12,6 +12,10 @@ import { getRolePreview } from '@/lib/role-preview'
 import { Suspense } from 'react'
 import { ScrollHighlight } from '@/components/ui/ScrollHighlight'
 import { SCHOOL_APPLICATION_TYPES } from '@/lib/schools'
+import { enrollStudent } from '@/lib/students/enrollStudent'
+import { ServirLinkCard } from './ServirLinkCard'
+import { InscricaoLinkCard } from './InscricaoLinkCard'
+import { MinistryLinkCard } from './MinistryLinkCard'
 import { InscricoesList } from './InscricoesList'
 import { criarPreInscricaoManual, criarPreInscricaoObreiroManual } from './actions'
 import { SearchBar } from '@/components/ui/SearchBar'
@@ -70,16 +74,49 @@ type HistoricoItem = {
   tipo: string
   nome: string
   escola: string | null
+  schoolId: string | null
+  ministryId: string | null
   motivo: string
   recusadoPor: string | null
   recusadoPorId: string | null
+  status: string
+  criadoEm: string
   recusadoEm: string
 }
 
 function daysAgo(dateStr: string) {
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24))
 }
-const isFinalizado = (s: string) => ['convertido','aprovado','descartado','reprovado','cancelado'].includes(s)
+const isFinalizado = (s: string) => ['convertido','aprovado','descartado','reprovado','cancelado','excluido'].includes(s)
+
+// Líder de ETED/escola e líder de ministério não encaminham direto (só o
+// DH faz isso) — eles SOLICITAM, via service_requests (mesma tabela já
+// usada pra hospedagem), e o DH resolve depois em /pendentes usando o
+// encaminhar que já existe. Mesmo nível de checagem de papel que
+// assertCanRequestHospedagem já usa nos arquivos irmãos (só papel, sem
+// verificar posse do item específico — createAdminClient ignora RLS, então
+// sem isso qualquer usuário autenticado poderia forjar uma solicitação).
+// Precisa ficar no nível do módulo (fora do componente da página): uma
+// função aninhada chamada de dentro de uma 'use server' action é tratada
+// como valor de closure a serializar pro client, e como ela mesma não é
+// 'use server', o Next.js quebra com "Functions cannot be passed directly
+// to Client Components".
+async function assertCanRequestTransfer(organizationId: string) {
+  const authClient = await createClient()
+  const { data: { user: actingUser } } = await authClient.auth.getUser()
+  if (!actingUser) throw new Error('unauthorized')
+  const { data: orgUsersRows } = await authClient
+    .from('organization_users')
+    .select('organization_id, roles(name)')
+    .eq('user_id', actingUser.id)
+    .eq('active', true)
+  const memberships = (orgUsersRows ?? []) as unknown as Array<{ organization_id: string | null; roles: { name: string } | null }>
+  const role = memberships.find(m => m.roles?.name === 'superadmin')?.roles?.name
+    ?? memberships.find(m => m.organization_id === organizationId)?.roles?.name
+    ?? ''
+  if (!['superadmin', 'admin_base', 'lider_base', 'dh', 'lider_eted', 'lider_ministerio'].includes(role)) throw new Error('forbidden')
+  return { userId: actingUser.id, role }
+}
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   pendente:           { label: 'Pendente',      color: 'bg-yellow-100 text-yellow-700' },
@@ -269,19 +306,25 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     const tipo   = formData.get('tipo') as string
     const id     = formData.get('id') as string
     const reason = (formData.get('reason') as string)?.trim()
+    // 'recusa' = candidato avaliado e não aceito; 'exclusao' = o cadastro em
+    // si é que está errado (duplicata, engano) — motivos diferentes, então
+    // status diferente, mas o resto do fluxo (motivo obrigatório, cancela
+    // pendência de hospedagem, vai pro histórico) é o mesmo.
+    const kind   = (formData.get('kind') as string) === 'exclusao' ? 'exclusao' : 'recusa'
     const decisionNote = (formData.get('decision_note') as string | null)?.trim() || null
     const decisionNoteShared = formData.get('decision_note_shared') === 'on'
     if (!reason) return
     const now = new Date().toISOString()
     if (tipo === 'pre_inscricao') {
+      const status = kind === 'exclusao' ? 'excluido' : 'descartado'
       const { data: row, error } = await db.from('school_interest_forms')
-        .update({ status: 'descartado', refusal_reason: reason, responded_at: now, reviewed_at: now, reviewed_by: user?.id ?? null, decision_note: decisionNote, decision_note_shared: decisionNoteShared })
+        .update({ status, refusal_reason: reason, responded_at: now, reviewed_at: now, reviewed_by: user?.id ?? null, decision_note: decisionNote, decision_note_shared: decisionNoteShared })
         .eq('id', id)
         .select('email, full_name, school_id, language, schools(name, contact_email)')
         .single()
       if (error?.code === 'PGRST204') {
         await db.from('school_interest_forms')
-          .update({ status: 'descartado', refusal_reason: reason, responded_at: now })
+          .update({ status, refusal_reason: reason, responded_at: now })
           .eq('id', id)
       }
       const escola = row?.schools as unknown as { name: string; contact_email: string | null } | null
@@ -306,11 +349,11 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       }
     } else if (tipo === 'pre_inscricao_obreiro') {
       await db.from('staff_interest_forms')
-        .update({ status: 'descartado', refusal_reason: reason, responded_at: now, reviewed_at: now, reviewed_by: user?.id ?? null })
+        .update({ status: kind === 'exclusao' ? 'excluido' : 'descartado', refusal_reason: reason, responded_at: now, reviewed_at: now, reviewed_by: user?.id ?? null })
         .eq('id', id)
     } else if (tipo === 'aluno') {
       const { data: row } = await db.from('student_applications')
-        .update({ status: 'reprovado', refusal_reason: reason, reviewed_at: now, reviewed_by: user?.id ?? null, decision_note: decisionNote, decision_note_shared: decisionNoteShared })
+        .update({ status: kind === 'exclusao' ? 'excluido' : 'reprovado', refusal_reason: reason, reviewed_at: now, reviewed_by: user?.id ?? null, decision_note: decisionNote, decision_note_shared: decisionNoteShared })
         .eq('id', id)
         .select('person_id, school_id, people(full_name), schools(name, contact_email)')
         .single()
@@ -335,12 +378,13 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         }
       }
     } else {
+      const status = kind === 'exclusao' ? 'excluido' : 'reprovado'
       const { error } = await db.from('staff_applications')
-        .update({ status: 'reprovado', refusal_reason: reason, reviewed_at: now, reviewed_by: user?.id ?? null })
+        .update({ status, refusal_reason: reason, reviewed_at: now, reviewed_by: user?.id ?? null })
         .eq('id', id)
       if (error?.code === 'PGRST204') {
         await db.from('staff_applications')
-          .update({ status: 'reprovado', reviewed_at: now, reviewed_by: user?.id ?? null })
+          .update({ status, reviewed_at: now, reviewed_by: user?.id ?? null })
           .eq('id', id)
       }
       // Pessoa saiu do processo de entrada — cancela a pendência de
@@ -422,38 +466,8 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         .eq('type', 'email').eq('value', email).maybeSingle()
       personId = contact?.person_id ?? null
     }
-    if (personId) {
-      const { data: existing } = await db.from('student_profiles').select('id').eq('person_id', personId).maybeSingle()
-      if (!existing) {
-        const { error } = await db.from('student_profiles').insert({
-          organization_id: orgIdForm,
-          person_id: personId,
-          active: true,
-          accepted_by: actingUser?.id ?? null,
-          accepted_at: now,
-        })
-        if (error?.code === 'PGRST204') {
-          await db.from('student_profiles').insert({ organization_id: orgIdForm, person_id: personId, active: true })
-        }
-      } else {
-        const { error } = await db.from('student_profiles')
-          .update({ accepted_by: actingUser?.id ?? null, accepted_at: now })
-          .eq('id', existing.id)
-        if (error?.code === 'PGRST204') {
-          await db.from('student_profiles')
-            .update({ active: true })
-            .eq('id', existing.id)
-        }
-      }
-      await db.from('people').update({ source: null }).eq('id', personId)
-
-      if (classId) {
-        await db.from('class_students').upsert({
-          class_id: classId,
-          person_id: personId,
-          status: 'ativo',
-        }, { onConflict: 'class_id,person_id' })
-      }
+    if (personId && classId) {
+      await enrollStudent({ organizationId: orgIdForm, personId, classId, acceptedBy: actingUser?.id ?? null })
     }
     let candidateLanguage: string | null | undefined
     if (tipo === 'pre_inscricao') {
@@ -690,6 +704,8 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     const { headers: hdrs } = await import('next/headers')
 
     const interestFormId = formData.get('interest_form_id') as string
+    const sendEmail = formData.get('send_email') !== '0'
+    const langParam = (formData.get('lang') as string | null) || undefined
 
     // Busca o interest form e a escola
     const { data: form } = await db
@@ -748,19 +764,27 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     const host = headersList.get('host') ?? 'localhost:3000'
     const protocol = host.startsWith('localhost') ? 'http' : 'https'
     const formUrl = `${protocol}://${host}/${slug}/formulario/${token}`
+    // O CTA/links dentro do e-mail precisam abrir o formulário já no mesmo
+    // idioma escolhido pra enviar o e-mail — senão o texto vem num idioma
+    // e o formulário abre em outro. O link retornado ao cliente (formUrl)
+    // fica sem esse parâmetro pois o cliente já anexa o idioma escolhido.
+    const formUrlForEmail = langParam ? `${formUrl}?lang=${langParam}` : formUrl
 
-    // Tenta enviar e-mail somente se a escola tiver e-mail configurado
+    // Tenta enviar e-mail somente se a escola tiver e-mail configurado e o
+    // usuário tiver escolhido enviar agora (em vez de só copiar o link)
     let emailWarning: string | undefined
-    if (escola?.contact_email) {
+    if (!sendEmail) {
+      // usuário escolheu "copiar link" — não é falha, não gera aviso
+    } else if (escola?.contact_email) {
       const { sendFormEmail } = await import('@/lib/email/sendFormEmail')
       const emailResult = await sendFormEmail({
         to: form.email,
         candidateName: form.full_name,
         schoolName: escola.name,
-        formUrl,
+        formUrl: formUrlForEmail,
         expiresAt,
         replyTo: escola.contact_email,
-        language: (form as unknown as { language?: string }).language,
+        language: langParam ?? (form as unknown as { language?: string }).language,
         organizationId: (form as unknown as { organization_id: string }).organization_id,
         schoolId: escola.id,
       })
@@ -943,6 +967,8 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     const authClient = await createClient()
 
     const interestFormId = formData.get('interest_form_id') as string
+    const sendEmail = formData.get('send_email') !== '0'
+    const langParam = (formData.get('lang') as string | null) || undefined
     const { data: { user } } = await authClient.auth.getUser()
 
     const { data: form } = await db
@@ -972,7 +998,8 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         ministryId: form.ministry_id,
         fullName: form.full_name,
         email: form.email,
-        language: form.language,
+        language: langParam ?? form.language,
+        sendEmail,
       })
     } else {
       const { createAndSendStaffApplication } = await import('@/lib/staff/staffApplicationInvite')
@@ -985,9 +1012,10 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         fullName: form.full_name,
         email: form.email,
         phone: form.phone,
-        language: form.language,
+        language: langParam ?? form.language,
         personId: form.person_id,
         leaderAcceptedBy: user?.id ?? null,
+        sendEmail,
       })
     }
 
@@ -1027,6 +1055,11 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     return result
   }
 
+  // Também usada pra REencaminhar (não só pra quem ainda não tem escola) —
+  // se a escola realmente mudar, limpa class_id: uma turma da escola antiga
+  // não faz sentido continuar vinculada depois da troca. O formulário já
+  // enviado (school_applications), se existir, não é tocado — fica com a
+  // escola antiga; a UI já avisa disso antes de encaminhar.
   async function encaminharParaEscola(formData: FormData) {
     'use server'
     const { createAdminClient: adm } = await import('@/lib/supabase/admin')
@@ -1034,11 +1067,18 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     const interestId = formData.get('interest_id') as string
     const schoolId = formData.get('school_id') as string
     if (!interestId || !schoolId) return
-    await db.from('school_interest_forms').update({ school_id: schoolId }).eq('id', interestId)
+    const { data: current } = await db.from('school_interest_forms').select('school_id').eq('id', interestId).single()
+    const changed = current?.school_id !== schoolId
+    await db.from('school_interest_forms').update({
+      school_id: schoolId,
+      ...(changed ? { class_id: null } : {}),
+    }).eq('id', interestId)
     const { redirect: redir } = await import('next/navigation')
     redir(`/${slug}/inscricoes?flash_success=${encodeURIComponent('Inscrição encaminhada para a escola.')}`)
   }
 
+  // ministry_id/school_id sempre são gravados juntos (um null, outro com o
+  // id) — já é seguro reusar pra REencaminhar quem já tinha um dos dois.
   async function encaminharParaMinisterio(formData: FormData) {
     'use server'
     const { createAdminClient: adm } = await import('@/lib/supabase/admin')
@@ -1055,6 +1095,25 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     redir(`/${slug}/inscricoes?tab=obreiro&flash_success=${encodeURIComponent('Inscrição encaminhada.')}`)
   }
 
+  // Mesma ideia de encaminharParaMinisterio, mas pro obreiro já convertido
+  // (staff_applications) em vez da pré-inscrição (staff_interest_forms) —
+  // cobre o caso "descobrimos no meio do processo que ele serve é em outro
+  // ministério".
+  async function reencaminharObreiro(formData: FormData) {
+    'use server'
+    const { createAdminClient: adm } = await import('@/lib/supabase/admin')
+    const db = adm()
+    const staffApplicationId = formData.get('staff_application_id') as string
+    const destination = (formData.get('destination') as string) || ''
+    const [destType, destId] = destination.includes(':') ? destination.split(':') : [null, null]
+    if (!staffApplicationId || !destId) return
+    await db.from('staff_applications').update({
+      ministry_id: destType === 'ministry' ? destId : null,
+      school_id: destType === 'school' ? destId : null,
+    }).eq('id', staffApplicationId)
+    const { redirect: redir } = await import('next/navigation')
+    redir(`/${slug}/inscricoes?tab=obreiro&flash_success=${encodeURIComponent('Inscrição encaminhada.')}`)
+  }
   // ── Queries ────────────────────────────────────────────────────────────────
 
   const [{ data: allSchoolsRaw }, { data: allMinistriesRaw }, { data: publicSchoolsRaw }, { data: publicMinistriesRaw }] = await Promise.all([
@@ -1067,12 +1126,98 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
   const allMinistries = (allMinistriesRaw ?? []) as Array<{ id: string; name: string }>
   const publicSchools = (publicSchoolsRaw ?? []).filter((s: { slug: string | null }) => s.slug) as Array<{ id: string; name: string; slug: string }>
   const publicMinistries = (publicMinistriesRaw ?? []).filter((m: { slug: string | null }) => m.slug) as Array<{ id: string; name: string; slug: string }>
-  const visiblePublicSchools = allowedSchoolIds
-    ? publicSchools.filter(s => allowedSchoolIds.includes(s.id))
-    : publicSchools
-  const visiblePublicMinistries = isLiderMinisterio && leaderMinistryId
-    ? publicMinistries.filter(m => m.id === leaderMinistryId)
-    : publicMinistries
+
+  async function solicitarTransferenciaEscola(formData: FormData) {
+    'use server'
+    const { userId, role } = await assertCanRequestTransfer(orgId)
+    const { createAdminClient: adm } = await import('@/lib/supabase/admin')
+    const db = adm()
+    const interestId = formData.get('interest_id') as string
+    const schoolId = formData.get('school_id') as string
+    const motivo = ((formData.get('motivo') as string) || '').trim()
+    if (!interestId || !schoolId || !motivo) return { error: 'Preencha o destino e o motivo.' }
+
+    const { data: interestForm } = await db.from('school_interest_forms').select('full_name').eq('id', interestId).single()
+    const schoolName = allSchools.find(s => s.id === schoolId)?.name ?? 'escola selecionada'
+
+    const { data: existing } = await db.from('service_requests')
+      .select('id')
+      .eq('school_interest_form_id', interestId)
+      .eq('request_type', 'transferencia_aluno')
+      .in('status', ['pendente', 'em_analise'])
+      .maybeSingle()
+
+    const payload = {
+      organization_id: orgId,
+      requester_id: userId,
+      requester_role: role,
+      target_department: 'dh',
+      request_type: 'transferencia_aluno',
+      subject: `Transferência solicitada — ${interestForm?.full_name ?? 'candidato'}`,
+      description: `Motivo: ${motivo}\n\nEscola solicitada: ${schoolName}`,
+      school_interest_form_id: interestId,
+      status: 'pendente',
+    }
+    if (existing) await db.from('service_requests').update(payload).eq('id', existing.id)
+    else await db.from('service_requests').insert(payload)
+
+    const { revalidatePath: reval } = await import('next/cache')
+    reval(`/${slug}/inscricoes`)
+    return { success: true }
+  }
+
+  async function solicitarTransferenciaObreiro(formData: FormData) {
+    'use server'
+    const { userId, role } = await assertCanRequestTransfer(orgId)
+    const { createAdminClient: adm } = await import('@/lib/supabase/admin')
+    const db = adm()
+    const interestId = (formData.get('interest_id') as string) || null
+    const staffApplicationId = (formData.get('staff_application_id') as string) || null
+    const destination = (formData.get('destination') as string) || ''
+    const motivo = ((formData.get('motivo') as string) || '').trim()
+    const [destType, destId] = destination.includes(':') ? destination.split(':') : [null, null]
+    if ((!interestId && !staffApplicationId) || !destId || !motivo) return { error: 'Preencha o destino e o motivo.' }
+
+    const destName = destType === 'ministry'
+      ? allMinistries.find(m => m.id === destId)?.name
+      : allSchools.find(s => s.id === destId)?.name
+    const destLabel = destType === 'ministry' ? 'Ministério' : 'Escola'
+
+    let nome = 'candidato'
+    if (interestId) {
+      const { data } = await db.from('staff_interest_forms').select('full_name').eq('id', interestId).single()
+      nome = data?.full_name ?? nome
+    } else if (staffApplicationId) {
+      const { data } = await db.from('staff_applications').select('people(full_name)').eq('id', staffApplicationId).single()
+      nome = (data?.people as unknown as { full_name?: string } | null)?.full_name ?? nome
+    }
+
+    const { data: existing } = await db.from('service_requests')
+      .select('id')
+      .eq('request_type', 'transferencia_obreiro')
+      .in('status', ['pendente', 'em_analise'])
+      .match(interestId ? { staff_interest_form_id: interestId } : { staff_application_id: staffApplicationId as string })
+      .maybeSingle()
+
+    const payload = {
+      organization_id: orgId,
+      requester_id: userId,
+      requester_role: role,
+      target_department: 'dh',
+      request_type: 'transferencia_obreiro',
+      subject: `Transferência solicitada — ${nome}`,
+      description: `Motivo: ${motivo}\n\n${destLabel} solicitado(a): ${destName ?? 'destino selecionado'}`,
+      staff_interest_form_id: interestId,
+      staff_application_id: staffApplicationId,
+      status: 'pendente',
+    }
+    if (existing) await db.from('service_requests').update(payload).eq('id', existing.id)
+    else await db.from('service_requests').insert(payload)
+
+    const { revalidatePath: reval } = await import('next/cache')
+    reval(`/${slug}/inscricoes`)
+    return { success: true }
+  }
 
   const items: InscricaoItem[] = []
   const historico: HistoricoItem[] = []
@@ -1132,9 +1277,13 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         historico.push({
           id: r.id, tipo: 'Pré-inscrição', nome: r.full_name,
           escola: escola?.name ?? null,
+          schoolId: escola?.id ?? null,
+          ministryId: null,
           motivo: r.refusal_reason,
           recusadoPor: null,
           recusadoPorId: r.reviewed_by ?? null,
+          status: r.status,
+          criadoEm: r.created_at,
           recusadoEm: r.responded_at ?? r.created_at,
         })
       } else {
@@ -1173,9 +1322,13 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         historico.push({
           id: r.id, tipo: 'Candidato a Aluno', nome: pessoa?.full_name ?? '—',
           escola: escola?.name ?? null,
+          schoolId: escola?.id ?? null,
+          ministryId: null,
           motivo: r.refusal_reason,
           recusadoPor: null,
           recusadoPorId: r.reviewed_by ?? null,
+          status: r.status,
+          criadoEm: r.applied_at,
           recusadoEm: r.reviewed_at ?? r.applied_at,
         })
       } else {
@@ -1226,9 +1379,13 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         historico.push({
           id: r.id, tipo: 'Pré-inscrição Obreiro', nome: r.full_name,
           escola: ministry?.name ?? school?.name ?? null,
+          schoolId: r.school_id ?? null,
+          ministryId: r.ministry_id ?? null,
           motivo: r.refusal_reason,
           recusadoPor: null,
           recusadoPorId: r.reviewed_by ?? null,
+          status: r.status,
+          criadoEm: r.created_at,
           recusadoEm: r.responded_at ?? r.created_at,
         })
       } else if (!appJaEnviada) {
@@ -1316,9 +1473,13 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         historico.push({
           id: r.id, tipo: 'Candidato a Obreiro', nome: pessoa?.full_name ?? '—',
           escola: ministry?.name ?? school?.name ?? null,
+          schoolId: r.school_id ?? null,
+          ministryId: r.ministry_id ?? null,
           motivo: r.refusal_reason,
           recusadoPor: null,
           recusadoPorId: r.reviewed_by ?? null,
+          status: r.status,
+          criadoEm: r.applied_at,
           recusadoEm: r.reviewed_at ?? r.applied_at,
         })
       } else {
@@ -1468,8 +1629,8 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
   // Lider Ministério: só vê inscrições de obreiro do seu ministério
   const roleFiltered = isEtedLeader
     ? items.filter(i => {
-        if (i.tipo === 'pre_inscricao' && !i.schoolId) return false
-        if (i.tipo === 'pre_inscricao' && allowedSchoolIds && !allowedSchoolIds.includes(i.schoolId!)) return false
+        if ((i.tipo === 'pre_inscricao' || i.tipo === 'aluno') && !i.schoolId) return false
+        if ((i.tipo === 'pre_inscricao' || i.tipo === 'aluno') && allowedSchoolIds && !allowedSchoolIds.includes(i.schoolId!)) return false
         if ((i.tipo === 'pre_inscricao_obreiro' || i.tipo === 'obreiro')) {
           if (!i.schoolId) return false
           if (allowedSchoolIds && !allowedSchoolIds.includes(i.schoolId)) return false
@@ -1488,13 +1649,33 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
   roleFiltered.sort((a, b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime())
   const quota = await getEmailQuota()
 
+  // Mesma regra de escopo do roleFiltered acima, aplicada ao histórico de
+  // recusas/exclusões — sem isso, líder de ETED/escola/seminário via o
+  // histórico de TODAS as escolas/ministérios da organização.
+  const historicoRoleFiltered = isEtedLeader
+    ? historico.filter(h => {
+        if (h.tipo === 'Pré-inscrição' || h.tipo === 'Candidato a Aluno' || h.tipo === 'Pré-inscrição Obreiro' || h.tipo === 'Candidato a Obreiro') {
+          if (!h.schoolId) return false
+          if (allowedSchoolIds && !allowedSchoolIds.includes(h.schoolId)) return false
+        }
+        return true
+      })
+    : isLiderMinisterio && leaderMinistryId
+    ? historico.filter(h => {
+        if (h.tipo === 'Pré-inscrição' || h.tipo === 'Candidato a Aluno') return false
+        if ((h.tipo === 'Pré-inscrição Obreiro' || h.tipo === 'Candidato a Obreiro') && h.ministryId && h.ministryId !== leaderMinistryId) return false
+        if (h.tipo === 'Pré-inscrição Obreiro' && !h.ministryId) return false
+        return true
+      })
+    : historico
+
   // As 3 listas de ids abaixo (reviewer/assumed/createdBy) costumavam ser
   // resolvidas em 3 chamadas Promise.all sequenciais — cada uma batendo na
   // API de admin do Supabase Auth (uma requisição por usuário). Como toda
   // ação nessa página recarrega o Server Component inteiro, isso multiplicava
   // o tempo de resposta a cada clique. Uma única leva, deduplicada, resolve
   // todos os nomes de uma vez.
-  const reviewerIds = [...new Set(historico.map(item => item.recusadoPorId).filter((id): id is string => Boolean(id)))]
+  const reviewerIds = [...new Set(historicoRoleFiltered.map(item => item.recusadoPorId).filter((id): id is string => Boolean(id)))]
   const assumedIds = [...new Set(assumedLookups.map(a => a.userId))]
   const createdByIds = [...new Set(createdByLookups.map(a => a.userId))]
   const allUserIds = [...new Set([...reviewerIds, ...assumedIds, ...createdByIds])]
@@ -1506,7 +1687,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     if (displayName) userDisplayNames.set(id, displayName)
   }))
 
-  for (const item of historico) {
+  for (const item of historicoRoleFiltered) {
     item.recusadoPor = item.recusadoPorId ? userDisplayNames.get(item.recusadoPorId) ?? null : null
   }
   for (const { item, userId } of assumedLookups) {
@@ -1517,7 +1698,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
   }
 
   // Histórico: max 30, mais recentes primeiro
-  const historicoTab = historico
+  const historicoTab = historicoRoleFiltered
     .sort((a, b) => new Date(b.recusadoEm).getTime() - new Date(a.recusadoEm).getTime())
     .slice(0, 30)
 
@@ -1538,7 +1719,6 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                   starts_at: c.starts_at,
                   schoolName: c.schools?.name ?? null,
                 }))}
-                publicSchools={visiblePublicSchools.map(s => ({ slug: s.slug, name: s.name }))}
               />
             )}
             {canWriteObreiro && (
@@ -1547,7 +1727,6 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                 criarAction={criarPreInscricaoObreiroManual.bind(null, orgId, slug)}
                 ministries={allMinistries}
                 schools={allSchools}
-                publicMinistries={visiblePublicMinistries.map(m => ({ slug: m.slug, name: m.name }))}
               />
             )}
             {canWriteObreiro && (
@@ -1579,6 +1758,29 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           initialTab={tab}
           initialEtapa={etapa}
           hideAlunoTipo={isLiderMinisterio}
+          linksAluno={publicSchools.length > 0 ? (
+            <InscricaoLinkCard
+              orgSlug={slug}
+              schools={(allowedSchoolIds
+                ? publicSchools.filter(s => allowedSchoolIds.includes(s.id))
+                : publicSchools
+              ).map(s => ({ slug: s.slug, name: s.name }))}
+            />
+          ) : null}
+          linksObreiro={(
+            <>
+              <ServirLinkCard slug={slug} />
+              {publicMinistries.length > 0 && (
+                <MinistryLinkCard
+                  orgSlug={slug}
+                  ministries={(isLiderMinisterio && leaderMinistryId
+                    ? publicMinistries.filter(m => m.id === leaderMinistryId)
+                    : publicMinistries
+                  ).map(m => ({ slug: m.slug, name: m.name }))}
+                />
+              )}
+            </>
+          )}
           openClasses={openClasses.map(c => ({
             id: c.id,
             school_id: c.school_id,
@@ -1608,6 +1810,9 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           marcarRecebidoExternamenteObreiro={marcarRecebidoExternamenteObreiro}
           encaminharParaEscola={encaminharParaEscola}
           encaminharParaMinisterio={encaminharParaMinisterio}
+          reencaminharObreiro={reencaminharObreiro}
+          solicitarTransferenciaEscola={solicitarTransferenciaEscola}
+          solicitarTransferenciaObreiro={solicitarTransferenciaObreiro}
         />
         </Suspense>
 

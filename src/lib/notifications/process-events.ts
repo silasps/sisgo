@@ -54,6 +54,12 @@ const EVENT_LABELS: Record<string, { title: string; bodyFn: (p: NotificationEven
       ? 'Nova solicitação de serviço'
       : `Solicitação ${statusLabel(p.new_status)}`,
   },
+  staff_assigned: {
+    title: 'Novo obreiro atribuído à base',
+    bodyFn: (p) => p.person_name
+      ? `${p.person_name} foi atribuído(a) à sua base pelo super admin — defina a área e função no Quadro de Obreiros`
+      : 'Um usuário foi atribuído à sua base pelo super admin — defina a área e função no Quadro de Obreiros',
+  },
 }
 
 function statusLabel(status?: string | null): string {

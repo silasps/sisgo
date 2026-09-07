@@ -7,6 +7,8 @@ import { SisgoLogo } from '@/components/layout/Logo'
 import { createClient } from '@/lib/supabase/client'
 import { getLoginRedirect, register, loginWithGoogle } from './actions'
 
+const SERVER_ACTION_ERROR = 'A resposta do servidor foi interrompida. Atualize a página e tente novamente.'
+
 function isNativePlatform() {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -41,8 +43,8 @@ function LoginPageInner() {
         if (error) { setError('Falha ao completar login.'); setGoogleLoading(false); return }
         try { const { Browser } = await import('@capacitor/browser'); await Browser.close() } catch {}
         localStorage.setItem('sisgo_has_session', '1')
-        const result = await getLoginRedirect()
-        if (result.redirectTo) window.location.href = result.redirectTo
+        const result = await getLoginRedirect().catch(() => ({ error: SERVER_ACTION_ERROR }))
+        if ('redirectTo' in result && result.redirectTo) window.location.href = result.redirectTo
       })
       cleanup = () => { listener.then(h => h.remove()) }
     })
@@ -68,7 +70,7 @@ function LoginPageInner() {
       return
     }
 
-    const result = await loginWithGoogle()
+    const result = await loginWithGoogle().catch(() => ({ error: SERVER_ACTION_ERROR }))
     if ('error' in result && result.error) { setError(result.error); setGoogleLoading(false); return }
     localStorage.setItem('sisgo_has_session', '1')
     window.location.href = (result as { redirectTo: string }).redirectTo
@@ -96,13 +98,19 @@ function LoginPageInner() {
       }
 
       setCheckingAuth(true)
-      const result = await getLoginRedirect()
-      if (!active || result.error || !result.redirectTo) {
+      const result = await getLoginRedirect().catch(() => ({ error: SERVER_ACTION_ERROR }))
+      const actionError = 'error' in result ? result.error : undefined
+      const redirectTo = 'redirectTo' in result ? result.redirectTo : undefined
+
+      if (!active || actionError || !redirectTo) {
+        if (active && actionError && actionError !== 'Sessão não encontrada. Faça login novamente.') {
+          setError(actionError)
+        }
         setCheckingAuth(false)
         return
       }
       localStorage.setItem('sisgo_has_session', '1')
-      window.location.replace(result.redirectTo)
+      window.location.replace(redirectTo)
     }
 
     redirectAuthenticatedUser()
@@ -136,8 +144,8 @@ function LoginPageInner() {
       return
     }
 
-    const result = await getLoginRedirect()
-    if (result.error) { setError(result.error); setLoading(false); return }
+    const result = await getLoginRedirect().catch(() => ({ error: SERVER_ACTION_ERROR }))
+    if ('error' in result && result.error) { setError(result.error); setLoading(false); return }
 
     localStorage.setItem('sisgo_has_session', '1')
 
@@ -148,7 +156,7 @@ function LoginPageInner() {
     }, 10000)
 
     try {
-      window.location.href = result.redirectTo!
+      window.location.href = 'redirectTo' in result && result.redirectTo ? result.redirectTo : '/bases'
     } catch {
       clearTimeout(timeout)
       setLoading(false)
@@ -165,9 +173,9 @@ function LoginPageInner() {
       setLoading(false)
       return
     }
-    const result = await register(fd)
-    if (result.error) { setError(result.error); setLoading(false); return }
-    const msg = result.needsEmailConfirm
+    const result = await register(fd).catch(() => ({ error: SERVER_ACTION_ERROR }))
+    if ('error' in result && result.error) { setError(result.error); setLoading(false); return }
+    const msg = 'needsEmailConfirm' in result && result.needsEmailConfirm
       ? 'Conta criada! Verifique seu e-mail para confirmar o acesso.'
       : 'Conta criada! Aguarde um administrador vincular sua conta a uma base.'
     setSuccess(msg)

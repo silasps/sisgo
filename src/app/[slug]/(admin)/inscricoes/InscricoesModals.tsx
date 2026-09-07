@@ -4,13 +4,12 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Modal } from '@/components/ui/Modal'
 import { InternationalPhoneField } from '@/components/ui/InternationalPhoneField'
+import { useSidebarLeftClass } from '@/components/layout/account-context'
 import { gerarLinkReferencia } from '@/app/[slug]/formulario/[token]/actions'
 import { gerarLinkReferenciaObreiro } from '@/app/[slug]/formulario-obreiro/[token]/actions'
-import { Link as LinkIcon, RefreshCw, CheckCircle2 } from 'lucide-react'
+import { Link as LinkIcon, RefreshCw, CheckCircle2, Pencil, GraduationCap, Briefcase } from 'lucide-react'
 import { toast } from 'sonner'
 import { ReferenceAnswers } from './ReferenceAnswers'
-import { PublicLinkButtons, type PublicLinkEntry } from './PublicLinkButtons'
-import { useSidebarOffsetClass } from '@/components/layout/account-context'
 
 type RefEntry = { status: string; data: Record<string, string> | null }
 type RefSummary = { pastor: RefEntry | null; amigo: RefEntry | null }
@@ -52,14 +51,11 @@ function DestinationSelect({ ministries, schools, defaultValue, className }: {
 // ── Nova pré-inscrição manual ──────────────────────────────────────────────
 
 export function NovaPreInscricaoButton({
-  openClasses, criarAction, slug, publicSchools,
-  open: openProp, onOpenChange, hideTrigger,
+  openClasses, criarAction, slug, open: openProp, onOpenChange, hideTrigger,
 }: {
   openClasses: ClassOption[]
   criarAction: CriarAction
   slug: string
-  publicSchools?: Array<{ slug: string; name: string }>
-  /** Controle externo do modal (ex.: disparado por outro botão) — quando omitido, o componente gerencia seu próprio estado e mostra o botão "+ Aluno". */
   open?: boolean
   onOpenChange?: (open: boolean) => void
   hideTrigger?: boolean
@@ -81,26 +77,18 @@ export function NovaPreInscricaoButton({
     router.refresh()
   }
 
-  const linkEntries: PublicLinkEntry[] = (publicSchools ?? []).map(school => ({
-    key: school.slug,
-    label: school.name,
-    path: `/${slug}/escola/${school.slug}/inscricao`,
-    embedPath: `/${slug}/escola/${school.slug}/embed`,
-    embedKind: 'form',
-  }))
-
   return (
     <>
       {!hideTrigger && (
-        <button onClick={() => setOpen(true)}
-          className="px-3 py-2 text-xs font-semibold text-white bg-brand-500 hover:bg-brand-600 rounded-lg transition-colors whitespace-nowrap">
-          + Aluno
+        <button onClick={() => setOpen(true)} aria-label="Nova pré-inscrição de aluno"
+          className="p-2 sm:px-3 sm:py-2 text-xs font-semibold text-white bg-brand-500 hover:bg-brand-600 rounded-lg transition-colors whitespace-nowrap">
+          <GraduationCap className="size-4 sm:hidden" />
+          <span className="hidden sm:inline">+ Aluno</span>
         </button>
       )}
 
       <Modal open={open} onClose={() => setOpen(false)} title="Nova pré-inscrição manual"
-        subtitle="Somente nome obrigatório — restante é opcional"
-        headerExtra={<PublicLinkButtons entries={linkEntries} accent="indigo" />}>
+        subtitle="Somente nome obrigatório — restante é opcional">
         <form onSubmit={handleSubmit} className="space-y-4 p-5">
           <input type="hidden" name="slug" value={slug} />
 
@@ -159,15 +147,12 @@ export function NovaPreInscricaoButton({
 // ── Nova pré-inscrição de obreiro ─────────────────────────────────────────
 
 export function NovaPreInscricaoObreiroButton({
-  ministries, schools, criarAction, slug, publicMinistries,
-  open: openProp, onOpenChange, hideTrigger,
+  ministries, schools, criarAction, slug, open: openProp, onOpenChange, hideTrigger,
 }: {
   ministries: MinistryOption[]
   schools: SchoolOption[]
   criarAction: CriarAction
   slug: string
-  publicMinistries?: Array<{ slug: string; name: string }>
-  /** Controle externo do modal (ex.: disparado por outro botão) — quando omitido, o componente gerencia seu próprio estado e mostra o botão "+ Obreiro". */
   open?: boolean
   onOpenChange?: (open: boolean) => void
   hideTrigger?: boolean
@@ -189,35 +174,18 @@ export function NovaPreInscricaoObreiroButton({
     router.refresh()
   }
 
-  const linkEntries: PublicLinkEntry[] = [
-    {
-      key: 'geral',
-      label: 'Página geral de obreiros',
-      path: `/${slug}/servir`,
-      embedPath: `/${slug}/servir/embed`,
-      embedKind: 'servir',
-    },
-    ...(publicMinistries ?? []).map(ministry => ({
-      key: ministry.slug,
-      label: ministry.name,
-      path: `/${slug}/servir/${ministry.slug}/inscricao`,
-      embedPath: `/${slug}/servir/${ministry.slug}/embed`,
-      embedKind: 'form' as const,
-    })),
-  ]
-
   return (
     <>
       {!hideTrigger && (
-        <button onClick={() => setOpen(true)}
-          className="px-3 py-2 text-xs font-semibold text-white bg-violet-500 hover:bg-violet-600 rounded-lg transition-colors whitespace-nowrap">
-          + Obreiro
+        <button onClick={() => setOpen(true)} aria-label="Nova pré-inscrição de obreiro"
+          className="p-2 sm:px-3 sm:py-2 text-xs font-semibold text-white bg-violet-500 hover:bg-violet-600 rounded-lg transition-colors whitespace-nowrap">
+          <Briefcase className="size-4 sm:hidden" />
+          <span className="hidden sm:inline">+ Obreiro</span>
         </button>
       )}
 
       <Modal open={open} onClose={() => setOpen(false)} title="Nova pré-inscrição de obreiro"
-        subtitle="Somente nome obrigatório — restante é opcional"
-        headerExtra={<PublicLinkButtons entries={linkEntries} accent="violet" />}>
+        subtitle="Somente nome obrigatório — restante é opcional">
         <form onSubmit={handleSubmit} className="space-y-4 p-5">
           <input type="hidden" name="slug" value={slug} />
 
@@ -280,11 +248,12 @@ type PreInscricao = {
 }
 
 export function EditarPreInscricaoButton({
-  item, openClasses, editarAction,
+  item, openClasses, editarAction, iconOnly,
 }: {
   item: PreInscricao
   openClasses: ClassOption[]
   editarAction: EditarAction
+  iconOnly?: boolean
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -303,11 +272,19 @@ export function EditarPreInscricaoButton({
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)}
-        title="Editar pré-inscrição"
-        className="text-xs px-2.5 py-1.5 text-gray-500 hover:text-brand-600 hover:bg-brand-50 border border-gray-200 rounded-lg transition-colors">
-        Editar
-      </button>
+      {iconOnly ? (
+        <button type="button" onClick={() => setOpen(true)}
+          aria-label="Editar pré-inscrição" title="Editar dados da pré-inscrição"
+          className="p-1.5 border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-brand-600 rounded-lg transition-colors">
+          <Pencil className="size-4" />
+        </button>
+      ) : (
+        <button type="button" onClick={() => setOpen(true)}
+          title="Editar pré-inscrição"
+          className="text-xs px-2.5 py-1.5 text-gray-500 hover:text-brand-600 hover:bg-brand-50 border border-gray-200 rounded-lg transition-colors">
+          Editar
+        </button>
+      )}
 
       <Modal open={open} onClose={() => setOpen(false)} title="Editar pré-inscrição"
         subtitle={item.full_name}>
@@ -373,12 +350,13 @@ type PreInscricaoObreiro = {
 }
 
 export function EditarPreInscricaoObreiroButton({
-  item, ministries, schools, editarAction,
+  item, ministries, schools, editarAction, iconOnly,
 }: {
   item: PreInscricaoObreiro
   ministries: MinistryOption[]
   schools: SchoolOption[]
   editarAction: EditarAction
+  iconOnly?: boolean
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -397,11 +375,19 @@ export function EditarPreInscricaoObreiroButton({
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)}
-        title="Editar pré-inscrição"
-        className="text-xs px-2.5 py-1.5 text-gray-500 hover:text-violet-600 hover:bg-violet-50 border border-gray-200 rounded-lg transition-colors">
-        Editar
-      </button>
+      {iconOnly ? (
+        <button type="button" onClick={() => setOpen(true)}
+          aria-label="Editar pré-inscrição" title="Editar dados da pré-inscrição"
+          className="p-1.5 border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-violet-600 rounded-lg transition-colors">
+          <Pencil className="size-4" />
+        </button>
+      ) : (
+        <button type="button" onClick={() => setOpen(true)}
+          title="Editar pré-inscrição"
+          className="text-xs px-2.5 py-1.5 text-gray-500 hover:text-violet-600 hover:bg-violet-50 border border-gray-200 rounded-lg transition-colors">
+          Editar
+        </button>
+      )}
 
       <Modal open={open} onClose={() => setOpen(false)} title="Editar pré-inscrição de obreiro"
         subtitle={item.full_name}>
@@ -533,7 +519,7 @@ export function LinksReferenciaAdminButton({
   const [copied, setCopied] = useState<'pastor' | 'amigo' | null>(null)
   const [showRespostas, setShowRespostas] = useState<'pastor' | 'amigo' | null>(null)
   const [confirmTipo, setConfirmTipo] = useState<'pastor' | 'amigo' | null>(null)
-  const offsetClass = useSidebarOffsetClass()
+  const sidebarLeftClass = useSidebarLeftClass()
   const anyRespondido = refSummary?.pastor?.status === 'enviado' || refSummary?.amigo?.status === 'enviado'
 
   async function gerar(tipo: 'pastor' | 'amigo') {
@@ -623,7 +609,7 @@ export function LinksReferenciaAdminButton({
 
       {confirmTipo && (
         <div
-          className={`fixed inset-0 ${offsetClass} z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm`}
+          className={`fixed inset-0 ${sidebarLeftClass} z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm`}
           onClick={() => setConfirmTipo(null)}
         >
           <div

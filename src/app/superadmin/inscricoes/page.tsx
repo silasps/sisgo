@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/Header'
-import Link from 'next/link'
+import { pushUserToBase } from './actions'
 
 function daysAgo(d: string) {
   return Math.floor((Date.now() - new Date(d).getTime()) / 86_400_000)
@@ -28,6 +28,8 @@ export default async function SuperAdminInscricoesPage() {
 
         <p className="text-sm text-gray-500">
           Usuários que criaram conta no sistema mas ainda não foram vinculados a nenhuma base.
+          Ao empurrar para uma base, o usuário entra como &ldquo;Pendente de Alocação&rdquo; e o DH
+          daquela base recebe uma notificação para definir a área e função dele.
         </p>
 
         {loose.length === 0 ? (
@@ -58,13 +60,16 @@ export default async function SuperAdminInscricoesPage() {
                   </div>
                   <div className="flex flex-wrap gap-2 flex-shrink-0">
                     {(orgs ?? []).map(org => (
-                      <Link
-                        key={org.id}
-                        href={`/${org.slug}/obreiros`}
-                        className="px-3 py-1.5 text-xs font-medium bg-brand-50 text-brand-600 hover:bg-brand-100 rounded-lg transition-colors"
-                      >
-                        → {org.name}
-                      </Link>
+                      <form key={org.id} action={pushUserToBase}>
+                        <input type="hidden" name="user_id" value={u.id} />
+                        <input type="hidden" name="org_id" value={org.id} />
+                        <button
+                          type="submit"
+                          className="px-3 py-1.5 text-xs font-medium bg-brand-50 text-brand-600 hover:bg-brand-100 rounded-lg transition-colors"
+                        >
+                          → {org.name}
+                        </button>
+                      </form>
                     ))}
                   </div>
                 </div>

@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 
-const MANAGEMENT_ROLES = ['superadmin', 'admin_base', 'lider_base', 'dh']
+const MANAGEMENT_ROLE_NAMES = ['superadmin', 'admin_base', 'lider_base', 'dh']
+const SERVICE_ROLE_NAMES = ['manutencao', 'hospitalidade', 'secretaria']
 
 export async function getRecipientUserIds(
   eventType: string,
@@ -10,12 +11,23 @@ export async function getRecipientUserIds(
   const supabase = createAdminClient()
   const userIds = new Set<string>()
 
+  // role_id em organization_users é um uuid (FK para roles.id), não o nome
+  // do papel — precisamos resolver os nomes para ids antes de filtrar.
+  const { data: roleRows } = await supabase
+    .from('roles')
+    .select('id, name')
+    .in('name', [...new Set([...MANAGEMENT_ROLE_NAMES, ...SERVICE_ROLE_NAMES])])
+
+  const roleIdsByName = new Map((roleRows ?? []).map(r => [r.name, r.id]))
+  const roleIds = (names: string[]) => names.map(name => roleIdsByName.get(name)).filter((id): id is string => Boolean(id))
+
   // Management always gets notified
   const { data: managers } = await supabase
     .from('organization_users')
     .select('user_id')
     .eq('organization_id', orgId)
-    .in('role_id', MANAGEMENT_ROLES)
+    .eq('active', true)
+    .in('role_id', roleIds(MANAGEMENT_ROLE_NAMES))
 
   for (const m of managers ?? []) userIds.add(m.user_id)
 
@@ -40,7 +52,8 @@ export async function getRecipientUserIds(
       .from('organization_users')
       .select('user_id')
       .eq('organization_id', orgId)
-      .in('role_id', ['manutencao', 'hospitalidade', 'secretaria'])
+      .eq('active', true)
+      .in('role_id', roleIds(SERVICE_ROLE_NAMES))
 
     for (const d of deptUsers ?? []) userIds.add(d.user_id)
   }

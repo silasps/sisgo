@@ -14,6 +14,7 @@ type SendFormLinkParams = {
   fullName: string
   email: string | null
   language: string | null
+  sendEmail?: boolean
 }
 
 // Monta a URL de /formulario-obreiro/[token] e (re)envia o e-mail com o
@@ -26,10 +27,16 @@ async function sendFormLink(params: SendFormLinkParams): Promise<StaffInviteResu
   const host = headersList.get('host') ?? 'localhost:3000'
   const protocol = host.startsWith('localhost') ? 'http' : 'https'
   const formUrl = `${protocol}://${host}/${params.slug}/formulario-obreiro/${params.token}`
+  // O CTA dentro do e-mail precisa abrir o formulário já no mesmo idioma
+  // escolhido pra enviar — o link devolvido ao cliente (formUrl) fica sem
+  // esse parâmetro pois o cliente já anexa o idioma escolhido nele.
+  const formUrlForEmail = params.language ? `${formUrl}?lang=${encodeURIComponent(params.language)}` : formUrl
 
   let emailWarning: string | undefined
   let emailErrorDetail: string | undefined
-  if (params.email) {
+  if (params.sendEmail === false) {
+    // usuário escolheu "copiar link" — não é falha, não gera aviso
+  } else if (params.email) {
     const { data: orgRow } = await db.from('organizations').select('name, email').eq('id', params.organizationId).maybeSingle()
     let ministryName: string | null = null
     if (params.ministryId) {
@@ -41,7 +48,7 @@ async function sendFormLink(params: SendFormLinkParams): Promise<StaffInviteResu
       to: params.email,
       candidateName: params.fullName,
       schoolName: ministryName ?? orgRow?.name ?? 'JOCUM',
-      formUrl,
+      formUrl: formUrlForEmail,
       expiresAt: params.expiresAt,
       replyTo: orgRow?.email || 'noreply@sisgomission.com',
       language: params.language,
@@ -76,6 +83,7 @@ type CreateAndSendParams = {
   language: string | null
   personId?: string | null
   leaderAcceptedBy: string | null
+  sendEmail?: boolean
 }
 
 // Cria (ou reaproveita) a people, gera a staff_applications com token e envia
@@ -140,6 +148,7 @@ export async function createAndSendStaffApplication(params: CreateAndSendParams)
     fullName,
     email,
     language,
+    sendEmail: params.sendEmail,
   })
 }
 

@@ -3,8 +3,8 @@
 import { useState, useTransition, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { ImageUpload } from '@/components/ui/ImageUpload'
+import { useSidebarLeftClass } from '@/components/layout/account-context'
 import { createProgramForClass } from './actions'
-import { useSidebarOffsetClass } from '@/components/layout/account-context'
 
 type Props = {
   orgId: string
@@ -16,7 +16,7 @@ export function CadastrarAtividadeModal({ orgId, slug }: Props) {
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
   const formRef = useRef<HTMLFormElement>(null)
-  const offsetClass = useSidebarOffsetClass()
+  const sidebarLeftClass = useSidebarLeftClass()
 
   function handleOpen() {
     setOpen(true)
@@ -53,7 +53,7 @@ export function CadastrarAtividadeModal({ orgId, slug }: Props) {
 
       {open && (
         <div
-          className={`fixed inset-0 ${offsetClass} z-50 flex items-center justify-center bg-black/50 p-4`}
+          className={`fixed inset-0 ${sidebarLeftClass} z-50 flex items-center justify-center bg-black/50 p-4`}
           onClick={handleBackdropClick}
         >
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">

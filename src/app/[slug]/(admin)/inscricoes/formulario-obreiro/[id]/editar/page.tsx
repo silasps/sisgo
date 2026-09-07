@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { getRolePreview } from '@/lib/role-preview'
+import { AdminFileUpload } from '@/components/inscricoes/AdminFileUpload'
+import { anexarDocumentoObreiroAdmin } from './actions'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
@@ -145,6 +147,30 @@ export default async function EditarFormularioObreiroPage({ params }: Props) {
   const nomeCandidato = (app.people as unknown as { full_name?: string } | null)?.full_name ?? 'Obreiro'
   const formData = (app.form_data as Record<string, unknown>) ?? {}
 
+  const DOCUMENT_UPLOADS = [
+    { key: 'doc_foto', label: 'Foto pessoal' },
+    { key: 'doc_rg_frente', label: 'RG — Frente' },
+    { key: 'doc_rg_verso', label: 'RG — Verso' },
+    { key: 'doc_passaporte', label: 'Passaporte' },
+    { key: 'doc_certidao_casamento_s10', label: 'Certidão de casamento' },
+  ]
+  const s3Docs = (formData.s3 as Record<string, { path?: string; name?: string; type?: string }> | undefined) ?? {}
+  const s10Docs = (formData.s10 as Record<string, { path?: string; name?: string; type?: string }> | undefined) ?? {}
+  const documentUploadEntries = await Promise.all(
+    DOCUMENT_UPLOADS.map(async doc => {
+      // Certidão pode ter sido anexada pelo próprio candidato na Seção 03
+      // (doc_certidao_casamento) antes de existir o slot fixo da Seção 10 —
+      // mostra a que existir, sem "perder de vista" o que já foi enviado.
+      const meta = s10Docs[doc.key] ?? (doc.key === 'doc_certidao_casamento_s10' ? s3Docs.doc_certidao_casamento : undefined)
+      let url: string | null = null
+      if (meta?.path) {
+        const { data } = await sb.storage.from('staff-application-documents').createSignedUrl(meta.path, 60 * 60)
+        url = data?.signedUrl ?? null
+      }
+      return { ...doc, meta, url }
+    })
+  )
+
   async function salvar(fd: FormData) {
     'use server'
     const { createAdminClient: adm } = await import('@/lib/supabase/admin')
@@ -196,7 +222,28 @@ export default async function EditarFormularioObreiroPage({ params }: Props) {
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6">
+      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+        {/* Documentos — fora do <form> de texto de propósito: upload é
+            enviado na hora, por action própria, não pelo botão "Salvar
+            correções" (um <input type=file> dentro desse <form> quebraria
+            o parser de FormData da action de texto). */}
+        <div className="bg-white rounded-2xl border border-gray-100 p-5">
+          <h2 className="text-sm font-bold text-gray-900 mb-1">Documentos</h2>
+          <p className="text-xs text-gray-400 mb-4">Anexe (ou substitua) direto aqui caso o candidato não tenha conseguido enviar pelo próprio formulário.</p>
+          <div className="space-y-2">
+            {documentUploadEntries.map(doc => (
+              <AdminFileUpload
+                key={doc.key}
+                label={doc.label}
+                currentName={doc.meta?.name ?? null}
+                currentUrl={doc.url}
+                currentType={doc.meta?.type ?? null}
+                onUpload={anexarDocumentoObreiroAdmin.bind(null, { slug, organizationId: app.organization_id, applicationId: id, key: doc.key })}
+              />
+            ))}
+          </div>
+        </div>
+
         <form action={salvar} className="space-y-6">
           {SECTION_FIELDS.map(section => (
             <div key={section.key} className="bg-white rounded-2xl border border-gray-100 p-5">

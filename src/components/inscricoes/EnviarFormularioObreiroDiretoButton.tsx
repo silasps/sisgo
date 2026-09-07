@@ -57,9 +57,9 @@ export function EnviarFormularioObreiroDiretoButton({
 
   return (
     <>
-      <button onClick={() => setOpen(true)}
-        className={buttonClassName ?? 'inline-flex items-center gap-1 px-3 py-2 text-xs font-semibold text-white bg-violet-500 hover:bg-violet-600 rounded-lg transition-colors whitespace-nowrap'}>
-        <Send className="size-3.5" /> {buttonLabel ?? 'Enviar formulário direto'}
+      <button onClick={() => setOpen(true)} aria-label={buttonLabel ?? 'Enviar formulário direto'}
+        className={buttonClassName ?? 'inline-flex items-center gap-1 p-2 sm:px-3 sm:py-2 text-xs font-semibold text-white bg-violet-500 hover:bg-violet-600 rounded-lg transition-colors whitespace-nowrap'}>
+        <Send className="size-4 sm:size-3.5" /> <span className="hidden sm:inline">{buttonLabel ?? 'Enviar formulário direto'}</span>
       </button>
 
       <Modal open={open} onClose={handleClose} title="Enviar formulário definitivo de obreiro"

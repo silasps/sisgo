@@ -14,12 +14,18 @@ export function stagesFromFlags(labels: string[], flags: boolean[]): Stage[] {
 export function PipelineStepper({ stages, href, size = 'sm' }: { stages: Stage[]; href?: string; size?: 'sm' | 'md' }) {
   const total = stages.length
   const doneCount = stages.filter(s => s.status === 'done').length
-  const current = stages.find(s => s.status === 'current')
+  const currentIndex = stages.findIndex(s => s.status === 'current')
+  const current = currentIndex === -1 ? undefined : stages[currentIndex]
   const textClass = size === 'md' ? 'text-sm font-medium text-gray-700' : 'text-xs text-gray-500'
   const dotClass = size === 'md' ? 'h-2 w-5' : 'h-1.5 w-4'
+  // A última etapa costuma ser um rótulo de estado concluído (ex. "Aprovado")
+  // — quando ela é a "atual" (ainda não alcançada), dizer só o nome dela dá a
+  // entender que já aconteceu. "Aguardando X" deixa claro que é o próximo
+  // passo, não um fato consumado.
+  const isLastPending = currentIndex === total - 1
 
   const content = (
-    <div className={`flex items-center gap-2 ${textClass}`}>
+    <div className={`flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0 ${textClass}`}>
       <div className="flex gap-0.5 shrink-0">
         {stages.map((s, i) => (
           <span
@@ -32,7 +38,11 @@ export function PipelineStepper({ stages, href, size = 'sm' }: { stages: Stage[]
         ))}
       </div>
       <span className="whitespace-nowrap">
-        {current ? `Etapa ${doneCount + 1} de ${total} · ${current.label}` : `${doneCount}/${total} etapas concluídas`}
+        {!current
+          ? `${doneCount}/${total} etapas concluídas`
+          : isLastPending
+          ? `${doneCount}/${total} etapas concluídas · falta: ${current.label}`
+          : `Etapa ${doneCount + 1} de ${total} · ${current.label}`}
       </span>
     </div>
   )
@@ -42,7 +52,7 @@ export function PipelineStepper({ stages, href, size = 'sm' }: { stages: Stage[]
     <a
       href={href}
       onClick={e => e.stopPropagation()}
-      className="group inline-flex items-center gap-2 hover:opacity-80 transition-opacity"
+      className="group flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0 hover:opacity-80 transition-opacity"
       title="Ver e gerenciar esta etapa"
     >
       {content}

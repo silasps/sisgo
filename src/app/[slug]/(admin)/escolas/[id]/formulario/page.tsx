@@ -10,12 +10,28 @@ type Props = { params: Promise<{ slug: string; id: string }> }
 
 // Todos os campos configuráveis, agrupados por seção
 const CONFIGURAVEL: { secao: string; key: string; titulo: string; campos: { name: string; label: string }[] }[] = [
+  { secao: 's3', key: 'termo_compromisso', titulo: 'Termo inicial de compromisso', campos: [
+    { name: 'termo_1', label: '1. Responsabilidade financeira' },
+    { name: 'termo_2', label: '2. Concordância com pagamento dos valores' },
+    { name: 'termo_3', label: '3. Sem estorno em caso de desistência/desligamento' },
+    { name: 'termo_4', label: '4. Isenção de responsabilidade da JOCUM por danos' },
+    { name: 'termo_5', label: '5. Submissão aos padrões e rotina da missão' },
+    { name: 'termo_6', label: '6. Consentimento para atendimento médico de emergência' },
+    { name: 'termo_7', label: '7. Proibição de tabaco, álcool e drogas' },
+    { name: 'termo_8', label: '8. Não compartilhar medicamentos' },
+    { name: 'termo_9', label: '9. Relacionamentos amorosos sujeitos à orientação da liderança' },
+    { name: 'termo_10', label: '10. Declaração de veracidade das informações' },
+  ]},
   { secao: 's4', key: 'escola_interesse', titulo: 'Escola de interesse', campos: [
     { name: 'como_conheceu', label: 'Como conheceu a escola' },
     { name: 'como_conheceu_jocum', label: 'Como conheceu a JOCUM' },
     { name: 'conversou_equipe', label: 'Conversou com alguém da escola?' },
     { name: 'conversou_com_quem', label: 'Com quem conversou' },
     { name: 'motivacao', label: 'Motivação' },
+    { name: 'data_chegada', label: 'Data prevista de chegada' },
+    { name: 'horario_chegada', label: 'Horário previsto de chegada' },
+    { name: 'data_saida', label: 'Data prevista de saída' },
+    { name: 'horario_saida', label: 'Horário previsto de saída' },
   ]},
   { secao: 's5', key: 'dados_pessoais', titulo: 'Informações pessoais', campos: [
     { name: 'estado_civil', label: 'Estado civil' },
@@ -27,12 +43,11 @@ const CONFIGURAVEL: { secao: string; key: string; titulo: string; campos: { name
     { name: 'trabalha', label: 'Trabalha atualmente?' },
     { name: 'experiencias', label: 'Experiências profissionais' },
     { name: 'habilidades', label: 'Habilidades' },
-    { name: 'instagram', label: 'Instagram' },
-    { name: 'facebook', label: 'Facebook' },
-    { name: 'linkedin', label: 'LinkedIn' },
-    { name: 'outros_links', label: 'Outros links' },
+    { name: 'endereco_bloco', label: 'Endereço (bloco inteiro)' },
+    { name: 'redes_bloco', label: 'Redes sociais (bloco inteiro)' },
   ]},
   { secao: 's6', key: 'historico_pessoal', titulo: 'Histórico pessoal', campos: [
+    { name: 'oculto', label: 'Etapa inteira aparece no formulário (desative pra pular)' },
     { name: 'sobre_voce', label: 'Sobre você' },
     { name: 'processo_decisao', label: 'Processo de decisão' },
     { name: 'expectativas', label: 'Expectativas' },
@@ -40,6 +55,7 @@ const CONFIGURAVEL: { secao: string; key: string; titulo: string; campos: { name
     { name: 'responsabilidades', label: 'Responsabilidades assumidas' },
   ]},
   { secao: 's7', key: 'familia', titulo: 'Informações familiares', campos: [
+    { name: 'oculto', label: 'Etapa inteira aparece no formulário (desative pra pular)' },
     { name: 'situacao_familiar', label: 'Situação familiar' },
     { name: 'tem_filhos', label: 'Tem filhos?' },
     { name: 'filhos_dados', label: 'Dados dos filhos' },
@@ -53,8 +69,10 @@ const CONFIGURAVEL: { secao: string; key: string; titulo: string; campos: { name
     { name: 'tem_lideranca', label: 'Tem liderança?' },
     { name: 'lideranca_cargo', label: 'Cargo de liderança' },
     { name: 'responsabilidades_igreja', label: 'Responsabilidades na igreja' },
+    { name: 'pastor_bloco', label: 'Referência de pastor (bloco inteiro)' },
   ]},
   { secao: 's9', key: 'amigo', titulo: 'Referência de Amigo', campos: [
+    { name: 'oculto', label: 'Etapa inteira aparece no formulário (desative pra pular)' },
     { name: 'ref_nome', label: 'Nome do amigo' },
     { name: 'ref_relacionamento', label: 'Como se conheceram' },
     { name: 'ref_tempo', label: 'Tempo de amizade' },
@@ -73,6 +91,7 @@ const CONFIGURAVEL: { secao: string; key: string; titulo: string; campos: { name
     { name: 'hist_lider_tel', label: 'Telefone do líder' },
   ]},
   { secao: 's11', key: 'espiritual', titulo: 'Espiritual e emocional', campos: [
+    { name: 'oculto', label: 'Etapa inteira aparece no formulário (desative pra pular)' },
     { name: 'psicologico', label: 'Acompanhamento psicológico?' },
     { name: 'diagnostico_emocional', label: 'Diagnóstico/situação emocional' },
     { name: 'recuperacao', label: 'Casa de recuperação?' },
@@ -89,11 +108,13 @@ const CONFIGURAVEL: { secao: string; key: string; titulo: string; campos: { name
     { name: 'plano_saude', label: 'Plano de saúde?' },
   ]},
   { secao: 's13', key: 'legal', titulo: 'Questões legais', campos: [
+    { name: 'oculto', label: 'Etapa inteira aparece no formulário (desative pra pular)' },
     { name: 'antecedente', label: 'Antecedente criminal?' },
     { name: 'pendencia_juridica', label: 'Pendência jurídica?' },
     { name: 'restricao_legal', label: 'Restrição legal?' },
   ]},
   { secao: 's14', key: 'financeiro', titulo: 'Financeiro', campos: [
+    { name: 'oculto', label: 'Etapa inteira aparece no formulário (desative pra pular)' },
     { name: 'apoio_tipo', label: 'Tipo de apoio financeiro' },
     { name: 'ajuda_igreja', label: 'Igreja ajudará financeiramente?' },
     { name: 'pagar_tudo', label: 'Consegue pagar tudo?' },
@@ -135,8 +156,9 @@ export default async function EscolaFormularioConfigPage({ params }: Props) {
     .single()
   if (!school) notFound()
 
-  const config = (school.form_config as { hidden_fields?: string[] }) ?? {}
+  const config = (school.form_config as { hidden_fields?: string[]; payment_info?: string }) ?? {}
   const hiddenFields = new Set<string>(config.hidden_fields ?? [])
+  const paymentInfo = config.payment_info ?? ''
 
   async function salvarConfig(fd: FormData) {
     'use server'
@@ -152,9 +174,10 @@ export default async function EscolaFormularioConfigPage({ params }: Props) {
     }
 
     const hiddenFields = todosOsCampos.filter(key => fd.get(key) !== 'on')
+    const paymentInfo = (fd.get('payment_info') as string | null)?.trim() || null
 
     await db.from('schools')
-      .update({ form_config: { hidden_fields: hiddenFields } })
+      .update({ form_config: { hidden_fields: hiddenFields, payment_info: paymentInfo } })
       .eq('id', id)
 
     redirect(`/${slug}/escolas/${id}/formulario`)
@@ -166,12 +189,21 @@ export default async function EscolaFormularioConfigPage({ params }: Props) {
   return (
     <>
       <div className="h-16 shrink-0 sticky top-0 z-10 bg-white border-b border-gray-200 px-4 md:px-6 flex items-center">
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex w-full items-center justify-between gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
           <Link href={`/${slug}/escolas/${id}`} className="text-sm text-gray-500 hover:text-gray-800">
             ← {school.name}
           </Link>
           <span className="text-gray-300">/</span>
           <span className="text-sm font-semibold text-gray-900">Configurar formulário</span>
+          </div>
+          <Link
+            href={`/${slug}/escolas/${id}/formulario/visualizar`}
+            target="_blank"
+            className="shrink-0 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 transition-colors hover:bg-indigo-100"
+          >
+            Visualizar formulário ↗
+          </Link>
         </div>
       </div>
 
@@ -189,6 +221,21 @@ export default async function EscolaFormularioConfigPage({ params }: Props) {
         </div>
 
         <form action={salvarConfig} className="space-y-3">
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <h3 className="font-semibold text-gray-900 text-sm mb-1">Informações de pagamento</h3>
+            <p className="text-xs text-gray-400 mb-3">
+              Aparece pro candidato assim que ele termina de enviar a inscrição — chave Pix, dados
+              bancários, cartão etc. Deixe em branco pra não mostrar nada.
+            </p>
+            <textarea
+              name="payment_info"
+              defaultValue={paymentInfo}
+              rows={5}
+              placeholder={'Ex: Pix (CPF): 000.000.000-00 — Fulano de Tal\nOu transferência: Banco X, ag. 0000, cc 00000-0'}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 resize-none"
+            />
+          </div>
+
           {CONFIGURAVEL.map(secao => {
             const ativos = secao.campos.filter(c => !hiddenFields.has(`${secao.secao}.${c.name}`)).length
             return (

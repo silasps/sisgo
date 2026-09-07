@@ -20,15 +20,37 @@ export async function getAvailableRooms(params: {
   checkIn: string
   checkOut: string
 }): Promise<AvailableRoom[]> {
+  return getAvailableRoomsInternal({ ...params, destinations: [params.guestType] })
+}
+
+// Mesma disponibilidade, sem restringir por destino do quarto — usado pela
+// aprovação de reserva ad-hoc (Reservas), onde o hóspede não é
+// necessariamente aluno/obreiro (pode ser visita) e o revisor está
+// escolhendo manualmente, então não faz sentido esconder opção nenhuma.
+export async function getAvailableRoomsAnyDestination(params: {
+  organizationId: string
+  checkIn: string
+  checkOut: string
+}): Promise<AvailableRoom[]> {
+  return getAvailableRoomsInternal({ ...params, destinations: null })
+}
+
+async function getAvailableRoomsInternal(params: {
+  organizationId: string
+  destinations: Array<'obreiro' | 'aluno' | 'visita'> | null
+  checkIn: string
+  checkOut: string
+}): Promise<AvailableRoom[]> {
   const sb = createAdminClient()
 
-  const { data: rooms } = await sb
+  let roomsQuery = sb
     .from('rooms')
     .select('id, name, capacity, allocation_mode, gender_constraint, destination')
     .eq('organization_id', params.organizationId)
     .eq('status', 'ativo')
-    .eq('destination', params.guestType)
     .order('display_order', { ascending: true })
+  if (params.destinations) roomsQuery = roomsQuery.in('destination', params.destinations)
+  const { data: rooms } = await roomsQuery
 
   const roomList = (rooms ?? []) as Array<{ id: string; name: string; capacity: number; allocation_mode: 'cama' | 'quarto'; gender_constraint: string | null }>
   if (roomList.length === 0) return []
@@ -145,13 +167,128 @@ export async function resolverHospedagemSemAlocacao(params: {
   })
 }
 
+// ── Blocos e Andares ────────────────────────────────────────────────────────
+// Hierarquia real: Bloco > Andar > Quarto > Cama. Andar carrega um público/
+// gênero *padrão* (só pré-preenche o formulário de quarto novo — não trava
+// nem é reaplicado depois); cada quarto pode sobrescrever à vontade.
+
+export async function createBlock(data: { organizationId: string; name: string; createdBy: string }) {
+  const sb = createAdminClient()
+  const { error } = await sb.from('blocks').insert({
+    organization_id: data.organizationId,
+    name: data.name,
+    created_by: data.createdBy,
+  })
+  if (error) throw new Error(error.message)
+}
+
+export async function updateBlock(data: { id: string; organizationId: string; name: string }) {
+  const sb = createAdminClient()
+  const { error } = await sb.from('blocks')
+    .update({ name: data.name })
+    .eq('id', data.id).eq('organization_id', data.organizationId)
+  if (error) throw new Error(error.message)
+}
+
+export async function deleteBlock(data: { id: string; organizationId: string }) {
+  const sb = createAdminClient()
+  const { count } = await sb.from('floors').select('id', { count: 'exact', head: true }).eq('block_id', data.id)
+  if ((count ?? 0) > 0) throw new Error('Esse bloco tem andar dentro — mova ou apague os andares primeiro.')
+  const { error } = await sb.from('blocks').delete().eq('id', data.id).eq('organization_id', data.organizationId)
+  if (error) throw new Error(error.message)
+}
+
+export async function createFloor(data: {
+  organizationId: string
+  blockId: string
+  name: string
+  destination: string | null
+  genderConstraint: string | null
+  createdBy: string
+}) {
+  const sb = createAdminClient()
+  const { error } = await sb.from('floors').insert({
+    organization_id: data.organizationId,
+    block_id: data.blockId,
+    name: data.name,
+    destination: data.destination,
+    gender_constraint: data.genderConstraint,
+    created_by: data.createdBy,
+  })
+  if (error) throw new Error(error.message)
+}
+
+export async function updateFloor(data: {
+  id: string
+  organizationId: string
+  name: string
+  destination: string | null
+  genderConstraint: string | null
+}) {
+  const sb = createAdminClient()
+  const { error } = await sb.from('floors')
+    .update({ name: data.name, destination: data.destination, gender_constraint: data.genderConstraint })
+    .eq('id', data.id).eq('organization_id', data.organizationId)
+  if (error) throw new Error(error.message)
+}
+
+export async function deleteFloor(data: { id: string; organizationId: string }) {
+  const sb = createAdminClient()
+  const { count } = await sb.from('rooms').select('id', { count: 'exact', head: true }).eq('floor_id', data.id)
+  if ((count ?? 0) > 0) throw new Error('Esse andar tem quarto dentro — mova ou apague os quartos primeiro.')
+  const { error } = await sb.from('floors').delete().eq('id', data.id).eq('organization_id', data.organizationId)
+  if (error) throw new Error(error.message)
+}
+
+// ── Holds (reserva de bloco/andar inteiro) ──────────────────────────────────
+// Só um bloqueio/aviso — "Reservado pro Grupo X, de tal a tal data". Não
+// aloca cama nenhuma sozinho; a distribuição cama a cama continua vindo de
+// createAllocation/allocateWholeRoom, sem relação direta com isso.
+
+export async function createHold(data: {
+  organizationId: string
+  scope: 'block' | 'floor' | 'room'
+  blockId: string
+  floorId: string | null
+  roomId: string | null
+  groupName: string
+  startsAt: string
+  endsAt: string
+  notes: string | null
+  createdBy: string
+}) {
+  const sb = createAdminClient()
+  const { error } = await sb.from('space_holds').insert({
+    organization_id: data.organizationId,
+    scope: data.scope,
+    block_id: data.blockId,
+    floor_id: data.scope === 'floor' ? data.floorId : null,
+    room_id: data.scope === 'room' ? data.roomId : null,
+    group_name: data.groupName,
+    starts_at: data.startsAt,
+    ends_at: data.endsAt,
+    notes: data.notes,
+    created_by: data.createdBy,
+  })
+  if (error) throw new Error(error.message)
+}
+
+export async function cancelHold(data: { id: string; organizationId: string; reason: string | null }) {
+  const sb = createAdminClient()
+  const { error } = await sb.from('space_holds').update({
+    status: 'cancelado',
+    cancel_reason: data.reason,
+    cancelled_at: new Date().toISOString(),
+  }).eq('id', data.id).eq('organization_id', data.organizationId)
+  if (error) throw new Error(error.message)
+}
+
 // ── Rooms ────────────────────────────────────────────────────────────────────
 
 export async function createRoom(data: {
   organizationId: string
   name: string
-  floor: string | null
-  block: string | null
+  floorId: string
   type: string
   genderConstraint: string | null
   destination: string
@@ -163,8 +300,7 @@ export async function createRoom(data: {
   const { error } = await sb.from('rooms').insert({
     organization_id:   data.organizationId,
     name:              data.name,
-    floor:             data.floor,
-    block:             data.block,
+    floor_id:          data.floorId,
     type:              data.type,
     gender_constraint: data.genderConstraint,
     destination:       data.destination,
@@ -180,8 +316,7 @@ export async function updateRoom(data: {
   id: string
   organizationId: string
   name: string
-  floor: string | null
-  block: string | null
+  floorId: string
   type: string
   genderConstraint: string | null
   destination: string
@@ -192,8 +327,7 @@ export async function updateRoom(data: {
   const sb = createAdminClient()
   const { error } = await sb.from('rooms').update({
     name:              data.name,
-    floor:             data.floor,
-    block:             data.block,
+    floor_id:          data.floorId,
     type:              data.type,
     gender_constraint: data.genderConstraint,
     destination:       data.destination,
@@ -355,7 +489,18 @@ export async function cancelAllocation(data: {
   id: string
   organizationId: string
   bedId: string | null
+  reason?: string | null
 }) {
+  // Motivo do cancelamento não tem coluna própria — junta na `notes` já
+  // existente, marcado, pra não perder o que já estava anotado ali.
+  if (data.reason?.trim()) {
+    const sb = createAdminClient()
+    const { data: current } = await sb.from('room_allocations').select('notes').eq('id', data.id).single()
+    const tag = `[Cancelado] ${data.reason.trim()}`
+    const notes = current?.notes ? `${current.notes}\n${tag}` : tag
+    await sb.from('room_allocations').update({ notes }).eq('id', data.id).eq('organization_id', data.organizationId)
+  }
+
   return updateAllocationStatus({
     id: data.id,
     organizationId: data.organizationId,
@@ -376,6 +521,7 @@ export async function allocateWholeRoom(data: {
   checkOut: string
   notes: string | null
   createdBy: string
+  reservationId?: string | null
 }) {
   const sb = createAdminClient()
 
@@ -398,6 +544,7 @@ export async function allocateWholeRoom(data: {
       organization_id: data.organizationId,
       room_id:         data.roomId,
       bed_id:          bed.id,
+      reservation_id:  data.reservationId ?? null,
       guest_name:      data.guestName,
       guest_type:      data.guestType,
       school_id:       data.schoolId,

@@ -11,7 +11,7 @@ import {
 } from '../actions'
 import { DeleteTurmaButton } from '../DeleteTurmaButton'
 import { EmbedCodeBox } from '@/components/ui/EmbedCodeBox'
-import { LocaleContentTabs } from '@/components/ui/LocaleContentTabs'
+import { SearchableSelectModal } from '@/components/ui/SearchableSelectModal'
 
 import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
 import { SCHOOL_TYPES } from '@/lib/schools'
@@ -191,7 +191,7 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
     .single()
 
   let leaderEmail: string | null = null
-  let orgUsersForAssignment: Array<{ id: string; email: string }> = []
+  let orgUsersForAssignment: Array<{ id: string; email: string; fullName: string | null }> = []
 
   if (isManagement) {
     if (leaderRow) {
@@ -202,11 +202,18 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
       .from('organization_users').select('user_id').eq('organization_id', org.id).eq('active', true)
     if (orgUsersData?.length) {
       const { data: { users: authUsers } } = await sbAdmin.auth.admin.listUsers({ perPage: 1000 })
+      const { data: staffRows } = await sbAdmin
+        .from('staff_profiles').select('user_id, people(full_name)')
+        .eq('organization_id', org.id).eq('active', true).not('user_id', 'is', null)
+      const namesByUserId = new Map<string, string>()
+      for (const s of (staffRows ?? []) as unknown as Array<{ user_id: string | null; people: { full_name: string } | null }>) {
+        if (s.user_id && s.people?.full_name) namesByUserId.set(s.user_id, s.people.full_name)
+      }
       const orgUserSet = new Set(orgUsersData.map((u: { user_id: string }) => u.user_id))
       orgUsersForAssignment = authUsers
         .filter(u => orgUserSet.has(u.id) && u.id !== (leaderRow?.user_id ?? ''))
-        .map(u => ({ id: u.id, email: u.email ?? u.id }))
-        .sort((a, b) => a.email.localeCompare(b.email))
+        .map(u => ({ id: u.id, email: u.email ?? u.id, fullName: namesByUserId.get(u.id) ?? null }))
+        .sort((a, b) => (a.fullName ?? a.email).localeCompare(b.fullName ?? b.email))
     }
   }
 
@@ -218,9 +225,6 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
     const sb = mkAdmin()
     const objectives    = (formData.get('objectives') as string ?? '').split('\n').map(s => s.trim()).filter(Boolean)
     const prerequisites = (formData.get('prerequisites') as string ?? '').split('\n').map(s => s.trim()).filter(Boolean)
-    const parseTranslations = (key: string) => {
-      try { return JSON.parse((formData.get(key) as string) || '{}') } catch { return {} }
-    }
     await sb.from('schools').update({
       name: formData.get('name') as string,
       acronym: (formData.get('acronym') as string) || null,
@@ -228,9 +232,7 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
       school_type: formData.get('school_type') as string,
       subtitle: (formData.get('subtitle') as string) || null,
       long_description: (formData.get('long_description') as string) || null,
-      long_description_translations: parseTranslations('long_description_translations'),
       target_audience: (formData.get('target_audience') as string) || null,
-      target_audience_translations: parseTranslations('target_audience_translations'),
       duration_description: (formData.get('duration_description') as string) || null,
       hero_image_url: (formData.get('hero_image_url') as string) || null,
       promo_video_url: (formData.get('promo_video_url') as string) || null,
@@ -295,6 +297,8 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
       name: formData.get('name') as string,
       year: formData.get('year') ? Number(formData.get('year')) : null,
       semester: formData.get('semester') ? Number(formData.get('semester')) : null,
+      starts_at: (formData.get('starts_at') as string) || null,
+      ends_at: (formData.get('ends_at') as string) || null,
       active: true,
     }).select('id').single()
     if (error || !newClass) redirect(`/${slug}/escolas/${id}`)
@@ -435,15 +439,11 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                 <div className="p-5">
                   <h2 className="font-semibold text-gray-900 mb-4">Conteúdo público</h2>
                   <div className="space-y-4">
-                    <LocaleContentTabs label="Descrição completa" name="long_description"
+                    <TextArea label="Descrição completa" name="long_description"
                       defaultValue={(escola as unknown as { long_description: string | null }).long_description ?? ''}
-                      translationsName="long_description_translations"
-                      defaultTranslations={(escola as unknown as { long_description_translations: Partial<Record<'en' | 'es', string>> | null }).long_description_translations ?? {}}
                       placeholder="O que é esta escola? Qual o objetivo do programa?" rows={5} />
-                    <LocaleContentTabs label="Público-alvo" name="target_audience"
+                    <TextArea label="Público-alvo" name="target_audience"
                       defaultValue={(escola as unknown as { target_audience: string | null }).target_audience ?? ''}
-                      translationsName="target_audience_translations"
-                      defaultTranslations={(escola as unknown as { target_audience_translations: Partial<Record<'en' | 'es', string>> | null }).target_audience_translations ?? {}}
                       placeholder="Para quem é indicada esta escola?" rows={3} />
                     <TextArea label="Objetivos (1 por linha)" name="objectives"
                       defaultValue={((escola as unknown as { objectives: string[] | null }).objectives ?? []).join('\n')}
@@ -593,7 +593,17 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                       className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
                     <input name="semester" type="number" min="1" max="2" placeholder="Semestre (1 ou 2)"
                       className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                    <button type="submit" className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg transition-colors">
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Início (opcional)</label>
+                      <input name="starts_at" type="date"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Fim (opcional)</label>
+                      <input name="ends_at" type="date"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                    </div>
+                    <button type="submit" className="self-end px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg transition-colors">
                       Criar turma
                     </button>
                   </div>
@@ -624,13 +634,15 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                       {leaderEmail ? 'Trocar líder' : 'Atribuir líder'}
                     </summary>
                     <form action={handleAssignLeader} className="mt-3 space-y-2">
-                      <select name="user_id" required
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
-                        <option value="">Selecionar usuário...</option>
-                        {orgUsersForAssignment.map(u => (
-                          <option key={u.id} value={u.id}>{u.email}</option>
-                        ))}
-                      </select>
+                      <SearchableSelectModal
+                        name="user_id"
+                        options={orgUsersForAssignment.map(u => ({
+                          id: u.id,
+                          label: u.fullName ?? u.email,
+                          sublabel: u.fullName ? u.email : undefined,
+                        }))}
+                        title="Selecionar usuário"
+                      />
                       <p className="text-xs text-gray-400">O papel do usuário será atualizado para Líder de Escola.</p>
                       <button type="submit" className="w-full px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
                         Confirmar
@@ -708,11 +720,13 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                   <details className={(staffMembers.length > 0 || pendingObreiroRequests.length > 0) ? 'border-t border-gray-100 pt-3' : ''}>
                     <summary className="text-sm text-brand-600 cursor-pointer select-none font-medium">+ Adicionar diretamente</summary>
                     <form action={handleAddStaff} className="mt-2 space-y-2">
-                      <select name="person_id" required
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
-                        <option value="">Selecionar pessoa...</option>
-                        {availablePeople.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
-                      </select>
+                      <SearchableSelectModal
+                        name="person_id"
+                        options={availablePeople.map(p => ({ id: p.id, label: p.full_name }))}
+                        placeholder="Selecionar pessoa..."
+                        searchPlaceholder="Buscar por nome..."
+                        title="Selecionar pessoa"
+                      />
                       <div className="flex gap-2">
                         <input name="role" placeholder="Papel" defaultValue="Obreiro"
                           className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
@@ -747,22 +761,111 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
       {isLiderEted && (
         <main className="p-4 md:p-6 space-y-4 max-w-2xl overflow-y-auto flex-1">
 
-          {/* Info da escola */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5 flex items-start justify-between gap-3">
-            <div>
-              <h2 className="font-semibold text-gray-900">{escola.name}</h2>
-              {(escola as unknown as { subtitle: string | null }).subtitle && (
-                <p className="text-sm text-gray-500 mt-1">{(escola as unknown as { subtitle: string | null }).subtitle}</p>
-              )}
-              {(escola as unknown as { school_type: string }).school_type && (
-                <p className="text-xs text-gray-400 mt-1">
-                  {SCHOOL_TYPES.find(t => t.value === (escola as unknown as { school_type: string }).school_type)?.label ?? ''}
-                </p>
-              )}
+          {/* Dados da escola — mesmo formulário da visão de gestão */}
+          <form action={updateSchool} className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+            <div className="p-5">
+              <h2 className="font-semibold text-gray-900 mb-4">Informações gerais</h2>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2">
+                  <Field label="Nome da escola *" name="name" defaultValue={escola.name} required />
+                </div>
+                <Field label="Sigla / Acrônimo" name="acronym" defaultValue={escola.acronym ?? ''} placeholder="Ex: ETED" />
+                <Field label="Slug (URL pública)" name="slug" defaultValue={(escola as unknown as { slug: string | null }).slug ?? ''} placeholder="ex: eted-almirante" />
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Tipo de escola</label>
+                  <select name="school_type" defaultValue={(escola as unknown as { school_type: string }).school_type}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
+                    {SCHOOL_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <Field label="Subtítulo" name="subtitle" defaultValue={(escola as unknown as { subtitle: string | null }).subtitle ?? ''} placeholder="Uma frase que resume o propósito da escola" />
+                </div>
+                <Field label="Duração" name="duration_description" defaultValue={(escola as unknown as { duration_description: string | null }).duration_description ?? ''} placeholder="Ex: 20 semanas (5 meses)" />
+                <Field label="URL da imagem hero" name="hero_image_url" defaultValue={(escola as unknown as { hero_image_url: string | null }).hero_image_url ?? ''} placeholder="https://..." />
+                <Field label="URL do vídeo promocional" name="promo_video_url" defaultValue={(escola as unknown as { promo_video_url: string | null }).promo_video_url ?? ''} placeholder="https://youtube.com/..." />
+              </div>
             </div>
-            <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${escola.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-              {escola.active ? 'Ativa' : 'Inativa'}
-            </span>
+
+            <div className="p-5">
+              <h2 className="font-semibold text-gray-900 mb-4">Conteúdo público</h2>
+              <div className="space-y-4">
+                <TextArea label="Descrição completa" name="long_description"
+                  defaultValue={(escola as unknown as { long_description: string | null }).long_description ?? ''}
+                  placeholder="O que é esta escola? Qual o objetivo do programa?" rows={5} />
+                <TextArea label="Público-alvo" name="target_audience"
+                  defaultValue={(escola as unknown as { target_audience: string | null }).target_audience ?? ''}
+                  placeholder="Para quem é indicada esta escola?" rows={3} />
+                <TextArea label="Objetivos (1 por linha)" name="objectives"
+                  defaultValue={((escola as unknown as { objectives: string[] | null }).objectives ?? []).join('\n')}
+                  placeholder={'Crescer no relacionamento com Deus\nSer desafiado para as missões'} rows={4} />
+                <TextArea label="Pré-requisitos (1 por linha)" name="prerequisites"
+                  defaultValue={((escola as unknown as { prerequisites: string[] | null }).prerequisites ?? []).join('\n')}
+                  placeholder={'Cristão com 2+ anos de fé\nEnvolvido em uma igreja'} rows={4} />
+              </div>
+            </div>
+
+            <div className="p-5">
+              <h2 className="font-semibold text-gray-900 mb-4">Visibilidade</h2>
+              <div className="flex flex-col gap-3">
+                <Toggle name="is_public" label="Página pública ativa"
+                  description="Aparece na listagem pública da base e a URL da escola fica acessível"
+                  defaultChecked={(escola as unknown as { is_public: boolean }).is_public} />
+                <Toggle name="active" label="Escola ativa"
+                  description="Escola aparece no sistema de gestão"
+                  defaultChecked={escola.active ?? true} />
+              </div>
+            </div>
+
+            <div className="p-5 flex justify-end">
+              <button type="submit" className="px-5 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg transition-colors">
+                Salvar alterações
+              </button>
+            </div>
+          </form>
+
+          {/* E-mail da escola */}
+          <form action={updateEmail} className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+            <div>
+              <h2 className="font-semibold text-gray-900 mb-1">E-mail da escola</h2>
+              <p className="text-xs text-gray-400">Usado como endereço de resposta nos e-mails de inscrição.</p>
+            </div>
+            <div className="flex items-end gap-3 flex-wrap">
+              <div className="flex-1 min-w-48">
+                <Field label="E-mail de contato" name="contact_email"
+                  defaultValue={(escola as unknown as { contact_email: string | null }).contact_email ?? ''}
+                  placeholder="eted.suabase@gmail.com" />
+              </div>
+              <button type="submit" className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg transition-colors whitespace-nowrap">
+                Salvar e-mail
+              </button>
+            </div>
+            {(() => {
+              const email   = (escola as unknown as { contact_email: string | null }).contact_email
+              const verified = (escola as unknown as { contact_email_verified: boolean }).contact_email_verified
+              if (!email) return null
+              if (verified) return <p className="text-xs text-green-600 flex items-center gap-1"><CheckCircle2 className="size-3.5" /> E-mail verificado</p>
+              return (
+                <div className="flex items-center gap-3 flex-wrap">
+                  <p className="text-xs text-orange-500 flex items-center gap-1"><AlertTriangle className="size-3.5 flex-shrink-0" /> Aguardando verificação — verifique a caixa de entrada de <strong>{email}</strong></p>
+                  <button type="submit" formAction={reenviarVerificacao} className="text-xs text-brand-500 hover:text-brand-600 underline underline-offset-2 whitespace-nowrap">
+                    Reenviar link
+                  </button>
+                </div>
+              )
+            })()}
+          </form>
+
+          {/* Formulário de inscrição */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="font-semibold text-gray-900">Formulário de inscrição</h2>
+              <Link href={`/${slug}/escolas/${id}/formulario`}
+                className="text-xs font-semibold text-brand-600 hover:text-brand-800 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-lg transition-colors">
+                <Settings className="size-3.5 inline -mt-0.5" /> Configurar campos
+              </Link>
+            </div>
+            <p className="text-xs text-gray-400">Ative ou desative campos do formulário que os candidatos preenchem.</p>
           </div>
 
           {/* Turmas */}
@@ -811,6 +914,32 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
               <p className="text-sm text-gray-400">Nenhuma turma cadastrada.</p>
             )}
           </div>
+          <form action={createTurma} className="bg-white rounded-xl border border-dashed border-gray-300 p-4">
+            <p className="text-sm font-medium text-gray-700 mb-3">Nova turma</p>
+            <div className="grid sm:grid-cols-3 gap-3">
+              <div className="sm:col-span-3">
+                <input name="name" required placeholder="Nome da turma (ex: ETED Julho 2026)"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+              </div>
+              <input name="year" type="number" placeholder="Ano (ex: 2026)"
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+              <input name="semester" type="number" min="1" max="2" placeholder="Semestre (1 ou 2)"
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Início (opcional)</label>
+                <input name="starts_at" type="date"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Fim (opcional)</label>
+                <input name="ends_at" type="date"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+              </div>
+              <button type="submit" className="self-end px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg transition-colors">
+                Criar turma
+              </button>
+            </div>
+          </form>
 
           {/* Obreiros da Escola */}
           <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -835,11 +964,13 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
               <details className={staffMembers.length > 0 ? 'border-t border-gray-100 pt-3' : ''}>
                 <summary className="text-sm text-brand-600 cursor-pointer select-none font-medium">+ Solicitar adição de obreiro</summary>
                 <form action={handleRequestObreiro} className="mt-3 space-y-2">
-                  <select name="person_id" required
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
-                    <option value="">Selecionar pessoa...</option>
-                    {availablePeople.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
-                  </select>
+                  <SearchableSelectModal
+                    name="person_id"
+                    options={availablePeople.map(p => ({ id: p.id, label: p.full_name }))}
+                    placeholder="Selecionar pessoa..."
+                    searchPlaceholder="Buscar por nome..."
+                    title="Selecionar pessoa"
+                  />
                   <input name="role" placeholder="Papel (ex: Instrutor, Monitor)" defaultValue="Obreiro"
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
                   <input name="notes" placeholder="Observação (opcional)"

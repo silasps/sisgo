@@ -4,11 +4,13 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getRolePreview } from '@/lib/role-preview'
 import { ReferenceModal } from './ReferenceModal'
-import { Pencil, FileText } from 'lucide-react'
+import { IncompleteFormLinkCard } from '@/components/inscricoes/IncompleteFormLinkCard'
+import { DocumentPreviewGrid } from '@/components/inscricoes/DocumentPreviewGrid'
+import { Pencil, FileText, ReceiptText } from 'lucide-react'
 import { PipelineStepper, stagesFromFlags } from '@/components/inscricoes/PipelineStepper'
 import { AvancarEtapaControl, AdvanceHistoryList } from '@/components/inscricoes/AvancarEtapaControl'
 import { getStageAdvances, resolveAdvancerNames } from '@/lib/pipelineStageAdvance'
-import { avancarEtapaAluno } from './actions'
+import { avancarEtapaAluno, reenviarLinkFormulario } from './actions'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
@@ -17,7 +19,7 @@ type FormSection = { title: string; fields: { label: string; key: string; type?:
 const SECTIONS: FormSection[] = [
   {
     title: 'Identificação inicial',
-    fields: [{ label: 'E-mail', key: 'email' }],
+    fields: [{ label: 'Nome completo', key: 'nome' }],
   },
   {
     title: 'Escola de interesse',
@@ -34,7 +36,6 @@ const SECTIONS: FormSection[] = [
   {
     title: 'Informações pessoais',
     fields: [
-      { label: 'Nome completo', key: 'nome' },
       { label: 'Sexo', key: 'sexo' },
       { label: 'Nascimento', key: 'data_nascimento' },
       { label: 'Estado civil', key: 'estado_civil' },
@@ -62,8 +63,8 @@ const SECTIONS: FormSection[] = [
       { label: 'Cidade', key: 'cidade' },
       { label: 'Estado', key: 'estado' },
       { label: 'País', key: 'pais' },
-      { label: 'E-mail de contato', key: 'email_contato' },
       { label: 'Celular', key: 'celular' },
+      { label: 'E-mail', key: 'email' },
       { label: 'Instagram', key: 'instagram' },
       { label: 'Facebook', key: 'facebook' },
       { label: 'LinkedIn', key: 'linkedin' },
@@ -292,7 +293,7 @@ export default async function FormularioViewerPage({ params }: Props) {
     .select(`
       id, status, form_data, created_at, edited_by, edited_at,
       organization_id,
-      schools(name),
+      schools(name, form_config),
       school_classes(name),
       school_interest_forms(full_name, email, phone)
     `)
@@ -305,10 +306,55 @@ export default async function FormularioViewerPage({ params }: Props) {
   const formData = (app.form_data as Record<string, unknown>) ?? {}
   const isExterno = (formData as Record<string, unknown>).source === 'externo'
     || (Object.keys(formData).every(k => ['source', 'prefill'].includes(k)))
-  const escola = app.schools as unknown as { name: string } | null
+  const escola = app.schools as unknown as { name: string; form_config: { hidden_fields?: string[]; payment_info?: string } | null } | null
+  const hiddenFieldsSet = new Set(escola?.form_config?.hidden_fields ?? [])
+  const showPastorRef = !hiddenFieldsSet.has('s8.pastor_bloco')
+  const showAmigoRef = !hiddenFieldsSet.has('s9.oculto')
+  const schoolPaymentInfo = escola?.form_config?.payment_info ?? null
+
+  // Formulário "incompleto": ou nunca chegou a ser enviado (ainda rascunho —
+  // inclui os casos criados manualmente pra recuperar candidatos presos na
+  // tela de pagamento, ver SYSTEM_ARCHITECTURE.md 24/08), ou foi enviado mas
+  // a escola exige comprovante de pagamento e ele nunca foi anexado. Nos dois
+  // casos o líder precisa poder reenviar o link pra pessoa terminar.
+  let incompleteReason: string | null = null
+  if (app.status === 'rascunho') {
+    incompleteReason = 'O formulário ainda não foi enviado — a pessoa parou em algum ponto do preenchimento.'
+  } else if (schoolPaymentInfo && !(formData.payment_receipt as { path?: string } | undefined)?.path) {
+    incompleteReason = 'O formulário foi preenchido, mas o comprovante de pagamento ainda não foi anexado.'
+  }
   const turma = app.school_classes as unknown as { name: string } | null
   const preform = app.school_interest_forms as unknown as { full_name?: string; email?: string; phone?: string } | null
-  const nomeCandidato = (formData.s5 as Record<string, string> | undefined)?.nome ?? preform?.full_name ?? '—'
+  // Nome mudou de seção (s5 → s1) numa correção posterior — mantém o fallback
+  // pra continuar lendo certo em inscrições antigas já enviadas antes disso.
+  const nomeCandidato = (formData.s1 as Record<string, string> | undefined)?.nome
+    ?? (formData.s5 as Record<string, string> | undefined)?.nome
+    ?? preform?.full_name ?? '—'
+  const paymentReceipt = formData.payment_receipt as {
+    path?: string; name?: string; uploaded_at?: string
+  } | undefined
+  let paymentReceiptUrl: string | null = null
+  if (paymentReceipt?.path) {
+    const { data } = await sb.storage.from('payment-receipts').createSignedUrl(paymentReceipt.path, 60 * 60)
+    paymentReceiptUrl = data?.signedUrl ?? null
+  }
+
+  const DOCUMENT_LABELS: Record<string, string> = {
+    doc_foto: 'Foto do rosto',
+    doc_rg_frente: 'RG (frente)',
+    doc_rg_verso: 'RG (verso)',
+    doc_cpf: 'CPF',
+    doc_passaporte: 'Passaporte',
+  }
+  const s15Docs = (formData.s15 as Record<string, { path?: string; name?: string; type?: string; uploaded_at?: string }> | undefined) ?? {}
+  const documentEntries = await Promise.all(
+    Object.entries(s15Docs)
+      .filter(([, doc]) => !!doc?.path)
+      .map(async ([key, doc]) => {
+        const { data } = await sb.storage.from('application-documents').createSignedUrl(doc.path!, 60 * 60)
+        return { key, label: DOCUMENT_LABELS[key] ?? key, doc, url: data?.signedUrl ?? null }
+      })
+  )
 
   let editedByName: string | null = null
   if (app.edited_by) {
@@ -405,10 +451,42 @@ export default async function FormularioViewerPage({ params }: Props) {
         </div>
 
         {/* Tabs: Candidato / Referências */}
-        <div className="grid lg:grid-cols-3 gap-5">
+        <div className={`grid gap-5 ${(showPastorRef || showAmigoRef) ? 'lg:grid-cols-3' : ''}`}>
           {/* Formulário do candidato */}
-          <div className="lg:col-span-2 space-y-3">
+          <div className={`space-y-3 ${(showPastorRef || showAmigoRef) ? 'lg:col-span-2' : ''}`}>
             <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest px-1">Formulário do Candidato</h2>
+
+            {paymentReceipt?.path && (
+              <div className="flex items-start gap-3 rounded-xl border border-green-200 bg-green-50 px-4 py-3">
+                <ReceiptText className="size-5 shrink-0 text-green-700 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-green-900">Comprovante de pagamento</p>
+                  <p className="truncate text-xs text-green-700">{paymentReceipt.name ?? 'Arquivo enviado pelo candidato'}</p>
+                  {paymentReceipt.uploaded_at && (
+                    <p className="mt-0.5 text-xs text-green-600">
+                      Enviado em {new Date(paymentReceipt.uploaded_at).toLocaleString('pt-BR')}
+                    </p>
+                  )}
+                </div>
+                {paymentReceiptUrl && (
+                  <a href={paymentReceiptUrl} target="_blank" rel="noopener noreferrer"
+                    className="shrink-0 rounded-lg bg-green-700 px-3 py-2 text-xs font-semibold text-white hover:bg-green-800">
+                    Abrir
+                  </a>
+                )}
+              </div>
+            )}
+
+            {documentEntries.length > 0 && (
+              <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
+                <p className="text-sm font-semibold text-gray-900 mb-2.5">Documentos enviados</p>
+                <DocumentPreviewGrid
+                  documents={documentEntries.map(({ key, label, doc, url }) => ({
+                    key, label, url, isImage: !!doc.type?.startsWith('image/'), fileName: doc.name ?? null,
+                  }))}
+                />
+              </div>
+            )}
 
             {isExterno && (
               <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
@@ -470,24 +548,38 @@ export default async function FormularioViewerPage({ params }: Props) {
           </div>
 
           {/* Painel lateral: referências */}
-          <div className="space-y-3">
-            <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest px-1">Referências</h2>
-            <ReferenceModal
-              tipo="pastor"
-              data={pastorRef?.form_data as Record<string, string> | null}
-              status={(pastorRef?.status ?? 'pendente') as 'pendente' | 'enviado'}
-              slug={slug}
-              applicationId={id}
-            />
-            <ReferenceModal
-              tipo="amigo"
-              data={amigoRef?.form_data as Record<string, string> | null}
-              status={(amigoRef?.status ?? 'pendente') as 'pendente' | 'enviado'}
-              slug={slug}
-              applicationId={id}
-            />
-          </div>
+          {(showPastorRef || showAmigoRef) && (
+            <div className="space-y-3">
+              <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest px-1">Referências</h2>
+              {showPastorRef && (
+                <ReferenceModal
+                  tipo="pastor"
+                  data={pastorRef?.form_data as Record<string, string> | null}
+                  status={(pastorRef?.status ?? 'pendente') as 'pendente' | 'enviado'}
+                  slug={slug}
+                  applicationId={id}
+                />
+              )}
+              {showAmigoRef && (
+                <ReferenceModal
+                  tipo="amigo"
+                  data={amigoRef?.form_data as Record<string, string> | null}
+                  status={(amigoRef?.status ?? 'pendente') as 'pendente' | 'enviado'}
+                  slug={slug}
+                  applicationId={id}
+                />
+              )}
+            </div>
+          )}
         </div>
+
+        {incompleteReason && (
+          <IncompleteFormLinkCard
+            reason={incompleteReason}
+            formPathPrefix={`/${slug}/formulario`}
+            onGenerateLink={reenviarLinkFormulario.bind(null, { slug, organizationId: app.organization_id, applicationId: id })}
+          />
+        )}
 
       </main>
     </>

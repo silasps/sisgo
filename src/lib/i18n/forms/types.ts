@@ -55,13 +55,20 @@ export interface FormDict {
     copied: string
     generating: string
     link_hint: string
+    payment_title: string
+    payment_gate_hint: string
+    receipt_label: string
+    receipt_hint: string
+    receipt_send: string
+    receipt_sending: string
+    receipt_success: string
   }
 
   // ── Section 1 ──────────────────────────────────────────────────────────
   s1: {
     section: string
     title: string
-    email: string
+    nome: string
   }
 
   // ── Section 3 ──────────────────────────────────────────────────────────
@@ -93,6 +100,9 @@ export interface FormDict {
     conversou_nao: string
     data_chegada: string
     data_chegada_hint: string
+    horario_chegada: string
+    data_saida: string
+    horario_saida: string
   }
 
   // ── Section 5 ──────────────────────────────────────────────────────────
@@ -126,6 +136,7 @@ export interface FormDict {
     outro_idioma: string
     outro_idioma_placeholder: string
     documentos_section: string
+    documentos_hint: string
     rg: string
     cpf: string
     passaporte_opcional: string
@@ -142,6 +153,7 @@ export interface FormDict {
     pais: string
     zip_placeholder: string
     celular: string
+    email: string
     // Social
     redes_section: string
     outros_links: string

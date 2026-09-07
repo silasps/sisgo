@@ -2,8 +2,8 @@
 
 import { useMemo, useState } from 'react'
 import { ChevronDown, X } from 'lucide-react'
+import { useSidebarLeftClass } from '@/components/layout/account-context'
 import { changeRole, createStaffUser, toggleActive, updateExtraRoles } from './actions'
-import { useSidebarOffsetClass } from '@/components/layout/account-context'
 
 type RoleRow = { id: string; name: string; label: string }
 type OptionRow = { id: string; name: string }
@@ -329,7 +329,8 @@ export function ObreiroCard({
   viewerIsDH?: boolean
   readOnly?: boolean
 }) {
-  const [open, setOpen] = useState(false)
+  const isPending = currentRoleName === 'pendente_alocacao'
+  const [open, setOpen] = useState(isPending)
   const [scope, setScope] = useState(scopeForRole(currentRoleName, currentArea))
   const [assignmentRole, setAssignmentRole] = useState(assignmentForRole(currentRoleName, currentRoleTitle))
   const roleName = roleForScope(scope, assignmentRole)
@@ -346,7 +347,9 @@ export function ObreiroCard({
   const roleLabel = roles.find(r => r.name === currentRoleName)?.label ?? currentRoleName
 
   return (
-    <div className={`rounded-xl border border-gray-200 bg-white overflow-hidden transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 ${!active ? 'opacity-60' : ''}`}>
+    <div className={`rounded-xl border bg-white overflow-hidden transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 ${
+      isPending ? 'border-amber-300 ring-1 ring-amber-200 bg-amber-50/30' : 'border-gray-200'
+    } ${!active ? 'opacity-60' : ''}`}>
       {/* Cabeçalho clicável */}
       <button
         type="button"
@@ -364,7 +367,9 @@ export function ObreiroCard({
               {currentArea && (
                 <span className="rounded-md bg-gray-100 px-2 py-0.5 text-xs text-gray-600">{currentArea}</span>
               )}
-              <span className="rounded-md bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">{roleLabel}</span>
+              <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${
+                isPending ? 'bg-amber-100 text-amber-800' : 'bg-brand-50 text-brand-700'
+              }`}>{roleLabel}</span>
               {currentRoleTitle && !['voluntário', 'voluntario', 'obreiro'].includes(currentRoleTitle.toLowerCase()) && (
                 <span className="rounded-md border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-500">{currentRoleTitle}</span>
               )}
@@ -377,6 +382,11 @@ export function ObreiroCard({
                 </span>
               )}
             </div>
+            {isPending && (
+              <p className="mt-1.5 text-xs font-medium text-amber-700">
+                Atribuído pelo super admin — defina a área e função abaixo
+              </p>
+            )}
           </div>
           <span className={`shrink-0 mt-0.5 rounded-full px-2 py-0.5 text-xs font-medium ${active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
             {active ? 'Ativo' : 'Inativo'}
@@ -435,7 +445,7 @@ export function ObreiroCard({
               <p className="text-xs text-gray-400 -mt-2">Áreas extras que esta pessoa também cobre individualmente.</p>
               <div className="flex flex-wrap gap-2">
                 {roles
-                  .filter(r => r.name !== currentRoleName && !['superadmin', 'admin_base', 'lider_base'].includes(r.name))
+                  .filter(r => r.name !== currentRoleName && !['superadmin', 'admin_base', 'lider_base', 'pendente_alocacao'].includes(r.name))
                   .map(r => (
                     <label key={r.name} className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs hover:border-amber-300 hover:bg-amber-50">
                       <input
@@ -537,7 +547,7 @@ export function CreateObreiroModal({
   roles: RoleRow[]; schools: OptionRow[]; ministries: OptionRow[]; orgId: string; slug: string
 }) {
   const [open, setOpen] = useState(false)
-  const offsetClass = useSidebarOffsetClass()
+  const sidebarLeftClass = useSidebarLeftClass()
   return (
     <>
       <button
@@ -549,7 +559,7 @@ export function CreateObreiroModal({
 
       {open && (
         <div
-          className={`fixed inset-0 ${offsetClass} z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-16`}
+          className={`fixed inset-0 ${sidebarLeftClass} z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-16`}
           onClick={() => setOpen(false)}
         >
           <div

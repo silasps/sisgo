@@ -6,6 +6,10 @@ export type NavItem = { href: string; label: string; icon: string; alert?: boole
 
 export type AllAppsState = {
   items: NavItem[]
+  /** Conjunto completo pra busca — inclui o que já está fixo na sidebar
+   * (a busca promete achar "tudo", diferente da grade de navegação, que só
+   * mostra o complemento pra não duplicar atalho já visível). */
+  searchItems: NavItem[]
   open: boolean
   openAllApps: () => void
   closeAllApps: () => void
@@ -13,6 +17,7 @@ export type AllAppsState = {
 
 const defaultState: AllAppsState = {
   items: [],
+  searchItems: [],
   open: false,
   openAllApps: () => {},
   closeAllApps: () => {},

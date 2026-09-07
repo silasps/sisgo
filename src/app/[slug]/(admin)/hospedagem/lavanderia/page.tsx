@@ -3,8 +3,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/Header'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { notFound, redirect } from 'next/navigation'
-import { getRolePreview } from '@/lib/role-preview'
-import { isManagementRole, canSeeHospedagem } from '@/lib/auth/permissions'
+import { isManagementRole, userHasAnyRole, HOSPEDAGEM_ROLES } from '@/lib/auth/permissions'
+import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { startMachine, stopMachine, createMachine, updateMachine, deleteMachine, upsertPricing, toggleLaundryEnabled, checkMachinesOnline, createDeviceModel, deleteDeviceModel, testDeviceConnection, testMachineConnection, upsertLaundryPaymentSettings } from './actions'
 import { WashingMachine, Power, PowerOff, Plus, Settings, History, Pencil, Trash2, DollarSign, Timer, Wifi, WifiOff, Cpu, Info, Cloud, QrCode, ExternalLink } from 'lucide-react'
 import { DeviceSelect } from './DeviceSelect'
@@ -30,17 +30,9 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
   ])
   if (!user || !org) notFound()
 
-  const { data: orgUser } = await supabase
-    .from('organization_users')
-    .select('roles(name)')
-    .eq('user_id', user.id)
-    .eq('active', true)
-    .single()
-  const realRole = (orgUser?.roles as unknown as { name: string } | null)?.name ?? ''
-  const preview  = await getRolePreview(realRole)
-  const role     = preview?.role ?? realRole
+  const { role, allRoles } = await getCurrentOrganizationRole(supabase, user.id, org.id)
 
-  if (!isManagementRole(role) && !canSeeHospedagem(role)) notFound()
+  if (!isManagementRole(role) && !userHasAnyRole(allRoles, HOSPEDAGEM_ROLES)) notFound()
 
   const laundryEnabled = (org as { laundry_enabled?: boolean }).laundry_enabled ?? false
 

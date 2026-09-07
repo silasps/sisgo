@@ -161,7 +161,7 @@ export default async function EstoqueManutencaoPage({ params, searchParams }: Pr
       <Header
         title="Estoque — Manutenção"
         actions={
-          <Link href={`/${slug}/manutencao`} className="text-sm px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors">
+          <Link href={`/${slug}/manutencao`} className="text-sm text-gray-300 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">
             ← Solicitações
           </Link>
         }

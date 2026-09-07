@@ -6,13 +6,15 @@ import { getRolePreview } from '@/lib/role-preview'
 import { Pencil } from 'lucide-react'
 import { PipelineStepper, stagesFromFlags } from '@/components/inscricoes/PipelineStepper'
 import { AvancarEtapaControl, AdvanceHistoryList } from '@/components/inscricoes/AvancarEtapaControl'
+import { DocumentPreviewGrid } from '@/components/inscricoes/DocumentPreviewGrid'
+import { IncompleteFormLinkCard } from '@/components/inscricoes/IncompleteFormLinkCard'
 import { getStageAdvances, resolveAdvancerNames } from '@/lib/pipelineStageAdvance'
 import BackgroundChecksSection from './BackgroundChecksSection'
 import { PastorReferenceGate } from './PastorReferenceGate'
 import { HospedagemHandoffCard } from './HospedagemHandoffCard'
 import { HospedagemSolicitacaoCard } from './HospedagemSolicitacaoCard'
 import { HospedagemGate } from './HospedagemGate'
-import { avancarEtapaObreiro } from './actions'
+import { avancarEtapaObreiro, reenviarLinkFormularioObreiro } from './actions'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
@@ -273,6 +275,25 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
   const pessoa = app.people as unknown as { full_name: string } | null
   const nomeCandidato = (formData.s2 as Record<string, string> | undefined)?.nome ?? preform?.full_name ?? pessoa?.full_name ?? '—'
 
+  const DOCUMENT_LABELS: Record<string, string> = {
+    doc_foto: 'Foto pessoal',
+    doc_rg_frente: 'RG (frente)',
+    doc_rg_verso: 'RG (verso)',
+    doc_passaporte: 'Passaporte',
+    doc_certidao_casamento: 'Certidão de casamento',
+    doc_certidao_casamento_s10: 'Certidão de casamento',
+  }
+  const s3Docs = (formData.s3 as Record<string, { path?: string; name?: string; type?: string }> | undefined) ?? {}
+  const s10Docs = (formData.s10 as Record<string, { path?: string; name?: string; type?: string }> | undefined) ?? {}
+  const documentEntries = await Promise.all(
+    [...Object.entries(s3Docs), ...Object.entries(s10Docs)]
+      .filter(([, doc]) => !!doc?.path)
+      .map(async ([key, doc]) => {
+        const { data } = await sb.storage.from('staff-application-documents').createSignedUrl(doc.path!, 60 * 60)
+        return { key, label: DOCUMENT_LABELS[key] ?? key, doc, url: data?.signedUrl ?? null }
+      })
+  )
+
   const { data: refs } = await sb
     .from('reference_forms')
     .select('type, status, form_data')
@@ -307,11 +328,12 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
   if (canHandoffHospedagem) {
     const { data: roomRows } = await sb
       .from('rooms')
-      .select('id, name, floor, allocation_mode, beds(id, label, status)')
+      .select('id, name, allocation_mode, beds(id, label, status), floors(name)')
       .eq('organization_id', app.organization_id)
       .eq('status', 'ativo')
       .order('display_order', { ascending: true })
-    rooms = (roomRows ?? []) as unknown as typeof rooms
+    rooms = ((roomRows ?? []) as unknown as Array<{ id: string; name: string; allocation_mode: string; beds: { id: string; label: string; status: string }[]; floors: { name: string } | null }>)
+      .map(r => ({ id: r.id, name: r.name, floor: r.floors?.name ?? null, allocation_mode: r.allocation_mode, beds: r.beds }))
   }
 
   const { data: backgroundChecks } = await sb
@@ -389,11 +411,12 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
       </header>
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-4">
-        {Object.keys(formData).length <= 1 && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-center">
-            <p className="text-sm text-amber-800 font-medium">Formulário já enviado e aguardando preenchimento.</p>
-            <p className="text-xs text-amber-600 mt-1">Foi enviado um link para preenchimento do formulário completo.</p>
-          </div>
+        {app.status === 'rascunho' && (
+          <IncompleteFormLinkCard
+            reason="O formulário ainda não foi enviado — a pessoa parou em algum ponto do preenchimento."
+            formPathPrefix={`/${slug}/formulario-obreiro`}
+            onGenerateLink={reenviarLinkFormularioObreiro.bind(null, { slug, organizationId: app.organization_id, applicationId: id })}
+          />
         )}
 
         {SECTIONS.map((section, sIdx) => {
@@ -413,6 +436,18 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
             </SectionCard>
           )
         })}
+
+        {documentEntries.length > 0 && (
+          <SectionCard title="Documentos enviados">
+            <div className="pt-3">
+              <DocumentPreviewGrid
+                documents={documentEntries.map(({ key, label, doc, url }) => ({
+                  key, label, url, isImage: !!doc.type?.startsWith('image/'), fileName: doc.name ?? null,
+                }))}
+              />
+            </div>
+          </SectionCard>
+        )}
 
         {/* Referências */}
         {(pastorRef || amigoRef || liderancaRef || app.pastor_reference_skip_reason) && (

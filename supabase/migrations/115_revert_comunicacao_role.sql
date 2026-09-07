@@ -1,0 +1,21 @@
+-- ============================================================
+-- Reverte a migration 114 — "comunicacao" NÃO deve ser um papel formal.
+--
+-- Diagnóstico errado: migration 114 assumiu que `ministries.linked_role
+-- = 'comunicacao'` precisava de uma linha em `roles` pra funcionar, igual
+-- Hospitalidade/Secretaria/DH/Cozinha/Manutenção. Na verdade o módulo
+-- "Comunicação da Base" (migrations 105-106) já resolvia esse acesso
+-- comparando `ministries.linked_role = 'comunicacao'` direto como texto
+-- (a coluna não é FK pra `roles.id`) nas policies de RLS e em
+-- `layout.tsx` (`linkedRoles`) — de propósito, pra não precisar virar
+-- papel principal de ninguém. Ver SYSTEM_ARCHITECTURE.md, seção 4.
+--
+-- Ter a linha em `roles` era inofensivo por si só, mas passou a ser
+-- perigoso depois que `addMember` (ministerios/[id]/actions.ts) ganhou
+-- `promotePendingIfLinkedRole`: qualquer papel que exista em `roles` com
+-- o mesmo nome do `linked_role` de um ministério passa a poder virar o
+-- papel PRINCIPAL de quem estiver "Pendente de Alocação" — o que é
+-- exatamente o que o design de "comunicacao" evita.
+-- ============================================================
+
+delete from roles where name = 'comunicacao';

@@ -3,7 +3,7 @@ import { Header } from '@/components/layout/Header'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { AtividadesExtrasSection } from './AtividadesExtrasSection'
-import { LocaleContentTabs } from '@/components/ui/LocaleContentTabs'
+import { DirectEnrollLinkBox } from './DirectEnrollLinkBox'
 
 type Props = { params: Promise<{ slug: string; id: string; classId: string }> }
 
@@ -16,7 +16,7 @@ export default async function EditarTurmaPage({ params }: Props) {
 
   const { data: escola } = await supabase
     .from('schools')
-    .select('id, name, slug')
+    .select('id, name, slug, school_type, is_public')
     .eq('id', id)
     .eq('organization_id', org.id)
     .single()
@@ -50,9 +50,6 @@ export default async function EditarTurmaPage({ params }: Props) {
     'use server'
     const { createAdminClient } = await import('@/lib/supabase/admin')
     const sb = createAdminClient()
-    const parseTranslations = (key: string) => {
-      try { return JSON.parse((formData.get(key) as string) || '{}') } catch { return {} }
-    }
 
     await sb.from('school_classes').update({
       name: formData.get('name') as string,
@@ -63,10 +60,8 @@ export default async function EditarTurmaPage({ params }: Props) {
       registration_deadline: (formData.get('registration_deadline') as string) || null,
       base_cost: formData.get('base_cost') ? Number(formData.get('base_cost')) : null,
       cost_description: (formData.get('cost_description') as string) || null,
-      cost_description_translations: parseTranslations('cost_description_translations'),
       location: (formData.get('location') as string) || null,
       public_description: (formData.get('public_description') as string) || null,
-      public_description_translations: parseTranslations('public_description_translations'),
       max_students: formData.get('max_students') ? Number(formData.get('max_students')) : null,
       registrations_open: formData.get('registrations_open') === 'on',
       online_applications: formData.get('online_applications') === 'on',
@@ -201,17 +196,13 @@ export default async function EditarTurmaPage({ params }: Props) {
                 <Field label="Valor base (R$)" name="base_cost" type="number" defaultValue={(turma as unknown as { base_cost: number | null }).base_cost?.toString() ?? ''} placeholder="0,00" />
                 <Field label="Local / Endereço" name="location" defaultValue={(turma as unknown as { location: string | null }).location ?? ''} placeholder="Base JOCUM, Almirante Tamandaré/PR" />
                 <div className="sm:col-span-2">
-                  <LocaleContentTabs label="Descrição de pagamento" name="cost_description"
+                  <TextArea label="Descrição de pagamento" name="cost_description"
                     defaultValue={(turma as unknown as { cost_description: string | null }).cost_description ?? ''}
-                    translationsName="cost_description_translations"
-                    defaultTranslations={(turma as unknown as { cost_description_translations: Partial<Record<'en' | 'es', string>> | null }).cost_description_translations ?? {}}
                     placeholder="Ex: Inclui hospedagem e 3 refeições. Parcelamento disponível." rows={3} />
                 </div>
                 <div className="sm:col-span-2">
-                  <LocaleContentTabs label="Descrição pública da turma" name="public_description"
+                  <TextArea label="Descrição pública da turma" name="public_description"
                     defaultValue={(turma as unknown as { public_description: string | null }).public_description ?? ''}
-                    translationsName="public_description_translations"
-                    defaultTranslations={(turma as unknown as { public_description_translations: Partial<Record<'en' | 'es', string>> | null }).public_description_translations ?? {}}
                     placeholder="Informações adicionais que aparecerão na página pública." rows={3} />
                 </div>
               </div>
@@ -268,6 +259,29 @@ export default async function EditarTurmaPage({ params }: Props) {
           </div>
         </form>
 
+        {escola.school_type === 'seminario' && (
+          <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+            <div>
+              <h2 className="font-semibold text-gray-900">Link de matrícula direta</h2>
+              <p className="text-xs text-gray-500 mt-1">
+                Diferente das outras escolas, o Seminário não tem pré-inscrição — este link único
+                já abre o formulário completo desta turma. Ao enviar, a pessoa é matriculada
+                automaticamente (sem passar por aprovação manual). Compartilhe no WhatsApp ou
+                coloque num site. Só funciona com &ldquo;Inscrições abertas&rdquo; ligado acima.
+              </p>
+            </div>
+            {escola.is_public && turma.registrations_open ? (
+              <DirectEnrollLinkBox path={`/${slug}/escola/${escola.slug ?? escola.id}/turma/${classId}/matricula`} />
+            ) : (
+              <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                {!escola.is_public
+                  ? 'A escola precisa estar com "Página pública ativa" (em Configurações) pra esse link funcionar.'
+                  : 'Ative "Inscrições abertas" acima pra esse link funcionar.'}
+              </p>
+            )}
+          </section>
+        )}
+
         <AtividadesExtrasSection
           programs={(allPrograms ?? []).map(p => ({
             id: p.id,
@@ -299,6 +313,18 @@ function Field({ label, name, defaultValue, placeholder, type, required }: {
       <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
       <input name={name} type={type ?? 'text'} defaultValue={defaultValue} placeholder={placeholder} required={required}
         className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+    </div>
+  )
+}
+
+function TextArea({ label, name, defaultValue, placeholder, rows }: {
+  label: string; name: string; defaultValue?: string; placeholder?: string; rows?: number
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
+      <textarea name={name} defaultValue={defaultValue} placeholder={placeholder} rows={rows ?? 3}
+        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 resize-none" />
     </div>
   )
 }

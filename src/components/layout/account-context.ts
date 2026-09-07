@@ -21,8 +21,10 @@ export type BrandInfo = { logoUrl?: string; sisgoLogo?: boolean; subtitle?: stri
 export const BrandCtx = createContext<BrandInfo>({})
 export const useBrand = () => useContext(BrandCtx)
 
-/** Classe de offset (`md:left-*`) que acompanha a largura atual da sidebar
- * (recolhida = `md:w-16`, expandida = `md:w-60`), para overlays de modal que
- * não devem cobrir a sidebar. Usar no lugar de um `md:left-60` fixo, que fica
- * com um vão sem escurecer quando a sidebar está recolhida. */
-export const useSidebarOffsetClass = () => (useBrand().collapsed ? 'md:left-16' : 'md:left-60')
+// Overlays fixos (modais) usam isso pra não cobrir a sidebar — precisa
+// bater com a largura real dela (md:w-16 recolhida / md:w-60 expandida em
+// Sidebar.tsx), senão sobra uma faixa do conteúdo sem o overlay por cima.
+export function useSidebarLeftClass() {
+  const { collapsed } = useBrand()
+  return collapsed ? 'md:left-16' : 'md:left-60'
+}

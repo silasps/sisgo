@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useRef, useState, useTransition } from 'react'
+import { useEffect, useRef, useState, useTransition, type ReactNode } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useFormStatus } from 'react-dom'
-import { Search, ClipboardList, Mail, MessageCircle, ChevronDown, Loader2, RefreshCw } from 'lucide-react'
-import { RecusarModal } from './RecusarModal'
+import { Search, ClipboardList, Mail, MessageCircle, ChevronDown, Link2, Loader2, RefreshCw } from 'lucide-react'
+import { Modal } from '@/components/ui/Modal'
+import { RecusarModal, ExcluirModal } from './RecusarModal'
 import { DisponibilizarFormularioButton } from './DisponibilizarFormularioButton'
 import { PipelineStepper, stagesFromFlags } from '@/components/inscricoes/PipelineStepper'
 import BackgroundChecksSection, { type BackgroundCheck } from './formulario-obreiro/[id]/BackgroundChecksSection'
@@ -65,6 +66,8 @@ type HistoricoItem = {
   motivo: string
   recusadoPor: string | null
   recusadoPorId: string | null
+  status: string
+  criadoEm: string
   recusadoEm: string
 }
 
@@ -84,6 +87,8 @@ type Props = {
   initialTab: string
   initialEtapa: string
   hideAlunoTipo: boolean
+  linksAluno: ReactNode
+  linksObreiro: ReactNode
   openClasses: OpenClassOption[]
   allSchools: Array<{ id: string; name: string }>
   allMinistries: Array<{ id: string; name: string }>
@@ -107,6 +112,9 @@ type Props = {
   marcarRecebidoExternamenteObreiro: (formData: FormData) => Promise<void>
   encaminharParaEscola: (formData: FormData) => Promise<void>
   encaminharParaMinisterio: (formData: FormData) => Promise<void>
+  reencaminharObreiro: (formData: FormData) => Promise<void>
+  solicitarTransferenciaEscola: (formData: FormData) => Promise<{ error?: string; success?: boolean }>
+  solicitarTransferenciaObreiro: (formData: FormData) => Promise<{ error?: string; success?: boolean }>
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -137,7 +145,7 @@ function urgencyBadge(dias: number) {
 }
 
 const isFinalizado = (s: string) =>
-  ['convertido', 'aprovado', 'descartado', 'reprovado', 'cancelado'].includes(s)
+  ['convertido', 'aprovado', 'descartado', 'reprovado', 'cancelado', 'excluido'].includes(s)
 
 const TIPO_TABS = [
   { key: 'todas',   label: 'Todas' },
@@ -161,9 +169,11 @@ function matchesTipo(i: { tipo: string }, key: string) {
 // um candidato aceito continua com o mesmo `tipo` de quando estava em
 // pré-inscrição, então rotear só por tipo o deixaria preso na aba errada.
 function matchesEtapa(i: { tipo: string; status: string }, key: string) {
-  if (key === 'todas') return true
   if (key === 'finalizados') return isFinalizado(i.status)
+  // Finalizado só aparece em "Finalizados" — inclusive "Todas as etapas" é
+  // só as etapas ativas do processo, não um "todos os registros, sempre".
   if (isFinalizado(i.status)) return false
+  if (key === 'todas') return true
   if (key === 'pre_inscricao') return i.tipo === 'pre_inscricao' || i.tipo === 'pre_inscricao_obreiro'
   return i.tipo === 'aluno' || i.tipo === 'obreiro'
 }
@@ -181,11 +191,46 @@ function obreiroStages(item: InscricaoItem) {
   return stagesFromFlags(OBREIRO_STAGE_LABELS, [true, formSubmitted, pastorDone, bgDone, hospedagemDone, approved])
 }
 
+// Uma recomendação só "bloqueia" se ela chegou a ser solicitada (link
+// gerado) — não são obrigatórias pra aceitar o aluno, então uma referência
+// nunca pedida não deve travar a etapa.
+function alunoRefsOk(item: InscricaoItem) {
+  const pastor = item.refSummary?.pastor
+  const amigo = item.refSummary?.amigo
+  return (!pastor || pastor.status === 'enviado') && (!amigo || amigo.status === 'enviado')
+}
+
 function alunoStages(item: InscricaoItem) {
-  const formSubmitted = ['formulario_enviado', 'em_analise', 'convertido'].includes(item.status) || !!item.hasFormData
-  const emAnalise = ['em_analise', 'convertido'].includes(item.status)
+  // "Formulário enviado" = o convite foi mandado (status avança assim que o
+  // link/e-mail sai, mesmo que o candidato ainda não tenha respondido nada).
+  // Não confundir com "preencheu" — por isso não usamos hasFormData aqui.
+  const convited = ['formulario_enviado', 'em_analise', 'convertido'].includes(item.status)
   const approved = item.status === 'convertido'
-  return stagesFromFlags(ALUNO_STAGE_LABELS, [true, formSubmitted, emAnalise, approved])
+  // "Em análise" só fecha (e libera a etapa "Aprovado" para virar a atual)
+  // quando o formulário foi preenchido E toda recomendação solicitada
+  // (pastor/amigo) já foi respondida — até lá, mesmo com o formulário
+  // pronto, o candidato continua (corretamente) "em análise". Mas aceitar o
+  // aluno nunca dependeu das recomendações estarem prontas — se o líder já
+  // aprovou mesmo com alguma pendente, a barra não pode ficar "presa" em
+  // "Em análise": aprovado sempre implica as etapas anteriores concluídas.
+  const formSubmitted = !!item.hasFormData && (alunoRefsOk(item) || approved)
+  return stagesFromFlags(ALUNO_STAGE_LABELS, [true, convited, formSubmitted, approved])
+}
+
+// Recomendações (pastor/amigo) só fazem sentido depois que o formulário foi
+// preenchido — é o próprio formulário que gera o pedido pro pastor/amigo, e
+// como não são obrigatórias pra aceitar o aluno, mostrar isso antes ou depois
+// da etapa "Em análise" só duplicaria informação sem ajudar. Aparece só
+// enquanto o candidato está de fato "em análise" (formulário pronto, decisão
+// pendente) — não antes (nada pra mostrar) nem depois de aprovado (já resolvido).
+function alunoShowRecomendacoes(item: InscricaoItem) {
+  return !!item.hasFormData && item.status !== 'convertido'
+}
+
+function refLabel(entry: { status: string } | null | undefined): { text: string; color: string } {
+  if (!entry) return { text: 'não solicitada', color: 'bg-gray-100 text-gray-400' }
+  if (entry.status === 'enviado') return { text: 'respondeu ✓', color: 'bg-green-100 text-green-700' }
+  return { text: 'aguardando resposta', color: 'bg-amber-100 text-amber-700' }
 }
 
 function StatusDropdown({ item, label, color, options, updateStatus }: {
@@ -314,6 +359,115 @@ function DataChegadaField({ slug, organizationId, ministryId, staffApplicationId
   )
 }
 
+// Muitas escolas/ministérios já combinam data fixa com a hospitalidade antes
+// mesmo da inscrição — por isso fica escondido num botão discreto em vez de
+// um bloco grande sempre aberto, e só quando ainda não há nenhuma data.
+function InformarChegadaButton(props: Parameters<typeof DataChegadaField>[0]) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="col-span-2">
+      <button type="button" onClick={() => setOpen(true)}
+        className="w-full text-xs px-3 py-2 bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors font-medium">
+        Informar data de chegada d{props.guestType === 'aluno' ? 'o aluno' : 'o obreiro'}
+      </button>
+
+      <Modal open={open} onClose={() => setOpen(false)} title="Data de chegada" subtitle={props.guestName}>
+        <div className="p-5">
+          <DataChegadaField {...props} />
+        </div>
+      </Modal>
+    </div>
+  )
+}
+
+const ACTION_BUTTON_TONES = {
+  violet: 'bg-violet-50 text-violet-700 hover:bg-violet-100 border-violet-200',
+  blue: 'bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200',
+  green: 'bg-green-600 text-white hover:bg-green-700 border-green-600 font-semibold',
+}
+
+// Botão que abre um modal com um formulário dentro — reaproveitado sempre
+// que um formulário secundário (encaminhar, palavra ao obreiro, etc.)
+// ocuparia espaço permanente no card só de existir; assim fica escondido
+// atrás de um botão até a pessoa realmente precisar dele.
+function ActionModalButton({ label, subtitle, tone = 'violet', children }: {
+  label: string
+  subtitle?: string
+  tone?: keyof typeof ACTION_BUTTON_TONES
+  children: ReactNode
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="col-span-2">
+      <button type="button" onClick={() => setOpen(true)}
+        className={`w-full text-xs px-3 py-2 border rounded-lg transition-colors font-medium ${ACTION_BUTTON_TONES[tone]}`}>
+        {label}
+      </button>
+      <Modal open={open} onClose={() => setOpen(false)} title={label} subtitle={subtitle}>
+        <div className="p-5">{children}</div>
+      </Modal>
+    </div>
+  )
+}
+
+// Formulário de SOLICITAR (não executar direto) — usado por líder de ETED/
+// ministério dentro dos mesmos modais de encaminhar que o DH usa, mas em vez
+// de mudar escola/ministério na hora, cria uma service_requests pro DH
+// decidir em /pendentes. Precisa de feedback próprio (useTransition) porque,
+// diferente da action de encaminhar direto do DH (que faz redirect), essa só
+// devolve {success}/{error} — o modal continua aberto até a pessoa ver a
+// confirmação.
+function SolicitarTransferenciaForm({ action, hiddenFields, destinationField, motivoPlaceholder }: {
+  action: (formData: FormData) => Promise<{ error?: string; success?: boolean }>
+  hiddenFields: Record<string, string>
+  destinationField: ReactNode
+  motivoPlaceholder?: string
+}) {
+  const [done, setDone] = useState(false)
+  const [error, setError] = useState('')
+  const [pending, startTransition] = useTransition()
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const fd = new FormData(e.currentTarget)
+    setError('')
+    startTransition(async () => {
+      const result = await action(fd)
+      if (result?.error) setError(result.error)
+      else setDone(true)
+    })
+  }
+
+  if (done) {
+    return (
+      <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2.5">
+        ✓ Solicitação enviada — o DH vai revisar e decidir o encaminhamento.
+      </p>
+    )
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-2">
+      {Object.entries(hiddenFields).map(([name, value]) => (
+        <input key={name} type="hidden" name={name} value={value} />
+      ))}
+      {destinationField}
+      <textarea
+        name="motivo"
+        required
+        rows={3}
+        placeholder={motivoPlaceholder ?? 'Explique o motivo da transferência — o DH vai ler isso pra decidir'}
+        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-300"
+      />
+      {error && <p className="text-xs text-red-600">{error}</p>}
+      <button type="submit" disabled={pending}
+        className="w-full text-sm px-3 py-2.5 bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-60 rounded-xl transition-colors font-semibold">
+        {pending ? 'Enviando…' : 'Solicitar transferência'}
+      </button>
+    </form>
+  )
+}
+
 export function InscricoesList({
   items,
   historico,
@@ -322,6 +476,8 @@ export function InscricoesList({
   initialTab,
   initialEtapa,
   hideAlunoTipo,
+  linksAluno,
+  linksObreiro,
   openClasses,
   allSchools,
   allMinistries,
@@ -345,15 +501,19 @@ export function InscricoesList({
   marcarRecebidoExternamenteObreiro,
   encaminharParaEscola,
   encaminharParaMinisterio,
+  reencaminharObreiro,
+  solicitarTransferenciaEscola,
+  solicitarTransferenciaObreiro,
 }: Props) {
   const [tab, setTab] = useState(initialTab)
   const [etapa, setEtapa] = useState(initialEtapa)
+  const [showLinks, setShowLinks] = useState(false)
   const [query, setQuery] = useState(initialQuery)
   const searchParams = useSearchParams()
   const router = useRouter()
+  const account = useAccount()
   const [hasUpdates, setHasUpdates] = useState(false)
   const updatesBaseline = useRef<number | null>(null)
-  const account = useAccount()
 
   // Feedback visual instantâneo pra ações que hoje dependem de um
   // round-trip lento ao servidor (recusar, assumir conversa): o item some/
@@ -429,7 +589,42 @@ export function InscricoesList({
     (i.email ?? '').toLowerCase().includes(query.toLowerCase())
   )
 
+  const currentLinks = tab === 'aluno' ? linksAluno : tab === 'obreiro' ? linksObreiro : null
   const visibleTipoTabs = hideAlunoTipo ? TIPO_TABS.filter(t => t.key !== 'aluno') : TIPO_TABS
+
+  // Agrupa por escola (ou, na falta de escola, por ministério — obreiro pode
+  // estar vinculado a um ou outro) e, dentro de cada grupo, por turma — uma
+  // escola pode ter mais de uma turma aberta ao mesmo tempo, e misturar tudo
+  // numa lista só dificultava enxergar de onde vem cada inscrição.
+  const groups = (() => {
+    const map = new Map<string, { label: string; items: InscricaoItem[] }>()
+    for (const item of filtered) {
+      const key = item.schoolId ? `escola:${item.schoolId}` : item.ministryId ? `ministerio:${item.ministryId}` : 'outro'
+      const label = (item.schoolId || item.ministryId) ? (item.escola ?? '—') : 'Sem escola/ministério vinculado'
+      if (!map.has(key)) map.set(key, { label, items: [] })
+      map.get(key)!.items.push(item)
+    }
+    return Array.from(map.entries())
+      .map(([key, { label, items }]) => ({ key, label, items }))
+      .sort((a, b) => (a.key === 'outro' ? 1 : b.key === 'outro' ? -1 : a.label.localeCompare(b.label, 'pt-BR')))
+  })()
+
+  function turmaSubgroups(groupItems: InscricaoItem[]) {
+    const map = new Map<string, { label: string; items: InscricaoItem[] }>()
+    const semTurma: InscricaoItem[] = []
+    for (const item of groupItems) {
+      if (item.classId && item.turma) {
+        if (!map.has(item.classId)) map.set(item.classId, { label: item.turma, items: [] })
+        map.get(item.classId)!.items.push(item)
+      } else {
+        semTurma.push(item)
+      }
+    }
+    const subgroups = Array.from(map.entries())
+      .map(([key, { label, items }]) => ({ key, label, items }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'))
+    return { subgroups, semTurma }
+  }
 
   return (
     <div className="space-y-4">
@@ -477,6 +672,24 @@ export function InscricoesList({
         })}
       </div>
 
+      {/* Links públicos de inscrição — escondidos atrás de um botão, para não poluir a tela */}
+      {currentLinks && (
+        <div>
+          <button type="button" onClick={() => setShowLinks(s => !s)}
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-800"
+          >
+            <Link2 className="size-3.5" />
+            {tab === 'aluno' ? 'Link de pré-inscrição pública' : 'Links para servir / ministérios'}
+            <ChevronDown className={`size-3.5 transition-transform ${showLinks ? 'rotate-180' : ''}`} />
+          </button>
+          {showLinks && (
+            <div className="mt-2 space-y-3">
+              {currentLinks}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Search */}
       <div className="relative w-full sm:w-80">
         <Search
@@ -515,8 +728,11 @@ export function InscricoesList({
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {filtered.map(item => {
+        <div className="space-y-4">
+          {groups.map(group => {
+            const { subgroups, semTurma } = turmaSubgroups(group.items)
+            const hasSubgroups = subgroups.length > 0
+            const renderItem = (item: InscricaoItem) => {
             // Assumir conversa já implica em início de contato — reflete isso
             // na hora, antes mesmo do servidor confirmar (ver assumirPreInscricaoObreiro).
             const effectiveStatus = item.tipo === 'pre_inscricao_obreiro' && item.status === 'pendente' && optimisticAssumedIds.has(item.id)
@@ -605,9 +821,38 @@ export function InscricoesList({
                         <PipelineStepper stages={stepperStages} href={stepperHref} size="md" />
                       </div>
                     )}
+                    {isAlunoTrack && alunoShowRecomendacoes(item) && (
+                      <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                        {(['pastor', 'amigo'] as const).map(tipo => {
+                          const ref = refLabel(item.refSummary?.[tipo])
+                          return (
+                            <span key={tipo} className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap ${ref.color}`}>
+                              {tipo === 'pastor' ? 'Pastor' : 'Amigo'}: {ref.text}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
+                    {!finalizado && canWriteItem(item) && item.tipo === 'pre_inscricao' && (
+                      <EditarPreInscricaoButton
+                        item={{ id: item.id, full_name: item.nome, email: item.email, phone: item.phone, message: item.mensagem, classId: item.classId }}
+                        openClasses={openClasses}
+                        editarAction={editarPreInscricao}
+                        iconOnly
+                      />
+                    )}
+                    {!finalizado && canWriteObreiro && item.tipo === 'pre_inscricao_obreiro' && (
+                      <EditarPreInscricaoObreiroButton
+                        item={{ id: item.id, full_name: item.nome, email: item.email, phone: item.phone, message: item.mensagem, ministryId: item.ministryId ?? null, schoolId: item.schoolId }}
+                        ministries={allMinistries}
+                        schools={allSchools}
+                        editarAction={editarPreInscricaoObreiro}
+                        iconOnly
+                      />
+                    )}
                     {!finalizado && item.email && (
                       <Tooltip label="Enviar e-mail">
                         <a
@@ -669,8 +914,6 @@ export function InscricoesList({
                     {/* Formulário preenchido, links de recomendação etc. — só em Detalhes (link do stepper) */}
                     <p className="text-xs text-gray-300 mt-1.5">
                       {new Date(item.criadoEm).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
-                      {' às '}
-                      {new Date(item.criadoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                     </p>
 
                   {!finalizado && (
@@ -693,45 +936,77 @@ export function InscricoesList({
                         </div>
                       )}
 
-                      {((canWriteItem(item) && item.tipo === 'pre_inscricao') || (canWriteObreiro && (item.tipo === 'pre_inscricao_obreiro' || (item.tipo === 'obreiro' && !finalizado)))) && (
+                      {canWriteObreiro && item.tipo === 'obreiro' && !finalizado && (
                         <details className="col-span-2 text-xs">
                           <summary className="cursor-pointer text-gray-400 select-none py-1">Mais ações</summary>
                           <div className="mt-1.5 space-y-1.5">
-                            <div className="grid grid-cols-2 gap-1.5">
-                              {canWriteItem(item) && item.tipo === 'pre_inscricao' && (
-                                <EditarPreInscricaoButton
-                                  item={{ id: item.id, full_name: item.nome, email: item.email, phone: item.phone, message: item.mensagem, classId: item.classId }}
-                                  openClasses={openClasses}
-                                  editarAction={editarPreInscricao}
-                                />
-                              )}
-                              {canWriteObreiro && item.tipo === 'pre_inscricao_obreiro' && (
-                                <EditarPreInscricaoObreiroButton
-                                  item={{ id: item.id, full_name: item.nome, email: item.email, phone: item.phone, message: item.mensagem, ministryId: item.ministryId ?? null, schoolId: item.schoolId }}
-                                  ministries={allMinistries}
-                                  schools={allSchools}
-                                  editarAction={editarPreInscricaoObreiro}
-                                />
-                              )}
+                            <div>
+                              <ActionModalButton label="Palavra sobre receber este obreiro" tone="blue">
+                                <form action={salvarPalavraLider} className="space-y-2">
+                                  <input type="hidden" name="id" value={item.id} />
+                                  <textarea
+                                    name="leader_word"
+                                    rows={3}
+                                    placeholder="A palavra que Deus deu sobre receber esta pessoa, se houver..."
+                                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                  />
+                                  <label className="flex items-start gap-2 text-sm text-gray-600">
+                                    <input type="checkbox" name="leader_word_shared" className="mt-0.5" />
+                                    Enviar esta palavra ao obreiro, se for aceito
+                                  </label>
+                                  <button type="submit" className="w-full text-sm px-3 py-2.5 bg-blue-600 text-white hover:bg-blue-700 rounded-xl transition-colors font-semibold">
+                                    Salvar palavra
+                                  </button>
+                                </form>
+                              </ActionModalButton>
                             </div>
-                            {item.tipo === 'obreiro' && (
-                              <form action={salvarPalavraLider} className="space-y-1.5 border-t border-gray-100 pt-1.5">
-                                <input type="hidden" name="id" value={item.id} />
-                                <p className="text-gray-500">Palavra sobre receber este obreiro (opcional)</p>
-                                <textarea
-                                  name="leader_word"
-                                  rows={2}
-                                  placeholder="A palavra que Deus deu sobre receber esta pessoa, se houver..."
-                                  className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-700"
-                                />
-                                <label className="flex items-start gap-2 text-gray-600">
-                                  <input type="checkbox" name="leader_word_shared" className="mt-0.5" />
-                                  Enviar esta palavra ao obreiro, se for aceito
-                                </label>
-                                <button type="submit" className="w-full text-xs px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg transition-colors font-semibold">
-                                  Salvar palavra
-                                </button>
-                              </form>
+                            {canWriteObreiro && (
+                              <div className="border-t border-gray-100 pt-1.5">
+                                <ActionModalButton label={canWrite ? 'Encaminhar para outro ministério/escola' : 'Solicitar transferência de ministério/escola'}>
+                                  {canWrite ? (
+                                    <form action={reencaminharObreiro} className="space-y-2">
+                                      <input type="hidden" name="staff_application_id" value={item.id} />
+                                      <select name="destination" required defaultValue="" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-violet-300">
+                                        <option value="" disabled>Selecione o destino</option>
+                                        {allMinistries.length > 0 && (
+                                          <optgroup label="Ministérios">
+                                            {allMinistries.map(m => <option key={m.id} value={`ministry:${m.id}`}>{m.name}</option>)}
+                                          </optgroup>
+                                        )}
+                                        {allSchools.length > 0 && (
+                                          <optgroup label="Escolas">
+                                            {allSchools.map(s => <option key={s.id} value={`school:${s.id}`}>{s.name}</option>)}
+                                          </optgroup>
+                                        )}
+                                      </select>
+                                      <p className="text-xs text-amber-700">Confira se pendências de hospedagem/antecedentes ligadas ao vínculo atual ainda fazem sentido depois de mudar.</p>
+                                      <button type="submit" className="w-full text-sm px-3 py-2.5 bg-violet-600 text-white hover:bg-violet-700 rounded-xl transition-colors font-semibold">
+                                        Encaminhar
+                                      </button>
+                                    </form>
+                                  ) : (
+                                    <SolicitarTransferenciaForm
+                                      action={solicitarTransferenciaObreiro}
+                                      hiddenFields={{ staff_application_id: item.id }}
+                                      destinationField={
+                                        <select name="destination" required defaultValue="" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-300">
+                                          <option value="" disabled>Transferir para qual ministério ou escola?</option>
+                                          {allMinistries.length > 0 && (
+                                            <optgroup label="Ministérios">
+                                              {allMinistries.map(m => <option key={m.id} value={`ministry:${m.id}`}>{m.name}</option>)}
+                                            </optgroup>
+                                          )}
+                                          {allSchools.length > 0 && (
+                                            <optgroup label="Escolas">
+                                              {allSchools.map(s => <option key={s.id} value={`school:${s.id}`}>{s.name}</option>)}
+                                            </optgroup>
+                                          )}
+                                        </select>
+                                      }
+                                    />
+                                  )}
+                                </ActionModalButton>
+                              </div>
                             )}
                           </div>
                         </details>
@@ -763,12 +1038,10 @@ export function InscricoesList({
                               />
                             </details>
                           </div>
-                        ) : (
+                        ) : item.candidateArrivalDate ? (
                           <div className="col-span-2 rounded-lg border border-amber-300 bg-amber-50 p-2.5">
                             <p className="text-xs font-bold text-amber-900">
-                              {item.candidateArrivalDate
-                                ? `⏳ ${item.nome} indicou chegada em ${new Date(item.candidateArrivalDate + 'T00:00:00').toLocaleDateString('pt-BR')} — revise e envie para a hospitalidade`
-                                : '⏳ Data de chegada ainda não informada'}
+                              ⏳ {item.nome} indicou chegada em {new Date(item.candidateArrivalDate + 'T00:00:00').toLocaleDateString('pt-BR')} — revise e envie para a hospitalidade
                             </p>
                             <DataChegadaField
                               slug={slug}
@@ -778,12 +1051,20 @@ export function InscricoesList({
                               guestName={item.nome}
                               guestType="obreiro"
                               prefillDate={item.candidateArrivalDate}
-                              hint={item.candidateArrivalDate
-                                ? 'Confirme (ou ajuste) a data antes de avisar a hospitalidade.'
-                                : undefined}
+                              hint="Confirme (ou ajuste) a data antes de avisar a hospitalidade."
                               action={solicitarHospedagemObreiro}
                             />
                           </div>
+                        ) : (
+                          <InformarChegadaButton
+                            slug={slug}
+                            organizationId={orgId}
+                            ministryId={item.ministryId ?? null}
+                            staffApplicationId={item.staffApplicationId}
+                            guestName={item.nome}
+                            guestType="obreiro"
+                            action={solicitarHospedagemObreiro}
+                          />
                         )
                       )}
                       {canWrite && item.tipo === 'pre_inscricao_obreiro' && item.ministryId && !item.assumedByName && !optimisticAssumedIds.has(item.id) && !finalizado && (
@@ -803,6 +1084,7 @@ export function InscricoesList({
                               interestFormId={item.id}
                               slug={slug}
                               schoolId={item.schoolId}
+                              candidateName={item.nome}
                               action={disponibilizarFormulario}
                               emailDisabled={quota.exceeded}
                               emailDisabledReason={
@@ -821,6 +1103,7 @@ export function InscricoesList({
                             interestFormId={item.id}
                             slug={slug}
                             schoolId="__obreiro__"
+                            candidateName={item.nome}
                             action={disponibilizarFormularioObreiro}
                             emailDisabled={false}
                             label="Enviar formulário de obreiro por e-mail"
@@ -830,40 +1113,90 @@ export function InscricoesList({
 
                       <div className="col-span-2 h-px bg-gray-100" />
 
-                      {canWrite && item.tipo === 'pre_inscricao' && !item.schoolId && (
-                        <form action={encaminharParaEscola} className="col-span-2 space-y-1.5 rounded-lg border border-blue-100 bg-blue-50 p-2.5">
-                          <input type="hidden" name="interest_id" value={item.id} />
-                          <p className="text-xs font-semibold text-blue-800">Sem preferência de escola</p>
-                          <select name="school_id" required className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300">
-                            <option value="" disabled>Encaminhar para qual escola?</option>
-                            {allSchools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                          </select>
-                          <button type="submit" className="w-full text-xs px-3 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors font-semibold">
-                            Encaminhar para escola
-                          </button>
-                        </form>
+                      {(canWrite || canWriteEted) && item.tipo === 'pre_inscricao' && (
+                        <ActionModalButton label={
+                          canWrite
+                            ? (item.schoolId ? 'Encaminhar para outra escola' : 'Sem preferência — encaminhar para escola')
+                            : 'Solicitar transferência de escola'
+                        }>
+                          {canWrite ? (
+                            <form action={encaminharParaEscola} className="space-y-2">
+                              <input type="hidden" name="interest_id" value={item.id} />
+                              {item.applicationId && (
+                                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                                  ⚠ Já existe um formulário enviado pra {item.escola ?? 'a escola atual'} — ele não será apagado, mas fica vinculado a ela. Envie um novo formulário pra escola nova depois de encaminhar.
+                                </p>
+                              )}
+                              <select name="school_id" required defaultValue="" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300">
+                                <option value="" disabled>Encaminhar para qual escola?</option>
+                                {allSchools.filter(s => s.id !== item.schoolId).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                              </select>
+                              <button type="submit" className="w-full text-sm px-3 py-2.5 bg-blue-600 text-white hover:bg-blue-700 rounded-xl transition-colors font-semibold">
+                                Encaminhar para escola
+                              </button>
+                            </form>
+                          ) : (
+                            <SolicitarTransferenciaForm
+                              action={solicitarTransferenciaEscola}
+                              hiddenFields={{ interest_id: item.id }}
+                              destinationField={
+                                <select name="school_id" required defaultValue="" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-300">
+                                  <option value="" disabled>Transferir para qual escola?</option>
+                                  {allSchools.filter(s => s.id !== item.schoolId).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                </select>
+                              }
+                            />
+                          )}
+                        </ActionModalButton>
                       )}
-                      {canWrite && item.tipo === 'pre_inscricao_obreiro' && !item.ministryId && !item.schoolId && (
-                        <form action={encaminharParaMinisterio} className="col-span-2 space-y-1.5 rounded-lg border border-violet-100 bg-violet-50 p-2.5">
-                          <input type="hidden" name="interest_id" value={item.id} />
-                          <p className="text-xs font-semibold text-violet-800">Sem preferência de ministério/escola</p>
-                          <select name="destination" required className="w-full rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-violet-300">
-                            <option value="" disabled>Encaminhar para qual ministério ou escola?</option>
-                            {allMinistries.length > 0 && (
-                              <optgroup label="Ministérios">
-                                {allMinistries.map(m => <option key={m.id} value={`ministry:${m.id}`}>{m.name}</option>)}
-                              </optgroup>
-                            )}
-                            {allSchools.length > 0 && (
-                              <optgroup label="Escolas">
-                                {allSchools.map(s => <option key={s.id} value={`school:${s.id}`}>{s.name}</option>)}
-                              </optgroup>
-                            )}
-                          </select>
-                          <button type="submit" className="w-full text-xs px-3 py-2 bg-violet-600 text-white hover:bg-violet-700 rounded-lg transition-colors font-semibold">
-                            Encaminhar
-                          </button>
-                        </form>
+                      {canWriteObreiro && item.tipo === 'pre_inscricao_obreiro' && (
+                        <ActionModalButton label={
+                          canWrite
+                            ? ((item.ministryId || item.schoolId) ? 'Encaminhar para outro ministério/escola' : 'Sem preferência — encaminhar')
+                            : 'Solicitar transferência de ministério/escola'
+                        }>
+                          {canWrite ? (
+                            <form action={encaminharParaMinisterio} className="space-y-2">
+                              <input type="hidden" name="interest_id" value={item.id} />
+                              <select name="destination" required defaultValue="" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-violet-300">
+                                <option value="" disabled>Encaminhar para qual ministério ou escola?</option>
+                                {allMinistries.length > 0 && (
+                                  <optgroup label="Ministérios">
+                                    {allMinistries.map(m => <option key={m.id} value={`ministry:${m.id}`}>{m.name}</option>)}
+                                  </optgroup>
+                                )}
+                                {allSchools.length > 0 && (
+                                  <optgroup label="Escolas">
+                                    {allSchools.map(s => <option key={s.id} value={`school:${s.id}`}>{s.name}</option>)}
+                                  </optgroup>
+                                )}
+                              </select>
+                              <button type="submit" className="w-full text-sm px-3 py-2.5 bg-violet-600 text-white hover:bg-violet-700 rounded-xl transition-colors font-semibold">
+                                Encaminhar
+                              </button>
+                            </form>
+                          ) : (
+                            <SolicitarTransferenciaForm
+                              action={solicitarTransferenciaObreiro}
+                              hiddenFields={{ interest_id: item.id }}
+                              destinationField={
+                                <select name="destination" required defaultValue="" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-300">
+                                  <option value="" disabled>Transferir para qual ministério ou escola?</option>
+                                  {allMinistries.length > 0 && (
+                                    <optgroup label="Ministérios">
+                                      {allMinistries.map(m => <option key={m.id} value={`ministry:${m.id}`}>{m.name}</option>)}
+                                    </optgroup>
+                                  )}
+                                  {allSchools.length > 0 && (
+                                    <optgroup label="Escolas">
+                                      {allSchools.map(s => <option key={s.id} value={`school:${s.id}`}>{s.name}</option>)}
+                                    </optgroup>
+                                  )}
+                                </select>
+                              }
+                            />
+                          )}
+                        </ActionModalButton>
                       )}
 
                       {canWriteItem(item) && item.tipo === 'pre_inscricao' && item.applicationId && !finalizado && !item.hospedagemResolved && (
@@ -911,18 +1244,15 @@ export function InscricoesList({
                             />
                           </div>
                         ) : item.applicationId ? (
-                          <div className="col-span-2 rounded-lg border border-amber-300 bg-amber-50 p-2.5">
-                            <p className="text-xs font-bold text-amber-900">⏳ Data de chegada ainda não informada</p>
-                            <DataChegadaField
-                              slug={slug}
-                              organizationId={orgId}
-                              ministryId={null}
-                              staffApplicationId={item.applicationId}
-                              guestName={item.nome}
-                              guestType="aluno"
-                              action={solicitarHospedagemAluno}
-                            />
-                          </div>
+                          <InformarChegadaButton
+                            slug={slug}
+                            organizationId={orgId}
+                            ministryId={null}
+                            staffApplicationId={item.applicationId}
+                            guestName={item.nome}
+                            guestType="aluno"
+                            action={solicitarHospedagemAluno}
+                          />
                         ) : null
                       )}
                       {canWriteItem(item) && (item.status === 'pendente' || item.status === 'em_contato' || item.status === 'formulario_enviado' || item.status === 'em_analise') && item.tipo !== 'obreiro' && item.tipo !== 'pre_inscricao_obreiro' && (() => {
@@ -1005,43 +1335,44 @@ export function InscricoesList({
                               )}
                             </div>
                           )}
-                          <form action={finalizarObreiro} className="col-span-2 space-y-1.5 rounded-lg border border-amber-100 bg-amber-50 p-2">
-                            <input type="hidden" name="id" value={item.id} />
-                            <input type="hidden" name="org_id" value={orgId} />
-                            <input type="hidden" name="person_id" value={item.personId} />
-                            <input type="hidden" name="ministry_id" value={item.ministryId ?? ''} />
-                            <input type="hidden" name="name" value={item.nome} />
-                            <p className="text-xs font-semibold text-amber-800">Criar acesso à plataforma e aprovar</p>
-                            <input
-                              name="email"
-                              type="email"
-                              defaultValue={item.email ?? ''}
-                              required
-                              placeholder="E-mail de login"
-                              className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-300"
-                            />
-                            <input
-                              name="password"
-                              type="password"
-                              required
-                              minLength={6}
-                              placeholder="Senha temporária"
-                              className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-300"
-                            />
-                            {(bgConcern || bgPending) && (
-                              <label className="flex items-start gap-2 text-xs text-amber-800">
-                                <input type="checkbox" required className="mt-0.5" />
-                                Estou ciente do alerta de antecedentes e assumo a decisão de finalizar mesmo assim.
-                              </label>
-                            )}
-                            <button type="submit" className="w-full text-xs px-3 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg transition-colors font-semibold">
-                              Finalizar obreiro
-                            </button>
-                          </form>
+                          <ActionModalButton label="Criar acesso à plataforma e aprovar" tone="green" subtitle={item.nome}>
+                            <form action={finalizarObreiro} className="space-y-2">
+                              <input type="hidden" name="id" value={item.id} />
+                              <input type="hidden" name="org_id" value={orgId} />
+                              <input type="hidden" name="person_id" value={item.personId} />
+                              <input type="hidden" name="ministry_id" value={item.ministryId ?? ''} />
+                              <input type="hidden" name="name" value={item.nome} />
+                              <input
+                                name="email"
+                                type="email"
+                                defaultValue={item.email ?? ''}
+                                required
+                                placeholder="E-mail de login"
+                                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-300"
+                              />
+                              <input
+                                name="password"
+                                type="password"
+                                required
+                                minLength={6}
+                                placeholder="Senha temporária"
+                                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-300"
+                              />
+                              {(bgConcern || bgPending) && (
+                                <label className="flex items-start gap-2 text-sm text-amber-800">
+                                  <input type="checkbox" required className="mt-0.5" />
+                                  Estou ciente do alerta de antecedentes e assumo a decisão de finalizar mesmo assim.
+                                </label>
+                              )}
+                              <button type="submit" className="w-full text-sm px-3 py-2.5 bg-green-600 text-white hover:bg-green-700 rounded-xl transition-colors font-semibold">
+                                Finalizar obreiro
+                              </button>
+                            </form>
+                          </ActionModalButton>
                         </>
                       )}
                       {((item.tipo === 'pre_inscricao_obreiro' || item.tipo === 'obreiro') ? canWriteObreiro : canWriteItem(item)) && (
-                        <div className="col-span-2 sm:col-span-1">
+                        <div className="col-span-2 sm:col-span-1 flex items-center gap-1.5">
                           <RecusarModal
                             id={item.id}
                             tipo={item.tipo}
@@ -1049,6 +1380,7 @@ export function InscricoesList({
                             onOptimisticRemove={id => setHiddenIds(prev => new Set(prev).add(id))}
                             onOptimisticRestore={id => setHiddenIds(prev => { const next = new Set(prev); next.delete(id); return next })}
                           />
+                          <ExcluirModal id={item.id} tipo={item.tipo} action={recusar} />
                         </div>
                       )}
                     </div>
@@ -1059,6 +1391,48 @@ export function InscricoesList({
                 )}
               </div>
             )
+            }
+            return (
+              <details key={group.key} className="group/escola" open>
+                <summary className="cursor-pointer flex items-center gap-2 py-1.5 select-none list-none">
+                  <span className="text-gray-400 transition-transform group-open/escola:rotate-90">▶</span>
+                  <span className="text-sm font-bold text-gray-800">{group.label}</span>
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{group.items.length}</span>
+                </summary>
+                <div className="pl-4 sm:pl-5 mt-2 space-y-4 border-l-2 border-gray-100">
+                  {hasSubgroups ? (
+                    <>
+                      {subgroups.map(sg => (
+                        <details key={sg.key} className="group/turma" open>
+                          <summary className="cursor-pointer flex items-center gap-2 py-1 select-none list-none">
+                            <span className="text-gray-300 transition-transform group-open/turma:rotate-90 text-xs">▶</span>
+                            <span className="text-xs font-semibold text-gray-600">{sg.label}</span>
+                            <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-full bg-gray-50 text-gray-400">{sg.items.length}</span>
+                          </summary>
+                          <div className="mt-1.5 space-y-3">
+                            {sg.items.map(renderItem)}
+                          </div>
+                        </details>
+                      ))}
+                      {semTurma.length > 0 && (
+                        <details className="group/turma" open>
+                          <summary className="cursor-pointer flex items-center gap-2 py-1 select-none list-none">
+                            <span className="text-gray-300 transition-transform group-open/turma:rotate-90 text-xs">▶</span>
+                            <span className="text-xs font-semibold text-gray-600">Outras inscrições</span>
+                            <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-full bg-gray-50 text-gray-400">{semTurma.length}</span>
+                          </summary>
+                          <div className="mt-1.5 space-y-3">
+                            {semTurma.map(renderItem)}
+                          </div>
+                        </details>
+                      )}
+                    </>
+                  ) : (
+                    <div className="space-y-3">{group.items.map(renderItem)}</div>
+                  )}
+                </div>
+              </details>
+            )
           })}
         </div>
       )}
@@ -1068,7 +1442,7 @@ export function InscricoesList({
         <details className="group">
           <summary className="cursor-pointer flex items-center gap-2 py-2 text-sm font-semibold text-gray-500 hover:text-gray-700 select-none list-none">
             <span className="transition-transform group-open:rotate-90">▶</span>
-            Histórico de recusas ({historico.length})
+            Histórico de recusas e exclusões ({historico.length})
           </summary>
           <div className="mt-3 bg-white rounded-xl border border-gray-200 overflow-hidden">
             <table className="w-full text-sm">
@@ -1077,7 +1451,7 @@ export function InscricoesList({
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Nome</th>
                   <th className="hidden sm:table-cell text-left px-4 py-3 font-medium text-gray-600">Tipo</th>
                   <th className="hidden md:table-cell text-left px-4 py-3 font-medium text-gray-600">Escola</th>
-                  <th className="hidden lg:table-cell text-left px-4 py-3 font-medium text-gray-600">Recusado por</th>
+                  <th className="hidden lg:table-cell text-left px-4 py-3 font-medium text-gray-600">Registrado por</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Motivo</th>
                 </tr>
               </thead>
@@ -1085,9 +1459,14 @@ export function InscricoesList({
                 {historico.map(h => (
                   <tr key={`hist-${h.id}`} className="hover:bg-gray-50">
                     <td className="px-4 py-3">
-                      <p className="font-medium text-gray-900">{h.nome}</p>
+                      <p className="font-medium text-gray-900 flex items-center gap-1.5">
+                        {h.nome}
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${h.status === 'excluido' ? 'bg-gray-100 text-gray-500' : 'bg-red-50 text-red-600'}`}>
+                          {h.status === 'excluido' ? 'Excluído' : 'Recusado'}
+                        </span>
+                      </p>
                       <p className="text-xs text-gray-400">
-                        {new Date(h.recusadoEm).toLocaleDateString('pt-BR')}
+                        {new Date(h.criadoEm).toLocaleDateString('pt-BR')} → {new Date(h.recusadoEm).toLocaleDateString('pt-BR')}
                       </p>
                     </td>
                     <td className="hidden sm:table-cell px-4 py-3 text-xs text-gray-500">{h.tipo}</td>
@@ -1096,7 +1475,7 @@ export function InscricoesList({
                     <td className="px-4 py-3 text-xs text-gray-600 max-w-xs">
                       <p className="line-clamp-2" title={h.motivo}>{h.motivo}</p>
                       <p className="mt-1 text-[11px] text-gray-400 lg:hidden">
-                        Recusado por: {h.recusadoPor ?? '—'}
+                        Registrado por: {h.recusadoPor ?? '—'}
                       </p>
                     </td>
                   </tr>

@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { insertStageAdvance } from '@/lib/pipelineStageAdvance'
+import { getOrRegenerateToken } from '@/lib/inscricoes/resendLink'
 
 async function assertDh(organizationId: string) {
   const supabase = await createClient()
@@ -91,6 +92,22 @@ export async function solicitarHospedagemAluno(params: {
   revalidatePath(`/${params.slug}/inscricoes/formulario/${applicationId}`)
   revalidatePath(`/${params.slug}/inscricoes`)
   revalidatePath(`/${params.slug}/pendentes`)
+}
+
+// Devolve o link do formulário pro líder reenviar — se o token ainda for
+// válido, devolve o mesmo (o formulário já preenchido continua lá, a pessoa
+// só termina de onde parou); se expirou, gera um novo token/prazo na mesma
+// school_applications, sem apagar nada do que já foi respondido.
+export async function reenviarLinkFormulario(params: {
+  slug: string
+  organizationId: string
+  applicationId: string
+}) {
+  await assertCanRequestHospedagem(params.organizationId)
+  const sb = createAdminClient()
+  const result = await getOrRegenerateToken(sb, 'school_applications', params.applicationId, params.organizationId)
+  if ('error' in result) throw new Error(result.error)
+  return result
 }
 
 export async function avancarEtapaAluno(params: {

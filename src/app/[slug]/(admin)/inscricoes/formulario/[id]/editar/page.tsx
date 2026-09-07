@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { getRolePreview } from '@/lib/role-preview'
+import { AdminFileUpload } from '@/components/inscricoes/AdminFileUpload'
+import { anexarDocumentoAdmin, anexarComprovanteAdmin } from './actions'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
@@ -10,7 +12,7 @@ type Props = { params: Promise<{ slug: string; id: string }> }
 const SECTION_FIELDS: { key: string; title: string; fields: { label: string; name: string; type?: 'textarea' | 'select'; options?: string[] }[] }[] = [
   {
     key: 's1', title: 'Identificação inicial',
-    fields: [{ label: 'E-mail', name: 'email' }],
+    fields: [{ label: 'Nome completo', name: 'nome' }],
   },
   {
     key: 's4', title: 'Escola de interesse',
@@ -27,7 +29,6 @@ const SECTION_FIELDS: { key: string; title: string; fields: { label: string; nam
   {
     key: 's5', title: 'Informações pessoais',
     fields: [
-      { label: 'Nome completo', name: 'nome' },
       { label: 'Sexo', name: 'sexo', type: 'select', options: ['M', 'F'] },
       { label: 'Data de nascimento', name: 'data_nascimento' },
       { label: 'Estado civil', name: 'estado_civil', type: 'select', options: ['solteiro', 'casado', 'divorciado', 'viuvo', 'uniao_estavel'] },
@@ -52,8 +53,8 @@ const SECTION_FIELDS: { key: string; title: string; fields: { label: string; nam
       { label: 'Cidade', name: 'cidade' },
       { label: 'Estado', name: 'estado' },
       { label: 'País', name: 'pais' },
-      { label: 'E-mail de contato', name: 'email_contato' },
       { label: 'Celular', name: 'celular' },
+      { label: 'E-mail', name: 'email' },
       { label: 'Instagram', name: 'instagram' },
       { label: 'Facebook', name: 'facebook' },
       { label: 'LinkedIn', name: 'linkedin' },
@@ -239,7 +240,7 @@ export default async function FormularioEditorPage({ params }: Props) {
 
   const { data: app } = await sb
     .from('school_applications')
-    .select('id, status, form_data, organization_id, school_interest_forms(full_name)')
+    .select('id, status, form_data, organization_id, school_interest_forms(full_name), schools(form_config)')
     .eq('id', id)
     .eq('organization_id', org.id)
     .single()
@@ -247,10 +248,41 @@ export default async function FormularioEditorPage({ params }: Props) {
 
   const formData = (app.form_data as Record<string, Record<string, string>>) ?? {}
   const preform = app.school_interest_forms as unknown as { full_name?: string } | null
-  const nomeCandidato = formData.s5?.nome ?? preform?.full_name ?? '—'
+  const nomeCandidato = formData.s1?.nome ?? formData.s5?.nome ?? preform?.full_name ?? '—'
 
   function get(section: string, field: string) {
     return formData[section]?.[field] ?? ''
+  }
+
+  const escola = app.schools as unknown as { form_config: { payment_info?: string } | null } | null
+  const paymentInfo = escola?.form_config?.payment_info ?? null
+  const s15 = (app.form_data as Record<string, unknown> | null)?.s15 as Record<string, { path?: string; name?: string; type?: string }> | undefined
+  const paymentReceipt = (app.form_data as Record<string, unknown> | null)?.payment_receipt as { path?: string; name?: string; type?: string } | undefined
+
+  const DOCUMENT_UPLOADS = [
+    { key: 'doc_foto', label: 'Foto do rosto' },
+    { key: 'doc_rg_frente', label: 'RG — Frente' },
+    { key: 'doc_rg_verso', label: 'RG — Verso' },
+    { key: 'doc_cpf', label: 'CPF' },
+    { key: 'doc_passaporte', label: 'Passaporte' },
+  ]
+
+  const documentEntries = await Promise.all(
+    DOCUMENT_UPLOADS.map(async doc => {
+      const meta = s15?.[doc.key]
+      let url: string | null = null
+      if (meta?.path) {
+        const { data } = await sb.storage.from('application-documents').createSignedUrl(meta.path, 60 * 60)
+        url = data?.signedUrl ?? null
+      }
+      return { ...doc, meta, url }
+    })
+  )
+
+  let paymentReceiptUrl: string | null = null
+  if (paymentReceipt?.path) {
+    const { data } = await sb.storage.from('payment-receipts').createSignedUrl(paymentReceipt.path, 60 * 60)
+    paymentReceiptUrl = data?.signedUrl ?? null
   }
 
   async function salvar(fd: FormData) {
@@ -318,7 +350,41 @@ export default async function FormularioEditorPage({ params }: Props) {
         </div>
       </div>
 
-      <main className="p-4 md:p-6 max-w-3xl mx-auto">
+      <main className="p-4 md:p-6 max-w-3xl mx-auto space-y-4">
+
+        {/* Documentos e comprovante — fora do <form> de texto (upload é
+            enviado na hora, por action própria, não no "Salvar formulário") */}
+        <details className="group bg-white rounded-xl border border-gray-200 overflow-hidden" open>
+          <summary className="flex items-center justify-between px-5 py-4 cursor-pointer select-none list-none hover:bg-gray-50">
+            <h3 className="font-semibold text-gray-900 text-sm">Documentos</h3>
+            <span className="text-gray-400 text-xs transition-transform group-open:rotate-180">▼</span>
+          </summary>
+          <div className="px-5 pb-5 border-t border-gray-100 pt-4 space-y-2">
+            <p className="text-xs text-gray-400 -mt-1 mb-2">
+              Anexe (ou substitua) direto aqui caso o candidato não tenha conseguido enviar pelo próprio formulário.
+            </p>
+            {documentEntries.map(doc => (
+              <AdminFileUpload
+                key={doc.key}
+                label={doc.label}
+                currentName={doc.meta?.name ?? null}
+                currentUrl={doc.url}
+                currentType={doc.meta?.type ?? null}
+                onUpload={anexarDocumentoAdmin.bind(null, { slug, organizationId: app.organization_id, applicationId: id, key: doc.key })}
+              />
+            ))}
+            {paymentInfo && (
+              <AdminFileUpload
+                label="Comprovante de pagamento"
+                currentName={paymentReceipt?.name ?? null}
+                currentUrl={paymentReceiptUrl}
+                currentType={paymentReceipt?.type ?? null}
+                onUpload={anexarComprovanteAdmin.bind(null, { slug, organizationId: app.organization_id, applicationId: id })}
+              />
+            )}
+          </div>
+        </details>
+
         <form action={salvar} className="space-y-4">
 
           {SECTION_FIELDS.map(section => (

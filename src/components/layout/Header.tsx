@@ -55,10 +55,16 @@ export function Header({ title, backHref, actions }: HeaderProps) {
         )}
         <h1 className="text-lg font-semibold text-white truncate">{title}</h1>
       </div>
-      <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-        {actions}
-        <AllAppsMenu />
-        <AccountMenu />
+      <div className="flex items-center gap-2 ml-2 min-w-0">
+        {actions && (
+          <div className="flex items-center gap-2 min-w-0 overflow-x-auto scrollbar-none">
+            {actions}
+          </div>
+        )}
+        <div className="flex items-center gap-2 shrink-0">
+          <AllAppsMenu />
+          <AccountMenu />
+        </div>
       </div>
     </header>
   )

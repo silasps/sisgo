@@ -29,7 +29,7 @@ type StaffProfileRow = {
   people: { full_name: string } | null
 }
 
-const STAFF_ROLE_ORDER = ['dh', 'secretaria', 'hospitalidade', 'cozinha', 'lider_eted', 'obreiro_eted', 'lider_ministerio', 'obreiro_ministerio']
+const STAFF_ROLE_ORDER = ['pendente_alocacao', 'dh', 'secretaria', 'hospitalidade', 'cozinha', 'lider_eted', 'obreiro_eted', 'lider_ministerio', 'obreiro_ministerio']
 const BLOCKED_ROLE_NAMES = ['superadmin', 'admin_base', 'lider_base']
 const REQUIRED_STAFF_ROLES: Record<string, { label: string; description: string }> = {
   lider_eted: {

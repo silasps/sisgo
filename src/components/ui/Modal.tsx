@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useSidebarOffsetClass } from '@/components/layout/account-context'
+import { createPortal } from 'react-dom'
+import { useSidebarLeftClass } from '@/components/layout/account-context'
 
 type Props = {
   open: boolean
@@ -14,6 +15,8 @@ type Props = {
 }
 
 export function Modal({ open, onClose, title, subtitle, headerExtra, hideFooter, children }: Props) {
+  const sidebarLeftClass = useSidebarLeftClass()
+
   useEffect(() => {
     if (!open) return
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -27,12 +30,15 @@ export function Modal({ open, onClose, title, subtitle, headerExtra, hideFooter,
     return () => { document.body.style.overflow = '' }
   }, [open])
 
-  const offsetClass = useSidebarOffsetClass()
-
   if (!open) return null
 
-  return (
-    <div className={`fixed inset-0 ${offsetClass} z-50 flex items-center justify-center p-4`} onClick={onClose}>
+  // Portal pro <body> — sem isso, um <div fixed> nascido dentro de um
+  // ancestral com transform/filter (ex.: a animação de .animate-stagger,
+  // que deixa um transform: translateY(0) residual mesmo parada) vira
+  // "fixed" em relação a esse ancestral, não à viewport — o modal aparece
+  // preso num canto da tela em vez de centralizado.
+  return createPortal(
+    <div className={`fixed inset-0 ${sidebarLeftClass} z-50 flex items-center justify-center p-4`} onClick={onClose}>
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
       <div
         className="relative z-10 w-full max-w-lg max-h-[85vh] flex flex-col rounded-2xl bg-white shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 duration-200"
@@ -61,6 +67,7 @@ export function Modal({ open, onClose, title, subtitle, headerExtra, hideFooter,
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

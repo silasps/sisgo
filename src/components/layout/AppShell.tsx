@@ -24,6 +24,7 @@ export function AppShell({
   user,
   account,
   allNavItems,
+  searchNavItems,
 }: {
   items: NavItem[]
   bottomBarItems?: BottomBarItem[]
@@ -35,6 +36,7 @@ export function AppShell({
   user?: { name?: string; email: string; badge?: string }
   account?: AccountInfo
   allNavItems?: NavItem[]
+  searchNavItems?: NavItem[]
 }) {
   const [open, setOpen] = useState(false)
   const [allAppsOpen, setAllAppsOpen] = useState(false)
@@ -55,10 +57,11 @@ export function AppShell({
 
   const allAppsValue = useMemo(() => ({
     items: allNavItems ?? [],
+    searchItems: searchNavItems ?? allNavItems ?? [],
     open: allAppsOpen,
     openAllApps: () => setAllAppsOpen(true),
     closeAllApps: () => setAllAppsOpen(false),
-  }), [allNavItems, allAppsOpen])
+  }), [allNavItems, searchNavItems, allAppsOpen])
 
   return (
     <AccountCtx.Provider value={account ?? null}>
@@ -82,7 +85,7 @@ export function AppShell({
                 onToggleCollapsed={toggleCollapsed}
               />
 
-              <div className={`flex-1 flex flex-col overflow-auto scroll-smooth min-w-0 ${collapsed ? 'md:ml-16' : 'md:ml-60'} ${bottomBarItems ? 'pb-20 md:pb-0' : ''}`}>
+              <div className={`flex-1 flex flex-col overflow-y-auto overflow-x-hidden scroll-smooth min-w-0 ${collapsed ? 'md:ml-16' : 'md:ml-60'} ${bottomBarItems ? 'pb-20 md:pb-0' : ''}`}>
                 {children}
               </div>
             </div>

@@ -1,6 +1,7 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { cancelAllocation } from '../hospedagem/actions'
 
 export async function createReservation(data: {
   organizationId: string
@@ -52,6 +53,36 @@ export async function updateReservationStatus(
     final_cost:   finalCost,
     updated_at:   new Date().toISOString(),
   }).eq('id', id)
+}
+
+// Cancela uma reserva já aprovada (quem aprova/gerencia, não o solicitante —
+// esse caso é `cancelReservation` acima, só enquanto pendente). Se a reserva
+// já tinha cama alocada (Parte 2: aprovar reserva de quarto pode alocar na
+// hora), cancela a alocação junto, pra liberar a cama de verdade.
+export async function cancelApprovedReservation(
+  id: string,
+  organizationId: string,
+  reviewedBy: string,
+  reviewNotes: string | null,
+) {
+  const sb = createAdminClient()
+  await sb.from('reservations').update({
+    status: 'cancelada',
+    reviewed_by:  reviewedBy,
+    reviewed_at:  new Date().toISOString(),
+    review_notes: reviewNotes,
+    updated_at:   new Date().toISOString(),
+  }).eq('id', id)
+
+  const { data: allocation } = await sb.from('room_allocations')
+    .select('id, bed_id')
+    .eq('reservation_id', id)
+    .neq('status', 'cancelada')
+    .maybeSingle()
+
+  if (allocation) {
+    await cancelAllocation({ id: allocation.id, organizationId, bedId: allocation.bed_id })
+  }
 }
 
 export async function cancelReservation(id: string, requestedBy: string) {

@@ -29,8 +29,6 @@ type PendenteItem = {
   criadoEm: string
   diasAberto: number
   linkDestino: string
-  overflow: boolean
-  overflowEscola?: string
   email?: string | null
   phone?: string | null
   turma?: string | null
@@ -199,20 +197,14 @@ export default async function PendentesPage({ params, searchParams }: Props) {
       const dias   = daysAgo(r.created_at)
       const schoolId = escola?.id
 
-      if (isLiderEted) {
-        const isOwner    = schoolId ? liderEtedSchoolIds.includes(schoolId) : false
-        const isOverflow = !isOwner && dias >= 3 && r.status === 'pendente'
-        if (!isOwner && !isOverflow) continue
-      }
+      if (isLiderEted && (!schoolId || !liderEtedSchoolIds.includes(schoolId))) continue
 
-      const isOverflow = isLiderEted && schoolId ? !liderEtedSchoolIds.includes(schoolId) : false
       const statusInfo = STATUS_LABELS[r.status] ?? { label: r.status, color: 'bg-gray-100 text-gray-500' }
       items.push({
-        id: r.id, categoria: 'Pré-inscrição', nome: r.full_name, overflow: isOverflow,
+        id: r.id, categoria: 'Pré-inscrição', nome: r.full_name,
         escola: escola ? `${escola.name}${turma?.name ? ` · ${turma.name}` : ''}` : null,
         status: r.status, statusLabel: statusInfo.label, statusColor: statusInfo.color,
         criadoEm: r.created_at, diasAberto: dias, linkDestino: `/${slug}/inscricoes`,
-        overflowEscola: isOverflow ? (escola?.name ?? undefined) : undefined,
         email: r.email, phone: r.phone, mensagem: r.message,
         turma: turma?.name ?? null,
       })
@@ -240,7 +232,7 @@ export default async function PendentesPage({ params, searchParams }: Props) {
       }
       const statusInfo = STATUS_LABELS[r.status] ?? { label: r.status, color: 'bg-gray-100 text-gray-500' }
       items.push({
-        id: r.id, categoria: 'Candidato a Aluno', overflow: false,
+        id: r.id, categoria: 'Candidato a Aluno',
         nome: r.people?.full_name ?? '—',
         escola: (r.schools as { name: string } | null)?.name ?? null,
         status: r.status, statusLabel: statusInfo.label, statusColor: statusInfo.color,
@@ -266,7 +258,7 @@ export default async function PendentesPage({ params, searchParams }: Props) {
     for (const r of ((staffApps ?? []) as unknown as StaffAppRaw[])) {
       const statusInfo = STATUS_LABELS[r.status] ?? { label: r.status, color: 'bg-gray-100 text-gray-500' }
       items.push({
-        id: r.id, categoria: 'Candidato a Obreiro', overflow: false,
+        id: r.id, categoria: 'Candidato a Obreiro',
         nome: r.people?.full_name ?? '—', escola: null,
         status: r.status,
         statusLabel: r.status === 'em_analise' ? 'Obreiro sem cadastro' : statusInfo.label,

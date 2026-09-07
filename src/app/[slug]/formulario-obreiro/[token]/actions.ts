@@ -2,6 +2,8 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getOrCreateReferenceForm, buildReferenceUrl } from '@/lib/staff/referenceForms'
+import { basicImageSanity } from '@/lib/documents/basicImageSanity'
+import { classifyDocument, type DocumentKind } from '@/lib/documents/classifyDocument'
 
 const EDITABLE_SECTIONS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
 
@@ -47,6 +49,82 @@ export async function salvarSecaoObreiro(slug: string, token: string, section: n
     form_data: updated,
     current_section: Math.max(app.current_section ?? 1, section),
   }).eq('id', app.id)
+
+  return { success: true }
+}
+
+const DOCUMENT_TYPES: Record<string, string> = {
+  'application/pdf': 'pdf',
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+}
+
+const DOCUMENT_KIND_BY_KEY: Record<string, DocumentKind> = {
+  doc_foto: 'foto',
+  doc_rg_frente: 'rg_frente',
+  doc_rg_verso: 'rg_verso',
+  doc_passaporte: 'passaporte',
+  doc_certidao_casamento: 'certidao_casamento',
+  doc_certidao_casamento_s10: 'certidao_casamento',
+}
+
+// Igual a salvarSecaoObreiro, mas pra seções que misturam campos de texto
+// com upload de arquivo (03 — Família, quando casado: certidão de
+// casamento; 10 — Documentos e Aceite Final): um File dentro de um
+// FormData vira `{}` vazio se gravado direto como jsonb, então cada File
+// precisa ser enviado pro Storage antes — só o metadado (path/name/tipo)
+// vai pro form_data. Se a seção for reenviada sem escolher o arquivo de
+// novo (voltar/avançar sem reselecionar), o metadado já salvo é mantido.
+export async function salvarSecaoObreiroComArquivos(slug: string, token: string, section: number, formData: FormData) {
+  if (!EDITABLE_SECTIONS.has(section)) return { error: 'Seção inválida.' }
+
+  const result = await getEditableApplication(token, slug)
+  if ('error' in result) return { error: result.error }
+
+  const { app, sb } = result
+
+  const existing = (app.form_data as Record<string, unknown>) ?? {}
+  const existingSection = (existing[`s${section}`] as Record<string, unknown>) ?? {}
+  const updatedSection: Record<string, unknown> = { ...existingSection }
+  const toRemove: string[] = []
+
+  for (const [key, value] of formData.entries()) {
+    if (value instanceof File) {
+      if (value.size === 0) continue
+      if (!DOCUMENT_TYPES[value.type]) return { error: `Envie imagens (JPG, PNG ou WebP) ou PDF em "${key}".` }
+      if (value.size > 10 * 1024 * 1024) return { error: 'Cada arquivo deve ter no máximo 10 MB.' }
+
+      const fileBuffer = Buffer.from(await value.arrayBuffer())
+      const sanity = await basicImageSanity(fileBuffer, value.type)
+      if (!sanity.valid) return { error: sanity.reason }
+      const kind = DOCUMENT_KIND_BY_KEY[key]
+      if (kind) {
+        const classification = await classifyDocument(fileBuffer, value.type, kind)
+        if (!classification.valid) return { error: classification.reason ?? `A imagem enviada não parece ser o documento pedido ("${key}").` }
+      }
+
+      const path = `${app.organization_id}/${app.id}/${key}-${Date.now()}.${DOCUMENT_TYPES[value.type]}`
+      const { error: uploadError } = await sb.storage.from('staff-application-documents').upload(path, fileBuffer, {
+        contentType: value.type,
+        upsert: false,
+      })
+      if (uploadError) return { error: `Não foi possível enviar "${key}". Tente novamente.` }
+
+      const previous = existingSection[key] as { path?: string } | undefined
+      updatedSection[key] = { path, name: value.name, type: value.type, size: value.size, uploaded_at: new Date().toISOString() }
+      if (previous?.path) toRemove.push(previous.path)
+    } else if (typeof value === 'string') {
+      updatedSection[key] = value
+    }
+  }
+
+  await sb.from('staff_applications').update({
+    form_data: { ...existing, [`s${section}`]: updatedSection },
+    current_section: Math.max(app.current_section ?? 1, section),
+  }).eq('id', app.id)
+
+  if (toRemove.length) await sb.storage.from('staff-application-documents').remove(toRemove)
 
   return { success: true }
 }
