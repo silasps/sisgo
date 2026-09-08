@@ -195,8 +195,23 @@ function ZipAddressFields({ data }: { data?: Record<string, string> }) {
 
 type JocumSchoolEntry = { escola: string; mesAno: string }
 
-// Aceita tanto o novo formato (JSON array) quanto texto livre salvo antes
-// desta mudança — sem isso, reabrir uma inscrição antiga perderia o dado.
+// Formata como MM/AAAA enquanto digita (só números, barra automática) —
+// guarda direto nesse formato, sem depender do datepicker nativo de
+// <input type="month"> (que ignora placeholder na maioria dos navegadores).
+function formatMesAnoInput(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 6)
+  return digits.length <= 2 ? digits : `${digits.slice(0, 2)}/${digits.slice(2)}`
+}
+
+// Aceita o novo formato (JSON array), o mês/ano salvo no formato antigo
+// AAAA-MM (quando o campo ainda era <input type="month">) e texto livre de
+// antes dessa mudança toda — sem isso, reabrir uma inscrição antiga perderia
+// o dado.
+function normalizeMesAno(mesAno?: string): string {
+  const m = mesAno?.match(/^(\d{4})-(\d{2})$/)
+  return m ? `${m[2]}/${m[1]}` : (mesAno ?? '')
+}
+
 function parseJocumSchools(raw?: string): JocumSchoolEntry[] {
   if (!raw) return [{ escola: '', mesAno: '' }]
   try {
@@ -204,7 +219,7 @@ function parseJocumSchools(raw?: string): JocumSchoolEntry[] {
     if (Array.isArray(parsed) && parsed.length) {
       return parsed.map((r: unknown) => {
         const row = (r ?? {}) as Partial<JocumSchoolEntry>
-        return { escola: row.escola ?? '', mesAno: row.mesAno ?? '' }
+        return { escola: row.escola ?? '', mesAno: normalizeMesAno(row.mesAno) }
       })
     }
   } catch { /* valor legado em texto livre, cai no fallback abaixo */ }
@@ -244,8 +259,9 @@ function JocumSchoolsField({ label, placeholder, data }: { label: string; placeh
           <input type="text" value={row.escola} onChange={e => updateRow(i, { escola: e.target.value })}
             placeholder={placeholder}
             className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-gray-50" />
-          <input type="month" value={row.mesAno} onChange={e => updateRow(i, { mesAno: e.target.value })}
-            placeholder={d.s2.escolas_jocum_mes_ano} aria-label={d.s2.escolas_jocum_mes_ano}
+          <input type="text" inputMode="numeric" value={row.mesAno}
+            onChange={e => updateRow(i, { mesAno: formatMesAnoInput(e.target.value) })}
+            placeholder="10/2026" maxLength={7} aria-label={d.s2.escolas_jocum_mes_ano}
             className="w-40 px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-gray-50" />
           {rows.length > 1 && (
             <button type="button" onClick={() => removeRow(i)} aria-label={d.s2.escolas_jocum_remove}
