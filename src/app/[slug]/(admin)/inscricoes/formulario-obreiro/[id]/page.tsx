@@ -39,7 +39,7 @@ const SECTIONS: FormSection[] = [
       { label: 'Profissão', key: 'profissao' },
       { label: 'Habilidades', key: 'habilidades', type: 'textarea' },
       { label: 'Especialização profissional', key: 'especializacao_profissional' },
-      { label: 'Escolas/especializações JOCUM', key: 'escolas_jocum', type: 'jocum_schools' },
+      { label: 'Cursos e formações concluídos', key: 'escolas_jocum', type: 'jocum_schools' },
       { label: 'Português', key: 'idioma_portugues' },
       { label: 'Inglês', key: 'idioma_ingles' },
       { label: 'Espanhol', key: 'idioma_espanhol' },

@@ -128,7 +128,6 @@ export default async function FormularioObreiroPage({ params, searchParams }: Pr
             token={token}
             applicationId={app.id}
             orgName={org.name}
-            orgType={org.org_type}
             ministryName={ministry?.name}
             ministryId={app.ministry_id}
             ministries={ministries}

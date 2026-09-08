@@ -29,7 +29,6 @@ type Props = {
   token: string
   applicationId: string
   orgName: string
-  orgType?: string | null
   ministryName?: string
   ministryId?: string | null
   ministries: MinistryOption[]
@@ -249,7 +248,6 @@ function JocumSchoolsField({ label, placeholder, data }: { label: string; placeh
   return (
     <div className="sm:col-span-2 space-y-2">
       <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      <p className="text-xs text-gray-500 -mt-1">{d.s2.escolas_jocum_hint}</p>
       {rows.map((row, i) => (
         <div key={i} className="relative rounded-xl border border-gray-200 bg-white p-3 space-y-2">
           {rows.length > 1 && (
@@ -302,10 +300,9 @@ function S1Email({ prefill, data }: { prefill?: Prefill; data?: Record<string, s
   )
 }
 
-function S2Dados({ prefill, data, onNationalityChange, orgName, orgType }: {
+function S2Dados({ prefill, data, onNationalityChange }: {
   prefill?: Prefill; data?: Record<string, string>
   onNationalityChange?: (isBrazilian: boolean) => void
-  orgName: string; orgType?: string | null
 }) {
   const d = useContext(DictCtx)
   const [estrangeiro, setEstrangeiro] = useState(data?.is_brasileiro === 'nao')
@@ -383,7 +380,7 @@ function S2Dados({ prefill, data, onNationalityChange, orgName, orgType }: {
             placeholder={d.s2.especializacao_profissional_ph} />
         </div>
         <JocumSchoolsField
-          label={!orgType || orgType === 'jocum' ? d.s2.escolas_jocum : tStaff(d.s2.escolas_jocum_generic, { orgName })}
+          label={d.s2.escolas_jocum}
           placeholder={d.s2.escolas_jocum_ph}
           data={data?.escolas_jocum}
         />
@@ -971,7 +968,7 @@ function SubmittedScreen({ slug, applicationId, orgName, d }: {
 type SectionDef = { id: number; component: React.ReactNode }
 
 export function FormularioObreiro({
-  slug, token, applicationId, orgName, orgType, ministryId, ministries,
+  slug, token, applicationId, orgName, ministryId, ministries,
   prefill, initialSection = 1, initialData, initialLang, printMode
 }: Props) {
   const router = useRouter()
@@ -1003,7 +1000,7 @@ export function FormularioObreiro({
 
   const sections: SectionDef[] = [
     { id: 1, component: <S1Email prefill={prefill} data={localData.s1} /> },
-    { id: 2, component: <S2Dados prefill={prefill} data={localData.s2} onNationalityChange={setIsBrazilian} orgName={orgName} orgType={orgType} /> },
+    { id: 2, component: <S2Dados prefill={prefill} data={localData.s2} onNationalityChange={setIsBrazilian} /> },
     { id: 3, component: <S3Familia data={localData.s3} estadoCivilS2={localData.s2?.estado_civil} /> },
     { id: 4, component: <S4Igreja data={localData.s4} /> },
     { id: 5, component: <S5Experiencia data={localData.s5} /> },
