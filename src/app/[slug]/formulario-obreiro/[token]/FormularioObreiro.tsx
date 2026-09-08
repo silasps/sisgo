@@ -193,7 +193,7 @@ function ZipAddressFields({ data }: { data?: Record<string, string> }) {
 
 // ── Escolas/especializações — lista dinâmica (nome + mês/ano de conclusão) ──
 
-type JocumSchoolEntry = { escola: string; mesAno: string }
+type JocumSchoolEntry = { escola: string; base: string; pais: string; mesAno: string }
 
 // Formata como MM/AAAA enquanto digita (só números, barra automática) —
 // guarda direto nesse formato, sem depender do datepicker nativo de
@@ -213,17 +213,18 @@ function normalizeMesAno(mesAno?: string): string {
 }
 
 function parseJocumSchools(raw?: string): JocumSchoolEntry[] {
-  if (!raw) return [{ escola: '', mesAno: '' }]
+  const empty = { escola: '', base: '', pais: '', mesAno: '' }
+  if (!raw) return [empty]
   try {
     const parsed = JSON.parse(raw)
     if (Array.isArray(parsed) && parsed.length) {
       return parsed.map((r: unknown) => {
         const row = (r ?? {}) as Partial<JocumSchoolEntry>
-        return { escola: row.escola ?? '', mesAno: normalizeMesAno(row.mesAno) }
+        return { escola: row.escola ?? '', base: row.base ?? '', pais: row.pais ?? '', mesAno: normalizeMesAno(row.mesAno) }
       })
     }
   } catch { /* valor legado em texto livre, cai no fallback abaixo */ }
-  return raw.trim() ? [{ escola: raw, mesAno: '' }] : [{ escola: '', mesAno: '' }]
+  return raw.trim() ? [{ ...empty, escola: raw }] : [empty]
 }
 
 function JocumSchoolsField({ label, placeholder, data }: { label: string; placeholder: string; data?: string }) {
@@ -234,7 +235,7 @@ function JocumSchoolsField({ label, placeholder, data }: { label: string; placeh
     setRows(prev => prev.map((r, idx) => idx === i ? { ...r, ...patch } : r))
   }
   function addRow() {
-    setRows(prev => [...prev, { escola: '', mesAno: '' }])
+    setRows(prev => [...prev, { escola: '', base: '', pais: '', mesAno: '' }])
   }
   function removeRow(i: number) {
     setRows(prev => prev.filter((_, idx) => idx !== i))
@@ -242,31 +243,39 @@ function JocumSchoolsField({ label, placeholder, data }: { label: string; placeh
 
   // Só serializa linhas com algum conteúdo — evita salvar um array cheio de
   // linhas vazias quando a pessoa clicou em "+" mas não preencheu.
-  const serialized = JSON.stringify(rows.filter(r => r.escola.trim() || r.mesAno.trim()))
+  const serialized = JSON.stringify(rows.filter(r => r.escola.trim() || r.base.trim() || r.pais.trim() || r.mesAno.trim()))
+  const inputClass = "w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-gray-50"
 
   return (
     <div className="sm:col-span-2 space-y-2">
       <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
       <p className="text-xs text-gray-500 -mt-1">{d.s2.escolas_jocum_hint}</p>
-      {rows.length > 0 && (
-        <div className="hidden sm:flex gap-2 items-start">
-          <span className="flex-1 text-xs font-medium text-gray-500">{placeholder}</span>
-          <span className="w-40 text-xs font-medium text-gray-500">{d.s2.escolas_jocum_mes_ano}</span>
-        </div>
-      )}
       {rows.map((row, i) => (
-        <div key={i} className="flex gap-2 items-start">
-          <input type="text" value={row.escola} onChange={e => updateRow(i, { escola: e.target.value })}
-            placeholder={placeholder}
-            className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-gray-50" />
-          <input type="text" inputMode="numeric" value={row.mesAno}
-            onChange={e => updateRow(i, { mesAno: formatMesAnoInput(e.target.value) })}
-            placeholder="10/2026" maxLength={7} aria-label={d.s2.escolas_jocum_mes_ano}
-            className="w-40 px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-gray-50" />
+        <div key={i} className="relative rounded-xl border border-gray-200 bg-white p-3 space-y-2">
           {rows.length > 1 && (
             <button type="button" onClick={() => removeRow(i)} aria-label={d.s2.escolas_jocum_remove}
-              className="px-3 py-2.5 text-gray-400 hover:text-red-500 text-sm">✕</button>
+              className="absolute top-2 right-2 text-gray-400 hover:text-red-500 text-sm">✕</button>
           )}
+          <input type="text" value={row.escola} onChange={e => updateRow(i, { escola: e.target.value })}
+            placeholder={placeholder} className={`${inputClass} pr-8`} />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div>
+              <label className="block text-xs text-gray-500 mb-0.5">{d.s2.escolas_jocum_local}</label>
+              <input type="text" value={row.base} onChange={e => updateRow(i, { base: e.target.value })}
+                placeholder={d.s2.escolas_jocum_local_ph} className={inputClass} />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-0.5">{d.s2.escolas_jocum_pais}</label>
+              <input type="text" value={row.pais} onChange={e => updateRow(i, { pais: e.target.value })}
+                placeholder={d.s2.escolas_jocum_pais_ph} className={inputClass} />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-0.5">{d.s2.escolas_jocum_mes_ano}</label>
+              <input type="text" inputMode="numeric" value={row.mesAno}
+                onChange={e => updateRow(i, { mesAno: formatMesAnoInput(e.target.value) })}
+                placeholder="10/2026" maxLength={7} className={inputClass} />
+            </div>
+          </div>
         </div>
       ))}
       <button type="button" onClick={addRow}

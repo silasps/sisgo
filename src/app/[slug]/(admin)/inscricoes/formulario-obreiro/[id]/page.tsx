@@ -177,25 +177,27 @@ function SectionCard({ title, children }: { title: string; children: React.React
 // "Escolas/especializações JOCUM" passou a ser uma lista (nome + mês/ano de
 // conclusão) serializada como JSON dentro do mesmo campo de texto — aceita
 // também o formato antigo (texto livre) salvo antes dessa mudança.
-function parseJocumSchools(value: unknown): { escola: string; mesAno: string }[] {
+type JocumSchoolRow = { escola: string; base: string; pais: string; mesAno: string }
+
+function parseJocumSchools(value: unknown): JocumSchoolRow[] {
   if (typeof value !== 'string' || !value.trim()) return []
   try {
     const parsed = JSON.parse(value)
     if (Array.isArray(parsed)) {
       return parsed
         .map((r: unknown) => {
-          const row = (r ?? {}) as { escola?: string; mesAno?: string }
-          return { escola: row.escola ?? '', mesAno: row.mesAno ?? '' }
+          const row = (r ?? {}) as Partial<JocumSchoolRow>
+          return { escola: row.escola ?? '', base: row.base ?? '', pais: row.pais ?? '', mesAno: row.mesAno ?? '' }
         })
         .filter(r => r.escola.trim())
     }
   } catch { /* valor legado em texto livre */ }
-  return [{ escola: value, mesAno: '' }]
+  return [{ escola: value, base: '', pais: '', mesAno: '' }]
 }
 
 function formatMesAno(mesAno: string): string {
-  const [year, month] = mesAno.split('-')
-  return year && month ? `${month}/${year}` : mesAno
+  const legacy = mesAno.match(/^(\d{4})-(\d{2})$/)
+  return legacy ? `${legacy[2]}/${legacy[1]}` : mesAno
 }
 
 function FieldRow({ label, value, type }: { label: string; value: unknown; type?: 'textarea' | 'jocum_schools' }) {
@@ -206,9 +208,10 @@ function FieldRow({ label, value, type }: { label: string; value: unknown; type?
       <div className="py-2.5 border-b border-gray-50 last:border-0">
         <p className="text-xs font-medium text-gray-400 mb-0.5">{label}</p>
         <div className="text-sm text-gray-800 space-y-0.5">
-          {rows.map((r, i) => (
-            <p key={i}>{r.escola}{r.mesAno ? ` — ${formatMesAno(r.mesAno)}` : ''}</p>
-          ))}
+          {rows.map((r, i) => {
+            const details = [r.base, r.pais, r.mesAno ? formatMesAno(r.mesAno) : ''].filter(Boolean).join(' · ')
+            return <p key={i}>{r.escola}{details ? ` — ${details}` : ''}</p>
+          })}
         </div>
       </div>
     )
