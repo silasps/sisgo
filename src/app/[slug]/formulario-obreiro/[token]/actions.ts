@@ -45,9 +45,13 @@ export async function salvarSecaoObreiro(slug: string, token: string, section: n
     [`s${section}`]: data,
   }
 
+  // current_section marca em qual seção RETOMAR ao reabrir o link, não a que
+  // acabou de ser salva — sem isso, recarregar a página levava de volta pra
+  // seção já preenchida em vez da próxima, dando a impressão de que o
+  // progresso tinha sido perdido.
   await sb.from('staff_applications').update({
     form_data: updated,
-    current_section: Math.max(app.current_section ?? 1, section),
+    current_section: Math.max(app.current_section ?? 1, Math.min(section + 1, 10)),
   }).eq('id', app.id)
 
   return { success: true }
@@ -121,7 +125,7 @@ export async function salvarSecaoObreiroComArquivos(slug: string, token: string,
 
   await sb.from('staff_applications').update({
     form_data: { ...existing, [`s${section}`]: updatedSection },
-    current_section: Math.max(app.current_section ?? 1, section),
+    current_section: Math.max(app.current_section ?? 1, Math.min(section + 1, 10)),
   }).eq('id', app.id)
 
   if (toRemove.length) await sb.storage.from('staff-application-documents').remove(toRemove)
