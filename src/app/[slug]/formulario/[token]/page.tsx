@@ -30,11 +30,17 @@ export default async function FormularioPage({ params, searchParams }: Props) {
 
   const { data: org } = await sb
     .from('organizations')
-    .select('slug, active')
+    .select('slug, active, student_communication_languages')
     .eq('id', app.organization_id)
     .single()
 
   if (!org?.active || org.slug !== slug) notFound()
+
+  // Sem `?lang=` na URL e sem idioma salvo no formulário, o padrão segue os
+  // idiomas de comunicação configurados pela organização (pt se disponível,
+  // senão o primeiro da lista) em vez de cair direto para 'pt' fixo.
+  const orgStudentLanguages = (org.student_communication_languages as string[] | null) ?? []
+  const orgDefaultLang = orgStudentLanguages.includes('pt') ? 'pt' : (orgStudentLanguages[0] ?? 'pt')
 
   // Valida expiração
   if (new Date(app.token_expires_at) < new Date()) {
@@ -138,7 +144,7 @@ export default async function FormularioPage({ params, searchParams }: Props) {
             initialData={formData}
             hiddenFields={hiddenFields}
             paymentInfo={paymentInfo}
-            initialLang={lang ?? prefill.idioma}
+            initialLang={lang ?? prefill.idioma ?? orgDefaultLang}
             printMode={printMode}
           />
         </div>

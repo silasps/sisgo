@@ -27,22 +27,30 @@ async function sendFormLink(params: SendFormLinkParams): Promise<StaffInviteResu
   const host = headersList.get('host') ?? 'localhost:3000'
   const protocol = host.startsWith('localhost') ? 'http' : 'https'
   const formUrl = `${protocol}://${host}/${params.slug}/formulario-obreiro/${params.token}`
-  // O CTA dentro do e-mail precisa abrir o formulário já no mesmo idioma
-  // escolhido pra enviar — o link devolvido ao cliente (formUrl) fica sem
-  // esse parâmetro pois o cliente já anexa o idioma escolhido nele.
-  const formUrlForEmail = params.language ? `${formUrl}?lang=${encodeURIComponent(params.language)}` : formUrl
 
   let emailWarning: string | undefined
   let emailErrorDetail: string | undefined
   if (params.sendEmail === false) {
     // usuário escolheu "copiar link" — não é falha, não gera aviso
   } else if (params.email) {
-    const { data: orgRow } = await db.from('organizations').select('name, email, accent_color').eq('id', params.organizationId).maybeSingle()
+    const { data: orgRow } = await db.from('organizations').select('name, email, accent_color, staff_communication_languages').eq('id', params.organizationId).maybeSingle()
     let ministryName: string | null = null
     if (params.ministryId) {
       const { data: ministryRow } = await db.from('ministries').select('name').eq('id', params.ministryId).maybeSingle()
       ministryName = ministryRow?.name ?? null
     }
+    // Sem idioma explícito (candidato não escolheu um na pré-inscrição), o
+    // padrão segue os idiomas de comunicação configurados pela organização
+    // em vez de cair direto para 'pt' fixo dentro de sendFormEmail.
+    let language = params.language
+    if (!language) {
+      const orgStaffLanguages = (orgRow?.staff_communication_languages as string[] | null) ?? []
+      language = orgStaffLanguages.includes('pt') ? 'pt' : (orgStaffLanguages[0] ?? 'pt')
+    }
+    // O CTA dentro do e-mail precisa abrir o formulário já no mesmo idioma
+    // escolhido pra enviar — o link devolvido ao cliente (formUrl) fica sem
+    // esse parâmetro pois o cliente já anexa o idioma escolhido nele.
+    const formUrlForEmail = `${formUrl}?lang=${encodeURIComponent(language)}`
     const { sendFormEmail } = await import('@/lib/email/sendFormEmail')
     const emailResult = await sendFormEmail({
       to: params.email,
@@ -52,7 +60,7 @@ async function sendFormLink(params: SendFormLinkParams): Promise<StaffInviteResu
       formUrl: formUrlForEmail,
       expiresAt: params.expiresAt,
       replyTo: orgRow?.email || 'noreply@sisgomission.com',
-      language: params.language,
+      language,
       organizationId: params.organizationId,
       accentColor: orgRow?.accent_color ?? null,
     })

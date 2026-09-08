@@ -29,11 +29,17 @@ export default async function FormularioObreiroPage({ params, searchParams }: Pr
 
   const { data: org } = await sb
     .from('organizations')
-    .select('slug, active, name')
+    .select('slug, active, name, org_type, staff_communication_languages')
     .eq('id', app.organization_id)
     .single()
 
   if (!org?.active || org.slug !== slug) notFound()
+
+  // Sem `?lang=` na URL e sem idioma salvo no formulário, o padrão segue os
+  // idiomas de comunicação configurados pela organização (pt se disponível,
+  // senão o primeiro da lista) em vez de cair direto para 'pt' fixo.
+  const orgStaffLanguages = (org.staff_communication_languages as string[] | null) ?? []
+  const orgDefaultLang = orgStaffLanguages.includes('pt') ? 'pt' : (orgStaffLanguages[0] ?? 'pt')
 
   if (new Date(app.token_expires_at!) < new Date()) {
     return (
@@ -122,13 +128,14 @@ export default async function FormularioObreiroPage({ params, searchParams }: Pr
             token={token}
             applicationId={app.id}
             orgName={org.name}
+            orgType={org.org_type}
             ministryName={ministry?.name}
             ministryId={app.ministry_id}
             ministries={ministries}
             prefill={prefill}
             initialSection={app.current_section ?? 1}
             initialData={formData}
-            initialLang={lang ?? prefill.idioma}
+            initialLang={lang ?? prefill.idioma ?? orgDefaultLang}
             printMode={printMode}
           />
         </div>

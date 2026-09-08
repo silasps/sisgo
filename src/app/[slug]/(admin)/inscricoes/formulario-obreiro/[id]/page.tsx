@@ -18,7 +18,7 @@ import { avancarEtapaObreiro, reenviarLinkFormularioObreiro, reenviarEmailFormul
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
-type FormSection = { title: string; fields: { label: string; key: string; type?: 'textarea' }[] }
+type FormSection = { title: string; fields: { label: string; key: string; type?: 'textarea' | 'jocum_schools' }[] }
 
 const SECTIONS: FormSection[] = [
   {
@@ -39,7 +39,7 @@ const SECTIONS: FormSection[] = [
       { label: 'Profissão', key: 'profissao' },
       { label: 'Habilidades', key: 'habilidades', type: 'textarea' },
       { label: 'Especialização profissional', key: 'especializacao_profissional' },
-      { label: 'Escolas/especializações JOCUM', key: 'escolas_jocum' },
+      { label: 'Escolas/especializações JOCUM', key: 'escolas_jocum', type: 'jocum_schools' },
       { label: 'Português', key: 'idioma_portugues' },
       { label: 'Inglês', key: 'idioma_ingles' },
       { label: 'Espanhol', key: 'idioma_espanhol' },
@@ -174,7 +174,45 @@ function SectionCard({ title, children }: { title: string; children: React.React
   )
 }
 
-function FieldRow({ label, value, type }: { label: string; value: unknown; type?: 'textarea' }) {
+// "Escolas/especializações JOCUM" passou a ser uma lista (nome + mês/ano de
+// conclusão) serializada como JSON dentro do mesmo campo de texto — aceita
+// também o formato antigo (texto livre) salvo antes dessa mudança.
+function parseJocumSchools(value: unknown): { escola: string; mesAno: string }[] {
+  if (typeof value !== 'string' || !value.trim()) return []
+  try {
+    const parsed = JSON.parse(value)
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((r: unknown) => {
+          const row = (r ?? {}) as { escola?: string; mesAno?: string }
+          return { escola: row.escola ?? '', mesAno: row.mesAno ?? '' }
+        })
+        .filter(r => r.escola.trim())
+    }
+  } catch { /* valor legado em texto livre */ }
+  return [{ escola: value, mesAno: '' }]
+}
+
+function formatMesAno(mesAno: string): string {
+  const [year, month] = mesAno.split('-')
+  return year && month ? `${month}/${year}` : mesAno
+}
+
+function FieldRow({ label, value, type }: { label: string; value: unknown; type?: 'textarea' | 'jocum_schools' }) {
+  if (type === 'jocum_schools') {
+    const rows = parseJocumSchools(value)
+    if (!rows.length) return null
+    return (
+      <div className="py-2.5 border-b border-gray-50 last:border-0">
+        <p className="text-xs font-medium text-gray-400 mb-0.5">{label}</p>
+        <div className="text-sm text-gray-800 space-y-0.5">
+          {rows.map((r, i) => (
+            <p key={i}>{r.escola}{r.mesAno ? ` — ${formatMesAno(r.mesAno)}` : ''}</p>
+          ))}
+        </div>
+      </div>
+    )
+  }
   const str = typeof value === 'string' ? value.trim() : ''
   if (!str) return null
   return (
