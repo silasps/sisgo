@@ -842,8 +842,13 @@ export function InscricoesList({
                       </p>
                     )}
                     {stepperStages && (
-                      <div className="mt-1.5">
+                      <div className="mt-1.5 flex items-center gap-2 flex-wrap">
                         <PipelineStepper stages={stepperStages} href={stepperHref} size="md" />
+                        {canWriteObreiro && item.tipo === 'obreiro' && !finalizado && !item.hasFormData && item.staffApplicationId && item.email && (
+                          <span onClick={e => e.stopPropagation()}>
+                            <ReenviarEmailButton slug={slug} orgId={orgId} applicationId={item.staffApplicationId} />
+                          </span>
+                        )}
                       </div>
                     )}
                     {isAlunoTrack && alunoShowRecomendacoes(item) && (
@@ -958,12 +963,6 @@ export function InscricoesList({
                             interestFormId={item.id}
                             externoAction={marcarRecebidoExternamenteObreiro}
                           />
-                        </div>
-                      )}
-
-                      {canWriteObreiro && item.tipo === 'obreiro' && !finalizado && !item.hasFormData && item.staffApplicationId && item.email && (
-                        <div className="col-span-2 sm:col-span-1">
-                          <ReenviarEmailButton slug={slug} orgId={orgId} applicationId={item.staffApplicationId} />
                         </div>
                       )}
 
