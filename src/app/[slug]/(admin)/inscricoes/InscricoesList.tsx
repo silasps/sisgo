@@ -9,7 +9,8 @@ import { RecusarModal, ExcluirModal } from './RecusarModal'
 import { DisponibilizarFormularioButton } from './DisponibilizarFormularioButton'
 import { PipelineStepper, stagesFromFlags } from '@/components/inscricoes/PipelineStepper'
 import BackgroundChecksSection, { type BackgroundCheck } from './formulario-obreiro/[id]/BackgroundChecksSection'
-import { solicitarHospedagemObreiro } from './formulario-obreiro/[id]/actions'
+import { solicitarHospedagemObreiro, reenviarEmailFormularioObreiro } from './formulario-obreiro/[id]/actions'
+import { toast } from 'sonner'
 import { solicitarHospedagemAluno } from './formulario/[id]/actions'
 import { checkInscricoesUpdates } from './actions'
 import {
@@ -272,6 +273,30 @@ function StatusDropdown({ item, label, color, options, updateStatus }: {
         </>
       )}
     </div>
+  )
+}
+
+// Ação rápida direta no card da lista — antes só dava pra reenviar o
+// e-mail entrando em Detalhes, o que atrasava um caso comum (formulário
+// ainda não preenchido, candidato avisa que o e-mail não chegou).
+function ReenviarEmailButton({ slug, orgId, applicationId }: { slug: string; orgId: string; applicationId: string }) {
+  const [pending, startTransition] = useTransition()
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      onClick={() => startTransition(async () => {
+        try {
+          await reenviarEmailFormularioObreiro({ slug, organizationId: orgId, applicationId })
+          toast.success('E-mail reenviado')
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : 'Não foi possível reenviar o e-mail')
+        }
+      })}
+      className="text-xs px-3 py-1.5 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors disabled:opacity-60"
+    >
+      {pending ? 'Reenviando…' : 'Reenviar e-mail'}
+    </button>
   )
 }
 
@@ -933,6 +958,12 @@ export function InscricoesList({
                             interestFormId={item.id}
                             externoAction={marcarRecebidoExternamenteObreiro}
                           />
+                        </div>
+                      )}
+
+                      {canWriteObreiro && item.tipo === 'obreiro' && !finalizado && !item.hasFormData && item.staffApplicationId && item.email && (
+                        <div className="col-span-2 sm:col-span-1">
+                          <ReenviarEmailButton slug={slug} orgId={orgId} applicationId={item.staffApplicationId} />
                         </div>
                       )}
 
