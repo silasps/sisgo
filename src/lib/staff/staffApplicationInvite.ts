@@ -37,7 +37,7 @@ async function sendFormLink(params: SendFormLinkParams): Promise<StaffInviteResu
   if (params.sendEmail === false) {
     // usuário escolheu "copiar link" — não é falha, não gera aviso
   } else if (params.email) {
-    const { data: orgRow } = await db.from('organizations').select('name, email').eq('id', params.organizationId).maybeSingle()
+    const { data: orgRow } = await db.from('organizations').select('name, email, accent_color').eq('id', params.organizationId).maybeSingle()
     let ministryName: string | null = null
     if (params.ministryId) {
       const { data: ministryRow } = await db.from('ministries').select('name').eq('id', params.ministryId).maybeSingle()
@@ -47,12 +47,14 @@ async function sendFormLink(params: SendFormLinkParams): Promise<StaffInviteResu
     const emailResult = await sendFormEmail({
       to: params.email,
       candidateName: params.fullName,
+      orgName: orgRow?.name ?? 'JOCUM',
       schoolName: ministryName ?? orgRow?.name ?? 'JOCUM',
       formUrl: formUrlForEmail,
       expiresAt: params.expiresAt,
       replyTo: orgRow?.email || 'noreply@sisgomission.com',
       language: params.language,
       organizationId: params.organizationId,
+      accentColor: orgRow?.accent_color ?? null,
     })
     if (!emailResult.success) {
       emailWarning = emailResult.error === 'quota_atingida' ? 'quota_atingida' : 'email_falhou'

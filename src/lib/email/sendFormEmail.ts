@@ -2,17 +2,20 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getEmailQuota } from './getEmailQuota'
 import { normalizeLang } from '@/lib/i18n/forms'
 import { getEmailDict, emailLocale, type EmailLang } from '@/lib/i18n/emails'
+import { getAccentColor } from '@/lib/accent-colors'
 
 type SendFormEmailParams = {
   to: string
   candidateName: string
-  schoolName: string
+  orgName?: string        // nome da base/organização (quem está enviando)
+  schoolName: string       // pra qual escola/ministério é a inscrição
   formUrl: string
   expiresAt: string
   replyTo: string        // e-mail da ETED (usado como reply-to)
   language?: string | null
   organizationId?: string
   schoolId?: string
+  accentColor?: string | null   // accent_color da organização (config do sistema)
 }
 
 function formatDate(iso: string, lang: EmailLang) {
@@ -24,11 +27,11 @@ const LANG_NAMES: Record<EmailLang, string> = { pt: 'Português', en: 'English',
 // Igual ao seletor de idioma de dentro do formulário (LangSwitcher) — aqui
 // vira link porque e-mail não roda JS: cada opção reabre o formulário já no
 // idioma escolhido (?lang=xx), o form lê isso em initialLang.
-function langSwitcherHtml(formUrl: string, current: EmailLang): string {
+function langSwitcherHtml(formUrl: string, current: EmailLang, accentHex: string): string {
   const sep = formUrl.includes('?') ? '&' : '?'
   const links = (Object.keys(LANG_NAMES) as EmailLang[]).map(l => {
     const active = l === current
-    return `<a href="${formUrl}${sep}lang=${l}" style="color:${active ? '#4f46e5' : '#9ca3af'};text-decoration:none;font-weight:${active ? 700 : 400};">${LANG_NAMES[l]}</a>`
+    return `<a href="${formUrl}${sep}lang=${l}" style="color:${active ? accentHex : '#9ca3af'};text-decoration:none;font-weight:${active ? 700 : 400};">${LANG_NAMES[l]}</a>`
   })
   return `<table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:0 0 20px;font-size:12px;">
     ${links.join('&nbsp;&nbsp;·&nbsp;&nbsp;')}
@@ -39,13 +42,17 @@ function buildHtml(p: SendFormEmailParams): string {
   const lang = normalizeLang(p.language) as EmailLang
   const d = getEmailDict(lang)
   const date = formatDate(p.expiresAt, lang)
+  const accent = getAccentColor(p.accentColor ?? 'laranja')
+  const c500 = accent.hex[500]
+  const c600 = accent.hex[600]
+  const orgName = p.orgName ?? d.org
 
   return `<!DOCTYPE html>
 <html lang="${lang}">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>${d.subtitle} — ${p.schoolName}</title>
+<title>${orgName} — ${p.schoolName}</title>
 </head>
 <body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 16px;">
@@ -54,9 +61,9 @@ function buildHtml(p: SendFormEmailParams): string {
 
         <!-- Header -->
         <tr>
-          <td style="background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%);padding:40px 40px 32px;text-align:center;">
+          <td style="background:linear-gradient(135deg,${c500} 0%,${c600} 100%);padding:40px 40px 32px;text-align:center;">
             <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:0.1em;">
-              ${d.org}
+              ${orgName}
             </p>
             <h1 style="margin:0;font-size:26px;font-weight:800;color:#ffffff;line-height:1.2;">
               ${p.schoolName}
@@ -70,7 +77,7 @@ function buildHtml(p: SendFormEmailParams): string {
         <!-- Body -->
         <tr>
           <td style="padding:40px;">
-            ${langSwitcherHtml(p.formUrl, lang)}
+            ${langSwitcherHtml(p.formUrl, lang, c500)}
             <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:#111827;">
               ${d.greeting.replace('{name}', p.candidateName)}
             </p>
@@ -83,7 +90,7 @@ function buildHtml(p: SendFormEmailParams): string {
               <tr>
                 <td align="center" style="padding:8px 0 32px;">
                   <a href="${p.formUrl}"
-                    style="display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;font-size:16px;font-weight:700;padding:16px 40px;border-radius:12px;letter-spacing:0.01em;">
+                    style="display:inline-block;background:${c500};color:#ffffff;text-decoration:none;font-size:16px;font-weight:700;padding:16px 40px;border-radius:12px;letter-spacing:0.01em;">
                     ${d.cta}
                   </a>
                 </td>
@@ -112,7 +119,7 @@ function buildHtml(p: SendFormEmailParams): string {
 
             <p style="margin:28px 0 0;font-size:13px;color:#9ca3af;line-height:1.6;">
               ${d.fallback}<br />
-              <a href="${p.formUrl}" style="color:#4f46e5;word-break:break-all;">${p.formUrl}</a>
+              <a href="${p.formUrl}" style="color:${c500};word-break:break-all;">${p.formUrl}</a>
             </p>
           </td>
         </tr>
@@ -122,7 +129,7 @@ function buildHtml(p: SendFormEmailParams): string {
           <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:24px 40px;text-align:center;">
             <p style="margin:0 0 4px;font-size:13px;color:#6b7280;">
               ${d.contact}
-              <a href="mailto:${p.replyTo}" style="color:#4f46e5;">${p.replyTo}</a>
+              <a href="mailto:${p.replyTo}" style="color:${c500};">${p.replyTo}</a>
             </p>
             <p style="margin:0;font-size:12px;color:#9ca3af;">
               ${d.disclaimer}
@@ -146,11 +153,12 @@ export async function sendFormEmail(params: SendFormEmailParams): Promise<{ succ
   const apiKey = process.env.BREVO_API_KEY
   const fromEmail = process.env.BREVO_FROM_EMAIL ?? 'noreply@sisgomission.com'
   const lang = normalizeLang(params.language) as EmailLang
+  const orgName = params.orgName
   const subject = lang === 'en'
-    ? `Your application form — ${params.schoolName}`
+    ? `${orgName ? `${orgName} — ` : ''}Your application form (${params.schoolName})`
     : lang === 'es'
-      ? `Tu formulario de inscripción — ${params.schoolName}`
-      : `Seu formulário de inscrição — ${params.schoolName}`
+      ? `${orgName ? `${orgName} — ` : ''}Tu formulario de inscripción (${params.schoolName})`
+      : `${orgName ? `${orgName} — ` : ''}Seu formulário de inscrição (${params.schoolName})`
 
   let status: 'sent' | 'failed' = 'sent'
   let errorMsg: string | undefined
@@ -164,7 +172,7 @@ export async function sendFormEmail(params: SendFormEmailParams): Promise<{ succ
         accept: 'application/json',
       },
       body: JSON.stringify({
-        sender: { name: params.schoolName, email: fromEmail },
+        sender: { name: params.orgName ?? params.schoolName, email: fromEmail },
         to: [{ email: params.to, name: params.candidateName }],
         replyTo: { email: params.replyTo },
         subject,
