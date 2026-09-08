@@ -14,7 +14,7 @@ import { PastorReferenceGate } from './PastorReferenceGate'
 import { HospedagemHandoffCard } from './HospedagemHandoffCard'
 import { HospedagemSolicitacaoCard } from './HospedagemSolicitacaoCard'
 import { HospedagemGate } from './HospedagemGate'
-import { avancarEtapaObreiro, reenviarLinkFormularioObreiro } from './actions'
+import { avancarEtapaObreiro, reenviarLinkFormularioObreiro, reenviarEmailFormularioObreiro, editarEmailInteresseObreiro } from './actions'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
@@ -237,13 +237,13 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
     .from('staff_applications')
     .select(`
       id, status, form_data, applied_at,
-      organization_id, ministry_id, person_id,
+      organization_id, ministry_id, person_id, interest_form_id,
       pastor_reference_skip_reason, pastor_reference_skipped_by, pastor_reference_skipped_at,
       hospedagem_skip_reason, hospedagem_skipped_by, hospedagem_skipped_at,
       edited_by, edited_at,
       people(full_name),
       ministries(name),
-      staff_interest_forms(full_name, email, phone)
+      staff_interest_forms(id, full_name, email, phone, language)
     `)
     .eq('id', id)
     .eq('organization_id', org.id)
@@ -271,7 +271,7 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
 
   const formData = (app.form_data as Record<string, unknown>) ?? {}
   const ministry = app.ministries as unknown as { name: string } | null
-  const preform = app.staff_interest_forms as unknown as { full_name?: string; email?: string; phone?: string } | null
+  const preform = app.staff_interest_forms as unknown as { id?: string; full_name?: string; email?: string; phone?: string; language?: string | null } | null
   const pessoa = app.people as unknown as { full_name: string } | null
   const nomeCandidato = (formData.s2 as Record<string, string> | undefined)?.nome ?? preform?.full_name ?? pessoa?.full_name ?? '—'
 
@@ -411,13 +411,27 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
       </header>
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-4">
-        {app.status === 'rascunho' && (
-          <IncompleteFormLinkCard
-            reason="O formulário ainda não foi enviado — a pessoa parou em algum ponto do preenchimento."
-            formPathPrefix={`/${slug}/formulario-obreiro`}
-            onGenerateLink={reenviarLinkFormularioObreiro.bind(null, { slug, organizationId: app.organization_id, applicationId: id })}
-          />
-        )}
+        {app.status === 'rascunho' && (() => {
+          const organizationId = app.organization_id
+          async function handleResendEmail() {
+            'use server'
+            await reenviarEmailFormularioObreiro({ slug, organizationId, applicationId: id })
+          }
+          async function handleEditEmail(email: string) {
+            'use server'
+            await editarEmailInteresseObreiro({ organizationId, interestFormId: preform!.id!, email })
+          }
+          return (
+            <IncompleteFormLinkCard
+              reason="O formulário ainda não foi enviado — a pessoa parou em algum ponto do preenchimento."
+              formPathPrefix={`/${slug}/formulario-obreiro`}
+              onGenerateLink={reenviarLinkFormularioObreiro.bind(null, { slug, organizationId, applicationId: id })}
+              email={preform?.email}
+              onResendEmail={preform?.email ? handleResendEmail : undefined}
+              onEditEmail={preform?.id ? handleEditEmail : undefined}
+            />
+          )
+        })()}
 
         {SECTIONS.map((section, sIdx) => {
           const sKey = `s${sIdx + 1}`

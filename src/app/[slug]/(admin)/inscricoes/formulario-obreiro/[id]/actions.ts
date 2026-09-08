@@ -62,6 +62,59 @@ export async function reenviarLinkFormularioObreiro(params: {
   return result
 }
 
+// Reenvia o e-mail com o link (não só copia/gera) — pro caso relatado de
+// "cliquei em enviar mas o e-mail nunca chegou". Reaproveita o mesmo token
+// (ou gera um novo se expirado) e reenvia via Brevo.
+export async function reenviarEmailFormularioObreiro(params: {
+  slug: string
+  organizationId: string
+  applicationId: string
+}) {
+  await assertCanManage(params.organizationId)
+  const sb = createAdminClient()
+
+  const tokenResult = await getOrRegenerateToken(sb, 'staff_applications', params.applicationId, params.organizationId)
+  if ('error' in tokenResult) throw new Error(tokenResult.error)
+
+  const { data: app } = await sb
+    .from('staff_applications')
+    .select('ministry_id, token_expires_at, staff_interest_forms(full_name, email, language)')
+    .eq('id', params.applicationId)
+    .single()
+  const interestForm = app?.staff_interest_forms as unknown as { full_name?: string; email?: string; language?: string | null } | null
+  if (!interestForm?.email) throw new Error('Candidato sem e-mail cadastrado')
+
+  const { resendStaffApplicationEmail } = await import('@/lib/staff/staffApplicationInvite')
+  const result = await resendStaffApplicationEmail({
+    slug: params.slug,
+    token: tokenResult.token,
+    expiresAt: app!.token_expires_at as string,
+    organizationId: params.organizationId,
+    ministryId: app?.ministry_id ?? null,
+    fullName: interestForm.full_name ?? '',
+    email: interestForm.email,
+    language: interestForm.language ?? null,
+  })
+  if (result.emailWarning) throw new Error(result.emailErrorDetail ?? result.emailWarning)
+  return { success: true }
+}
+
+// Editar o e-mail do candidato nesta fase (formulário ainda incompleto) —
+// forma rápida de corrigir um e-mail digitado errado sem precisar voltar
+// pra lista de Inscrições.
+export async function editarEmailInteresseObreiro(params: {
+  organizationId: string
+  interestFormId: string
+  email: string
+}) {
+  await assertCanManage(params.organizationId)
+  const email = params.email.trim()
+  if (!email) throw new Error('E-mail obrigatório')
+  const sb = createAdminClient()
+  await sb.from('staff_interest_forms').update({ email }).eq('id', params.interestFormId)
+  return { success: true, email }
+}
+
 export async function pularReferenciaPastor(params: {
   staffApplicationId: string
   organizationId: string
