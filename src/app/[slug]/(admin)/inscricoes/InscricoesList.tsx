@@ -844,7 +844,7 @@ export function InscricoesList({
                     {stepperStages && (
                       <div className="mt-1.5 flex items-center gap-2 flex-wrap">
                         <PipelineStepper stages={stepperStages} href={stepperHref} size="md" />
-                        {canWriteObreiro && item.tipo === 'obreiro' && !finalizado && !item.hasFormData && item.staffApplicationId && item.email && (
+                        {canWriteObreiro && isObreiroTrack && !finalizado && !item.hasFormData && item.staffApplicationId && item.email && (
                           <span onClick={e => e.stopPropagation()}>
                             <ReenviarEmailButton slug={slug} orgId={orgId} applicationId={item.staffApplicationId} />
                           </span>
