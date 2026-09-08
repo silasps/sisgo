@@ -59,10 +59,16 @@ type Props = {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function Field({ label, name, defaultValue, placeholder, required, type = 'text', maxLength }: {
+// Sem min/max o <input type="date"> deixa digitar qualquer quantidade de
+// dígitos no ano — trava nascimento entre 1900/hoje e chegada/saída até 2100.
+const DATE_MIN = '1900-01-01'
+const DATE_MAX = new Date().toISOString().slice(0, 10)
+
+function Field({ label, name, defaultValue, placeholder, required, type = 'text', maxLength, min, max }: {
   label: string; name: string; defaultValue?: string; placeholder?: string
-  required?: boolean; type?: string; maxLength?: number
+  required?: boolean; type?: string; maxLength?: number; min?: string; max?: string
 }) {
+  const isBirthDate = name === 'data_nascimento'
   return (
     <div data-field={name}>
       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -70,6 +76,8 @@ function Field({ label, name, defaultValue, placeholder, required, type = 'text'
       </label>
       <input name={name} type={type} defaultValue={defaultValue} placeholder={placeholder}
         required={required} maxLength={maxLength}
+        min={type === 'date' ? (min ?? DATE_MIN) : undefined}
+        max={type === 'date' ? (max ?? (isBirthDate ? DATE_MAX : '2100-12-31')) : undefined}
         className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-gray-50" />
     </div>
   )

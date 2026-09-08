@@ -42,9 +42,14 @@ type Props = {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function Field({ label, name, defaultValue, placeholder, required, type = 'text', maxLength }: {
+// Sem min/max o <input type="date"> deixa digitar qualquer quantidade de
+// dígitos no ano (ex.: "969999") — trava o valor entre 1900 e hoje.
+const DATE_MIN = '1900-01-01'
+const DATE_MAX = new Date().toISOString().slice(0, 10)
+
+function Field({ label, name, defaultValue, placeholder, required, type = 'text', maxLength, min, max }: {
   label: string; name: string; defaultValue?: string; placeholder?: string
-  required?: boolean; type?: string; maxLength?: number
+  required?: boolean; type?: string; maxLength?: number; min?: string; max?: string
 }) {
   return (
     <div data-field={name}>
@@ -53,6 +58,8 @@ function Field({ label, name, defaultValue, placeholder, required, type = 'text'
       </label>
       <input name={name} type={type} defaultValue={defaultValue} placeholder={placeholder}
         required={required} maxLength={maxLength}
+        min={type === 'date' ? (min ?? DATE_MIN) : undefined}
+        max={type === 'date' ? (max ?? DATE_MAX) : undefined}
         className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-gray-50" />
     </div>
   )
@@ -540,7 +547,7 @@ function S6ServirBase({ data, ministries, ministryId }: {
           defaultValue={data?.tempo_servico} required
           placeholder="Ex: 1 ano, 6 meses, indeterminado" />
         <Field label="Data prevista de chegada" name="data_chegada" type="date"
-          defaultValue={data?.data_chegada} />
+          defaultValue={data?.data_chegada} min={DATE_MAX} max="2100-12-31" />
         {ministries.length > 0 && (
           <div className="sm:col-span-2">
             <Select label="Qual ministério deseja servir?" name="ministerio_escolhido"
