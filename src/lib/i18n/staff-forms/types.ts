@@ -92,6 +92,7 @@ export interface StaffFormDict {
     escolas_jocum_generic: string   // {orgName} placeholder, used when org_type !== 'jocum'
     escolas_jocum_ph: string
     escolas_jocum_mes_ano: string
+    escolas_jocum_hint: string
     escolas_jocum_add: string
     escolas_jocum_remove: string
     // Languages

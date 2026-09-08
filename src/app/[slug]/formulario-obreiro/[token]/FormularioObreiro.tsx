@@ -232,13 +232,20 @@ function JocumSchoolsField({ label, placeholder, data }: { label: string; placeh
   return (
     <div className="sm:col-span-2 space-y-2">
       <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <p className="text-xs text-gray-500 -mt-1">{d.s2.escolas_jocum_hint}</p>
+      {rows.length > 0 && (
+        <div className="hidden sm:flex gap-2 items-start">
+          <span className="flex-1 text-xs font-medium text-gray-500">{placeholder}</span>
+          <span className="w-40 text-xs font-medium text-gray-500">{d.s2.escolas_jocum_mes_ano}</span>
+        </div>
+      )}
       {rows.map((row, i) => (
         <div key={i} className="flex gap-2 items-start">
           <input type="text" value={row.escola} onChange={e => updateRow(i, { escola: e.target.value })}
             placeholder={placeholder}
             className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-gray-50" />
           <input type="month" value={row.mesAno} onChange={e => updateRow(i, { mesAno: e.target.value })}
-            aria-label={d.s2.escolas_jocum_mes_ano}
+            placeholder={d.s2.escolas_jocum_mes_ano} aria-label={d.s2.escolas_jocum_mes_ano}
             className="w-40 px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-gray-50" />
           {rows.length > 1 && (
             <button type="button" onClick={() => removeRow(i)} aria-label={d.s2.escolas_jocum_remove}
