@@ -1151,7 +1151,8 @@ function S15Documentos({ hasRg, hasCpf, hasPassaporte }: { hasRg: boolean; hasCp
               {doc.label}{doc.required && <span className="text-red-500 ml-0.5"> *</span>}
             </label>
             <FileInputField name={doc.name} accept="image/jpeg,image/png,image/webp,application/pdf"
-              required={doc.required} chooseLabel={d.nav.choose_file} noFileLabel={d.nav.no_file_chosen} />
+              required={doc.required} chooseLabel={d.nav.choose_file} noFileLabel={d.nav.no_file_chosen}
+              changeLabel={d.nav.change_file} removeLabel={d.nav.remove_file} />
           </div>
         ))}
       </div>
@@ -1230,7 +1231,8 @@ function PaymentGateScreen({ slug, token, paymentInfo, onComplete, d }: {
             </label>
             <FileInputField name="comprovante" required
               accept="application/pdf,image/jpeg,image/png,image/webp"
-              tone="green" chooseLabel={d.nav.choose_file} noFileLabel={d.nav.no_file_chosen} />
+              tone="green" chooseLabel={d.nav.choose_file} noFileLabel={d.nav.no_file_chosen}
+              changeLabel={d.nav.change_file} removeLabel={d.nav.remove_file} />
             <p className="mt-1 text-xs text-gray-500">{d.submitted.receipt_hint}</p>
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
@@ -1452,7 +1454,8 @@ export function FormularioInscricao({
                 </label>
                 <FileInputField name="comprovante_preview"
                   accept="application/pdf,image/jpeg,image/png,image/webp"
-                  tone="green" chooseLabel={d.nav.choose_file} noFileLabel={d.nav.no_file_chosen} />
+                  tone="green" chooseLabel={d.nav.choose_file} noFileLabel={d.nav.no_file_chosen}
+                  changeLabel={d.nav.change_file} removeLabel={d.nav.remove_file} />
                 <p className="mt-1 text-xs text-gray-500">{d.submitted.receipt_hint}</p>
               </div>
               <button type="button" disabled

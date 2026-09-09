@@ -15,6 +15,8 @@ export const esDict: FormDict = {
     choose_file: 'Elegir archivo',
     no_file_chosen: 'Ningún archivo seleccionado',
     searching_cep: 'Buscando…',
+    change_file: 'Cambiar archivo',
+    remove_file: 'Eliminar archivo',
   },
 
   langSwitcher: { label: 'Idioma del formulario:' },

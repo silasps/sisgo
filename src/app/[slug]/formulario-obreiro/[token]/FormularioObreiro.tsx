@@ -2,7 +2,7 @@
 
 import { useRef, useState, useContext, createContext } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
-import { HeartHandshake } from 'lucide-react'
+import { HeartHandshake, Camera, IdCard } from 'lucide-react'
 import { salvarSecaoObreiro, salvarSecaoObreiroComArquivos, enviarFormularioObreiro, gerarLinkReferenciaObreiro, enviarRegrasInstituicaoEmail } from './actions'
 
 const SECTIONS_COM_ARQUIVO = new Set([3, 7, 10])
@@ -25,6 +25,7 @@ type Prefill = {
 }
 
 type MinistryOption = { id: string; name: string }
+type DocumentUrls = Record<string, { url: string; name: string; type: string }>
 
 type Props = {
   slug: string
@@ -40,6 +41,7 @@ type Props = {
   initialLang?: string
   printMode?: boolean
   institutionRulesText?: string | null
+  documentUrls?: DocumentUrls
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -620,7 +622,7 @@ function ChildrenField({ data }: { data?: string }) {
   )
 }
 
-function S3Familia({ data, estadoCivilS2 }: { data?: Record<string, string>; estadoCivilS2?: string }) {
+function S3Familia({ data, estadoCivilS2, documentUrls }: { data?: Record<string, string>; estadoCivilS2?: string; documentUrls?: DocumentUrls }) {
   const d = useContext(DictCtx)
   const estadoCivil = data?.estado_civil_atual ?? estadoCivilS2 ?? ''
   const [temFilhos, setTemFilhos] = useState(data?.tem_filhos === 'sim')
@@ -669,7 +671,11 @@ function S3Familia({ data, estadoCivilS2 }: { data?: Record<string, string>; est
             </label>
             {!certidaoSkipped && (
               <FileInputField name="doc_certidao_casamento" accept="image/jpeg,image/png,image/webp,application/pdf"
-                required chooseLabel={d.nav.choose_file} noFileLabel={d.nav.no_file_chosen} />
+                required chooseLabel={d.nav.choose_file} noFileLabel={d.nav.no_file_chosen}
+                changeLabel={d.nav.change_file} removeLabel={d.nav.remove_file}
+                existingFileUrl={documentUrls?.doc_certidao_casamento?.url}
+                existingFileName={documentUrls?.doc_certidao_casamento?.name}
+                existingFileType={documentUrls?.doc_certidao_casamento?.type} />
             )}
             <label className="flex items-start gap-2 mt-2 text-xs text-gray-600">
               <input type="checkbox" className="mt-0.5" checked={certidaoSkipped}
@@ -917,18 +923,22 @@ function S6ServirBase({ data, ministries, ministryId }: {
   )
 }
 
-function DocUpload({ label, name }: { label: string; name: string }) {
+function DocUpload({ label, name, documentUrls }: { label: string; name: string; documentUrls?: DocumentUrls }) {
   const d = useContext(DictCtx)
   return (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
       <FileInputField name={name} accept="image/jpeg,image/png,image/webp,application/pdf"
-        chooseLabel={d.nav.choose_file} noFileLabel={d.nav.no_file_chosen} />
+        chooseLabel={d.nav.choose_file} noFileLabel={d.nav.no_file_chosen}
+        changeLabel={d.nav.change_file} removeLabel={d.nav.remove_file}
+        existingFileUrl={documentUrls?.[name]?.url}
+        existingFileName={documentUrls?.[name]?.name}
+        existingFileType={documentUrls?.[name]?.type} />
     </div>
   )
 }
 
-function S7Saude({ data }: { data?: Record<string, string> }) {
+function S7Saude({ data, documentUrls }: { data?: Record<string, string>; documentUrls?: DocumentUrls }) {
   const d = useContext(DictCtx)
   const [problema, setProblema] = useState(data?.problema_saude === 'sim')
   const [limitacao, setLimitacao] = useState(data?.limitacao_fisica === 'sim')
@@ -946,7 +956,7 @@ function S7Saude({ data }: { data?: Record<string, string> }) {
         {problema && (<>
           <TextArea label={d.s7.problema_saude_desc} name="problema_saude_descricao"
             defaultValue={data?.problema_saude_descricao} required rows={3} />
-          <DocUpload label={d.s7.problema_saude_doc} name="doc_problema_saude" />
+          <DocUpload label={d.s7.problema_saude_doc} name="doc_problema_saude" documentUrls={documentUrls} />
         </>)}
 
         <Select label={d.s7.limitacao_fisica} name="limitacao_fisica" required
@@ -956,7 +966,7 @@ function S7Saude({ data }: { data?: Record<string, string> }) {
         {limitacao && (<>
           <TextArea label={d.s7.limitacao_fisica_desc} name="limitacao_fisica_descricao"
             defaultValue={data?.limitacao_fisica_descricao} required rows={3} />
-          <DocUpload label={d.s7.limitacao_fisica_doc} name="doc_limitacao_fisica" />
+          <DocUpload label={d.s7.limitacao_fisica_doc} name="doc_limitacao_fisica" documentUrls={documentUrls} />
         </>)}
 
         <Select label={d.s7.medicamento_controlado} name="remedio_controlado" required
@@ -966,7 +976,7 @@ function S7Saude({ data }: { data?: Record<string, string> }) {
         {remedio && (<>
           <TextArea label={d.s7.medicamento_controlado_desc} name="remedio_controlado_descricao"
             defaultValue={data?.remedio_controlado_descricao} required rows={3} />
-          <DocUpload label={d.s7.medicamento_controlado_doc} name="doc_remedio_controlado" />
+          <DocUpload label={d.s7.medicamento_controlado_doc} name="doc_remedio_controlado" documentUrls={documentUrls} />
         </>)}
 
         <Select label={d.s7.alergia} name="tem_alergia" required
@@ -976,7 +986,7 @@ function S7Saude({ data }: { data?: Record<string, string> }) {
         {alergia && (<>
           <TextArea label={d.s7.alergia_desc} name="alergia_descricao"
             defaultValue={data?.alergia_descricao} required rows={3} />
-          <DocUpload label={d.s7.alergia_doc} name="doc_alergia" />
+          <DocUpload label={d.s7.alergia_doc} name="doc_alergia" documentUrls={documentUrls} />
         </>)}
 
         {algumaDoenca && (
@@ -1138,8 +1148,24 @@ function S9Financeiro({ data }: { data?: Record<string, string> }) {
   )
 }
 
-function S10DocumentosAceite({ isBrazilian, estadoCivil }: { isBrazilian: boolean; estadoCivil: string }) {
+function S10DocumentosAceite({ data, isBrazilian, estadoCivil, documentUrls }: {
+  data?: Record<string, string>; isBrazilian: boolean; estadoCivil: string; documentUrls?: DocumentUrls
+}) {
   const d = useContext(DictCtx)
+  const docs: Array<{ name: string; label: string; required: boolean; icon: 'foto' | 'id'; hint?: string }> = [
+    { name: 'doc_foto', label: d.s10.doc_foto, required: true, icon: 'foto' },
+    ...(isBrazilian ? [
+      { name: 'doc_rg_frente', label: d.s10.doc_rg_frente, required: true, icon: 'id' as const },
+      { name: 'doc_rg_verso', label: d.s10.doc_rg_verso, required: true, icon: 'id' as const },
+      { name: 'doc_passaporte_opcional', label: d.s10.doc_passaporte_opcional, required: false, icon: 'id' as const },
+    ] : [
+      { name: 'doc_passaporte', label: d.s10.doc_passaporte, required: true, icon: 'id' as const },
+      { name: 'doc_id_outro', label: d.s10.doc_id_outro, required: false, icon: 'id' as const, hint: d.s10.doc_id_outro_hint },
+    ]),
+    ...(estadoCivil === 'casado' ? [
+      { name: 'doc_certidao_casamento_s10', label: d.s3.certidao_casamento, required: false, icon: 'id' as const },
+    ] : []),
+  ]
   return (
     <div className="space-y-4">
       <SectionTitle number={d.s10.section} title={d.s10.title} />
@@ -1151,26 +1177,24 @@ function S10DocumentosAceite({ isBrazilian, estadoCivil }: { isBrazilian: boolea
       </div>
 
       <div className="grid gap-4">
-        {[
-          { name: 'doc_foto', label: d.s10.doc_foto, required: true },
-          ...(isBrazilian ? [
-            { name: 'doc_rg_frente', label: d.s10.doc_rg_frente, required: true },
-            { name: 'doc_rg_verso', label: d.s10.doc_rg_verso, required: true },
-          ] : [
-            { name: 'doc_passaporte', label: d.s10.doc_passaporte, required: true },
-          ]),
-          ...(estadoCivil === 'casado' ? [
-            { name: 'doc_certidao_casamento_s10', label: d.s3.certidao_casamento, required: false },
-          ] : []),
-        ].map(doc => (
+        {docs.map(doc => (
           <div key={doc.name}>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {doc.label}{doc.required && <span className="text-red-500 ml-0.5"> *</span>}
+            <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1">
+              {doc.icon === 'foto'
+                ? <Camera size={15} className="text-amber-500 shrink-0" aria-hidden />
+                : <IdCard size={15} className="text-amber-500 shrink-0" aria-hidden />}
+              {doc.label}{doc.required && <span className="text-red-500 ml-0.5">*</span>}
             </label>
+            {doc.hint && <p className="text-xs text-gray-400 mb-1.5">{doc.hint}</p>}
             <FileInputField name={doc.name} accept="image/jpeg,image/png,image/webp,application/pdf"
-              required={doc.required} chooseLabel={d.nav.choose_file} noFileLabel={d.nav.no_file_chosen} />
+              required={doc.required} chooseLabel={d.nav.choose_file} noFileLabel={d.nav.no_file_chosen}
+              changeLabel={d.nav.change_file} removeLabel={d.nav.remove_file}
+              existingFileUrl={documentUrls?.[doc.name]?.url}
+              existingFileName={documentUrls?.[doc.name]?.name}
+              existingFileType={documentUrls?.[doc.name]?.type} />
           </div>
         ))}
+        <p className="text-xs text-gray-400 -mt-1">{d.s10.doc_hint_generic}</p>
       </div>
 
       <div className="mt-6 space-y-3">
@@ -1182,6 +1206,7 @@ function S10DocumentosAceite({ isBrazilian, estadoCivil }: { isBrazilian: boolea
         </div>
         <label className="flex items-start gap-3 p-4 rounded-xl border border-amber-200 bg-amber-50 cursor-pointer">
           <input type="checkbox" name="aceite_lgpd" value="sim" required
+            defaultChecked={data?.aceite_lgpd === 'sim'}
             className="mt-0.5 accent-amber-600 flex-shrink-0" />
           <span className="text-sm font-semibold text-amber-800">
             {d.s10.lgpd_checkbox}
@@ -1189,11 +1214,13 @@ function S10DocumentosAceite({ isBrazilian, estadoCivil }: { isBrazilian: boolea
         </label>
         <label className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 cursor-pointer hover:border-amber-200">
           <input type="checkbox" name="maior_18" value="sim" required
+            defaultChecked={data?.maior_18 === 'sim'}
             className="mt-0.5 accent-amber-600 flex-shrink-0" />
           <span className="text-sm text-gray-700">{d.s10.maior_18}</span>
         </label>
         <label className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 cursor-pointer hover:border-amber-200">
           <input type="checkbox" name="decl_ciencia_verificacao" value="sim" required
+            defaultChecked={data?.decl_ciencia_verificacao === 'sim'}
             className="mt-0.5 accent-amber-600 flex-shrink-0" />
           <span className="text-sm text-gray-700">
             {d.s10.decl_ciencia_verificacao}
@@ -1301,7 +1328,7 @@ type SectionDef = { id: number; component: React.ReactNode }
 
 export function FormularioObreiro({
   slug, token, applicationId, orgName, ministryId, ministries,
-  prefill, initialSection = 1, initialData, initialLang, printMode, institutionRulesText
+  prefill, initialSection = 1, initialData, initialLang, printMode, institutionRulesText, documentUrls
 }: Props) {
   const router = useRouter()
   const pathname = usePathname()
@@ -1333,11 +1360,11 @@ export function FormularioObreiro({
   const sections: SectionDef[] = [
     { id: 1, component: <S1Email prefill={prefill} data={localData.s1} /> },
     { id: 2, component: <S2Dados prefill={prefill} data={localData.s2} onNationalityChange={setIsBrazilian} orgName={orgName} /> },
-    { id: 3, component: <S3Familia data={localData.s3} estadoCivilS2={localData.s2?.estado_civil} /> },
+    { id: 3, component: <S3Familia data={localData.s3} estadoCivilS2={localData.s2?.estado_civil} documentUrls={documentUrls} /> },
     { id: 4, component: <S4Igreja data={localData.s4} /> },
     { id: 5, component: <S5Experiencia data={localData.s5} /> },
     { id: 6, component: <S6ServirBase data={localData.s6} ministries={ministries} ministryId={ministryId} /> },
-    { id: 7, component: <S7Saude data={localData.s7} /> },
+    { id: 7, component: <S7Saude data={localData.s7} documentUrls={documentUrls} /> },
     {
       id: 8, component: <S8Legal data={localData.s8}
         institutionRulesText={institutionRulesText}
@@ -1345,7 +1372,12 @@ export function FormularioObreiro({
         slug={slug} token={token} lang={lang} />,
     },
     { id: 9, component: <S9Financeiro data={localData.s9} /> },
-    { id: 10, component: <S10DocumentosAceite isBrazilian={isBrazilian} estadoCivil={localData.s2?.estado_civil ?? localData.s3?.estado_civil_atual ?? ''} /> },
+    {
+      id: 10, component: <S10DocumentosAceite data={localData.s10}
+        isBrazilian={isBrazilian}
+        estadoCivil={localData.s2?.estado_civil ?? localData.s3?.estado_civil_atual ?? ''}
+        documentUrls={documentUrls} />,
+    },
   ]
 
   if (printMode) {

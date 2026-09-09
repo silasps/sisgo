@@ -47,6 +47,30 @@ export default async function FormularioObreiroPage({ params, searchParams }: Pr
   } | null
   const formData = (app.form_data as Record<string, unknown>) ?? {}
   const prefillFromForm = (formData.prefill as Record<string, string | undefined>) ?? {}
+
+  // Documentos já enviados em visitas anteriores ficam salvos como
+  // `{path, name, type, size, uploaded_at}` dentro de cada seção do
+  // form_data — o bucket é privado, então pra mostrar a miniatura de volta
+  // no formulário (em vez de só "nenhum arquivo escolhido" de novo) cada um
+  // precisa de uma URL assinada, gerada aqui no server component.
+  const documentUrls: Record<string, { url: string; name: string; type: string }> = {}
+  const docEntries: Array<[string, { path: string; name: string; type: string }]> = []
+  for (const section of Object.values(formData)) {
+    if (!section || typeof section !== 'object') continue
+    for (const [key, value] of Object.entries(section as Record<string, unknown>)) {
+      const doc = value as { path?: string; name?: string; type?: string } | undefined
+      if (doc?.path && doc.name && doc.type) docEntries.push([key, doc as { path: string; name: string; type: string }])
+    }
+  }
+  if (docEntries.length) {
+    const signedUrls = await Promise.all(
+      docEntries.map(([, doc]) => sb.storage.from('staff-application-documents').createSignedUrl(doc.path, 3600))
+    )
+    docEntries.forEach(([key, doc], i) => {
+      const url = signedUrls[i].data?.signedUrl
+      if (url) documentUrls[key] = { url, name: doc.name, type: doc.type }
+    })
+  }
   const prefill = {
     nome: preform?.full_name ?? prefillFromForm.nome,
     email: preform?.email ?? prefillFromForm.email,
@@ -132,6 +156,7 @@ export default async function FormularioObreiroPage({ params, searchParams }: Pr
             initialLang={pageLang}
             printMode={printMode}
             institutionRulesText={(org as { institution_rules_text?: string | null }).institution_rules_text ?? null}
+            documentUrls={documentUrls}
           />
         </div>
 

@@ -74,6 +74,7 @@ const DOCUMENT_KIND_BY_KEY: Record<string, DocumentKind> = {
   doc_rg_frente: 'rg_frente',
   doc_rg_verso: 'rg_verso',
   doc_passaporte: 'passaporte',
+  doc_passaporte_opcional: 'passaporte',
   doc_certidao_casamento: 'certidao_casamento',
   doc_certidao_casamento_s10: 'certidao_casamento',
 }
@@ -126,8 +127,18 @@ export async function salvarSecaoObreiroComArquivos(slug: string, token: string,
   const existingSection = (existing[`s${section}`] as Record<string, unknown>) ?? {}
   const updatedSection: Record<string, unknown> = { ...existingSection }
   const toRemove: string[] = []
+  const removedKeys = new Set<string>()
+  const uploadedKeys = new Set<string>()
 
   for (const [key, value] of formData.entries()) {
+    // Campo oculto marcado pelo botão "excluir" de um arquivo já salvo (ver
+    // FileInputField) — tratado depois do loop, pra saber se esse mesmo
+    // envio também trouxe um arquivo novo pra essa chave (aí é troca, não
+    // exclusão: o upload abaixo já cuida de remover o antigo).
+    if (key.startsWith('remove_') && value === '1') {
+      removedKeys.add(key.slice('remove_'.length))
+      continue
+    }
     if (value instanceof File) {
       if (value.size === 0) continue
       if (!DOCUMENT_TYPES[value.type]) return { error: `Envie imagens (JPG, PNG ou WebP) ou PDF em "${key}".` }
@@ -151,10 +162,18 @@ export async function salvarSecaoObreiroComArquivos(slug: string, token: string,
 
       const previous = existingSection[key] as { path?: string } | undefined
       updatedSection[key] = { path, name: value.name, type: value.type, size: value.size, uploaded_at: new Date().toISOString() }
+      uploadedKeys.add(key)
       if (previous?.path) toRemove.push(previous.path)
     } else if (typeof value === 'string') {
       updatedSection[key] = value
     }
+  }
+
+  for (const key of removedKeys) {
+    if (uploadedKeys.has(key)) continue
+    const previous = existingSection[key] as { path?: string } | undefined
+    if (previous?.path) toRemove.push(previous.path)
+    delete updatedSection[key]
   }
 
   await sb.from('staff_applications').update({

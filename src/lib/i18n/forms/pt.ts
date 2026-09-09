@@ -15,6 +15,8 @@ export const ptDict: FormDict = {
     choose_file: 'Escolher arquivo',
     no_file_chosen: 'Nenhum arquivo escolhido',
     searching_cep: 'Buscando…',
+    change_file: 'Trocar arquivo',
+    remove_file: 'Remover arquivo',
   },
 
   langSwitcher: { label: 'Idioma do formulário:' },

@@ -16,6 +16,8 @@ export interface FormDict {
     choose_file: string
     no_file_chosen: string
     searching_cep: string
+    change_file: string
+    remove_file: string
   }
 
   // ── Lang switcher ──────────────────────────────────────────────────────

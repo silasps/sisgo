@@ -15,6 +15,8 @@ export const enDict: FormDict = {
     choose_file: 'Choose file',
     no_file_chosen: 'No file chosen',
     searching_cep: 'Searching…',
+    change_file: 'Change file',
+    remove_file: 'Remove file',
   },
 
   langSwitcher: { label: 'Form language:' },

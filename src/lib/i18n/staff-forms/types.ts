@@ -15,6 +15,8 @@ export interface StaffFormDict {
     loading_cep: string
     choose_file: string
     no_file_chosen: string
+    change_file: string
+    remove_file: string
   }
 
   // ── Lang switcher ──────────────────────────────────────────────────────
@@ -316,6 +318,10 @@ export interface StaffFormDict {
     doc_rg_frente: string
     doc_rg_verso: string
     doc_passaporte: string
+    doc_passaporte_opcional: string
+    doc_id_outro: string
+    doc_id_outro_hint: string
+    doc_hint_generic: string
     lgpd_heading: string
     lgpd_text: string
     lgpd_checkbox: string
