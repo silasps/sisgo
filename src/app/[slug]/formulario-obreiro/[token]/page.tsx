@@ -30,7 +30,7 @@ export default async function FormularioObreiroPage({ params, searchParams }: Pr
 
   const { data: org } = await sb
     .from('organizations')
-    .select('slug, active, name, org_type, staff_communication_languages')
+    .select('slug, active, name, org_type, staff_communication_languages, institution_rules_text')
     .eq('id', app.organization_id)
     .single()
 
@@ -131,6 +131,7 @@ export default async function FormularioObreiroPage({ params, searchParams }: Pr
             initialData={formData}
             initialLang={pageLang}
             printMode={printMode}
+            institutionRulesText={(org as { institution_rules_text?: string | null }).institution_rules_text ?? null}
           />
         </div>
 

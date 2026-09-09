@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getOrCreateReferenceForm, buildReferenceUrl } from '@/lib/staff/referenceForms'
 import { basicImageSanity } from '@/lib/documents/basicImageSanity'
 import { classifyDocument, type DocumentKind } from '@/lib/documents/classifyDocument'
+import { sendInstitutionRulesEmail } from '@/lib/email/sendInstitutionRulesEmail'
 
 const EDITABLE_SECTIONS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
 
@@ -75,6 +76,35 @@ const DOCUMENT_KIND_BY_KEY: Record<string, DocumentKind> = {
   doc_passaporte: 'passaporte',
   doc_certidao_casamento: 'certidao_casamento',
   doc_certidao_casamento_s10: 'certidao_casamento',
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+export async function enviarRegrasInstituicaoEmail(slug: string, token: string, email: string, lang?: string) {
+  if (!EMAIL_RE.test(email)) return { error: 'E-mail inválido.' }
+
+  const result = await getEditableApplication(token, slug)
+  if ('error' in result) return { error: result.error }
+  const { app, sb } = result
+
+  const { data: org } = await sb
+    .from('organizations')
+    .select('name, institution_rules_text')
+    .eq('id', app.organization_id)
+    .single()
+
+  const rulesText = (org as { institution_rules_text?: string | null } | null)?.institution_rules_text
+  if (!rulesText?.trim()) return { error: 'Nenhum texto de regras e valores configurado.' }
+
+  const sendResult = await sendInstitutionRulesEmail({
+    to: email,
+    orgName: org?.name ?? 'JOCUM',
+    rulesText,
+    organizationId: app.organization_id,
+    language: lang,
+  })
+  if (!sendResult.success) return { error: 'Não foi possível enviar o e-mail. Tente novamente.' }
+  return { success: true }
 }
 
 // Igual a salvarSecaoObreiro, mas pra seções que misturam campos de texto

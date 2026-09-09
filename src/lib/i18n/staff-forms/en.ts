@@ -269,6 +269,15 @@ export const enDict: StaffFormDict = {
     decl_verdadeiro: 'I declare that all the information provided in this form is true.',
     decl_respeito: "I commit to respecting this institution's rules and values during my period of service.",
     decl_sem_condenacao_menor: 'I declare that I have no conviction, ongoing legal proceeding, or history of inappropriate conduct involving children or adolescents.',
+    ver_regras_link: 'View institution rules and values',
+    regras_modal_title: 'Institution rules and values',
+    regras_baixar: 'Download',
+    regras_enviar_email: 'Send by email',
+    regras_email_ph: 'your@email.com',
+    regras_email_enviando: 'Sending…',
+    regras_email_sucesso: 'Sent! Check your inbox.',
+    regras_email_erro: 'Could not send. Please try again.',
+    regras_fechar: 'Close',
   },
 
   // ── S9: Finances ───────────────────────────────────────────────────────

@@ -269,6 +269,15 @@ export const esDict: StaffFormDict = {
     decl_verdadeiro: 'Declaro que toda la información proporcionada en este formulario es verdadera.',
     decl_respeito: 'Me comprometo a respetar las reglas y los valores de esta institución durante el período de servicio.',
     decl_sem_condenacao_menor: 'Declaro no tener condenas, procesos en curso ni antecedentes de conducta inapropiada relacionados con niños o adolescentes.',
+    ver_regras_link: 'Ver reglas y valores de la institución',
+    regras_modal_title: 'Reglas y valores de la institución',
+    regras_baixar: 'Descargar',
+    regras_enviar_email: 'Enviar por correo',
+    regras_email_ph: 'tu@email.com',
+    regras_email_enviando: 'Enviando…',
+    regras_email_sucesso: '¡Enviado! Revisa tu bandeja de entrada.',
+    regras_email_erro: 'No se pudo enviar. Inténtalo de nuevo.',
+    regras_fechar: 'Cerrar',
   },
 
   // ── S9: Finanzas ───────────────────────────────────────────────────────

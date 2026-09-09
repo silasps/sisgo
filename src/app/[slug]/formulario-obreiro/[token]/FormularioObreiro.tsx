@@ -3,7 +3,7 @@
 import { useRef, useState, useContext, createContext } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { HeartHandshake } from 'lucide-react'
-import { salvarSecaoObreiro, salvarSecaoObreiroComArquivos, enviarFormularioObreiro, gerarLinkReferenciaObreiro } from './actions'
+import { salvarSecaoObreiro, salvarSecaoObreiroComArquivos, enviarFormularioObreiro, gerarLinkReferenciaObreiro, enviarRegrasInstituicaoEmail } from './actions'
 
 const SECTIONS_COM_ARQUIVO = new Set([3, 7, 10])
 import { InternationalPhoneField } from '@/components/ui/InternationalPhoneField'
@@ -39,6 +39,7 @@ type Props = {
   initialData?: Record<string, unknown>
   initialLang?: string
   printMode?: boolean
+  institutionRulesText?: string | null
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -986,9 +987,76 @@ function S7Saude({ data }: { data?: Record<string, string> }) {
   )
 }
 
-function S8Legal({ data }: { data?: Record<string, string> }) {
+function InstitutionRulesModal({ text, onClose, slug, token, lang, candidateEmail }: {
+  text: string; onClose: () => void; slug: string; token: string; lang: string; candidateEmail?: string
+}) {
+  const d = useContext(DictCtx)
+  const [email, setEmail] = useState(candidateEmail ?? '')
+  const [sending, setSending] = useState(false)
+  const [result, setResult] = useState<'ok' | 'erro' | null>(null)
+
+  function handleDownload() {
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'regras-e-valores.txt'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function handleSendEmail() {
+    if (!email.trim()) return
+    setSending(true)
+    setResult(null)
+    const res = await enviarRegrasInstituicaoEmail(slug, token, email.trim(), lang)
+    setSending(false)
+    setResult('error' in res ? 'erro' : 'ok')
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
+          <h3 className="font-semibold text-gray-900">{d.s8.regras_modal_title}</h3>
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none px-1">×</button>
+        </div>
+        <div className="px-5 py-4 overflow-y-auto text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+          {text}
+        </div>
+        <div className="px-5 py-4 border-t border-gray-100 shrink-0 space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={handleDownload}
+              className="text-sm font-semibold px-4 py-2 rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors">
+              {d.s8.regras_baixar}
+            </button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+              placeholder={d.s8.regras_email_ph}
+              className="flex-1 min-w-[180px] px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-gray-50" />
+            <button type="button" onClick={handleSendEmail} disabled={sending || !email.trim()}
+              className="text-sm font-semibold px-4 py-2 rounded-xl bg-amber-600 text-white hover:bg-amber-700 transition-colors disabled:opacity-60">
+              {sending ? d.s8.regras_email_enviando : d.s8.regras_enviar_email}
+            </button>
+          </div>
+          {result === 'ok' && <p className="text-xs text-green-600">{d.s8.regras_email_sucesso}</p>}
+          {result === 'erro' && <p className="text-xs text-red-600">{d.s8.regras_email_erro}</p>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function S8Legal({ data, institutionRulesText, candidateEmail, slug, token, lang }: {
+  data?: Record<string, string>
+  institutionRulesText?: string | null
+  candidateEmail?: string
+  slug: string; token: string; lang: string
+}) {
   const d = useContext(DictCtx)
   const [pendencia, setPendencia] = useState(data?.pendencia_judicial === 'sim')
+  const [showRules, setShowRules] = useState(false)
   const decls = [
     { name: 'decl_verdadeiro', text: d.s8.decl_verdadeiro },
     { name: 'decl_compromisso', text: d.s8.decl_respeito },
@@ -1009,15 +1077,27 @@ function S8Legal({ data }: { data?: Record<string, string> }) {
 
         <div className="space-y-2 mt-2">
           {decls.map(decl => (
-            <label key={decl.name} className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 cursor-pointer hover:border-amber-200">
-              <input type="checkbox" name={decl.name} value="sim"
-                defaultChecked={data?.[decl.name] === 'sim'}
-                required className="mt-0.5 accent-amber-600 flex-shrink-0" />
-              <span className="text-sm text-gray-700">{decl.text}</span>
-            </label>
+            <div key={decl.name} className="rounded-xl border border-gray-100 hover:border-amber-200">
+              <label className="flex items-start gap-3 p-3 cursor-pointer">
+                <input type="checkbox" name={decl.name} value="sim"
+                  defaultChecked={data?.[decl.name] === 'sim'}
+                  required className="mt-0.5 accent-amber-600 flex-shrink-0" />
+                <span className="text-sm text-gray-700">{decl.text}</span>
+              </label>
+              {decl.name === 'decl_compromisso' && institutionRulesText?.trim() && (
+                <button type="button" onClick={() => setShowRules(true)}
+                  className="print:hidden text-xs font-semibold text-amber-600 hover:text-amber-800 px-3 pb-3 -mt-1">
+                  {d.s8.ver_regras_link}
+                </button>
+              )}
+            </div>
           ))}
         </div>
       </div>
+      {showRules && institutionRulesText?.trim() && (
+        <InstitutionRulesModal text={institutionRulesText} onClose={() => setShowRules(false)}
+          slug={slug} token={token} lang={lang} candidateEmail={candidateEmail} />
+      )}
     </div>
   )
 }
@@ -1221,7 +1301,7 @@ type SectionDef = { id: number; component: React.ReactNode }
 
 export function FormularioObreiro({
   slug, token, applicationId, orgName, ministryId, ministries,
-  prefill, initialSection = 1, initialData, initialLang, printMode
+  prefill, initialSection = 1, initialData, initialLang, printMode, institutionRulesText
 }: Props) {
   const router = useRouter()
   const pathname = usePathname()
@@ -1258,7 +1338,12 @@ export function FormularioObreiro({
     { id: 5, component: <S5Experiencia data={localData.s5} /> },
     { id: 6, component: <S6ServirBase data={localData.s6} ministries={ministries} ministryId={ministryId} /> },
     { id: 7, component: <S7Saude data={localData.s7} /> },
-    { id: 8, component: <S8Legal data={localData.s8} /> },
+    {
+      id: 8, component: <S8Legal data={localData.s8}
+        institutionRulesText={institutionRulesText}
+        candidateEmail={localData.s1?.email ?? prefill?.email}
+        slug={slug} token={token} lang={lang} />,
+    },
     { id: 9, component: <S9Financeiro data={localData.s9} /> },
     { id: 10, component: <S10DocumentosAceite isBrazilian={isBrazilian} estadoCivil={localData.s2?.estado_civil ?? localData.s3?.estado_civil_atual ?? ''} /> },
   ]

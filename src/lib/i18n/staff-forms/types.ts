@@ -282,6 +282,15 @@ export interface StaffFormDict {
     decl_verdadeiro: string
     decl_respeito: string
     decl_sem_condenacao_menor: string
+    ver_regras_link: string
+    regras_modal_title: string
+    regras_baixar: string
+    regras_enviar_email: string
+    regras_email_ph: string
+    regras_email_enviando: string
+    regras_email_sucesso: string
+    regras_email_erro: string
+    regras_fechar: string
   }
 
   // ── S9: Finanças ───────────────────────────────────────────────────────
