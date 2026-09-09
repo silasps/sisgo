@@ -159,6 +159,9 @@ export interface StaffFormDict {
     tempo_casados: string
     conjuge_vira: string
     certidao_casamento: string
+    certidao_casamento_skip_label: string
+    certidao_casamento_skip_reason: string
+    certidao_casamento_skip_reason_ph: string
     // Children
     tem_filhos: string
     filhos_dados: string

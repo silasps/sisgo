@@ -514,6 +514,7 @@ function S3Familia({ data, estadoCivilS2 }: { data?: Record<string, string>; est
   const d = useContext(DictCtx)
   const estadoCivil = data?.estado_civil_atual ?? estadoCivilS2 ?? ''
   const [temFilhos, setTemFilhos] = useState(data?.tem_filhos === 'sim')
+  const [certidaoSkipped, setCertidaoSkipped] = useState(!!data?.certidao_casamento_skip_reason)
 
   const civilMap: Record<string, string> = {
     solteiro: d.s3.solteiro,
@@ -544,11 +545,25 @@ function S3Familia({ data, estadoCivilS2 }: { data?: Record<string, string>; est
           ]} />
           <div className="sm:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              {d.s3.certidao_casamento} <span className="text-red-500">*</span>
+              {d.s3.certidao_casamento} {!certidaoSkipped && <span className="text-red-500">*</span>}
             </label>
-            <input type="file" name="doc_certidao_casamento" accept="image/jpeg,image/png,image/webp,application/pdf"
-              required
-              className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 cursor-pointer" />
+            {!certidaoSkipped && (
+              <input type="file" name="doc_certidao_casamento" accept="image/jpeg,image/png,image/webp,application/pdf"
+                required
+                className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 cursor-pointer" />
+            )}
+            <label className="flex items-start gap-2 mt-2 text-xs text-gray-600">
+              <input type="checkbox" className="mt-0.5" checked={certidaoSkipped}
+                onChange={e => setCertidaoSkipped(e.target.checked)} />
+              {d.s3.certidao_casamento_skip_label}
+            </label>
+            {certidaoSkipped && (
+              <div className="mt-2">
+                <TextArea label={d.s3.certidao_casamento_skip_reason} name="certidao_casamento_skip_reason"
+                  defaultValue={data?.certidao_casamento_skip_reason} required rows={2}
+                  placeholder={d.s3.certidao_casamento_skip_reason_ph} />
+              </div>
+            )}
           </div>
         </>}
 

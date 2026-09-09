@@ -18,7 +18,7 @@ import { avancarEtapaObreiro, reenviarLinkFormularioObreiro, reenviarEmailFormul
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
-type FormSection = { title: string; fields: { label: string; key: string; type?: 'textarea' | 'jocum_schools' | 'languages' }[] }
+type FormSection = { title: string; fields: { label: string; key: string; type?: 'textarea' | 'jocum_schools' | 'languages' | 'warning' }[] }
 
 const SECTIONS: FormSection[] = [
   {
@@ -68,6 +68,7 @@ const SECTIONS: FormSection[] = [
       { label: 'Nome do cônjuge', key: 'conjuge_nome' },
       { label: 'Nascimento do cônjuge', key: 'conjuge_nascimento' },
       { label: 'Tempo casados', key: 'tempo_casados' },
+      { label: 'Não enviou a certidão de casamento — motivo', key: 'certidao_casamento_skip_reason', type: 'warning' },
       { label: 'Cônjuge virá para a base?', key: 'conjuge_vira' },
       { label: 'Tem filhos?', key: 'tem_filhos' },
       { label: 'Dados dos filhos', key: 'filhos_dados', type: 'textarea' },
@@ -218,7 +219,17 @@ function parseLanguages(value: unknown): LanguageRow[] {
   return []
 }
 
-function FieldRow({ label, value, type }: { label: string; value: unknown; type?: 'textarea' | 'jocum_schools' | 'languages' }) {
+function FieldRow({ label, value, type }: { label: string; value: unknown; type?: 'textarea' | 'jocum_schools' | 'languages' | 'warning' }) {
+  if (type === 'warning') {
+    const str = typeof value === 'string' ? value.trim() : ''
+    if (!str) return null
+    return (
+      <div className="my-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5">
+        <p className="text-xs font-semibold text-amber-800">⚠ {label}</p>
+        <p className="text-sm text-amber-900 mt-0.5 whitespace-pre-wrap leading-relaxed">{str}</p>
+      </div>
+    )
+  }
   if (type === 'languages') {
     const rows = parseLanguages(value)
     if (!rows.length) return null
