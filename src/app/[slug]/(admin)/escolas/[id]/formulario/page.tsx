@@ -24,7 +24,7 @@ const CONFIGURAVEL: { secao: string; key: string; titulo: string; campos: { name
   ]},
   { secao: 's4', key: 'escola_interesse', titulo: 'Escola de interesse', campos: [
     { name: 'como_conheceu', label: 'Como conheceu a escola' },
-    { name: 'como_conheceu_jocum', label: 'Como conheceu a JOCUM' },
+    { name: 'como_conheceu_jocum', label: 'Como conheceu a organização' },
     { name: 'conversou_equipe', label: 'Conversou com alguém da escola?' },
     { name: 'conversou_com_quem', label: 'Com quem conversou' },
     { name: 'motivacao', label: 'Motivação' },

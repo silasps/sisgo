@@ -1,8 +1,23 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 
 type MaskType = 'cpf' | 'cep' | 'rg'
+
+// Algoritmo padrão dos dígitos verificadores do CPF — rejeita também
+// sequências óbvias (000.000.000-00, 111.111.111-11 etc.), que passariam
+// no cálculo dos dígitos mas nunca são CPFs reais.
+function isValidCPF(raw: string): boolean {
+  const cpf = raw.replace(/\D/g, '')
+  if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false
+  const digit = (len: number) => {
+    let sum = 0
+    for (let i = 0; i < len; i++) sum += parseInt(cpf[i], 10) * (len + 1 - i)
+    const rest = (sum * 10) % 11
+    return rest === 10 ? 0 : rest
+  }
+  return digit(9) === parseInt(cpf[9], 10) && digit(10) === parseInt(cpf[10], 10)
+}
 
 function applyMask(raw: string, mask: MaskType): string {
   const d = raw.replace(/\D/g, '')
@@ -49,6 +64,16 @@ type Props = {
 
 export function MaskedInput({ mask, name, label, defaultValue, required, inputClassName }: Props) {
   const [value, setValue] = useState(defaultValue ? applyMask(defaultValue, mask) : '')
+  const ref = useRef<HTMLInputElement>(null)
+
+  // Só valida CPF de fato (dígito verificador) — os outros formatos só têm
+  // máscara. setCustomValidity aproveita a validação nativa do form (mesmo
+  // mecanismo do `required`), sem precisar de lógica própria de bloqueio.
+  function validate(v: string) {
+    if (mask !== 'cpf' || !ref.current) return
+    const digits = v.replace(/\D/g, '')
+    ref.current.setCustomValidity(digits.length === 11 && !isValidCPF(v) ? 'CPF inválido' : '')
+  }
 
   return (
     <div>
@@ -56,9 +81,11 @@ export function MaskedInput({ mask, name, label, defaultValue, required, inputCl
         {label}{required && <span className="text-red-500 ml-0.5">*</span>}
       </label>
       <input
+        ref={ref}
         name={name}
         value={value}
-        onChange={e => setValue(applyMask(e.target.value, mask))}
+        onChange={e => { const v = applyMask(e.target.value, mask); setValue(v); validate(v) }}
+        onBlur={() => validate(value)}
         placeholder={PLACEHOLDER[mask]}
         maxLength={MAX_LEN[mask]}
         required={required}
@@ -72,6 +99,13 @@ export function MaskedInput({ mask, name, label, defaultValue, required, inputCl
 /** Versão para o formulário de pré-inscrição público (estilos maiores) */
 export function MaskedInputPublic({ mask, name, label, defaultValue, required }: Props) {
   const [value, setValue] = useState(defaultValue ? applyMask(defaultValue, mask) : '')
+  const ref = useRef<HTMLInputElement>(null)
+
+  function validate(v: string) {
+    if (mask !== 'cpf' || !ref.current) return
+    const digits = v.replace(/\D/g, '')
+    ref.current.setCustomValidity(digits.length === 11 && !isValidCPF(v) ? 'CPF inválido' : '')
+  }
 
   return (
     <div>
@@ -79,9 +113,11 @@ export function MaskedInputPublic({ mask, name, label, defaultValue, required }:
         {label}{required && <span className="text-red-500 ml-0.5"> *</span>}
       </label>
       <input
+        ref={ref}
         name={name}
         value={value}
-        onChange={e => setValue(applyMask(e.target.value, mask))}
+        onChange={e => { const v = applyMask(e.target.value, mask); setValue(v); validate(v) }}
+        onBlur={() => validate(value)}
         placeholder={PLACEHOLDER[mask]}
         maxLength={MAX_LEN[mask]}
         required={required}

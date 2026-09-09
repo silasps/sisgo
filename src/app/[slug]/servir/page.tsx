@@ -170,7 +170,7 @@ export default async function ServirPage({ params, searchParams }: Props) {
           <p className="font-bold">{org.name}</p>
           <p className="text-gray-500 text-sm mt-1">{d.servirChrome.footer_tagline}</p>
           <p className="text-xs text-gray-600 mt-4">
-            © {new Date().getFullYear()} {org.name} · JOCUM · {d.servirChrome.footer_rights}
+            © {new Date().getFullYear()} {org.name} · {d.servirChrome.footer_rights}
           </p>
         </div>
       </footer>

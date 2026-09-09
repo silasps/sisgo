@@ -357,7 +357,7 @@ export default async function SchoolPublicPage({ params, searchParams }: Props) 
           </div>
         </div>
         <div className="max-w-6xl mx-auto mt-6 sm:mt-8 pt-6 border-t border-white/5 text-center text-xs text-gray-600">
-          © {new Date().getFullYear()} {org.name} · JOCUM · {d.landingChrome.footer_rights}
+          © {new Date().getFullYear()} {org.name} · {d.landingChrome.footer_rights}
         </div>
       </footer>
 

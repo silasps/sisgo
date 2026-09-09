@@ -27,7 +27,7 @@ const SECTIONS: FormSection[] = [
       { label: 'Escola', key: 'escola' },
       { label: 'Turma', key: 'turma' },
       { label: 'Como conheceu', key: 'como_conheceu' },
-      { label: 'Como conheceu a JOCUM', key: 'como_conheceu_jocum' },
+      { label: 'Como conheceu a organização', key: 'como_conheceu_jocum' },
       { label: 'Conversou com alguém da escola?', key: 'conversou_equipe' },
       { label: 'Com quem conversou', key: 'conversou_com_quem' },
       { label: 'Motivação', key: 'motivacao', type: 'textarea' },

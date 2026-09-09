@@ -194,7 +194,7 @@ export default async function EditarTurmaPage({ params }: Props) {
               <h2 className="font-semibold text-gray-900 mb-4">Valores e pagamento</h2>
               <div className="grid sm:grid-cols-2 gap-4">
                 <Field label="Valor base (R$)" name="base_cost" type="number" defaultValue={(turma as unknown as { base_cost: number | null }).base_cost?.toString() ?? ''} placeholder="0,00" />
-                <Field label="Local / Endereço" name="location" defaultValue={(turma as unknown as { location: string | null }).location ?? ''} placeholder="Base JOCUM, Almirante Tamandaré/PR" />
+                <Field label="Local / Endereço" name="location" defaultValue={(turma as unknown as { location: string | null }).location ?? ''} placeholder="Ex: Rua das Flores, 123 - Cidade/UF" />
                 <div className="sm:col-span-2">
                   <TextArea label="Descrição de pagamento" name="cost_description"
                     defaultValue={(turma as unknown as { cost_description: string | null }).cost_description ?? ''}

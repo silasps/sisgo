@@ -156,7 +156,7 @@ export default async function PublicBasePage({ params, searchParams }: Props) {
           </div>
         </div>
         <div className="max-w-6xl mx-auto mt-8 pt-8 border-t border-dark-800 text-center text-xs text-gray-500">
-          © {new Date().getFullYear()} {org.name} · JOCUM · Todos os direitos reservados
+          © {new Date().getFullYear()} {org.name} · Todos os direitos reservados
         </div>
       </footer>
     </main>

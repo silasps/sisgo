@@ -18,7 +18,7 @@ import { avancarEtapaObreiro, reenviarLinkFormularioObreiro, reenviarEmailFormul
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
-type FormSection = { title: string; fields: { label: string; key: string; type?: 'textarea' | 'jocum_schools' }[] }
+type FormSection = { title: string; fields: { label: string; key: string; type?: 'textarea' | 'jocum_schools' | 'languages' }[] }
 
 const SECTIONS: FormSection[] = [
   {
@@ -40,10 +40,7 @@ const SECTIONS: FormSection[] = [
       { label: 'Habilidades', key: 'habilidades', type: 'textarea' },
       { label: 'Especialização profissional', key: 'especializacao_profissional' },
       { label: 'Cursos e formações concluídos', key: 'escolas_jocum', type: 'jocum_schools' },
-      { label: 'Português', key: 'idioma_portugues' },
-      { label: 'Inglês', key: 'idioma_ingles' },
-      { label: 'Espanhol', key: 'idioma_espanhol' },
-      { label: 'Outro idioma', key: 'outro_idioma' },
+      { label: 'Idiomas', key: 'idiomas', type: 'languages' },
       { label: 'RG', key: 'rg' },
       { label: 'CPF', key: 'cpf' },
       { label: 'Passaporte', key: 'passaporte' },
@@ -54,7 +51,6 @@ const SECTIONS: FormSection[] = [
       { label: 'Estado', key: 'estado' },
       { label: 'País', key: 'pais' },
       { label: 'Celular', key: 'celular' },
-      { label: 'E-mail de contato', key: 'email_contato' },
       { label: 'Instagram', key: 'instagram' },
       { label: 'Facebook', key: 'facebook' },
       { label: 'TikTok', key: 'tiktok' },
@@ -200,7 +196,43 @@ function formatMesAno(mesAno: string): string {
   return legacy ? `${legacy[2]}/${legacy[1]}` : mesAno
 }
 
-function FieldRow({ label, value, type }: { label: string; value: unknown; type?: 'textarea' | 'jocum_schools' }) {
+type LanguageRow = { idioma: string; fluencia: string }
+
+const FLUENCY_LABELS: Record<string, string> = {
+  nativo: 'nativo', basico: 'básico', intermediario: 'intermediário', avancado: 'avançado', fluente: 'fluente',
+}
+
+function parseLanguages(value: unknown): LanguageRow[] {
+  if (typeof value !== 'string' || !value.trim()) return []
+  try {
+    const parsed = JSON.parse(value)
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((r: unknown, i: number) => {
+          const row = (r ?? {}) as Partial<LanguageRow>
+          return { idioma: row.idioma ?? '', fluencia: row.fluencia || (i === 0 ? 'nativo' : '') }
+        })
+        .filter(r => r.idioma.trim())
+    }
+  } catch { /* nada a exibir */ }
+  return []
+}
+
+function FieldRow({ label, value, type }: { label: string; value: unknown; type?: 'textarea' | 'jocum_schools' | 'languages' }) {
+  if (type === 'languages') {
+    const rows = parseLanguages(value)
+    if (!rows.length) return null
+    return (
+      <div className="py-2.5 border-b border-gray-50 last:border-0">
+        <p className="text-xs font-medium text-gray-400 mb-0.5">{label}</p>
+        <div className="text-sm text-gray-800 space-y-0.5">
+          {rows.map((r, i) => (
+            <p key={i}>{r.idioma}{r.fluencia ? ` — ${FLUENCY_LABELS[r.fluencia] ?? r.fluencia}` : ''}</p>
+          ))}
+        </div>
+      </div>
+    )
+  }
   if (type === 'jocum_schools') {
     const rows = parseJocumSchools(value)
     if (!rows.length) return null

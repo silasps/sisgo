@@ -99,6 +99,11 @@ export interface StaffFormDict {
     escolas_jocum_remove: string
     // Languages
     idiomas_section: string
+    idioma_nativo: string
+    idioma_nativo_ph: string
+    idioma_outro_label: string
+    idioma_fluencia: string
+    idioma_add: string
     idioma_portugues: string
     idioma_ingles: string
     idioma_espanhol: string

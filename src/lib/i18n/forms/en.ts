@@ -90,7 +90,7 @@ export const enDict: FormDict = {
     escola: 'Desired school',
     turma: 'Class / Period',
     como_conheceu: 'How did you hear about this school?',
-    como_conheceu_jocum: 'How did you hear about YWAM?',
+    como_conheceu_jocum: 'How did you hear about this organization?',
     conversou_equipe: 'Have you spoken with anyone from the school team about your application?',
     conversou_com_quem: 'Who did you speak with at the school? (if yes)',
     motivacao: 'Why do you want to participate in this school?',

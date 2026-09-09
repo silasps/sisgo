@@ -226,6 +226,86 @@ function parseJocumSchools(raw?: string): JocumSchoolEntry[] {
   return raw.trim() ? [{ ...empty, escola: raw }] : [empty]
 }
 
+type LanguageEntry = { idioma: string; fluencia: string }
+
+// Aceita o novo formato (JSON array) e, se ainda não existir, tenta
+// aproveitar os campos fixos antigos (idioma_portugues/ingles/espanhol/
+// outro_idioma) — evita perder o que já tinha sido preenchido antes dessa
+// mudança pra lista dinâmica.
+function parseLanguages(raw: string | undefined, legacy: Record<string, string> | undefined): LanguageEntry[] {
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed) && parsed.length) {
+        return parsed.map((r: unknown) => {
+          const row = (r ?? {}) as Partial<LanguageEntry>
+          return { idioma: row.idioma ?? '', fluencia: row.fluencia ?? '' }
+        })
+      }
+    } catch { /* segue pro fallback legado abaixo */ }
+  }
+  const legacyEntries: LanguageEntry[] = []
+  if (legacy?.idioma_portugues) legacyEntries.push({ idioma: 'Português', fluencia: legacy.idioma_portugues })
+  if (legacy?.idioma_ingles) legacyEntries.push({ idioma: 'Inglês', fluencia: legacy.idioma_ingles })
+  if (legacy?.idioma_espanhol) legacyEntries.push({ idioma: 'Espanhol', fluencia: legacy.idioma_espanhol })
+  if (legacy?.outro_idioma) legacyEntries.push({ idioma: legacy.outro_idioma, fluencia: '' })
+  return legacyEntries.length ? legacyEntries : [{ idioma: '', fluencia: 'nativo' }]
+}
+
+function LanguagesField({ data }: { data?: Record<string, string> }) {
+  const d = useContext(DictCtx)
+  const [rows, setRows] = useState<LanguageEntry[]>(() => parseLanguages(data?.idiomas, data))
+
+  function updateRow(i: number, patch: Partial<LanguageEntry>) {
+    setRows(prev => prev.map((r, idx) => idx === i ? { ...r, ...patch } : r))
+  }
+  function addRow() {
+    setRows(prev => [...prev, { idioma: '', fluencia: 'basico' }])
+  }
+  function removeRow(i: number) {
+    setRows(prev => prev.filter((_, idx) => idx !== i))
+  }
+
+  const serialized = JSON.stringify(rows.filter((r, i) => i === 0 || r.idioma.trim()))
+  const inputClass = "w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-gray-50"
+
+  return (
+    <div className="sm:col-span-2 space-y-2">
+      {rows.map((row, i) => (
+        <div key={i} className="flex gap-2 items-end">
+          <div className="flex-1">
+            <label className="block text-xs text-gray-500 mb-0.5">
+              {i === 0 ? d.s2.idioma_nativo : d.s2.idioma_outro_label}
+            </label>
+            <input type="text" value={row.idioma} onChange={e => updateRow(i, { idioma: e.target.value })}
+              placeholder={d.s2.idioma_nativo_ph} required={i === 0} className={inputClass} />
+          </div>
+          {i > 0 && (
+            <div className="w-40">
+              <label className="block text-xs text-gray-500 mb-0.5">{d.s2.idioma_fluencia}</label>
+              <select value={row.fluencia} onChange={e => updateRow(i, { fluencia: e.target.value })} className={inputClass}>
+                <option value="basico">{d.opts.basic}</option>
+                <option value="intermediario">{d.opts.intermediate}</option>
+                <option value="avancado">{d.opts.advanced}</option>
+                <option value="fluente">{d.opts.fluent}</option>
+              </select>
+            </div>
+          )}
+          {i > 0 && (
+            <button type="button" onClick={() => removeRow(i)} aria-label={d.s2.escolas_jocum_remove}
+              className="px-3 py-2.5 text-gray-400 hover:text-red-500 text-sm">✕</button>
+          )}
+        </div>
+      ))}
+      <button type="button" onClick={addRow}
+        className="text-xs font-semibold text-amber-600 hover:text-amber-800">
+        {d.s2.idioma_add}
+      </button>
+      <input type="hidden" name="idiomas" value={serialized} readOnly />
+    </div>
+  )
+}
+
 function JocumSchoolsField({ label, placeholder, data }: { label: string; placeholder: string; data?: string }) {
   const d = useContext(DictCtx)
   const [rows, setRows] = useState<JocumSchoolEntry[]>(() => parseJocumSchools(data))
@@ -386,26 +466,7 @@ function S2Dados({ prefill, data, onNationalityChange }: {
         />
 
         <SubSection title={d.s2.idiomas_section} />
-        {([
-          { label: d.s2.idioma_portugues, name: 'idioma_portugues', defaultNativo: true },
-          { label: d.s2.idioma_ingles, name: 'idioma_ingles' },
-          { label: d.s2.idioma_espanhol, name: 'idioma_espanhol' },
-        ] as { label: string; name: string; defaultNativo?: boolean }[]).map(({ label, name, defaultNativo }) => (
-          <div key={name}>
-            <Select label={label} name={name}
-              defaultValue={data?.[name] ?? (defaultNativo ? 'nativo' : '')}
-              options={[
-                { value: 'nativo', label: d.opts.native },
-                { value: 'basico', label: d.opts.basic },
-                { value: 'intermediario', label: d.opts.intermediate },
-                { value: 'avancado', label: d.opts.advanced },
-                { value: 'fluente', label: d.opts.fluent },
-                { value: 'nao_falo', label: d.opts.dont_speak },
-              ]} />
-          </div>
-        ))}
-        <Field label={d.s2.outro_idioma} name="outro_idioma" defaultValue={data?.outro_idioma}
-          placeholder={d.s2.outro_idioma_ph} />
+        <LanguagesField data={data} />
 
         <SubSection title={d.s2.documentos_section} />
         {!estrangeiro ? (<>
@@ -426,8 +487,6 @@ function S2Dados({ prefill, data, onNationalityChange }: {
         <Field label={d.s2.pais} name="pais" defaultValue={data?.pais ?? (estrangeiro ? '' : 'Brasil')} required />
         <InternationalPhoneField phoneName="celular" countryName="celular_country"
           label={d.s2.celular} defaultCountryIso="BR" defaultPhone={data?.celular ?? prefill?.telefone} />
-        <Field label={d.s2.email_contato} name="email_contato" type="email"
-          defaultValue={data?.email_contato} required />
 
         <SubSection title={d.s2.redes_section} />
         <Field label={d.s2.instagram} name="instagram" defaultValue={data?.instagram} placeholder="@usuario" />
