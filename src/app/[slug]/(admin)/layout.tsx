@@ -576,20 +576,14 @@ export default async function SlugLayout({ children, params }: Props) {
   const sidebarItems: NavItem[] = navMode === 'administracao'
     ? [...universal, ...sectionize(adminNavItems)]
     : [...universal, ...personalNavItems]
-  // A GRADE do "Ver tudo" mostra só o complemento do que já está na sidebar
-  // do modo atual (ex.: itens do outro modo Pessoal/Administração) — não
-  // repete atalho que já é visível. Mas a CAIXA DE BUSCA dentro do mesmo
-  // painel promete "buscar em tudo que o sisgo oferece" — se a busca usasse
-  // só o complemento, um atalho que já está fixo na sidebar (ex. Lavanderia
-  // em modo Pessoal) ficaria invisível pra busca, o que é o oposto do que a
-  // caixa promete. Por isso existe também a lista completa (sem o filtro de
-  // complemento), só pra alimentar a busca — a grade de navegação continua
-  // usando a versão filtrada.
-  const sidebarIcons = new Set(sidebarItems.filter((i): i is RegularNavItem => !('divider' in i)).map(i => i.icon))
+  // A GRADE do "Ver tudo" (e a busca no mesmo painel) mostram SEMPRE tudo que
+  // o papel tem acesso, nos dois modos — mesmo o que já está fixo na sidebar
+  // do modo atual. Antes a grade filtrava pra não repetir atalho já visível,
+  // mas isso fazia a sidebar e o painel mostrarem conjuntos sem sobreposição
+  // nenhuma (ex.: sidebar em modo Pessoal x grade só com itens de
+  // Administração), o que parecia informação desencontrada. Repetir alguns
+  // ícones é um preço pequeno perto de manter as duas telas consistentes.
   const allNavItemsFull = dropEmptySections(buildAllAppsItems(universal, adminNavItems, personalNavItems))
-  const allNavItems = dropEmptySections(
-    allNavItemsFull.filter(i => 'divider' in i || !sidebarIcons.has(i.icon)),
-  )
 
   const myOrgs = userOrgRows
     .map(r => r.organizations)
@@ -622,7 +616,7 @@ export default async function SlugLayout({ children, params }: Props) {
         subtitle={org.name}
         logoUrl={(org as { logo_url?: string | null }).logo_url ?? undefined}
         className="flex flex-1 min-h-0 overflow-hidden"
-        allNavItems={allNavItems}
+        allNavItems={allNavItemsFull}
         searchNavItems={allNavItemsFull}
         account={{
           name: displayName,
