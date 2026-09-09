@@ -12,6 +12,8 @@ export const enDict: StaffFormDict = {
     error_save: 'Could not save. Please try again.',
     select_placeholder: 'Select…',
     loading_cep: 'Looking up address…',
+    choose_file: 'Choose file',
+    no_file_chosen: 'No file chosen',
   },
 
   langSwitcher: { label: 'Form language:' },

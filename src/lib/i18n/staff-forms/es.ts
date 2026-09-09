@@ -12,6 +12,8 @@ export const esDict: StaffFormDict = {
     error_save: 'No se pudo guardar. Inténtalo de nuevo.',
     select_placeholder: 'Selecciona…',
     loading_cep: 'Buscando dirección…',
+    choose_file: 'Elegir archivo',
+    no_file_chosen: 'Ningún archivo seleccionado',
   },
 
   langSwitcher: { label: 'Idioma del formulario:' },

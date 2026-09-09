@@ -35,6 +35,7 @@ function HiddenStyles() {
 import { salvarSecao, enviarFormulario, gerarLinkReferencia, anexarComprovante, anexarDocumentos, atualizarSecaoAtual } from './actions'
 import { InternationalPhoneField } from '@/components/ui/InternationalPhoneField'
 import { MaskedInput, useMask } from '@/components/ui/MaskedInput'
+import { FileInputField } from '@/components/ui/FileInputField'
 
 type Prefill = {
   nome?: string
@@ -1129,9 +1130,8 @@ function S15Documentos({ hasRg, hasCpf, hasPassaporte }: { hasRg: boolean; hasCp
             <label className="block text-sm font-medium text-gray-700 mb-1">
               {doc.label}{doc.required && <span className="text-red-500 ml-0.5"> *</span>}
             </label>
-            <input type="file" name={doc.name} accept="image/jpeg,image/png,image/webp,application/pdf"
-              required={doc.required}
-              className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
+            <FileInputField name={doc.name} accept="image/jpeg,image/png,image/webp,application/pdf"
+              required={doc.required} chooseLabel={d.nav.choose_file} noFileLabel={d.nav.no_file_chosen} />
           </div>
         ))}
       </div>
@@ -1205,12 +1205,12 @@ function PaymentGateScreen({ slug, token, paymentInfo, onComplete, d }: {
         <p className="text-sm text-gray-700 whitespace-pre-wrap">{paymentInfo}</p>
         <form onSubmit={handleSubmit} className="space-y-3 border-t border-green-200 pt-4">
           <div>
-            <label htmlFor="comprovante" className="block text-sm font-semibold text-gray-800 mb-1">
+            <label className="block text-sm font-semibold text-gray-800 mb-1">
               {d.submitted.receipt_label} <span className="text-red-500">*</span>
             </label>
-            <input id="comprovante" name="comprovante" type="file" required
+            <FileInputField name="comprovante" required
               accept="application/pdf,image/jpeg,image/png,image/webp"
-              className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-green-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-green-800 hover:file:bg-green-200" />
+              tone="green" chooseLabel={d.nav.choose_file} noFileLabel={d.nav.no_file_chosen} />
             <p className="mt-1 text-xs text-gray-500">{d.submitted.receipt_hint}</p>
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
@@ -1430,9 +1430,9 @@ export function FormularioInscricao({
                 <label className="block text-sm font-semibold text-gray-800 mb-1">
                   {d.submitted.receipt_label} <span className="text-red-500">*</span>
                 </label>
-                <input type="file"
+                <FileInputField name="comprovante_preview"
                   accept="application/pdf,image/jpeg,image/png,image/webp"
-                  className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-green-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-green-800 hover:file:bg-green-200 cursor-pointer" />
+                  tone="green" chooseLabel={d.nav.choose_file} noFileLabel={d.nav.no_file_chosen} />
                 <p className="mt-1 text-xs text-gray-500">{d.submitted.receipt_hint}</p>
               </div>
               <button type="button" disabled

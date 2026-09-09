@@ -13,6 +13,8 @@ export interface StaffFormDict {
     error_save: string
     select_placeholder: string
     loading_cep: string
+    choose_file: string
+    no_file_chosen: string
   }
 
   // ── Lang switcher ──────────────────────────────────────────────────────

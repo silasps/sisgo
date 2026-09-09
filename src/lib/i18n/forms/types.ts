@@ -13,6 +13,8 @@ export interface FormDict {
     error_save: string
     select_placeholder: string // "Selecione…"
     loading_cep: string
+    choose_file: string
+    no_file_chosen: string
     searching_cep: string
   }
 

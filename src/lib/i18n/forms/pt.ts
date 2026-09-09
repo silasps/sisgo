@@ -12,6 +12,8 @@ export const ptDict: FormDict = {
     error_save: 'Não foi possível salvar. Tente novamente.',
     select_placeholder: 'Selecione…',
     loading_cep: 'Buscando endereço…',
+    choose_file: 'Escolher arquivo',
+    no_file_chosen: 'Nenhum arquivo escolhido',
     searching_cep: 'Buscando…',
   },
 

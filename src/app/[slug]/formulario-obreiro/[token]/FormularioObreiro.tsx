@@ -8,6 +8,7 @@ import { salvarSecaoObreiro, salvarSecaoObreiroComArquivos, enviarFormularioObre
 const SECTIONS_COM_ARQUIVO = new Set([3, 10])
 import { InternationalPhoneField } from '@/components/ui/InternationalPhoneField'
 import { MaskedInput, useMask } from '@/components/ui/MaskedInput'
+import { FileInputField } from '@/components/ui/FileInputField'
 import { LangSwitcher } from '@/components/ui/LangSwitcher'
 import { getStaffFormDict, normalizeStaffLang, tStaff, ptDict } from '@/lib/i18n/staff-forms'
 import type { StaffFormDict, StaffLang } from '@/lib/i18n/staff-forms'
@@ -646,9 +647,8 @@ function S3Familia({ data, estadoCivilS2 }: { data?: Record<string, string>; est
               {d.s3.certidao_casamento} {!certidaoSkipped && <span className="text-red-500">*</span>}
             </label>
             {!certidaoSkipped && (
-              <input type="file" name="doc_certidao_casamento" accept="image/jpeg,image/png,image/webp,application/pdf"
-                required
-                className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 cursor-pointer" />
+              <FileInputField name="doc_certidao_casamento" accept="image/jpeg,image/png,image/webp,application/pdf"
+                required chooseLabel={d.nav.choose_file} noFileLabel={d.nav.no_file_chosen} />
             )}
             <label className="flex items-start gap-2 mt-2 text-xs text-gray-600">
               <input type="checkbox" className="mt-0.5" checked={certidaoSkipped}
@@ -1006,9 +1006,8 @@ function S10DocumentosAceite({ isBrazilian, estadoCivil }: { isBrazilian: boolea
             <label className="block text-sm font-medium text-gray-700 mb-1">
               {doc.label}{doc.required && <span className="text-red-500 ml-0.5"> *</span>}
             </label>
-            <input type="file" name={doc.name} accept="image/jpeg,image/png,image/webp,application/pdf"
-              required={doc.required}
-              className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 cursor-pointer" />
+            <FileInputField name={doc.name} accept="image/jpeg,image/png,image/webp,application/pdf"
+              required={doc.required} chooseLabel={d.nav.choose_file} noFileLabel={d.nav.no_file_chosen} />
           </div>
         ))}
       </div>
