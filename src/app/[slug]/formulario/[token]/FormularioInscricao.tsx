@@ -344,8 +344,6 @@ function S5Dados({ prefill, data, onNationalityChange }: {
     <div className="space-y-4">
       <SectionTitle number={d.s5.section} title={d.s5.title} />
       <div className="grid sm:grid-cols-2 gap-4">
-        <InternationalPhoneField phoneName="celular" countryName="celular_country"
-          label={d.s5.celular} defaultCountryIso="BR" defaultPhone={data?.celular ?? prefill?.telefone} />
         <Field label={d.s5.email} name="email" type="email"
           defaultValue={data?.email ?? prefill?.email} required />
         <Select label={d.s5.sexo} name="sexo" required defaultValue={data?.sexo} options={[
@@ -494,6 +492,9 @@ function S5Dados({ prefill, data, onNationalityChange }: {
           defaultPhone={data?.emergencia_telefone} required />
         <Field label={d.s5.emergencia_email} name="emergencia_email" type="email" defaultValue={data?.emergencia_email} />
         <Field label={d.s5.emergencia_cidade} name="emergencia_cidade" defaultValue={data?.emergencia_cidade} />
+
+        <InternationalPhoneField phoneName="celular" countryName="celular_country"
+          label={d.s5.celular} defaultCountryIso="BR" defaultPhone={data?.celular ?? prefill?.telefone} />
       </div>
     </div>
   )

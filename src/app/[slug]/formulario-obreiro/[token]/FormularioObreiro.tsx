@@ -402,8 +402,6 @@ function S2Dados({ prefill, data, onNationalityChange, orgName }: {
         <div className="sm:col-span-2">
           <Field label={d.s2.nome} name="nome" defaultValue={data?.nome ?? prefill?.nome} required />
         </div>
-        <InternationalPhoneField phoneName="celular" countryName="celular_country"
-          label={d.s2.celular} defaultCountryIso="BR" defaultPhone={data?.celular ?? prefill?.telefone} />
         <Select label={d.s2.sexo} name="sexo" required defaultValue={data?.sexo} options={[
           { value: 'M', label: d.opts.gender_m },
           { value: 'F', label: d.opts.gender_f },
@@ -504,6 +502,9 @@ function S2Dados({ prefill, data, onNationalityChange, orgName }: {
           label={d.s2.emergencia_telefone} defaultCountryIso="BR"
           defaultPhone={data?.emergencia_telefone} required />
         <Field label={d.s2.emergencia_email} name="emergencia_email" type="email" defaultValue={data?.emergencia_email} />
+
+        <InternationalPhoneField phoneName="celular" countryName="celular_country"
+          label={d.s2.celular} defaultCountryIso="BR" defaultPhone={data?.celular ?? prefill?.telefone} />
       </div>
     </div>
   )
