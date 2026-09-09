@@ -90,7 +90,7 @@ export const ptDict: FormDict = {
     escola: 'Escola desejada',
     turma: 'Turma / Período',
     como_conheceu: 'Como conheceu esta escola?',
-    como_conheceu_jocum: 'Como conheceu esta organização?',
+    como_conheceu_jocum: 'Como conheceu a {orgName}?',
     conversou_equipe: 'Você já conversou com alguém da escola sobre sua inscrição?',
     conversou_com_quem: 'Com quem você conversou na escola? (se sim)',
     motivacao: 'Por que deseja participar desta escola?',

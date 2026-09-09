@@ -30,7 +30,7 @@ export default async function FormularioPage({ params, searchParams }: Props) {
 
   const { data: org } = await sb
     .from('organizations')
-    .select('slug, active, student_communication_languages')
+    .select('slug, active, name, student_communication_languages')
     .eq('id', app.organization_id)
     .single()
 
@@ -138,6 +138,7 @@ export default async function FormularioPage({ params, searchParams }: Props) {
             token={token}
             applicationId={app.id}
             schoolName={escola?.name ?? ''}
+            orgName={org.name}
             className={turma?.name}
             prefill={prefill}
             initialSection={app.current_section ?? 1}

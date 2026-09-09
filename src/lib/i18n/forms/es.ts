@@ -90,7 +90,7 @@ export const esDict: FormDict = {
     escola: 'Escuela deseada',
     turma: 'Clase / Período',
     como_conheceu: '¿Cómo conociste esta escuela?',
-    como_conheceu_jocum: '¿Cómo conociste esta organización?',
+    como_conheceu_jocum: '¿Cómo conociste {orgName}?',
     conversou_equipe: '¿Has hablado con alguien del equipo de la escuela sobre tu inscripción?',
     conversou_com_quem: '¿Con quién hablaste en la escuela? (si es así)',
     motivacao: '¿Por qué deseas participar en esta escuela?',

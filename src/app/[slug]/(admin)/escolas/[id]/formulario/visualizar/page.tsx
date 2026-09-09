@@ -12,7 +12,7 @@ export default async function VisualizarFormularioPage({ params }: Props) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) notFound()
 
-  const { data: org } = await supabase.from('organizations').select('id').eq('slug', slug).single()
+  const { data: org } = await supabase.from('organizations').select('id, name').eq('slug', slug).single()
   if (!org) notFound()
 
   const { data: orgUsers } = await supabase
@@ -54,6 +54,7 @@ export default async function VisualizarFormularioPage({ params }: Props) {
             token="preview"
             applicationId="preview"
             schoolName={school.name}
+            orgName={org.name}
             initialData={{}}
             hiddenFields={config.hidden_fields ?? []}
             paymentInfo={config.payment_info ?? null}

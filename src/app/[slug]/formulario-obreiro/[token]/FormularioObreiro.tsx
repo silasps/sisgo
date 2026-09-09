@@ -11,6 +11,7 @@ import { MaskedInput, useMask } from '@/components/ui/MaskedInput'
 import { LangSwitcher } from '@/components/ui/LangSwitcher'
 import { getStaffFormDict, normalizeStaffLang, tStaff, ptDict } from '@/lib/i18n/staff-forms'
 import type { StaffFormDict, StaffLang } from '@/lib/i18n/staff-forms'
+import { orgShortName } from '@/lib/orgShortName'
 
 // ── Dictionary context — avoids prop drilling through all 10 sections ──────
 const DictCtx = createContext<StaffFormDict>(ptDict)
@@ -380,9 +381,10 @@ function S1Email({ prefill, data }: { prefill?: Prefill; data?: Record<string, s
   )
 }
 
-function S2Dados({ prefill, data, onNationalityChange }: {
+function S2Dados({ prefill, data, onNationalityChange, orgName }: {
   prefill?: Prefill; data?: Record<string, string>
   onNationalityChange?: (isBrazilian: boolean) => void
+  orgName: string
 }) {
   const d = useContext(DictCtx)
   const [estrangeiro, setEstrangeiro] = useState(data?.is_brasileiro === 'nao')
@@ -400,6 +402,8 @@ function S2Dados({ prefill, data, onNationalityChange }: {
         <div className="sm:col-span-2">
           <Field label={d.s2.nome} name="nome" defaultValue={data?.nome ?? prefill?.nome} required />
         </div>
+        <InternationalPhoneField phoneName="celular" countryName="celular_country"
+          label={d.s2.celular} defaultCountryIso="BR" defaultPhone={data?.celular ?? prefill?.telefone} />
         <Select label={d.s2.sexo} name="sexo" required defaultValue={data?.sexo} options={[
           { value: 'M', label: d.opts.gender_m },
           { value: 'F', label: d.opts.gender_f },
@@ -460,7 +464,7 @@ function S2Dados({ prefill, data, onNationalityChange }: {
             placeholder={d.s2.especializacao_profissional_ph} />
         </div>
         <JocumSchoolsField
-          label={d.s2.escolas_jocum}
+          label={tStaff(d.s2.escolas_jocum, { orgName: orgShortName(orgName) })}
           placeholder={d.s2.escolas_jocum_ph}
           data={data?.escolas_jocum}
         />
@@ -485,8 +489,6 @@ function S2Dados({ prefill, data, onNationalityChange }: {
           : <ZipAddressFields data={data} />
         }
         <Field label={d.s2.pais} name="pais" defaultValue={data?.pais ?? (estrangeiro ? '' : 'Brasil')} required />
-        <InternationalPhoneField phoneName="celular" countryName="celular_country"
-          label={d.s2.celular} defaultCountryIso="BR" defaultPhone={data?.celular ?? prefill?.telefone} />
 
         <SubSection title={d.s2.redes_section} />
         <Field label={d.s2.instagram} name="instagram" defaultValue={data?.instagram} placeholder="@usuario" />
@@ -1060,7 +1062,7 @@ export function FormularioObreiro({
 
   const sections: SectionDef[] = [
     { id: 1, component: <S1Email prefill={prefill} data={localData.s1} /> },
-    { id: 2, component: <S2Dados prefill={prefill} data={localData.s2} onNationalityChange={setIsBrazilian} /> },
+    { id: 2, component: <S2Dados prefill={prefill} data={localData.s2} onNationalityChange={setIsBrazilian} orgName={orgName} /> },
     { id: 3, component: <S3Familia data={localData.s3} estadoCivilS2={localData.s2?.estado_civil} /> },
     { id: 4, component: <S4Igreja data={localData.s4} /> },
     { id: 5, component: <S5Experiencia data={localData.s5} /> },

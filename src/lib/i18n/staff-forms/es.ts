@@ -83,7 +83,7 @@ export const esDict: StaffFormDict = {
     habilidades_ph: 'Ej.: cocina, música, enseñanza, liderazgo, mantenimiento…',
     especializacao_profissional: 'Especialización profesional',
     especializacao_profissional_ph: 'Ej.: enfermería, mecánica…',
-    escolas_jocum: 'Cursos y formaciones completados',
+    escolas_jocum: 'Escuelas o especializaciones de {orgName}',
     escolas_jocum_ph: 'Ej.: escuela de discipulado, escuela bíblica…',
     escolas_jocum_mes_ano: 'Mes/año de finalización',
     escolas_jocum_local: 'Base',

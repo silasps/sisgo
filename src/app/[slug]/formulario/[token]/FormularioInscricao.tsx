@@ -6,6 +6,7 @@ import { getFormDict, normalizeLang, t } from '@/lib/i18n/forms'
 import type { FormDict, Lang } from '@/lib/i18n/forms'
 import { HeartHandshake } from 'lucide-react'
 import { ptDict } from '@/lib/i18n/forms'
+import { orgShortName } from '@/lib/orgShortName'
 import { LangSwitcher } from '@/components/ui/LangSwitcher'
 
 // ── Contexts ────────────────────────────────────────────────────────────────
@@ -47,6 +48,7 @@ type Props = {
   token: string
   applicationId: string
   schoolName: string
+  orgName: string
   className?: string
   prefill?: Prefill
   initialSection?: number
@@ -183,7 +185,7 @@ function S3Termo({ data }: { data?: Record<string, string> }) {
   )
 }
 
-function S4Escola({ schoolName, className, data }: { schoolName: string; className?: string; data?: Record<string, string> }) {
+function S4Escola({ schoolName, className, data, orgName }: { schoolName: string; className?: string; data?: Record<string, string>; orgName: string }) {
   const d = useContext(DictCtx)
   return (
     <div className="space-y-4">
@@ -204,7 +206,7 @@ function S4Escola({ schoolName, className, data }: { schoolName: string; classNa
             ]} />
         </div></H>
         <H id="s4.como_conheceu_jocum"><div className="sm:col-span-2">
-          <Field label={d.s4.como_conheceu_jocum} name="como_conheceu_jocum" defaultValue={data?.como_conheceu_jocum} />
+          <Field label={t(d.s4.como_conheceu_jocum, { orgName: orgShortName(orgName) })} name="como_conheceu_jocum" defaultValue={data?.como_conheceu_jocum} />
         </div></H>
         <H id="s4.conversou_equipe"><Select label={d.s4.conversou_equipe}
           name="conversou_equipe" required defaultValue={data?.conversou_equipe}
@@ -342,6 +344,10 @@ function S5Dados({ prefill, data, onNationalityChange }: {
     <div className="space-y-4">
       <SectionTitle number={d.s5.section} title={d.s5.title} />
       <div className="grid sm:grid-cols-2 gap-4">
+        <InternationalPhoneField phoneName="celular" countryName="celular_country"
+          label={d.s5.celular} defaultCountryIso="BR" defaultPhone={data?.celular ?? prefill?.telefone} />
+        <Field label={d.s5.email} name="email" type="email"
+          defaultValue={data?.email ?? prefill?.email} required />
         <Select label={d.s5.sexo} name="sexo" required defaultValue={data?.sexo} options={[
           { value: 'M', label: d.opts.gender_m },
           { value: 'F', label: d.opts.gender_f },
@@ -465,10 +471,6 @@ function S5Dados({ prefill, data, onNationalityChange }: {
           }
           <Field label={d.s5.pais} name="pais" defaultValue={data?.pais ?? (estrangeiro ? '' : 'Brasil')} required />
         </></H>
-        <InternationalPhoneField phoneName="celular" countryName="celular_country"
-          label={d.s5.celular} defaultCountryIso="BR" defaultPhone={data?.celular ?? prefill?.telefone} />
-        <Field label={d.s5.email} name="email" type="email"
-          defaultValue={data?.email ?? prefill?.email} required />
 
         {/* Redes sociais */}
         <H id="s5.redes_bloco"><>
@@ -1230,7 +1232,7 @@ function SubmittedScreen({ slug, applicationId, schoolName, hiddenSet, d }: {
 type SectionDef = { id: number; component: React.ReactNode }
 
 export function FormularioInscricao({
-  slug, token, applicationId, schoolName, className, prefill, initialSection = 1, initialData, hiddenFields, paymentInfo, initialLang, printMode
+  slug, token, applicationId, schoolName, orgName, className, prefill, initialSection = 1, initialData, hiddenFields, paymentInfo, initialLang, printMode
 }: Props) {
   const hiddenSet = useMemo(() => new Set(hiddenFields ?? []), [hiddenFields])
   const router = useRouter()
@@ -1263,7 +1265,7 @@ export function FormularioInscricao({
   const sections: SectionDef[] = [
     { id: 1,  component: <S1Nome prefill={prefill} data={localData.s1} /> },
     { id: 3,  component: <S3Termo data={localData.s3} /> },
-    { id: 4,  component: <S4Escola schoolName={schoolName} className={className} data={localData.s4} /> },
+    { id: 4,  component: <S4Escola schoolName={schoolName} orgName={orgName} className={className} data={localData.s4} /> },
     { id: 5,  component: <S5Dados prefill={prefill} data={localData.s5} onNationalityChange={setIsBrazilian} /> },
     { id: 6,  component: <S6Historia data={localData.s6} /> },
     { id: 7,  component: <S7Familia data={localData.s7} estadoCivilS5={localData.s5?.estado_civil} /> },

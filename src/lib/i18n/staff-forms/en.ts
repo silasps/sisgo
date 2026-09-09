@@ -83,7 +83,7 @@ export const enDict: StaffFormDict = {
     habilidades_ph: 'E.g.: cooking, music, teaching, leadership, maintenance…',
     especializacao_profissional: 'Professional specialization',
     especializacao_profissional_ph: 'E.g.: nursing, mechanics…',
-    escolas_jocum: 'Courses and training completed',
+    escolas_jocum: 'Schools or specializations from {orgName}',
     escolas_jocum_ph: 'E.g.: discipleship school, Bible school…',
     escolas_jocum_mes_ano: 'Month/year completed',
     escolas_jocum_local: 'Base',
