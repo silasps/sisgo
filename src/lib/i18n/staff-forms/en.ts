@@ -247,12 +247,17 @@ export const enDict: StaffFormDict = {
     title: 'Health',
     problema_saude: 'Do you have any health condition?',
     problema_saude_desc: 'Describe the health condition',
+    problema_saude_doc: 'Attach medical report (optional)',
     limitacao_fisica: 'Do you have any physical limitation?',
     limitacao_fisica_desc: 'Describe the limitation',
+    limitacao_fisica_doc: 'Attach medical report or certificate (optional)',
     medicamento_controlado: 'Do you take any prescription medication?',
     medicamento_controlado_desc: 'Describe the medication, dosage and reason',
+    medicamento_controlado_doc: 'Attach prescription (optional)',
     alergia: 'Do you have any allergy?',
     alergia_desc: 'Describe the allergy',
+    alergia_doc: 'Attach medical report (optional)',
+    doc_hint: "If you already have the document on hand, attaching it now saves the team from having to ask later — but it's not required.",
   },
 
   // ── S8: Legal Matters ──────────────────────────────────────────────────

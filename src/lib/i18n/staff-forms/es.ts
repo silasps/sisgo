@@ -247,12 +247,17 @@ export const esDict: StaffFormDict = {
     title: 'Salud',
     problema_saude: '¿Tiene algún problema de salud?',
     problema_saude_desc: 'Describa el problema de salud',
+    problema_saude_doc: 'Adjuntar informe médico (opcional)',
     limitacao_fisica: '¿Tiene alguna limitación física?',
     limitacao_fisica_desc: 'Describa la limitación',
+    limitacao_fisica_doc: 'Adjuntar informe o certificado médico (opcional)',
     medicamento_controlado: '¿Toma algún medicamento controlado?',
     medicamento_controlado_desc: 'Describa el medicamento, la dosis y el motivo',
+    medicamento_controlado_doc: 'Adjuntar receta médica (opcional)',
     alergia: '¿Tiene alguna alergia?',
     alergia_desc: 'Describa la alergia',
+    alergia_doc: 'Adjuntar informe médico (opcional)',
+    doc_hint: 'Si ya tiene el documento a mano, adjuntarlo ahora evita que el equipo tenga que pedirlo después — pero no es obligatorio.',
   },
 
   // ── S8: Asuntos legales ────────────────────────────────────────────────

@@ -5,7 +5,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { HeartHandshake } from 'lucide-react'
 import { salvarSecaoObreiro, salvarSecaoObreiroComArquivos, enviarFormularioObreiro, gerarLinkReferenciaObreiro } from './actions'
 
-const SECTIONS_COM_ARQUIVO = new Set([3, 10])
+const SECTIONS_COM_ARQUIVO = new Set([3, 7, 10])
 import { InternationalPhoneField } from '@/components/ui/InternationalPhoneField'
 import { MaskedInput, useMask } from '@/components/ui/MaskedInput'
 import { FileInputField } from '@/components/ui/FileInputField'
@@ -916,12 +916,24 @@ function S6ServirBase({ data, ministries, ministryId }: {
   )
 }
 
+function DocUpload({ label, name }: { label: string; name: string }) {
+  const d = useContext(DictCtx)
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <FileInputField name={name} accept="image/jpeg,image/png,image/webp,application/pdf"
+        chooseLabel={d.nav.choose_file} noFileLabel={d.nav.no_file_chosen} />
+    </div>
+  )
+}
+
 function S7Saude({ data }: { data?: Record<string, string> }) {
   const d = useContext(DictCtx)
   const [problema, setProblema] = useState(data?.problema_saude === 'sim')
   const [limitacao, setLimitacao] = useState(data?.limitacao_fisica === 'sim')
   const [remedio, setRemedio] = useState(data?.remedio_controlado === 'sim')
   const [alergia, setAlergia] = useState(data?.tem_alergia === 'sim')
+  const algumaDoenca = problema || limitacao || remedio || alergia
   return (
     <div className="space-y-4">
       <SectionTitle number={d.s7.section} title={d.s7.title} />
@@ -930,36 +942,44 @@ function S7Saude({ data }: { data?: Record<string, string> }) {
           defaultValue={data?.problema_saude}
           options={[{ value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no }]}
           onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setProblema(e.target.value === 'sim')} />
-        {problema && (
+        {problema && (<>
           <TextArea label={d.s7.problema_saude_desc} name="problema_saude_descricao"
             defaultValue={data?.problema_saude_descricao} required rows={3} />
-        )}
+          <DocUpload label={d.s7.problema_saude_doc} name="doc_problema_saude" />
+        </>)}
 
         <Select label={d.s7.limitacao_fisica} name="limitacao_fisica" required
           defaultValue={data?.limitacao_fisica}
           options={[{ value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no }]}
           onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setLimitacao(e.target.value === 'sim')} />
-        {limitacao && (
+        {limitacao && (<>
           <TextArea label={d.s7.limitacao_fisica_desc} name="limitacao_fisica_descricao"
             defaultValue={data?.limitacao_fisica_descricao} required rows={3} />
-        )}
+          <DocUpload label={d.s7.limitacao_fisica_doc} name="doc_limitacao_fisica" />
+        </>)}
 
         <Select label={d.s7.medicamento_controlado} name="remedio_controlado" required
           defaultValue={data?.remedio_controlado}
           options={[{ value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no }]}
           onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setRemedio(e.target.value === 'sim')} />
-        {remedio && (
+        {remedio && (<>
           <TextArea label={d.s7.medicamento_controlado_desc} name="remedio_controlado_descricao"
             defaultValue={data?.remedio_controlado_descricao} required rows={3} />
-        )}
+          <DocUpload label={d.s7.medicamento_controlado_doc} name="doc_remedio_controlado" />
+        </>)}
 
         <Select label={d.s7.alergia} name="tem_alergia" required
           defaultValue={data?.tem_alergia}
           options={[{ value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no }]}
           onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setAlergia(e.target.value === 'sim')} />
-        {alergia && (
+        {alergia && (<>
           <TextArea label={d.s7.alergia_desc} name="alergia_descricao"
             defaultValue={data?.alergia_descricao} required rows={3} />
+          <DocUpload label={d.s7.alergia_doc} name="doc_alergia" />
+        </>)}
+
+        {algumaDoenca && (
+          <p className="text-xs text-gray-500 -mt-1">{d.s7.doc_hint}</p>
         )}
       </div>
     </div>

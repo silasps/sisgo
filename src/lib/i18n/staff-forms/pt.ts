@@ -247,12 +247,17 @@ export const ptDict: StaffFormDict = {
     title: 'Saúde',
     problema_saude: 'Possui algum problema de saúde?',
     problema_saude_desc: 'Descreva o problema de saúde',
+    problema_saude_doc: 'Anexar laudo médico (opcional)',
     limitacao_fisica: 'Possui alguma limitação física?',
     limitacao_fisica_desc: 'Descreva a limitação',
+    limitacao_fisica_doc: 'Anexar laudo ou atestado médico (opcional)',
     medicamento_controlado: 'Toma algum remédio controlado?',
     medicamento_controlado_desc: 'Descreva o medicamento, dosagem e motivo',
+    medicamento_controlado_doc: 'Anexar receita médica (opcional)',
     alergia: 'Tem alguma alergia?',
     alergia_desc: 'Descreva a alergia',
+    alergia_doc: 'Anexar laudo médico (opcional)',
+    doc_hint: 'Se já tiver o documento em mãos, anexar agora evita que a equipe precise pedir depois — mas não é obrigatório.',
   },
 
   // ── S8: Questões Jurídicas ─────────────────────────────────────────────

@@ -260,12 +260,17 @@ export interface StaffFormDict {
     title: string
     problema_saude: string
     problema_saude_desc: string
+    problema_saude_doc: string
     limitacao_fisica: string
     limitacao_fisica_desc: string
+    limitacao_fisica_doc: string
     medicamento_controlado: string
     medicamento_controlado_desc: string
+    medicamento_controlado_doc: string
     alergia: string
     alergia_desc: string
+    alergia_doc: string
+    doc_hint: string
   }
 
   // ── S8: Questões Jurídicas ─────────────────────────────────────────────
