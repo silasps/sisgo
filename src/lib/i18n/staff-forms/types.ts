@@ -134,6 +134,7 @@ export interface StaffFormDict {
     linkedin: string
     // Emergency contact
     emergencia_section: string
+    emergencia_hint: string
     emergencia_nome: string
     emergencia_parentesco: string
     emergencia_telefone: string

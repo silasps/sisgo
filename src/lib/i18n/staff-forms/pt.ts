@@ -124,6 +124,7 @@ export const ptDict: StaffFormDict = {
     tiktok: 'TikTok',
     linkedin: 'LinkedIn',
     emergencia_section: 'Contato de emergência',
+    emergencia_hint: 'Escolha alguém que normalmente NÃO esteja com você no dia a dia (evite cônjuge ou quem mora com você) — numa emergência, essa pessoa pode estar impossibilitada de atender também. Prefira um parente ou amigo próximo que more em outro lugar.',
     emergencia_nome: 'Nome',
     emergencia_parentesco: 'Grau de parentesco',
     emergencia_telefone: 'Telefone',

@@ -163,6 +163,7 @@ export const enDict: FormDict = {
     redes_section: 'Social media',
     outros_links: 'Other (website, channel, portfolio)',
     emergencia_section: 'Emergency contact',
+    emergencia_hint: "Choose someone who isn't usually with you day-to-day (avoid a spouse or someone who lives with you) — in an emergency, that person might be unreachable too. Prefer a close relative or friend who lives elsewhere.",
     emergencia_nome: 'Name',
     emergencia_parentesco: 'Relationship',
     emergencia_email: 'Email',

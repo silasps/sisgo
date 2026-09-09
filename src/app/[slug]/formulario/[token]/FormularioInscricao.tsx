@@ -484,6 +484,7 @@ function S5Dados({ prefill, data, onNationalityChange }: {
 
         {/* Emergência */}
         <div className="sm:col-span-2 mt-2"><p className="text-sm font-semibold text-gray-700 border-t pt-3">{d.s5.emergencia_section}</p></div>
+        <p className="sm:col-span-2 text-xs text-gray-500">{d.s5.emergencia_hint}</p>
         <Field label={d.s5.emergencia_nome} name="emergencia_nome" defaultValue={data?.emergencia_nome} required />
         <Field label={d.s5.emergencia_parentesco} name="emergencia_parentesco" defaultValue={data?.emergencia_parentesco} required />
         <InternationalPhoneField phoneName="emergencia_telefone" countryName="emergencia_telefone_country"

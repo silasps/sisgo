@@ -163,6 +163,7 @@ export const ptDict: FormDict = {
     redes_section: 'Redes sociais',
     outros_links: 'Outros (site, canal, portfólio)',
     emergencia_section: 'Contato de emergência',
+    emergencia_hint: 'Escolha alguém que normalmente NÃO esteja com você no dia a dia (evite cônjuge ou quem mora com você) — numa emergência, essa pessoa pode estar impossibilitada de atender também. Prefira um parente ou amigo próximo que more em outro lugar.',
     emergencia_nome: 'Nome',
     emergencia_parentesco: 'Grau de parentesco',
     emergencia_email: 'E-mail',

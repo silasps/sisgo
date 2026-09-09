@@ -159,6 +159,7 @@ export interface FormDict {
     outros_links: string
     // Emergency
     emergencia_section: string
+    emergencia_hint: string
     emergencia_nome: string
     emergencia_parentesco: string
     emergencia_email: string

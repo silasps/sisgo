@@ -495,6 +495,7 @@ function S2Dados({ prefill, data, onNationalityChange }: {
         <Field label={d.s2.linkedin} name="linkedin" defaultValue={data?.linkedin} />
 
         <SubSection title={d.s2.emergencia_section} />
+        <p className="sm:col-span-2 -mt-1 text-xs text-gray-500">{d.s2.emergencia_hint}</p>
         <Field label={d.s2.emergencia_nome} name="emergencia_nome" defaultValue={data?.emergencia_nome} required />
         <Field label={d.s2.emergencia_parentesco} name="emergencia_parentesco" defaultValue={data?.emergencia_parentesco} required />
         <InternationalPhoneField phoneName="emergencia_telefone" countryName="emergencia_telefone_country"

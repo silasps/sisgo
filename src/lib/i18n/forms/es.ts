@@ -163,6 +163,7 @@ export const esDict: FormDict = {
     redes_section: 'Redes sociales',
     outros_links: 'Otros (sitio web, canal, portafolio)',
     emergencia_section: 'Contacto de emergencia',
+    emergencia_hint: 'Elige a alguien que normalmente NO esté contigo en el día a día (evita a tu cónyuge o alguien que viva contigo) — en una emergencia, esa persona también podría no estar disponible. Prefiere un familiar cercano o amigo que viva en otro lugar.',
     emergencia_nome: 'Nombre',
     emergencia_parentesco: 'Parentesco',
     emergencia_email: 'Correo electrónico',
