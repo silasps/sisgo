@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { notFound } from 'next/navigation'
 import { FormularioInscricao } from './FormularioInscricao'
 import { CheckCircle2 } from 'lucide-react'
+import { getFormDict, normalizeLang } from '@/lib/i18n/forms'
 
 type Props = {
   params: Promise<{ slug: string; token: string }>
@@ -42,16 +43,29 @@ export default async function FormularioPage({ params, searchParams }: Props) {
   const orgStudentLanguages = (org.student_communication_languages as string[] | null) ?? []
   const orgDefaultLang = orgStudentLanguages.includes('pt') ? 'pt' : (orgStudentLanguages[0] ?? 'pt')
 
+  const preform = app.school_interest_forms as unknown as {
+    full_name?: string; email?: string; phone?: string; language?: string
+  } | null
+  const formData = (app.form_data as Record<string, unknown>) ?? {}
+  const prefillFromForm = (formData.prefill as Record<string, string | undefined>) ?? {}
+  const prefill = {
+    nome:     preform?.full_name  ?? prefillFromForm.nome,
+    email:    preform?.email      ?? prefillFromForm.email,
+    telefone: preform?.phone      ?? prefillFromForm.telefone,
+    idioma:   preform?.language   ?? prefillFromForm.idioma,
+  }
+
+  const pageLang = normalizeLang(lang ?? prefill.idioma ?? orgDefaultLang)
+  const d = getFormDict(pageLang).bigFormChrome
+
   // Valida expiração
   if (new Date(app.token_expires_at) < new Date()) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
         <div className="bg-white rounded-2xl shadow p-10 max-w-md text-center">
           <p className="text-4xl mb-4">⏰</p>
-          <h1 className="text-xl font-bold text-gray-900 mb-2">Link expirado</h1>
-          <p className="text-gray-500 text-sm">
-            Este link de formulário expirou. Entre em contato com a equipe da escola para solicitar um novo link.
-          </p>
+          <h1 className="text-xl font-bold text-gray-900 mb-2">{d.link_expired_title}</h1>
+          <p className="text-gray-500 text-sm">{d.link_expired_body}</p>
         </div>
       </div>
     )
@@ -62,10 +76,8 @@ export default async function FormularioPage({ params, searchParams }: Props) {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
         <div className="bg-white rounded-2xl shadow p-10 max-w-md text-center">
           <CheckCircle2 className="size-12 mx-auto mb-4 text-green-500" />
-          <h1 className="text-xl font-bold text-gray-900 mb-2">Formulário já enviado</h1>
-          <p className="text-gray-500 text-sm">
-            Seu formulário já foi enviado e está em análise. A equipe entrará em contato em breve.
-          </p>
+          <h1 className="text-xl font-bold text-gray-900 mb-2">{d.already_sent_title}</h1>
+          <p className="text-gray-500 text-sm">{d.already_sent_body}</p>
         </div>
       </div>
     )
@@ -87,19 +99,6 @@ export default async function FormularioPage({ params, searchParams }: Props) {
     hiddenFields.push(...(cfg.hidden_fields ?? []))
     paymentInfo = cfg.payment_info ?? null
   }
-  const preform = app.school_interest_forms as unknown as {
-    full_name?: string; email?: string; phone?: string; language?: string
-  } | null
-
-  const formData = (app.form_data as Record<string, unknown>) ?? {}
-  const prefillFromForm = (formData.prefill as Record<string, string | undefined>) ?? {}
-
-  const prefill = {
-    nome:     preform?.full_name  ?? prefillFromForm.nome,
-    email:    preform?.email      ?? prefillFromForm.email,
-    telefone: preform?.phone      ?? prefillFromForm.telefone,
-    idioma:   preform?.language   ?? prefillFromForm.idioma,
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
@@ -108,10 +107,10 @@ export default async function FormularioPage({ params, searchParams }: Props) {
       <header className="bg-white border-b border-gray-100 px-4 sm:px-6 py-4">
         <div className="max-w-2xl mx-auto">
           <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest">
-            Jovens Com Uma Missão
+            {d.org_label}
           </p>
           <h1 className="text-lg font-bold text-gray-900 mt-0.5">
-            {escola?.name ?? 'Inscrição'}
+            {escola?.name ?? d.fallback_title}
           </h1>
           {turma && <p className="text-sm text-gray-400">{turma.name}</p>}
         </div>
@@ -120,12 +119,9 @@ export default async function FormularioPage({ params, searchParams }: Props) {
       {/* Orientação */}
       <div className="print:hidden max-w-2xl mx-auto px-4 sm:px-6 pt-5 sm:pt-6">
         <div className="bg-indigo-600 text-white rounded-2xl p-5 mb-6">
-          <h2 className="font-bold text-base mb-1">Bem-vindo(a) ao formulário de inscrição!</h2>
+          <h2 className="font-bold text-base mb-1">{d.welcome_title}</h2>
           <p className="text-sm text-indigo-100 leading-relaxed">
-            {printMode
-              ? 'Esta é a versão em branco para preenchimento à mão, caso não seja possível preencher pela internet.'
-              : <>Este formulário faz parte do processo seletivo. Responda com atenção e sinceridade.
-                Seu progresso é salvo automaticamente a cada seção. Tempo estimado: <strong>30 a 45 minutos</strong>.</>}
+            {printMode ? d.welcome_body_print : d.welcome_body_online}
           </p>
         </div>
       </div>
@@ -145,13 +141,13 @@ export default async function FormularioPage({ params, searchParams }: Props) {
             initialData={formData}
             hiddenFields={hiddenFields}
             paymentInfo={paymentInfo}
-            initialLang={lang ?? prefill.idioma ?? orgDefaultLang}
+            initialLang={pageLang}
             printMode={printMode}
           />
         </div>
 
         <p className="text-center text-xs text-gray-400 mt-6">
-          Dúvidas? Entre em contato com a equipe responsável pela escola.
+          {d.footer_contact}
         </p>
       </main>
     </div>
