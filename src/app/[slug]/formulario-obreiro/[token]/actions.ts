@@ -31,7 +31,15 @@ async function getEditableApplication(token: string, slug: string) {
   return { app, sb }
 }
 
-export async function salvarSecaoObreiro(slug: string, token: string, section: number, data: Record<string, unknown>) {
+// `nextSection` é a seção pra onde o usuário está indo AGORA (a seguinte, se
+// clicou "Próxima seção"; a anterior, se clicou "Voltar") — current_section
+// grava exatamente isso, sem "Math.max" pra não regredir. Um max ali parecia
+// seguro (não perder progresso), mas quebrava justamente o caso de voltar
+// pra revisar uma seção anterior: ao recarregar, a pessoa era jogada de
+// volta pro ponto mais avançado já alcançado, não pra seção onde estava de
+// fato — dando a falsa impressão de que seções intermediárias já preenchidas
+// (quando na real ela só estava revisando uma anterior) continuavam ok.
+export async function salvarSecaoObreiro(slug: string, token: string, section: number, data: Record<string, unknown>, nextSection: number) {
   if (!EDITABLE_SECTIONS.has(section)) return { error: 'Seção inválida.' }
 
   const result = await getEditableApplication(token, slug)
@@ -45,13 +53,9 @@ export async function salvarSecaoObreiro(slug: string, token: string, section: n
     [`s${section}`]: data,
   }
 
-  // current_section marca em qual seção RETOMAR ao reabrir o link, não a que
-  // acabou de ser salva — sem isso, recarregar a página levava de volta pra
-  // seção já preenchida em vez da próxima, dando a impressão de que o
-  // progresso tinha sido perdido.
   await sb.from('staff_applications').update({
     form_data: updated,
-    current_section: Math.max(app.current_section ?? 1, Math.min(section + 1, 10)),
+    current_section: nextSection,
   }).eq('id', app.id)
 
   return { success: true }
@@ -80,7 +84,7 @@ const DOCUMENT_KIND_BY_KEY: Record<string, DocumentKind> = {
 // precisa ser enviado pro Storage antes — só o metadado (path/name/tipo)
 // vai pro form_data. Se a seção for reenviada sem escolher o arquivo de
 // novo (voltar/avançar sem reselecionar), o metadado já salvo é mantido.
-export async function salvarSecaoObreiroComArquivos(slug: string, token: string, section: number, formData: FormData) {
+export async function salvarSecaoObreiroComArquivos(slug: string, token: string, section: number, formData: FormData, nextSection: number) {
   if (!EDITABLE_SECTIONS.has(section)) return { error: 'Seção inválida.' }
 
   const result = await getEditableApplication(token, slug)
@@ -125,7 +129,7 @@ export async function salvarSecaoObreiroComArquivos(slug: string, token: string,
 
   await sb.from('staff_applications').update({
     form_data: { ...existing, [`s${section}`]: updatedSection },
-    current_section: Math.max(app.current_section ?? 1, Math.min(section + 1, 10)),
+    current_section: nextSection,
   }).eq('id', app.id)
 
   if (toRemove.length) await sb.storage.from('staff-application-documents').remove(toRemove)

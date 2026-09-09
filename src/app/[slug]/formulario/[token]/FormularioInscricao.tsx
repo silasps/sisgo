@@ -32,7 +32,7 @@ function HiddenStyles() {
   }).join(',')
   return <style>{`${selectors}{display:none!important}`}</style>
 }
-import { salvarSecao, enviarFormulario, gerarLinkReferencia, anexarComprovante, anexarDocumentos } from './actions'
+import { salvarSecao, enviarFormulario, gerarLinkReferencia, anexarComprovante, anexarDocumentos, atualizarSecaoAtual } from './actions'
 import { InternationalPhoneField } from '@/components/ui/InternationalPhoneField'
 import { MaskedInput, useMask } from '@/components/ui/MaskedInput'
 
@@ -1362,18 +1362,21 @@ export function FormularioInscricao({
 
   async function handleBack() {
     if (currentIndex === 0) return
+    const target = visibleSections[currentIndex - 1].id
     // Seção 15 é só arquivo — não tem texto pra guardar em dataRecord (viraria
     // {} e apagaria os documentos já enviados via anexarDocumentos). Os
     // arquivos já ficam salvos assim que a pessoa avança por lá; nada a
     // fazer aqui além de navegar.
-    if (formRef.current && visibleSections[currentIndex].id !== 15) {
+    if (visibleSections[currentIndex].id === 15) {
+      await atualizarSecaoAtual(slug, token, target).catch(() => {})
+    } else if (formRef.current) {
       const fd = new FormData(formRef.current)
       const dataRecord: Record<string, string> = {}
       fd.forEach((v, k) => { if (typeof v === 'string') dataRecord[k] = v })
       setLocalData(prev => ({ ...prev, [`s${visibleSections[currentIndex].id}`]: dataRecord }))
-      await salvarSecao(slug, token, visibleSections[currentIndex].id, dataRecord).catch(() => {})
+      await salvarSecao(slug, token, visibleSections[currentIndex].id, dataRecord, target).catch(() => {})
     }
-    setCurrent(visibleSections[currentIndex - 1].id)
+    setCurrent(target)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -1423,17 +1426,18 @@ export function FormularioInscricao({
 
       const dataRecord: Record<string, string> = {}
       fd.forEach((v, k) => { if (typeof v === 'string') dataRecord[k] = v })
+      const target = isLast ? visibleSections[currentIndex].id : visibleSections[currentIndex + 1].id
 
       // Seção 15 é só upload de arquivo — salvarSecao não serve pra isso (o
       // File nunca vira nada útil dentro de um jsonb); usa a action dedicada
       // que sobe os arquivos pro Storage de verdade.
       if (visibleSections[currentIndex].id === 15) {
-        const uploadResult = await anexarDocumentos(slug, token, fd)
+        const uploadResult = await anexarDocumentos(slug, token, fd, target)
         if ('error' in uploadResult) throw new Error(uploadResult.error)
       } else {
         const data: Record<string, unknown> = {}
         fd.forEach((v, k) => { data[k] = v })
-        const saveResult = await salvarSecao(slug, token, visibleSections[currentIndex].id, data)
+        const saveResult = await salvarSecao(slug, token, visibleSections[currentIndex].id, data, target)
         if (!('error' in saveResult)) {
           setLocalData(prev => ({ ...prev, [`s${visibleSections[currentIndex].id}`]: dataRecord }))
         }

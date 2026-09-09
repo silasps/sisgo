@@ -6,15 +6,6 @@ import { basicImageSanity } from '@/lib/documents/basicImageSanity'
 import { classifyDocument, type DocumentKind } from '@/lib/documents/classifyDocument'
 
 const EDITABLE_SECTIONS = new Set([1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16])
-const SORTED_SECTIONS = [...EDITABLE_SECTIONS].sort((a, b) => a - b)
-const LAST_SECTION = SORTED_SECTIONS[SORTED_SECTIONS.length - 1]
-
-// Seção 2 não existe nesse formulário (numeração tem um buraco) — não dá
-// pra simplesmente somar 1 ao salvar, ou o resume cairia numa seção que não
-// existe. Acha a próxima seção editável de verdade depois da que foi salva.
-function nextEditableSection(section: number): number {
-  return SORTED_SECTIONS.find(s => s > section) ?? LAST_SECTION
-}
 
 // Só usado no fluxo de matrícula direta de seminário (sem pré-inscrição
 // prévia) — resolve/cria a pessoa a partir do que ela mesma preencheu no
@@ -82,7 +73,13 @@ async function getEditableApplication(token: string, slug: string) {
   return { app, sb }
 }
 
-export async function salvarSecao(slug: string, token: string, section: number, data: Record<string, unknown>) {
+// `nextSection` é a seção pra onde o usuário está indo AGORA (a seguinte, se
+// avançou; a anterior, se voltou) — current_section grava exatamente isso,
+// sem "Math.max". Um max ali parecia seguro (não perder progresso), mas
+// quebrava o caso de voltar pra revisar uma seção anterior: ao recarregar, a
+// pessoa caía de volta no ponto mais avançado já alcançado, não na seção
+// onde estava de fato revisando.
+export async function salvarSecao(slug: string, token: string, section: number, data: Record<string, unknown>, nextSection: number) {
   if (!EDITABLE_SECTIONS.has(section)) return { error: 'Seção inválida.' }
 
   const result = await getEditableApplication(token, slug)
@@ -96,15 +93,23 @@ export async function salvarSecao(slug: string, token: string, section: number, 
     [`s${section}`]: data,
   }
 
-  // current_section marca em qual seção RETOMAR ao reabrir o link, não a que
-  // acabou de ser salva — sem isso, recarregar a página levava de volta pra
-  // seção já preenchida em vez da próxima, dando a impressão de que o
-  // progresso tinha sido perdido.
   await sb.from('school_applications').update({
     form_data: updated,
-    current_section: Math.max(app.current_section ?? 1, nextEditableSection(section)),
+    current_section: nextSection,
   }).eq('id', app.id)
 
+  return { success: true }
+}
+
+// Só pra navegar pra trás saindo da seção 15 (só arquivo — salvarSecao
+// sobrescreveria os documentos já enviados com {} se fosse usada aqui).
+// Sem isso, current_section ficava parado na 15/16 e o reload não voltava
+// pra seção certa.
+export async function atualizarSecaoAtual(slug: string, token: string, nextSection: number) {
+  const result = await getEditableApplication(token, slug)
+  if ('error' in result) return { error: result.error }
+  const { app, sb } = result
+  await sb.from('school_applications').update({ current_section: nextSection }).eq('id', app.id)
   return { success: true }
 }
 
@@ -239,7 +244,7 @@ const DOCUMENT_TYPES: Record<string, string> = {
 // cada arquivo presente no formData e grava só os metadados
 // (path/name/type/size) em form_data.s15, igual ao padrão de
 // anexarComprovante.
-export async function anexarDocumentos(slug: string, token: string, formData: FormData) {
+export async function anexarDocumentos(slug: string, token: string, formData: FormData, nextSection: number) {
   const result = await getEditableApplication(token, slug)
   if ('error' in result) return { error: result.error }
   const { app, sb } = result
@@ -275,7 +280,7 @@ export async function anexarDocumentos(slug: string, token: string, formData: Fo
 
   await sb.from('school_applications').update({
     form_data: { ...existing, s15: updatedS15 },
-    current_section: Math.max(app.current_section ?? 1, nextEditableSection(15)),
+    current_section: nextSection,
   }).eq('id', app.id)
 
   if (toRemove.length) await sb.storage.from('application-documents').remove(toRemove)

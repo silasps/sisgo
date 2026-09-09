@@ -1120,18 +1120,19 @@ export function FormularioObreiro({
 
   async function handleBack() {
     if (currentIndex === 0) return
+    const target = sections[currentIndex - 1].id
     if (formRef.current) {
       const fd = new FormData(formRef.current)
       const dataRecord: Record<string, string> = {}
       fd.forEach((v, k) => { if (typeof v === 'string') dataRecord[k] = v })
       setLocalData(prev => ({ ...prev, [`s${sections[currentIndex].id}`]: dataRecord }))
       if (SECTIONS_COM_ARQUIVO.has(sections[currentIndex].id)) {
-        await salvarSecaoObreiroComArquivos(slug, token, sections[currentIndex].id, fd).catch(() => {})
+        await salvarSecaoObreiroComArquivos(slug, token, sections[currentIndex].id, fd, target).catch(() => {})
       } else {
-        await salvarSecaoObreiro(slug, token, sections[currentIndex].id, dataRecord).catch(() => {})
+        await salvarSecaoObreiro(slug, token, sections[currentIndex].id, dataRecord, target).catch(() => {})
       }
     }
-    setCurrent(sections[currentIndex - 1].id)
+    setCurrent(target)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -1158,9 +1159,10 @@ export function FormularioObreiro({
 
       const dataRecord: Record<string, string> = {}
       fd.forEach((v, k) => { if (typeof v === 'string') dataRecord[k] = v })
+      const target = isLast ? sections[currentIndex].id : sections[currentIndex + 1].id
       const saveResult = SECTIONS_COM_ARQUIVO.has(sections[currentIndex].id)
-        ? await salvarSecaoObreiroComArquivos(slug, token, sections[currentIndex].id, fd)
-        : await salvarSecaoObreiro(slug, token, sections[currentIndex].id, dataRecord)
+        ? await salvarSecaoObreiroComArquivos(slug, token, sections[currentIndex].id, fd, target)
+        : await salvarSecaoObreiro(slug, token, sections[currentIndex].id, dataRecord, target)
       if (!('error' in saveResult)) {
         setLocalData(prev => ({ ...prev, [`s${sections[currentIndex].id}`]: dataRecord }))
       }
