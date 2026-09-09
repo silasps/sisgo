@@ -159,6 +159,9 @@ export const enDict: StaffFormDict = {
     filhos_nome_ph: "Child's full name",
     filhos_sexo: 'Sex',
     filhos_nascimento: 'Date of birth',
+    filhos_idade_anos: '{anos} year(s) old',
+    filhos_idade_meses: '{meses} month(s) old',
+    filhos_idade_anos_meses: '{anos} year(s) and {meses} month(s) old',
     filhos_add: '+ Add child',
     filhos_remove: 'Remove',
     filhos_virao: 'Will your children be joining you?',
@@ -229,8 +232,13 @@ export const enDict: StaffFormDict = {
     quanto_tempo_ph: 'E.g.: 1 year, 6 months, undetermined',
     qual_ministerio: 'Which ministry would you like to serve in?',
     data_chegada: 'Expected arrival date',
+    data_inicio: 'Start date',
+    data_fim: 'End date',
     motivacao: 'Motivation to serve here',
     motivacao_ph: 'Tell us why you want to serve with us and what motivates you…',
+    projeto: 'What is your project for this community?',
+    projeto_ph: 'Describe what you intend to develop, contribute, or accomplish here…',
+    sem_projeto_label: "I don't have a specific project yet",
   },
 
   // ── S7: Health ─────────────────────────────────────────────────────────

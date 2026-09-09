@@ -159,6 +159,9 @@ export const esDict: StaffFormDict = {
     filhos_nome_ph: 'Nombre completo del niño/a',
     filhos_sexo: 'Sexo',
     filhos_nascimento: 'Fecha de nacimiento',
+    filhos_idade_anos: '{anos} año(s)',
+    filhos_idade_meses: '{meses} mes(es)',
+    filhos_idade_anos_meses: '{anos} año(s) y {meses} mes(es)',
     filhos_add: '+ Agregar hijo',
     filhos_remove: 'Eliminar',
     filhos_virao: '¿Los hijos vendrán también?',
@@ -229,8 +232,13 @@ export const esDict: StaffFormDict = {
     quanto_tempo_ph: 'Ej.: 1 año, 6 meses, indeterminado',
     qual_ministerio: '¿En cuál ministerio le gustaría servir?',
     data_chegada: 'Fecha prevista de llegada',
+    data_inicio: 'Fecha de inicio',
+    data_fim: 'Fecha de término',
     motivacao: 'Motivación para servir aquí',
     motivacao_ph: 'Cuéntenos por qué desea servir con nosotros y qué le motiva…',
+    projeto: '¿Cuál es su proyecto para esta comunidad?',
+    projeto_ph: 'Describa lo que pretende desarrollar, aportar o realizar aquí…',
+    sem_projeto_label: 'Todavía no tengo un proyecto específico',
   },
 
   // ── S7: Salud ──────────────────────────────────────────────────────────

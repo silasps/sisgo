@@ -209,6 +209,9 @@ export interface FormDict {
     filhos_nome_ph: string
     filhos_sexo: string
     filhos_nascimento: string
+    filhos_idade_anos: string     // "{anos} ano(s)"
+    filhos_idade_meses: string    // "{meses} mês(es)"
+    filhos_idade_anos_meses: string // "{anos} ano(s) e {meses} mês(es)"
     filhos_add: string
     filhos_remove: string
     filhos_virao: string

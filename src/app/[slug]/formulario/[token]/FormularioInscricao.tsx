@@ -513,6 +513,23 @@ function anosDesde(dateStr: string): number | null {
   return years >= 0 ? years : null
 }
 
+function idadeCrianca(dateStr: string, d: FormDict): string | null {
+  if (!dateStr) return null
+  const then = new Date(dateStr + 'T00:00:00')
+  if (Number.isNaN(then.getTime())) return null
+  const now = new Date()
+  if (then > now) return null
+  let years = now.getFullYear() - then.getFullYear()
+  let months = now.getMonth() - then.getMonth()
+  if (now.getDate() < then.getDate()) months -= 1
+  if (months < 0) { years -= 1; months += 12 }
+  if (years < 0) return null
+  if (years >= 5) return t(d.s7.filhos_idade_anos, { anos: String(years) })
+  if (years === 0) return t(d.s7.filhos_idade_meses, { meses: String(months) })
+  if (months === 0) return t(d.s7.filhos_idade_anos, { anos: String(years) })
+  return t(d.s7.filhos_idade_anos_meses, { anos: String(years), meses: String(months) })
+}
+
 type ChildEntry = { nome: string; sexo: string; data_nascimento: string }
 
 function parseChildren(raw?: string): ChildEntry[] {
@@ -576,6 +593,9 @@ function ChildrenField({ data }: { data?: string }) {
               <label className="block text-xs text-gray-500 mb-0.5">{d.s7.filhos_nascimento}</label>
               <input type="date" value={row.data_nascimento} max={new Date().toISOString().slice(0, 10)}
                 onChange={e => updateRow(i, { data_nascimento: e.target.value })} className={inputClass} />
+              {row.data_nascimento && (
+                <p className="text-xs text-indigo-700 mt-1">{idadeCrianca(row.data_nascimento, d)}</p>
+              )}
             </div>
           </div>
         </div>

@@ -523,6 +523,23 @@ function anosDesde(dateStr: string): number | null {
   return years >= 0 ? years : null
 }
 
+function idadeCrianca(dateStr: string, d: StaffFormDict): string | null {
+  if (!dateStr) return null
+  const then = new Date(dateStr + 'T00:00:00')
+  if (Number.isNaN(then.getTime())) return null
+  const now = new Date()
+  if (then > now) return null
+  let years = now.getFullYear() - then.getFullYear()
+  let months = now.getMonth() - then.getMonth()
+  if (now.getDate() < then.getDate()) months -= 1
+  if (months < 0) { years -= 1; months += 12 }
+  if (years < 0) return null
+  if (years >= 5) return tStaff(d.s3.filhos_idade_anos, { anos: String(years) })
+  if (years === 0) return tStaff(d.s3.filhos_idade_meses, { meses: String(months) })
+  if (months === 0) return tStaff(d.s3.filhos_idade_anos, { anos: String(years) })
+  return tStaff(d.s3.filhos_idade_anos_meses, { anos: String(years), meses: String(months) })
+}
+
 type ChildEntry = { nome: string; sexo: string; data_nascimento: string }
 
 function parseChildren(raw?: string): ChildEntry[] {
@@ -586,6 +603,9 @@ function ChildrenField({ data }: { data?: string }) {
               <label className="block text-xs text-gray-500 mb-0.5">{d.s3.filhos_nascimento}</label>
               <input type="date" value={row.data_nascimento} max={new Date().toISOString().slice(0, 10)}
                 onChange={e => updateRow(i, { data_nascimento: e.target.value })} className={inputClass} />
+              {row.data_nascimento && (
+                <p className="text-xs text-amber-700 mt-1">{idadeCrianca(row.data_nascimento, d)}</p>
+              )}
             </div>
           </div>
         </div>
@@ -725,13 +745,15 @@ function S4Igreja({ data }: { data?: Record<string, string> }) {
             ]} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setConversou(e.target.value === 'sim')} />
         </div>
         {conversou && (
-          <Select label={d.s4.pastor_concorda} name="pastor_concorda"
-            defaultValue={data?.pastor_concorda}
-            options={[
-              { value: 'sim', label: d.opts.yes },
-              { value: 'parcialmente', label: d.opts.partially },
-              { value: 'nao', label: d.opts.no },
-            ]} />
+          <div className="sm:col-span-2">
+            <Select label={d.s4.pastor_concorda} name="pastor_concorda"
+              defaultValue={data?.pastor_concorda}
+              options={[
+                { value: 'sim', label: d.opts.yes },
+                { value: 'parcialmente', label: d.opts.partially },
+                { value: 'nao', label: d.opts.no },
+              ]} />
+          </div>
         )}
         <div className="sm:col-span-2">
           <Select label={d.s4.igreja_ciente} name="igreja_ciente" required
@@ -820,6 +842,10 @@ function S6ServirBase({ data, ministries, ministryId }: {
   data?: Record<string, string>; ministries: MinistryOption[]; ministryId?: string | null
 }) {
   const d = useContext(DictCtx)
+  const [modalidade, setModalidade] = useState(data?.modalidade_servico ?? '')
+  const [semProjeto, setSemProjeto] = useState(data?.sem_projeto === 'sim')
+  const [dataInicio, setDataInicio] = useState(data?.data_inicio ?? data?.data_chegada ?? '')
+  const temporario = modalidade === 'temporario'
   return (
     <div className="space-y-4">
       <SectionTitle number={d.s6.section} title={d.s6.title} />
@@ -831,13 +857,32 @@ function S6ServirBase({ data, ministries, ministryId }: {
               { value: 'integral', label: d.s6.integral },
               { value: 'parcial', label: d.s6.parcial },
               { value: 'temporario', label: d.s6.temporario },
-            ]} />
+            ]} onChange={e => setModalidade(e.target.value)} />
         </div>
-        <Field label={d.s6.quanto_tempo} name="tempo_servico"
-          defaultValue={data?.tempo_servico} required
-          placeholder={d.s6.quanto_tempo_ph} />
-        <Field label={d.s6.data_chegada} name="data_chegada" type="date"
-          defaultValue={data?.data_chegada} min={DATE_MAX} max="2100-12-31" />
+        {temporario ? (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {d.s6.data_inicio}<span className="text-red-500 ml-0.5">*</span>
+              </label>
+              <input type="date" name="data_inicio" value={dataInicio} required
+                min={DATE_MAX} max="2100-12-31"
+                onChange={e => setDataInicio(e.target.value)}
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-gray-50" />
+            </div>
+            <Field label={d.s6.data_fim} name="data_fim" type="date"
+              defaultValue={data?.data_fim} required
+              min={dataInicio || DATE_MAX} max="2100-12-31" />
+          </>
+        ) : (
+          <>
+            <Field label={d.s6.quanto_tempo} name="tempo_servico"
+              defaultValue={data?.tempo_servico} required
+              placeholder={d.s6.quanto_tempo_ph} />
+            <Field label={d.s6.data_chegada} name="data_chegada" type="date"
+              defaultValue={data?.data_chegada} min={DATE_MAX} max="2100-12-31" />
+          </>
+        )}
         {ministries.length > 0 && (
           <div className="sm:col-span-2">
             <Select label={d.s6.qual_ministerio} name="ministerio_escolhido"
@@ -849,6 +894,22 @@ function S6ServirBase({ data, ministries, ministryId }: {
           <TextArea label={d.s6.motivacao} name="motivacao"
             defaultValue={data?.motivacao} required rows={4}
             placeholder={d.s6.motivacao_ph} />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            {d.s6.projeto}{!semProjeto && <span className="text-red-500 ml-0.5">*</span>}
+          </label>
+          {!semProjeto && (
+            <textarea name="projeto_comunidade" defaultValue={data?.projeto_comunidade} required rows={4}
+              placeholder={d.s6.projeto_ph}
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-gray-50 resize-none" />
+          )}
+          <label className="flex items-start gap-2 mt-2 text-xs text-gray-600">
+            <input type="checkbox" className="mt-0.5" checked={semProjeto}
+              onChange={e => setSemProjeto(e.target.checked)} />
+            {d.s6.sem_projeto_label}
+          </label>
+          <input type="hidden" name="sem_projeto" value={semProjeto ? 'sim' : 'nao'} />
         </div>
       </div>
     </div>
