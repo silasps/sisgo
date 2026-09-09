@@ -156,7 +156,8 @@ export interface StaffFormDict {
     conjuge_section: string
     conjuge_nome: string
     conjuge_data_nascimento: string
-    tempo_casados: string
+    data_casamento: string
+    data_casamento_anos: string
     conjuge_vira: string
     certidao_casamento: string
     certidao_casamento_skip_label: string
@@ -165,7 +166,12 @@ export interface StaffFormDict {
     // Children
     tem_filhos: string
     filhos_dados: string
-    filhos_dados_ph: string
+    filhos_contagem: string
+    filhos_nome_ph: string
+    filhos_sexo: string
+    filhos_nascimento: string
+    filhos_add: string
+    filhos_remove: string
     filhos_virao: string
   }
 

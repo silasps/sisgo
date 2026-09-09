@@ -192,7 +192,8 @@ export interface FormDict {
     situacao_familiar: string
     // Married
     conjuge_nome_idade: string
-    tempo_casados: string
+    data_casamento: string
+    data_casamento_anos: string
     conjuge_apoia: string
     conjuge_participa: string
     // Engaged
@@ -202,6 +203,12 @@ export interface FormDict {
     // Children
     tem_filhos: string
     filhos_dados: string
+    filhos_contagem: string
+    filhos_nome_ph: string
+    filhos_sexo: string
+    filhos_nascimento: string
+    filhos_add: string
+    filhos_remove: string
     filhos_virao: string
     filhos_ficam_com: string
   }

@@ -500,6 +500,94 @@ function S5Dados({ prefill, data, onNationalityChange }: {
   )
 }
 
+function anosDesde(dateStr: string): number | null {
+  if (!dateStr) return null
+  const then = new Date(dateStr + 'T00:00:00')
+  if (Number.isNaN(then.getTime())) return null
+  const now = new Date()
+  let years = now.getFullYear() - then.getFullYear()
+  const beforeAnniversary = now.getMonth() < then.getMonth() ||
+    (now.getMonth() === then.getMonth() && now.getDate() < then.getDate())
+  if (beforeAnniversary) years -= 1
+  return years >= 0 ? years : null
+}
+
+type ChildEntry = { nome: string; sexo: string; data_nascimento: string }
+
+function parseChildren(raw?: string): ChildEntry[] {
+  if (!raw) return [{ nome: '', sexo: '', data_nascimento: '' }]
+  try {
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed) && parsed.length) {
+      return parsed.map((r: unknown) => {
+        const row = (r ?? {}) as Partial<ChildEntry>
+        return { nome: row.nome ?? '', sexo: row.sexo ?? '', data_nascimento: row.data_nascimento ?? '' }
+      })
+    }
+  } catch { /* valor legado em texto livre, cai no fallback abaixo */ }
+  return raw.trim() ? [{ nome: raw, sexo: '', data_nascimento: '' }] : [{ nome: '', sexo: '', data_nascimento: '' }]
+}
+
+function ChildrenField({ data }: { data?: string }) {
+  const d = useContext(DictCtx)
+  const [rows, setRows] = useState<ChildEntry[]>(() => parseChildren(data))
+
+  function updateRow(i: number, patch: Partial<ChildEntry>) {
+    setRows(prev => prev.map((r, idx) => idx === i ? { ...r, ...patch } : r))
+  }
+  function addRow() {
+    setRows(prev => [...prev, { nome: '', sexo: '', data_nascimento: '' }])
+  }
+  function removeRow(i: number) {
+    setRows(prev => prev.filter((_, idx) => idx !== i))
+  }
+
+  const filled = rows.filter(r => r.nome.trim())
+  const serialized = JSON.stringify(filled)
+  const inputClass = "w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-gray-50"
+
+  return (
+    <div className="sm:col-span-2 space-y-2">
+      <div className="flex items-center justify-between">
+        <label className="block text-sm font-medium text-gray-700">{d.s7.filhos_dados}</label>
+        <span className="text-xs font-medium text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">
+          {t(d.s7.filhos_contagem, { count: String(filled.length) })}
+        </span>
+      </div>
+      {rows.map((row, i) => (
+        <div key={i} className="relative rounded-xl border border-gray-200 bg-white p-3 space-y-2">
+          {rows.length > 1 && (
+            <button type="button" onClick={() => removeRow(i)} aria-label={d.s7.filhos_remove}
+              className="absolute top-2 right-2 text-gray-400 hover:text-red-500 text-sm">✕</button>
+          )}
+          <input type="text" value={row.nome} onChange={e => updateRow(i, { nome: e.target.value })}
+            placeholder={d.s7.filhos_nome_ph} required className={`${inputClass} pr-8`} />
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs text-gray-500 mb-0.5">{d.s7.filhos_sexo}</label>
+              <select value={row.sexo} onChange={e => updateRow(i, { sexo: e.target.value })} className={inputClass}>
+                <option value="" disabled>{d.nav.select_placeholder}</option>
+                <option value="M">{d.opts.gender_m}</option>
+                <option value="F">{d.opts.gender_f}</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-0.5">{d.s7.filhos_nascimento}</label>
+              <input type="date" value={row.data_nascimento} max={new Date().toISOString().slice(0, 10)}
+                onChange={e => updateRow(i, { data_nascimento: e.target.value })} className={inputClass} />
+            </div>
+          </div>
+        </div>
+      ))}
+      <button type="button" onClick={addRow}
+        className="text-xs font-semibold text-indigo-600 hover:text-indigo-800">
+        {d.s7.filhos_add}
+      </button>
+      <input type="hidden" name="filhos_dados" value={serialized} readOnly />
+    </div>
+  )
+}
+
 function S6Historia({ data }: { data?: Record<string, string> }) {
   const d = useContext(DictCtx)
   return (
@@ -526,6 +614,8 @@ function S7Familia({ data, estadoCivilS5 }: { data?: Record<string, string>; est
   const estadoCivil = initialCivil
   const [temFilhos, setTemFilhos] = useState(data?.tem_filhos === 'sim')
   const [filhosVirao, setFilhosVirao] = useState(data?.filhos_virao ?? '')
+  const [dataCasamento, setDataCasamento] = useState(data?.data_casamento ?? '')
+  const anosCasados = anosDesde(dataCasamento)
 
   const civilMap: Record<string, string> = {
     solteiro: d.s5.solteiro,
@@ -569,7 +659,15 @@ function S7Familia({ data, estadoCivilS5 }: { data?: Record<string, string>; est
 
         {(estadoCivil === 'casado' || initialCivil === 'casado') && <>
           <Field label={d.s7.conjuge_nome_idade} name="conjuge_nome_idade" defaultValue={data?.conjuge_nome_idade} />
-          <Field label={d.s7.tempo_casados} name="tempo_casados" defaultValue={data?.tempo_casados} />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{d.s7.data_casamento}</label>
+            <input type="date" name="data_casamento" value={dataCasamento} max={new Date().toISOString().slice(0, 10)}
+              onChange={e => setDataCasamento(e.target.value)}
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-gray-50" />
+            {anosCasados !== null && (
+              <p className="text-xs text-indigo-700 mt-1">{t(d.s7.data_casamento_anos, { anos: String(anosCasados) })}</p>
+            )}
+          </div>
           <Select label={d.s7.conjuge_apoia} name="conjuge_apoia" defaultValue={data?.conjuge_apoia} options={[
             { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
           ]} />
@@ -598,9 +696,7 @@ function S7Familia({ data, estadoCivilS5 }: { data?: Record<string, string>; est
           }} />
         </div>
         {temFilhos && <>
-          <div className="sm:col-span-2">
-            <TextArea label={d.s7.filhos_dados} name="filhos_dados" defaultValue={data?.filhos_dados} rows={2} />
-          </div>
+          <ChildrenField data={data?.filhos_dados} />
           <Select label={d.s7.filhos_virao} name="filhos_virao" defaultValue={data?.filhos_virao} options={[
             { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
           ]} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilhosVirao(e.target.value)} />

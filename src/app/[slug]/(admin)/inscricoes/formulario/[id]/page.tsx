@@ -14,7 +14,7 @@ import { avancarEtapaAluno, reenviarLinkFormulario } from './actions'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
-type FormSection = { title: string; fields: { label: string; key: string; type?: 'textarea' | 'radio' }[] }
+type FormSection = { title: string; fields: { label: string; key: string; type?: 'textarea' | 'radio' | 'date_anos' | 'children' }[] }
 
 const SECTIONS: FormSection[] = [
   {
@@ -96,14 +96,14 @@ const SECTIONS: FormSection[] = [
       { label: 'Situação familiar', key: 'situacao_familiar', type: 'textarea' },
       { label: 'Estado civil atual', key: 'estado_civil_atual' },
       { label: 'Nome/idade do cônjuge', key: 'conjuge_nome_idade' },
-      { label: 'Tempo casados', key: 'tempo_casados' },
+      { label: 'Data do casamento', key: 'data_casamento', type: 'date_anos' },
       { label: 'Cônjuge apoia?', key: 'conjuge_apoia' },
       { label: 'Cônjuge participará?', key: 'conjuge_participa' },
       { label: 'Tempo comprometido(a)', key: 'tempo_compromisso' },
       { label: 'Parceiro(a) apoia?', key: 'compromisso_apoia' },
       { label: 'Situação relacional', key: 'situacao_relacional', type: 'textarea' },
       { label: 'Tem filhos?', key: 'tem_filhos' },
-      { label: 'Dados dos filhos', key: 'filhos_dados', type: 'textarea' },
+      { label: 'Filhos', key: 'filhos_dados', type: 'children' },
       { label: 'Filhos virão?', key: 'filhos_virao' },
       { label: 'Com quem os filhos ficarão', key: 'filhos_ficam_com' },
     ],
@@ -243,7 +243,65 @@ function SectionCard({ title, children }: { title: string; children: React.React
   )
 }
 
-function FieldRow({ label, value, type }: { label: string; value: unknown; type?: 'textarea' | 'radio' }) {
+function anosDesde(dateStr: string): number | null {
+  const then = new Date(dateStr + 'T00:00:00')
+  if (Number.isNaN(then.getTime())) return null
+  const now = new Date()
+  let years = now.getFullYear() - then.getFullYear()
+  const beforeAnniversary = now.getMonth() < then.getMonth() ||
+    (now.getMonth() === then.getMonth() && now.getDate() < then.getDate())
+  if (beforeAnniversary) years -= 1
+  return years >= 0 ? years : null
+}
+
+type ChildRow = { nome: string; sexo: string; data_nascimento: string }
+
+function parseChildren(value: unknown): ChildRow[] {
+  if (typeof value !== 'string' || !value.trim()) return []
+  try {
+    const parsed = JSON.parse(value)
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((r: unknown) => {
+          const row = (r ?? {}) as Partial<ChildRow>
+          return { nome: row.nome ?? '', sexo: row.sexo ?? '', data_nascimento: row.data_nascimento ?? '' }
+        })
+        .filter(r => r.nome.trim())
+    }
+  } catch { /* valor legado em texto livre */ }
+  return [{ nome: value, sexo: '', data_nascimento: '' }]
+}
+
+function FieldRow({ label, value, type }: { label: string; value: unknown; type?: 'textarea' | 'radio' | 'date_anos' | 'children' }) {
+  if (type === 'date_anos') {
+    const str = typeof value === 'string' ? value.trim() : ''
+    if (!str) return null
+    const anos = anosDesde(str)
+    const formatted = new Date(str + 'T00:00:00').toLocaleDateString('pt-BR')
+    return (
+      <div className="py-2.5 border-b border-gray-50 last:border-0">
+        <p className="text-xs font-medium text-gray-400 mb-0.5">{label}</p>
+        <p className="text-sm text-gray-800">{formatted}{anos !== null ? ` — ${anos} ano(s) de casados` : ''}</p>
+      </div>
+    )
+  }
+  if (type === 'children') {
+    const rows = parseChildren(value)
+    if (!rows.length) return null
+    return (
+      <div className="py-2.5 border-b border-gray-50 last:border-0">
+        <p className="text-xs font-medium text-gray-400 mb-0.5">{label} <span className="text-indigo-700 font-semibold">({rows.length})</span></p>
+        <div className="text-sm text-gray-800 space-y-0.5">
+          {rows.map((r, i) => {
+            const sexoLabel = r.sexo === 'M' ? 'Masculino' : r.sexo === 'F' ? 'Feminino' : ''
+            const nascimento = r.data_nascimento ? new Date(r.data_nascimento + 'T00:00:00').toLocaleDateString('pt-BR') : ''
+            const details = [sexoLabel, nascimento].filter(Boolean).join(' · ')
+            return <p key={i}>{r.nome}{details ? ` — ${details}` : ''}</p>
+          })}
+        </div>
+      </div>
+    )
+  }
   const str = typeof value === 'string' ? value.trim() : ''
   if (!str) return null
   return (
