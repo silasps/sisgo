@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useContext, createContext } from 'react'
+import { useRef, useState, useContext, createContext, useEffect } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { HeartHandshake, Camera, IdCard, FileText } from 'lucide-react'
 import { salvarSecaoObreiro, salvarSecaoObreiroComArquivos, enviarFormularioObreiro, gerarLinkReferenciaObreiro, enviarRegrasInstituicaoEmail } from './actions'
@@ -1005,6 +1005,12 @@ function InstitutionRulesModal({ text, onClose, slug, token, lang, candidateEmai
   const [email, setEmail] = useState(candidateEmail ?? '')
   const [sending, setSending] = useState(false)
   const [result, setResult] = useState<'ok' | 'erro' | null>(null)
+
+  useEffect(() => {
+    const original = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = original }
+  }, [])
 
   function handleDownload() {
     const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })

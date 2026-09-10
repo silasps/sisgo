@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Cropper, { type Area } from 'react-easy-crop'
 import { ZoomIn } from 'lucide-react'
 
@@ -64,6 +64,17 @@ export function PhotoCropperModal({
   const accent = tone === 'amber' ? '#d97706' : '#4f46e5'
 
   const onCropComplete = useCallback((_: Area, pixels: Area) => setCroppedAreaPixels(pixels), [])
+
+  // Trava o scroll da página de fundo enquanto o modal está aberto — sem
+  // isso, rolar por trás de um overlay fixed é a causa clássica de
+  // conteúdo "sumindo"/desalinhando em navegadores mobile (o scroll por
+  // trás mexe com o recálculo do viewport visível, mesmo o modal sendo
+  // fixed). Técnica padrão pra qualquer modal em tela cheia no mobile.
+  useEffect(() => {
+    const original = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = original }
+  }, [])
 
   async function handleConfirm() {
     if (!croppedAreaPixels) return
