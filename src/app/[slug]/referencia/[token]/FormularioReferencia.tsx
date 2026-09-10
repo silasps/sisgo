@@ -11,7 +11,7 @@ import type { Lang } from '@/lib/i18n/forms'
 
 type Props = {
   token: string
-  tipo: 'pastor' | 'amigo' | 'lideranca_experiencia'
+  tipo: 'pastor' | 'amigo' | 'lideranca_experiencia' | 'responsavel'
   candidatoNome: string
   escolaNome: string
   initialLang?: string
@@ -357,6 +357,49 @@ function FormLiderancaExperiencia({ candidatoNome, d, selectPh, isStaff }: {
   )
 }
 
+function FormResponsavel({ candidatoNome, d, selectPh }: {
+  candidatoNome: string
+  d: ReturnType<typeof getFormDict>
+  selectPh: string
+}) {
+  return (
+    <div className="space-y-5">
+      <p className="text-sm text-gray-600 leading-relaxed">
+        <InlineWithName template={d.ref.responsavel_intro} name={candidatoNome} />
+      </p>
+
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div className="sm:col-span-2">
+          <Field label={d.ref.responsavel_nome_confirma} name="responsavel_nome_confirma" required />
+        </div>
+        <div className="sm:col-span-2">
+          <Select label={d.ref.responsavel_parentesco} name="parentesco" required selectPlaceholder={selectPh}
+            options={[
+              { value: 'mae', label: d.ref.responsavel_parentesco_mae },
+              { value: 'pai', label: d.ref.responsavel_parentesco_pai },
+              { value: 'tutor', label: d.ref.responsavel_parentesco_tutor },
+              { value: 'outro', label: d.ref.responsavel_parentesco_outro },
+            ]} />
+        </div>
+        <div className="sm:col-span-2">
+          <TextArea label={d.ref.responsavel_observacoes} name="observacoes" rows={3}
+            placeholder={d.ref.responsavel_observacoes_ph} />
+        </div>
+
+        <div className="sm:col-span-2 border-t pt-4 mt-2">
+          <label className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 cursor-pointer hover:border-indigo-200">
+            <input type="checkbox" name="decl_autorizacao" value="sim" required
+              className="mt-0.5 accent-indigo-600 flex-shrink-0" />
+            <span className="text-sm text-gray-700">
+              <InlineWithName template={d.ref.responsavel_decl} name={candidatoNome} />
+            </span>
+          </label>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function FormularioReferencia({ token, tipo, candidatoNome, escolaNome, initialLang, isStaff }: Props) {
   const router = useRouter()
   const pathname = usePathname()
@@ -379,7 +422,9 @@ export function FormularioReferencia({ token, tipo, candidatoNome, escolaNome, i
     ? d.ref.form_type_pastor
     : tipo === 'amigo'
       ? d.ref.form_type_amigo
-      : d.ref.form_type_lideranca_experiencia
+      : tipo === 'responsavel'
+        ? d.ref.form_type_responsavel
+        : d.ref.form_type_lideranca_experiencia
   const selectPh = d.nav.select_placeholder
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -432,7 +477,9 @@ export function FormularioReferencia({ token, tipo, candidatoNome, escolaNome, i
         ? <FormPastor candidatoNome={candidatoNome} d={d} selectPh={selectPh} isStaff={isStaff} />
         : tipo === 'amigo'
           ? <FormAmigo candidatoNome={candidatoNome} d={d} selectPh={selectPh} isStaff={isStaff} />
-          : <FormLiderancaExperiencia candidatoNome={candidatoNome} d={d} selectPh={selectPh} isStaff={isStaff} />
+          : tipo === 'responsavel'
+            ? <FormResponsavel candidatoNome={candidatoNome} d={d} selectPh={selectPh} />
+            : <FormLiderancaExperiencia candidatoNome={candidatoNome} d={d} selectPh={selectPh} isStaff={isStaff} />
       }
 
       {error && (

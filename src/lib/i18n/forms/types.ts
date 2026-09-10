@@ -394,6 +394,7 @@ export interface FormDict {
     form_type_pastor: string
     form_type_amigo: string
     form_type_lideranca_experiencia: string
+    form_type_responsavel: string
     ref_for: string    // "Referência para" — name added by component
     org_label: string
     form_title_prefix: string   // "Formulário" — prefixa o tipo (ex.: "Formulário Pastoral")
@@ -450,6 +451,17 @@ export interface FormDict {
     lideranca_observacoes: string
     lideranca_observacoes_ph: string
     lideranca_decl: string
+    // Autorização de responsável (candidato menor de idade)
+    responsavel_intro: string  // {name} placeholder
+    responsavel_nome_confirma: string
+    responsavel_parentesco: string
+    responsavel_parentesco_mae: string
+    responsavel_parentesco_pai: string
+    responsavel_parentesco_tutor: string
+    responsavel_parentesco_outro: string
+    responsavel_observacoes: string
+    responsavel_observacoes_ph: string
+    responsavel_decl: string  // {name} placeholder
     // Common
     submit: string
     submitting: string

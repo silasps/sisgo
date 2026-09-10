@@ -11,6 +11,7 @@ import { IncompleteFormLinkCard } from '@/components/inscricoes/IncompleteFormLi
 import { getStageAdvances, resolveAdvancerNames } from '@/lib/pipelineStageAdvance'
 import BackgroundChecksSection from './BackgroundChecksSection'
 import { PastorReferenceGate } from './PastorReferenceGate'
+import { ResponsavelReferenceGate } from './ResponsavelReferenceGate'
 import { HospedagemHandoffCard } from './HospedagemHandoffCard'
 import { HospedagemSolicitacaoCard } from './HospedagemSolicitacaoCard'
 import { HospedagemGate } from './HospedagemGate'
@@ -445,6 +446,20 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
   const pastorRef = refs?.find(r => r.type === 'pastor')
   const amigoRef = refs?.find(r => r.type === 'amigo')
   const liderancaRef = refs?.find(r => r.type === 'lideranca_experiencia')
+  const responsavelRef = refs?.find(r => r.type === 'responsavel')
+  const s2ForIdade = (formData.s2 as Record<string, string> | undefined) ?? {}
+  const isMinorCandidate = (() => {
+    const dateStr = s2ForIdade.data_nascimento
+    if (!dateStr) return false
+    const then = new Date(dateStr + 'T00:00:00')
+    if (Number.isNaN(then.getTime())) return false
+    const now = new Date()
+    let years = now.getFullYear() - then.getFullYear()
+    const beforeAnniversary = now.getMonth() < then.getMonth() ||
+      (now.getMonth() === then.getMonth() && now.getDate() < then.getDate())
+    if (beforeAnniversary) years -= 1
+    return years >= 0 && years < 18
+  })()
 
   const isLiderMinisterio = userRole === 'lider_ministerio'
   let leaderMinistryId: string | null = null
@@ -606,7 +621,7 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
         )}
 
         {/* Referências */}
-        {(pastorRef || amigoRef || liderancaRef || app.pastor_reference_skip_reason) && (
+        {(pastorRef || amigoRef || liderancaRef || app.pastor_reference_skip_reason || responsavelRef || isMinorCandidate) && (
           <SectionCard title="Referências">
             <div className="py-2">
               <p className="text-xs font-semibold text-gray-500 mb-1">Pastor / Líder (obrigatória)</p>
@@ -674,6 +689,33 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+            {(responsavelRef || isMinorCandidate) && (
+              <div className="py-2 border-t border-gray-50">
+                <p className="text-xs font-semibold text-gray-500 mb-1">Autorização do responsável (candidato menor de idade)</p>
+                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${responsavelRef?.status === 'enviado' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                  {responsavelRef?.status === 'enviado' ? 'Enviado' : 'Pendente'}
+                </span>
+                {responsavelRef?.status === 'enviado' && responsavelRef.form_data && (
+                  <div className="mt-2 space-y-1">
+                    {(responsavelRef.form_data as Record<string, unknown>).resolvido_manualmente === true && (
+                      <p className="text-xs font-medium text-gray-500">Resolvido manualmente pelo DH</p>
+                    )}
+                    {Object.entries(responsavelRef.form_data as Record<string, unknown>)
+                      .filter(([k]) => !['resolvido_manualmente', 'resolvido_por', 'resolvido_em'].includes(k))
+                      .map(([k, v]) => (
+                        <FieldRow key={k} label={k.replace(/_/g, ' ')} value={String(v ?? '')} />
+                      ))}
+                  </div>
+                )}
+                <ResponsavelReferenceGate
+                  staffApplicationId={id}
+                  organizationId={app.organization_id}
+                  slug={slug}
+                  status={responsavelRef?.status === 'enviado' ? 'enviado' : 'pendente'}
+                  readOnly={!canManagePastorSkip}
+                />
               </div>
             )}
           </SectionCard>

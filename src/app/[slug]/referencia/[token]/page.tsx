@@ -78,7 +78,9 @@ export default async function ReferenciaPage({ params, searchParams }: Props) {
     ? d.ref.form_type_pastor
     : ref.type === 'amigo'
       ? d.ref.form_type_amigo
-      : d.ref.form_type_lideranca_experiencia
+      : ref.type === 'responsavel'
+        ? d.ref.form_type_responsavel
+        : d.ref.form_type_lideranca_experiencia
 
   if (new Date(ref.token_expires_at) < new Date()) {
     return (
@@ -130,7 +132,7 @@ export default async function ReferenciaPage({ params, searchParams }: Props) {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6 md:p-8">
           <FormularioReferencia
             token={token}
-            tipo={ref.type as 'pastor' | 'amigo' | 'lideranca_experiencia'}
+            tipo={ref.type as 'pastor' | 'amigo' | 'lideranca_experiencia' | 'responsavel'}
             candidatoNome={candidatoNome}
             escolaNome={escolaNome}
             initialLang={langParam}

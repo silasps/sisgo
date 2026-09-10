@@ -301,6 +301,41 @@ async function enviarPedidosDeReferencia(
       }).catch(() => {})
     }
   }
+
+  // Candidato menor de idade: em vez de "declaro que sou maior de 18 anos",
+  // a Seção 10 pede o contato do responsável — a autorização de verdade
+  // acontece aqui, com o responsável confirmando num link próprio (mesma
+  // infra de reference_forms usada pra pastor/liderança), não só um
+  // contato coletado e arquivado.
+  const s10 = formData.s10
+  if (isMinorByBirthDate(formData.s2?.data_nascimento) && s10?.responsavel_email) {
+    const ref = await getOrCreateReferenceForm(sb, staffApplicationId, 'responsavel')
+    if (ref.token) {
+      const url = await buildReferenceUrl(slug, ref.token)
+      await sendReferenceRequestEmail({
+        to: s10.responsavel_email,
+        recommenderRole: 'responsavel',
+        candidateName,
+        contextLabel,
+        formUrl: url,
+        expiresAt: ref.expiresAt,
+        replyTo,
+        organizationId,
+      }).catch(() => {})
+    }
+  }
+}
+
+function isMinorByBirthDate(dateStr?: string): boolean {
+  if (!dateStr) return false
+  const then = new Date(dateStr + 'T00:00:00')
+  if (Number.isNaN(then.getTime())) return false
+  const now = new Date()
+  let years = now.getFullYear() - then.getFullYear()
+  const beforeAnniversary = now.getMonth() < then.getMonth() ||
+    (now.getMonth() === then.getMonth() && now.getDate() < then.getDate())
+  if (beforeAnniversary) years -= 1
+  return years >= 0 && years < 18
 }
 
 export async function gerarLinkReferenciaObreiro(

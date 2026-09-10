@@ -340,6 +340,13 @@ export interface StaffFormDict {
     lgpd_checkbox: string
     maior_18: string
     decl_ciencia_verificacao: string
+    menor_aviso_titulo: string
+    menor_aviso_texto: string
+    responsavel_nome: string
+    responsavel_email: string
+    responsavel_telefone: string
+    doc_autorizacao_responsavel: string
+    doc_autorizacao_responsavel_hint: string
   }
 
   // ── Chrome da landing de "servir" (servir/page.tsx e variantes) ────────

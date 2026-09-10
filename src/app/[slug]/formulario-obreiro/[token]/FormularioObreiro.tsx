@@ -1149,9 +1149,9 @@ function S9Financeiro({ data }: { data?: Record<string, string> }) {
   )
 }
 
-function S10DocumentosAceite({ data, isBrazilian, estadoCivil, temPassaporte, sexo, documentUrls }: {
+function S10DocumentosAceite({ data, isBrazilian, estadoCivil, temPassaporte, sexo, isMinor, documentUrls }: {
   data?: Record<string, string>; isBrazilian: boolean; estadoCivil: string; temPassaporte: boolean; sexo?: string
-  documentUrls?: DocumentUrls
+  isMinor: boolean; documentUrls?: DocumentUrls
 }) {
   const d = useContext(DictCtx)
   // RG e CNH ficam os dois visíveis (não é mais uma escolha por botão) — o
@@ -1202,6 +1202,9 @@ function S10DocumentosAceite({ data, isBrazilian, estadoCivil, temPassaporte, se
     ...(estadoCivil === 'casado' ? [
       { name: 'doc_certidao_casamento_s10', label: d.s3.certidao_casamento, required: true, icon: 'id' as const },
     ] : []),
+    ...(isMinor ? [
+      { name: 'doc_autorizacao_responsavel', label: d.s10.doc_autorizacao_responsavel, required: false, icon: 'id' as const, hint: d.s10.doc_autorizacao_responsavel_hint },
+    ] : []),
   ]
 
   function renderDoc(doc: DocDef) {
@@ -1233,6 +1236,22 @@ function S10DocumentosAceite({ data, isBrazilian, estadoCivil, temPassaporte, se
       <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 text-sm text-amber-800 leading-relaxed">
         {d.s10.docs_intro}
       </div>
+
+      {isMinor && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-3">
+          <div>
+            <p className="text-sm font-bold text-red-800">{d.s10.menor_aviso_titulo}</p>
+            <p className="text-sm text-red-700 leading-relaxed mt-0.5">{d.s10.menor_aviso_texto}</p>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Field label={d.s10.responsavel_nome} name="responsavel_nome" defaultValue={data?.responsavel_nome} required />
+            <Field label={d.s10.responsavel_email} name="responsavel_email" type="email" defaultValue={data?.responsavel_email} required />
+            <InternationalPhoneField phoneName="responsavel_telefone" countryName="responsavel_telefone_country"
+              label={d.s10.responsavel_telefone} defaultCountryIso="BR"
+              defaultPhone={data?.responsavel_telefone} required />
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4">
         {renderDoc({ name: 'doc_foto', label: d.s10.doc_foto, required: true, icon: 'foto' })}
@@ -1270,12 +1289,14 @@ function S10DocumentosAceite({ data, isBrazilian, estadoCivil, temPassaporte, se
             {d.s10.lgpd_checkbox}
           </span>
         </label>
-        <label className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 cursor-pointer hover:border-amber-200">
-          <input type="checkbox" name="maior_18" value="sim" required
-            defaultChecked={data?.maior_18 === 'sim'}
-            className="mt-0.5 accent-amber-600 flex-shrink-0" />
-          <span className="text-sm text-gray-700">{d.s10.maior_18}</span>
-        </label>
+        {!isMinor && (
+          <label className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 cursor-pointer hover:border-amber-200">
+            <input type="checkbox" name="maior_18" value="sim" required
+              defaultChecked={data?.maior_18 === 'sim'}
+              className="mt-0.5 accent-amber-600 flex-shrink-0" />
+            <span className="text-sm text-gray-700">{d.s10.maior_18}</span>
+          </label>
+        )}
         <label className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 cursor-pointer hover:border-amber-200">
           <input type="checkbox" name="decl_ciencia_verificacao" value="sim" required
             defaultChecked={data?.decl_ciencia_verificacao === 'sim'}
@@ -1436,6 +1457,7 @@ export function FormularioObreiro({
         estadoCivil={localData.s2?.estado_civil ?? localData.s3?.estado_civil_atual ?? ''}
         temPassaporte={!!localData.s2?.passaporte?.trim()}
         sexo={localData.s2?.sexo}
+        isMinor={(anosDesde(localData.s2?.data_nascimento ?? '') ?? 99) < 18}
         documentUrls={documentUrls} />,
     },
   ]

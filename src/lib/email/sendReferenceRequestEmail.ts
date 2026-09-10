@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getEmailQuota } from './getEmailQuota'
 
-type RecommenderRole = 'pastor' | 'lideranca_experiencia'
+type RecommenderRole = 'pastor' | 'lideranca_experiencia' | 'responsavel'
 
 type Params = {
   to: string
@@ -16,10 +16,14 @@ type Params = {
 
 function buildHtml(p: Params): string {
   const isPastor = p.recommenderRole === 'pastor'
-  const title = isPastor ? 'Pedido de recomendação pastoral' : 'Pedido de avaliação'
+  const isResponsavel = p.recommenderRole === 'responsavel'
+  const title = isPastor ? 'Pedido de recomendação pastoral' : isResponsavel ? 'Autorização de responsável' : 'Pedido de avaliação'
   const intro = isPastor
     ? `<strong style="color:#111827;">${p.candidateName}</strong> informou você como pastor(a) ao se candidatar para servir como obreiro(a) em <strong style="color:#111827;">${p.contextLabel}</strong>. Precisamos da sua recomendação para dar continuidade ao processo.`
+    : isResponsavel
+    ? `<strong style="color:#111827;">${p.candidateName}</strong> é menor de idade e se candidatou para servir como voluntário(a) em <strong style="color:#111827;">${p.contextLabel}</strong>. Como responsável legal, pedimos sua autorização para que o processo possa continuar.`
     : `<strong style="color:#111827;">${p.candidateName}</strong> indicou seu contato como liderança responsável durante sua passagem por <strong style="color:#111827;">${p.contextLabel}</strong>, ao se candidatar para servir como obreiro(a). Gostaríamos da sua avaliação sobre esse período.`
+  const ctaLabel = isResponsavel ? 'Ver e autorizar' : 'Responder recomendação'
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -42,7 +46,7 @@ function buildHtml(p: Params): string {
                 <td align="center" style="padding:8px 0 8px;">
                   <a href="${p.formUrl}"
                     style="display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;font-size:16px;font-weight:700;padding:16px 40px;border-radius:12px;">
-                    Responder recomendação
+                    ${ctaLabel}
                   </a>
                 </td>
               </tr>
@@ -81,6 +85,8 @@ export async function sendReferenceRequestEmail(params: Params): Promise<{ succe
   const fromEmail = process.env.BREVO_FROM_EMAIL ?? 'noreply@sisgomission.com'
   const subject = params.recommenderRole === 'pastor'
     ? `Recomendação de ${params.candidateName} — ${params.contextLabel}`
+    : params.recommenderRole === 'responsavel'
+    ? `Autorização de responsável — ${params.candidateName} — ${params.contextLabel}`
     : `Avaliação de ${params.candidateName} — ${params.contextLabel}`
 
   let status: 'sent' | 'failed' = 'sent'

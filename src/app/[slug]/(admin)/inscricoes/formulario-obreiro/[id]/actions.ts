@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { insertStageAdvance } from '@/lib/pipelineStageAdvance'
 import { getOrRegenerateToken } from '@/lib/inscricoes/resendLink'
+import { getOrCreateReferenceForm } from '@/lib/staff/referenceForms'
 
 async function assertCanManage(organizationId: string) {
   const supabase = await createClient()
@@ -129,6 +130,42 @@ export async function pularReferenciaPastor(params: {
     pastor_reference_skipped_by: userId,
     pastor_reference_skipped_at: new Date().toISOString(),
   }).eq('id', params.staffApplicationId)
+  revalidatePath(`/${params.slug}/inscricoes/formulario-obreiro/${params.staffApplicationId}`)
+}
+
+// DH resolve a autorização do responsável (candidato menor de idade) sem
+// depender do e-mail — cobre o caso de ter falado com o responsável por
+// telefone, por exemplo. Reaproveita a mesma linha de reference_forms que o
+// fluxo por e-mail usaria (getOrCreateReferenceForm já cria se não existir),
+// só marcando como resolvida com o que o DH registrar.
+export async function resolverAutorizacaoResponsavelManualmente(params: {
+  staffApplicationId: string
+  organizationId: string
+  slug: string
+  nomeResponsavel: string
+  observacoes: string
+}) {
+  if (!params.nomeResponsavel.trim()) throw new Error('Nome do responsável é obrigatório')
+  const userId = await assertDh(params.organizationId)
+  const sb = createAdminClient()
+
+  const created = await getOrCreateReferenceForm(sb, params.staffApplicationId, 'responsavel')
+  if ('error' in created) throw new Error(created.error)
+
+  await sb.from('reference_forms')
+    .update({
+      status: 'enviado',
+      form_data: {
+        responsavel_nome_confirma: params.nomeResponsavel.trim(),
+        observacoes: params.observacoes.trim() || null,
+        resolvido_manualmente: true,
+        resolvido_por: userId,
+        resolvido_em: new Date().toISOString(),
+      },
+    })
+    .eq('staff_application_id', params.staffApplicationId)
+    .eq('type', 'responsavel')
+
   revalidatePath(`/${params.slug}/inscricoes/formulario-obreiro/${params.staffApplicationId}`)
 }
 
