@@ -79,20 +79,30 @@ export function PhotoCropperModal({
   }
 
   return (
-    // items-start (em vez de centralizar) + overflow-y-auto: centralizar com
-    // fixed inset-0 depende de 100vh bater com a altura visível de verdade,
-    // o que quebra no mobile (barra de endereço do navegador reduz a área
-    // visível sem mudar 100vh) — o modal calculava o centro certo pra um
-    // viewport mais alto que o que a pessoa via de fato, e sumia quase todo
-    // fora da tela. Alinhar no topo evita depender dessa conta.
-    <div className="fixed inset-0 z-[60] bg-black/70 overflow-y-auto flex items-start justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))]" onClick={onCancel}>
-      <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full max-h-[90dvh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between shrink-0">
-          <h3 className="font-semibold text-gray-900 text-sm">{title}</h3>
-          <button type="button" onClick={onCancel} className="text-gray-400 hover:text-gray-700 text-xl leading-none px-1">×</button>
+    // Centralizar um modal com fixed+items-center depende de bater 100vh
+    // com a altura realmente visível — no mobile isso é frágil (barra de
+    // endereço do navegador, teclado, etc.) e o modal pode calcular o
+    // centro pra uma área maior do que a pessoa realmente vê. A solução que
+    // apps de foto maduros usam (Instagram, Google Fotos) não tenta
+    // resolver essa conta: no mobile o editor vira tela cheia — cabeçalho e
+    // rodapé fixos, a área de recorte ocupa (flex-1) o que sobrar entre os
+    // dois, sem centralizar nada. Sem cálculo de altura pra dar errado.
+    // No desktop, sem esse problema de viewport, volta a ser um cartão
+    // centralizado normal (sm:).
+    <div className="fixed inset-0 z-[60] bg-black sm:bg-black/70 flex sm:items-center sm:justify-center sm:p-4" onClick={onCancel}>
+      <div
+        className="flex flex-col w-full h-full sm:h-auto sm:max-w-sm sm:max-h-[85dvh] sm:rounded-2xl sm:shadow-xl bg-black sm:bg-white overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        <div
+          className="flex items-center justify-between px-4 sm:px-5 py-3.5 border-b border-white/10 sm:border-gray-100 shrink-0"
+          style={{ paddingTop: 'max(0.875rem, env(safe-area-inset-top))' }}
+        >
+          <h3 className="font-semibold text-white sm:text-gray-900 text-sm">{title}</h3>
+          <button type="button" onClick={onCancel} className="text-white/70 hover:text-white sm:text-gray-400 sm:hover:text-gray-700 text-xl leading-none px-1">×</button>
         </div>
 
-        <div className="relative bg-gray-900" style={{ height: 320 }}>
+        <div className="relative bg-gray-900 flex-1 min-h-0 sm:flex-none sm:h-80">
           <Cropper
             image={imageSrc}
             crop={crop}
@@ -105,18 +115,21 @@ export function PhotoCropperModal({
           />
         </div>
 
-        <div className="px-5 py-4 space-y-3 shrink-0">
+        <div
+          className="px-4 sm:px-5 py-4 space-y-3 shrink-0 bg-black sm:bg-white"
+          style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+        >
           <div className="flex items-center gap-3">
-            <ZoomIn size={15} className="text-gray-400 shrink-0" aria-hidden />
+            <ZoomIn size={15} className="text-white/60 sm:text-gray-400 shrink-0" aria-hidden />
             <input type="range" min={1} max={3} step={0.02} value={zoom}
               onChange={e => setZoom(Number(e.target.value))}
               aria-label={zoomLabel}
               className="w-full accent-current" style={{ color: accent }} />
           </div>
-          {error && <p className="text-xs text-red-600">{errorLabel}</p>}
+          {error && <p className="text-xs text-red-400 sm:text-red-600">{errorLabel}</p>}
           <div className="flex gap-2">
             <button type="button" onClick={onCancel}
-              className="flex-1 px-4 py-2.5 text-sm font-semibold text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+              className="flex-1 px-4 py-2.5 text-sm font-semibold text-white/80 sm:text-gray-600 border border-white/20 sm:border-gray-200 rounded-xl hover:bg-white/10 sm:hover:bg-gray-50 transition-colors">
               {cancelLabel}
             </button>
             <button type="button" onClick={handleConfirm} disabled={saving || !croppedAreaPixels}
