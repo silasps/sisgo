@@ -477,7 +477,7 @@ function S2Dados({ prefill, data, onNationalityChange, orgName }: {
 
         <SubSection title={d.s2.documentos_section} />
         {!estrangeiro ? (<>
-          <MaskedInput mask="rg" name="rg" label={d.s2.rg} defaultValue={data?.rg} required />
+          <MaskedInput mask="rg" name="rg" label={d.s2.rg} defaultValue={data?.rg} />
           <MaskedInput mask="cpf" name="cpf" label={d.s2.cpf} defaultValue={data?.cpf} required />
           <Field label={d.s2.passaporte_opcional} name="passaporte" defaultValue={data?.passaporte} maxLength={20} />
         </>) : (<>
@@ -1149,23 +1149,41 @@ function S9Financeiro({ data }: { data?: Record<string, string> }) {
   )
 }
 
-function S10DocumentosAceite({ data, isBrazilian, estadoCivil, documentUrls }: {
-  data?: Record<string, string>; isBrazilian: boolean; estadoCivil: string; documentUrls?: DocumentUrls
+function S10DocumentosAceite({ data, isBrazilian, estadoCivil, temPassaporte, sexo, documentUrls }: {
+  data?: Record<string, string>; isBrazilian: boolean; estadoCivil: string; temPassaporte: boolean; sexo?: string
+  documentUrls?: DocumentUrls
 }) {
   const d = useContext(DictCtx)
-  type DocDef = { name: string; label: string; required: boolean; conditional?: boolean; icon: 'foto' | 'id'; hint?: string }
+  const [idDocType, setIdDocType] = useState<'rg' | 'cnh'>(
+    data?.doc_tipo_identificacao === 'cnh' ? 'cnh' : 'rg'
+  )
+  type DocDef = { name: string; label: string; required: boolean; icon: 'foto' | 'id'; hint?: string }
+  // A página se ajusta ao que a pessoa já respondeu nas seções anteriores:
+  // brasileiro escolhe aqui mesmo (na hora do upload) se vai usar RG ou CNH
+  // como documento de identificação — só um dos dois é pedido, e é
+  // obrigatório. Passaporte só entra aqui (e, se entrar, é obrigatório) se
+  // ela já tiver informado o número dele na seção 2 — não faz sentido pedir
+  // upload de um documento que ela disse não ter. Estrangeiro sempre
+  // precisa do passaporte. Certidão de casamento só aparece pra quem se
+  // declarou casado(a), e aí é obrigatória (não "se aplicável" — já
+  // filtramos por quem realmente precisa dela).
   const docs: DocDef[] = [
     { name: 'doc_foto', label: d.s10.doc_foto, required: true, icon: 'foto' },
-    ...(isBrazilian ? [
-      { name: 'doc_rg_frente', label: d.s10.doc_rg_frente, required: true, icon: 'id' as const },
-      { name: 'doc_rg_verso', label: d.s10.doc_rg_verso, required: true, icon: 'id' as const },
-      { name: 'doc_passaporte_opcional', label: d.s10.doc_passaporte_opcional, required: false, icon: 'id' as const },
-    ] : [
+    ...(isBrazilian ? (
+      idDocType === 'cnh'
+        ? [{ name: 'doc_cnh', label: d.s10.doc_cnh, required: true, icon: 'id' as const }]
+        : [
+          { name: 'doc_rg_frente', label: d.s10.doc_rg_frente, required: true, icon: 'id' as const },
+          { name: 'doc_rg_verso', label: d.s10.doc_rg_verso, required: true, icon: 'id' as const },
+        ]
+    ) : []),
+    ...(isBrazilian && temPassaporte ? [{ name: 'doc_passaporte', label: d.s10.doc_passaporte, required: true, icon: 'id' as const }] : []),
+    ...(!isBrazilian ? [
       { name: 'doc_passaporte', label: d.s10.doc_passaporte, required: true, icon: 'id' as const },
       { name: 'doc_id_outro', label: d.s10.doc_id_outro, required: false, icon: 'id' as const, hint: d.s10.doc_id_outro_hint },
-    ]),
+    ] : []),
     ...(estadoCivil === 'casado' ? [
-      { name: 'doc_certidao_casamento_s10', label: d.s3.certidao_casamento, required: false, conditional: true, icon: 'id' as const },
+      { name: 'doc_certidao_casamento_s10', label: d.s3.certidao_casamento, required: true, icon: 'id' as const },
     ] : []),
   ]
   return (
@@ -1176,6 +1194,25 @@ function S10DocumentosAceite({ data, isBrazilian, estadoCivil, documentUrls }: {
         {d.s10.docs_intro}
       </div>
 
+      {isBrazilian && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">{d.s10.doc_tipo_identificacao}</label>
+          <div className="flex gap-2">
+            {(['rg', 'cnh'] as const).map(opt => (
+              <button key={opt} type="button" onClick={() => setIdDocType(opt)}
+                className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors ${
+                  idDocType === opt
+                    ? 'bg-amber-600 text-white border-amber-600'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-amber-300'
+                }`}>
+                {opt === 'rg' ? d.s10.doc_tipo_rg : d.s10.doc_tipo_cnh}
+              </button>
+            ))}
+          </div>
+          <input type="hidden" name="doc_tipo_identificacao" value={idDocType} />
+        </div>
+      )}
+
       <div className="grid gap-4">
         {docs.map(doc => (
           <div key={doc.name}>
@@ -1184,12 +1221,12 @@ function S10DocumentosAceite({ data, isBrazilian, estadoCivil, documentUrls }: {
               required={doc.required} tone="amber"
               icon={doc.icon === 'foto' ? <Camera size={16} aria-hidden /> : <IdCard size={16} aria-hidden />}
               title={doc.label} subtitle={doc.icon === 'foto' ? d.s10.foto_instrucoes : undefined}
-              badgeLabel={doc.required ? d.nav.doc_required : doc.conditional ? d.nav.doc_conditional : d.nav.doc_optional}
+              badgeLabel={doc.required ? d.nav.doc_required : d.nav.doc_optional}
               readyLabel={d.nav.doc_ready}
               dropLabel={doc.icon === 'foto' ? d.s10.foto_drop_label : d.nav.doc_drop_generic}
               dropHint={d.nav.doc_drop_hint} attachedLabel={d.nav.doc_attached}
               changeLabel={d.nav.change_file} removeLabel={d.nav.remove_file}
-              modelGraphic={doc.icon === 'foto' ? <PhotoFramingGuide tone="amber" caption={d.nav.photo_model_caption} /> : undefined}
+              modelGraphic={doc.icon === 'foto' ? <PhotoFramingGuide sexo={sexo} caption={d.nav.photo_model_caption} /> : undefined}
               existingFileUrl={documentUrls?.[doc.name]?.url}
               existingFileName={documentUrls?.[doc.name]?.name}
               existingFileType={documentUrls?.[doc.name]?.type}
@@ -1378,6 +1415,8 @@ export function FormularioObreiro({
       id: 10, component: <S10DocumentosAceite data={localData.s10}
         isBrazilian={isBrazilian}
         estadoCivil={localData.s2?.estado_civil ?? localData.s3?.estado_civil_atual ?? ''}
+        temPassaporte={!!localData.s2?.passaporte?.trim()}
+        sexo={localData.s2?.sexo}
         documentUrls={documentUrls} />,
     },
   ]

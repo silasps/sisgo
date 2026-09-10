@@ -327,9 +327,12 @@ export interface StaffFormDict {
     doc_rg_frente: string
     doc_rg_verso: string
     doc_passaporte: string
-    doc_passaporte_opcional: string
     doc_id_outro: string
     doc_id_outro_hint: string
+    doc_tipo_identificacao: string
+    doc_tipo_rg: string
+    doc_tipo_cnh: string
+    doc_cnh: string
     doc_hint_generic: string
     lgpd_heading: string
     lgpd_text: string

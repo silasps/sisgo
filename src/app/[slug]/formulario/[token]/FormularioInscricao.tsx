@@ -1129,8 +1129,8 @@ function S14Financeiro({ data }: { data?: Record<string, string> }) {
   )
 }
 
-function S15Documentos({ hasRg, hasCpf, hasPassaporte, documentUrls }: {
-  hasRg: boolean; hasCpf: boolean; hasPassaporte: boolean; documentUrls?: DocumentUrls
+function S15Documentos({ hasRg, hasCpf, hasPassaporte, sexo, documentUrls }: {
+  hasRg: boolean; hasCpf: boolean; hasPassaporte: boolean; sexo?: string; documentUrls?: DocumentUrls
 }) {
   const d = useContext(DictCtx)
   // Só pede upload do(s) documento(s) que a pessoa de fato preencheu na seção 5
@@ -1160,7 +1160,7 @@ function S15Documentos({ hasRg, hasCpf, hasPassaporte, documentUrls }: {
             dropLabel={doc.icon === 'foto' ? d.nav.doc_drop_generic : d.nav.doc_drop_generic}
             dropHint={d.nav.doc_drop_hint} attachedLabel={d.nav.doc_attached}
             changeLabel={d.nav.change_file} removeLabel={d.nav.remove_file}
-            modelGraphic={doc.icon === 'foto' ? <PhotoFramingGuide tone="indigo" caption={d.nav.photo_model_caption} /> : undefined}
+            modelGraphic={doc.icon === 'foto' ? <PhotoFramingGuide sexo={sexo} caption={d.nav.photo_model_caption} /> : undefined}
             existingFileUrl={documentUrls?.[doc.name]?.url}
             existingFileName={documentUrls?.[doc.name]?.name}
             existingFileType={documentUrls?.[doc.name]?.type}
@@ -1409,6 +1409,7 @@ export function FormularioInscricao({
         hasRg={!!localData.s5?.rg?.trim()}
         hasCpf={!!localData.s5?.cpf?.trim()}
         hasPassaporte={!!localData.s5?.passaporte?.trim()}
+        sexo={localData.s5?.sexo}
         documentUrls={documentUrls}
       /> },
     { id: 16, component: <S16Aceite data={localData.s16} /> },
