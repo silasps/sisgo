@@ -78,31 +78,30 @@ export function PhotoCropperModal({
     }
   }
 
+  // Cabeçalho (h-14/56px) e rodapé (h-[172px], com altura fixa mesmo sem
+  // erro pra nunca mudar de tamanho depois de montado) ficam com altura
+  // constante, e a área de recorte no mobile é posicionada via top/bottom
+  // absolutos batendo exatamente com essas alturas — o navegador resolve o
+  // tamanho da área do meio numa única conta de layout (CSS puro), sem
+  // depender de flexbox "sobrar espaço" pro filho dividir com a lib de
+  // recorte nem de nenhuma medição em JS (essa combinação se mostrou
+  // frágil na prática). No desktop (sm:) tudo volta a ficar em fluxo normal
+  // (position: relative), empilhado como um cartão comum.
   return (
-    // Centralizar um modal com fixed+items-center depende de bater 100vh
-    // com a altura realmente visível — no mobile isso é frágil (barra de
-    // endereço do navegador, teclado, etc.) e o modal pode calcular o
-    // centro pra uma área maior do que a pessoa realmente vê. A solução que
-    // apps de foto maduros usam (Instagram, Google Fotos) não tenta
-    // resolver essa conta: no mobile o editor vira tela cheia — cabeçalho e
-    // rodapé fixos, a área de recorte ocupa (flex-1) o que sobrar entre os
-    // dois, sem centralizar nada. Sem cálculo de altura pra dar errado.
-    // No desktop, sem esse problema de viewport, volta a ser um cartão
-    // centralizado normal (sm:).
-    <div className="fixed inset-0 z-[60] bg-black sm:bg-black/70 flex sm:items-center sm:justify-center sm:p-4" onClick={onCancel}>
+    <div className="fixed inset-0 z-[60] bg-black sm:bg-black/70 sm:flex sm:items-center sm:justify-center sm:p-4" onClick={onCancel}>
       <div
-        className="flex flex-col w-full h-full sm:h-auto sm:max-w-sm sm:max-h-[85dvh] sm:rounded-2xl sm:shadow-xl bg-black sm:bg-white overflow-hidden"
+        className="relative w-full h-[100dvh] sm:h-auto sm:max-w-sm sm:max-h-[85dvh] sm:rounded-2xl sm:shadow-xl sm:overflow-hidden bg-black sm:bg-white mx-auto"
         onClick={e => e.stopPropagation()}
       >
         <div
-          className="flex items-center justify-between px-4 sm:px-5 py-3.5 border-b border-white/10 sm:border-gray-100 shrink-0"
-          style={{ paddingTop: 'max(0.875rem, env(safe-area-inset-top))' }}
+          className="absolute sm:relative top-0 sm:top-auto inset-x-0 sm:inset-x-auto z-10 h-14 flex items-center justify-between px-4 sm:px-5 border-b border-white/10 sm:border-gray-100 bg-black sm:bg-white"
+          style={{ paddingTop: 'env(safe-area-inset-top)' }}
         >
           <h3 className="font-semibold text-white sm:text-gray-900 text-sm">{title}</h3>
           <button type="button" onClick={onCancel} className="text-white/70 hover:text-white sm:text-gray-400 sm:hover:text-gray-700 text-xl leading-none px-1">×</button>
         </div>
 
-        <div className="relative bg-gray-900 flex-1 min-h-0 sm:flex-none sm:h-80">
+        <div className="absolute sm:relative top-14 sm:top-auto bottom-[172px] sm:bottom-auto inset-x-0 sm:inset-x-auto sm:h-80 bg-gray-900">
           <Cropper
             image={imageSrc}
             crop={crop}
@@ -116,8 +115,8 @@ export function PhotoCropperModal({
         </div>
 
         <div
-          className="px-4 sm:px-5 py-4 space-y-3 shrink-0 bg-black sm:bg-white"
-          style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+          className="absolute sm:relative bottom-0 sm:bottom-auto inset-x-0 sm:inset-x-auto z-10 h-[172px] flex flex-col justify-center gap-3 px-4 sm:px-5 py-4 bg-black sm:bg-white"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         >
           <div className="flex items-center gap-3">
             <ZoomIn size={15} className="text-white/60 sm:text-gray-400 shrink-0" aria-hidden />
@@ -126,7 +125,7 @@ export function PhotoCropperModal({
               aria-label={zoomLabel}
               className="w-full accent-current" style={{ color: accent }} />
           </div>
-          {error && <p className="text-xs text-red-400 sm:text-red-600">{errorLabel}</p>}
+          <p className="text-xs text-red-400 sm:text-red-600 h-4">{error ? errorLabel : ''}</p>
           <div className="flex gap-2">
             <button type="button" onClick={onCancel}
               className="flex-1 px-4 py-2.5 text-sm font-semibold text-white/80 sm:text-gray-600 border border-white/20 sm:border-gray-200 rounded-xl hover:bg-white/10 sm:hover:bg-gray-50 transition-colors">
