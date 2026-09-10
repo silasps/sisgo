@@ -79,8 +79,14 @@ export function PhotoCropperModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/70 flex items-center justify-center p-4" onClick={onCancel}>
-      <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+    // items-start (em vez de centralizar) + overflow-y-auto: centralizar com
+    // fixed inset-0 depende de 100vh bater com a altura visível de verdade,
+    // o que quebra no mobile (barra de endereço do navegador reduz a área
+    // visível sem mudar 100vh) — o modal calculava o centro certo pra um
+    // viewport mais alto que o que a pessoa via de fato, e sumia quase todo
+    // fora da tela. Alinhar no topo evita depender dessa conta.
+    <div className="fixed inset-0 z-[60] bg-black/70 overflow-y-auto flex items-start justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))]" onClick={onCancel}>
+      <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full max-h-[90dvh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between shrink-0">
           <h3 className="font-semibold text-gray-900 text-sm">{title}</h3>
           <button type="button" onClick={onCancel} className="text-gray-400 hover:text-gray-700 text-xl leading-none px-1">×</button>
