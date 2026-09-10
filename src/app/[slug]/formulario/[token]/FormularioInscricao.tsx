@@ -4,10 +4,11 @@ import { useRef, useState, useContext, createContext, useMemo } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { getFormDict, normalizeLang, t } from '@/lib/i18n/forms'
 import type { FormDict, Lang } from '@/lib/i18n/forms'
-import { HeartHandshake } from 'lucide-react'
+import { HeartHandshake, Camera, IdCard, FileText } from 'lucide-react'
 import { ptDict } from '@/lib/i18n/forms'
 import { orgShortName } from '@/lib/orgShortName'
 import { LangSwitcher } from '@/components/ui/LangSwitcher'
+import { PhotoFramingGuide } from '@/components/ui/PhotoFramingGuide'
 
 // ── Contexts ────────────────────────────────────────────────────────────────
 
@@ -44,6 +45,8 @@ type Prefill = {
   idioma?: string
 }
 
+type DocumentUrls = Record<string, { url: string; name: string; type: string; size?: number }>
+
 type Props = {
   slug: string
   token: string
@@ -58,6 +61,7 @@ type Props = {
   paymentInfo?: string | null
   initialLang?: string
   printMode?: boolean
+  documentUrls?: DocumentUrls
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -1125,20 +1129,22 @@ function S14Financeiro({ data }: { data?: Record<string, string> }) {
   )
 }
 
-function S15Documentos({ hasRg, hasCpf, hasPassaporte }: { hasRg: boolean; hasCpf: boolean; hasPassaporte: boolean }) {
+function S15Documentos({ hasRg, hasCpf, hasPassaporte, documentUrls }: {
+  hasRg: boolean; hasCpf: boolean; hasPassaporte: boolean; documentUrls?: DocumentUrls
+}) {
   const d = useContext(DictCtx)
   // Só pede upload do(s) documento(s) que a pessoa de fato preencheu na seção 5
   // (lá é exigido pelo menos um entre RG/CPF/Passaporte) — se por algum motivo
   // nenhum dos três estiver disponível (ex: todos escondidos pela escola),
   // não força upload de documento nenhum.
-  const docs = [
-    { name: 'doc_foto', label: d.s15.doc_foto, required: true },
+  const docs: Array<{ name: string; label: string; required: boolean; icon: 'foto' | 'id' }> = [
+    { name: 'doc_foto', label: d.s15.doc_foto, required: true, icon: 'foto' },
     ...(hasRg ? [
-      { name: 'doc_rg_frente', label: d.s15.doc_rg_frente_br, required: true },
-      { name: 'doc_rg_verso', label: d.s15.doc_rg_verso_br, required: true },
+      { name: 'doc_rg_frente', label: d.s15.doc_rg_frente_br, required: true, icon: 'id' as const },
+      { name: 'doc_rg_verso', label: d.s15.doc_rg_verso_br, required: true, icon: 'id' as const },
     ] : []),
-    ...(hasCpf ? [{ name: 'doc_cpf', label: d.s15.doc_cpf, required: true }] : []),
-    ...(hasPassaporte ? [{ name: 'doc_passaporte', label: d.s15.doc_passaporte_estrangeiro, required: true }] : []),
+    ...(hasCpf ? [{ name: 'doc_cpf', label: d.s15.doc_cpf, required: true, icon: 'id' as const }] : []),
+    ...(hasPassaporte ? [{ name: 'doc_passaporte', label: d.s15.doc_passaporte_estrangeiro, required: true, icon: 'id' as const }] : []),
   ]
   return (
     <div className="space-y-4">
@@ -1146,14 +1152,19 @@ function S15Documentos({ hasRg, hasCpf, hasPassaporte }: { hasRg: boolean; hasCp
       <InfoBox>{d.s15.infobox}</InfoBox>
       <div className="grid gap-4">
         {docs.map(doc => (
-          <div key={doc.name}>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {doc.label}{doc.required && <span className="text-red-500 ml-0.5"> *</span>}
-            </label>
-            <FileInputField name={doc.name} accept="image/jpeg,image/png,image/webp,application/pdf"
-              required={doc.required} chooseLabel={d.nav.choose_file} noFileLabel={d.nav.no_file_chosen}
-              changeLabel={d.nav.change_file} removeLabel={d.nav.remove_file} />
-          </div>
+          <FileInputField key={doc.name} name={doc.name} accept="image/jpeg,image/png,image/webp,application/pdf"
+            required={doc.required} tone="indigo"
+            icon={doc.icon === 'foto' ? <Camera size={16} aria-hidden /> : <IdCard size={16} aria-hidden />}
+            title={doc.label}
+            badgeLabel={d.nav.doc_required} readyLabel={d.nav.doc_ready}
+            dropLabel={doc.icon === 'foto' ? d.nav.doc_drop_generic : d.nav.doc_drop_generic}
+            dropHint={d.nav.doc_drop_hint} attachedLabel={d.nav.doc_attached}
+            changeLabel={d.nav.change_file} removeLabel={d.nav.remove_file}
+            modelGraphic={doc.icon === 'foto' ? <PhotoFramingGuide tone="indigo" caption={d.nav.photo_model_caption} /> : undefined}
+            existingFileUrl={documentUrls?.[doc.name]?.url}
+            existingFileName={documentUrls?.[doc.name]?.name}
+            existingFileType={documentUrls?.[doc.name]?.type}
+            existingFileSize={documentUrls?.[doc.name]?.size} />
         ))}
       </div>
     </div>
@@ -1226,14 +1237,13 @@ function PaymentGateScreen({ slug, token, paymentInfo, onComplete, d }: {
         <p className="text-sm text-gray-700 whitespace-pre-wrap">{paymentInfo}</p>
         <form onSubmit={handleSubmit} className="space-y-3 border-t border-green-200 pt-4">
           <div>
-            <label className="block text-sm font-semibold text-gray-800 mb-1">
-              {d.submitted.receipt_label} <span className="text-red-500">*</span>
-            </label>
             <FileInputField name="comprovante" required
               accept="application/pdf,image/jpeg,image/png,image/webp"
-              tone="green" chooseLabel={d.nav.choose_file} noFileLabel={d.nav.no_file_chosen}
+              tone="green" icon={<FileText size={16} aria-hidden />}
+              title={d.submitted.receipt_label} subtitle={d.submitted.receipt_hint}
+              badgeLabel={d.nav.doc_required} readyLabel={d.nav.doc_ready}
+              dropLabel={d.nav.doc_drop_generic} dropHint={d.nav.doc_drop_hint} attachedLabel={d.nav.doc_attached}
               changeLabel={d.nav.change_file} removeLabel={d.nav.remove_file} />
-            <p className="mt-1 text-xs text-gray-500">{d.submitted.receipt_hint}</p>
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <button type="submit" disabled={status === 'sending'}
@@ -1351,7 +1361,7 @@ function SubmittedScreen({ slug, applicationId, schoolName, hiddenSet, d }: {
 type SectionDef = { id: number; component: React.ReactNode }
 
 export function FormularioInscricao({
-  slug, token, applicationId, schoolName, orgName, className, prefill, initialSection = 1, initialData, hiddenFields, paymentInfo, initialLang, printMode
+  slug, token, applicationId, schoolName, orgName, className, prefill, initialSection = 1, initialData, hiddenFields, paymentInfo, initialLang, printMode, documentUrls
 }: Props) {
   const hiddenSet = useMemo(() => new Set(hiddenFields ?? []), [hiddenFields])
   const router = useRouter()
@@ -1399,6 +1409,7 @@ export function FormularioInscricao({
         hasRg={!!localData.s5?.rg?.trim()}
         hasCpf={!!localData.s5?.cpf?.trim()}
         hasPassaporte={!!localData.s5?.passaporte?.trim()}
+        documentUrls={documentUrls}
       /> },
     { id: 16, component: <S16Aceite data={localData.s16} /> },
   ]
@@ -1449,14 +1460,13 @@ export function FormularioInscricao({
             <p className="text-sm text-gray-700 whitespace-pre-wrap">{paymentInfo}</p>
             <div className="border-t border-green-200 mt-4 pt-4 space-y-3 print:hidden">
               <div>
-                <label className="block text-sm font-semibold text-gray-800 mb-1">
-                  {d.submitted.receipt_label} <span className="text-red-500">*</span>
-                </label>
                 <FileInputField name="comprovante_preview"
                   accept="application/pdf,image/jpeg,image/png,image/webp"
-                  tone="green" chooseLabel={d.nav.choose_file} noFileLabel={d.nav.no_file_chosen}
+                  tone="green" icon={<FileText size={16} aria-hidden />}
+                  title={d.submitted.receipt_label} subtitle={d.submitted.receipt_hint}
+                  badgeLabel={d.nav.doc_required} readyLabel={d.nav.doc_ready}
+                  dropLabel={d.nav.doc_drop_generic} dropHint={d.nav.doc_drop_hint} attachedLabel={d.nav.doc_attached}
                   changeLabel={d.nav.change_file} removeLabel={d.nav.remove_file} />
-                <p className="mt-1 text-xs text-gray-500">{d.submitted.receipt_hint}</p>
               </div>
               <button type="button" disabled
                 className="w-full rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white opacity-60 cursor-not-allowed">
@@ -1607,26 +1617,27 @@ export function FormularioInscricao({
     <HiddenCtx.Provider value={hiddenSet}>
     <HiddenStyles />
     <div>
-      {/* Lang switcher */}
-      <div className="flex justify-end mb-4">
-        <LangSwitcher lang={lang} onChange={setLang} uiLabel={d.langSwitcher.label} />
-      </div>
-
-      {/* Progress bar */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-semibold text-gray-500">
+      <div className="sticky top-0 z-20 -mx-4 sm:-mx-6 md:-mx-8 -mt-4 sm:-mt-6 md:-mt-8 px-4 sm:px-6 md:px-8 pt-4 sm:pt-6 md:pt-8 pb-3 bg-white/95 backdrop-blur-sm rounded-t-2xl border-b border-gray-100 mb-6">
+        <div className="flex items-center justify-between gap-2 mb-2.5">
+          <span className="inline-flex items-center gap-2 text-xs font-semibold text-gray-500">
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-indigo-50 text-indigo-600 font-bold text-[11px]">
+              {currentIndex + 1}
+            </span>
             {t(d.nav.section_of, { n: String(currentIndex + 1), total: String(visibleSections.length) })}
           </span>
-          <span className="text-xs font-semibold text-indigo-600">{progress}%</span>
+          <LangSwitcher lang={lang} onChange={setLang} tone="indigo" />
         </div>
-        <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-[11px] text-gray-400">{d.langSwitcher.label}</span>
+          <span className="text-xs font-bold text-indigo-600">{progress}%</span>
+        </div>
+        <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
           <div className="h-full bg-indigo-500 rounded-full transition-all duration-500"
             style={{ width: `${progress}%` }} />
         </div>
       </div>
 
-      <form ref={formRef} onSubmit={handleNext} className="space-y-6">
+      <form ref={formRef} onSubmit={handleNext} className="space-y-6 pb-24">
         {visibleSections[currentIndex].component}
 
         {error && (
@@ -1634,21 +1645,27 @@ export function FormularioInscricao({
             {error}
           </div>
         )}
+        {/* Mantém o Enter dentro de um campo submetendo a seção — o botão
+            visível fica fora do form (barra fixa), então sem isso o form
+            perderia o envio implícito por teclado. */}
+        <button type="submit" className="sr-only" aria-hidden="true" tabIndex={-1} />
+      </form>
 
-        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 pt-6 border-t border-gray-100">
+      <div className="fixed inset-x-0 bottom-0 z-30 bg-white/95 backdrop-blur-sm border-t border-gray-100">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           {currentIndex > 0 ? (
             <button type="button" onClick={handleBack}
-              className="w-full sm:w-auto px-6 py-3 sm:py-2.5 text-sm font-semibold text-gray-600 hover:text-gray-900 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-center">
+              className="px-5 py-2.5 text-sm font-semibold text-gray-600 hover:text-gray-900 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-center shrink-0">
               {d.nav.back}
             </button>
           ) : <div className="hidden sm:block" />}
 
-          <button type="submit" disabled={saving}
-            className="w-full sm:w-auto px-8 py-3 sm:py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-bold rounded-xl transition-colors text-center">
+          <button type="button" onClick={() => formRef.current?.requestSubmit()} disabled={saving}
+            className="flex-1 px-8 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-bold rounded-xl transition-colors text-center">
             {saving ? d.nav.saving : isLast ? d.nav.submit : d.nav.next}
           </button>
         </div>
-      </form>
+      </div>
     </div>
     </HiddenCtx.Provider>
     </DictCtx.Provider>

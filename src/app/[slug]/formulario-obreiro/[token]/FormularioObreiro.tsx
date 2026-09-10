@@ -2,13 +2,14 @@
 
 import { useRef, useState, useContext, createContext } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
-import { HeartHandshake, Camera, IdCard } from 'lucide-react'
+import { HeartHandshake, Camera, IdCard, FileText } from 'lucide-react'
 import { salvarSecaoObreiro, salvarSecaoObreiroComArquivos, enviarFormularioObreiro, gerarLinkReferenciaObreiro, enviarRegrasInstituicaoEmail } from './actions'
 
 const SECTIONS_COM_ARQUIVO = new Set([3, 7, 10])
 import { InternationalPhoneField } from '@/components/ui/InternationalPhoneField'
 import { MaskedInput, useMask } from '@/components/ui/MaskedInput'
 import { FileInputField } from '@/components/ui/FileInputField'
+import { PhotoFramingGuide } from '@/components/ui/PhotoFramingGuide'
 import { LangSwitcher } from '@/components/ui/LangSwitcher'
 import { getStaffFormDict, normalizeStaffLang, tStaff, ptDict } from '@/lib/i18n/staff-forms'
 import type { StaffFormDict, StaffLang } from '@/lib/i18n/staff-forms'
@@ -25,7 +26,7 @@ type Prefill = {
 }
 
 type MinistryOption = { id: string; name: string }
-type DocumentUrls = Record<string, { url: string; name: string; type: string }>
+type DocumentUrls = Record<string, { url: string; name: string; type: string; size?: number }>
 
 type Props = {
   slug: string
@@ -666,16 +667,16 @@ function S3Familia({ data, estadoCivilS2, documentUrls }: { data?: Record<string
             { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
           ]} />
           <div className="sm:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {d.s3.certidao_casamento} {!certidaoSkipped && <span className="text-red-500">*</span>}
-            </label>
             {!certidaoSkipped && (
               <FileInputField name="doc_certidao_casamento" accept="image/jpeg,image/png,image/webp,application/pdf"
-                required chooseLabel={d.nav.choose_file} noFileLabel={d.nav.no_file_chosen}
+                required tone="amber" icon={<IdCard size={16} aria-hidden />}
+                title={d.s3.certidao_casamento} badgeLabel={d.nav.doc_required} readyLabel={d.nav.doc_ready}
+                dropLabel={d.nav.doc_drop_generic} dropHint={d.nav.doc_drop_hint} attachedLabel={d.nav.doc_attached}
                 changeLabel={d.nav.change_file} removeLabel={d.nav.remove_file}
                 existingFileUrl={documentUrls?.doc_certidao_casamento?.url}
                 existingFileName={documentUrls?.doc_certidao_casamento?.name}
-                existingFileType={documentUrls?.doc_certidao_casamento?.type} />
+                existingFileType={documentUrls?.doc_certidao_casamento?.type}
+                existingFileSize={documentUrls?.doc_certidao_casamento?.size} />
             )}
             <label className="flex items-start gap-2 mt-2 text-xs text-gray-600">
               <input type="checkbox" className="mt-0.5" checked={certidaoSkipped}
@@ -926,15 +927,15 @@ function S6ServirBase({ data, ministries, ministryId }: {
 function DocUpload({ label, name, documentUrls }: { label: string; name: string; documentUrls?: DocumentUrls }) {
   const d = useContext(DictCtx)
   return (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      <FileInputField name={name} accept="image/jpeg,image/png,image/webp,application/pdf"
-        chooseLabel={d.nav.choose_file} noFileLabel={d.nav.no_file_chosen}
-        changeLabel={d.nav.change_file} removeLabel={d.nav.remove_file}
-        existingFileUrl={documentUrls?.[name]?.url}
-        existingFileName={documentUrls?.[name]?.name}
-        existingFileType={documentUrls?.[name]?.type} />
-    </div>
+    <FileInputField name={name} accept="image/jpeg,image/png,image/webp,application/pdf"
+      tone="amber" icon={<FileText size={16} aria-hidden />}
+      title={label} badgeLabel={d.nav.doc_optional} readyLabel={d.nav.doc_ready}
+      dropLabel={d.nav.doc_drop_generic} dropHint={d.nav.doc_drop_hint} attachedLabel={d.nav.doc_attached}
+      changeLabel={d.nav.change_file} removeLabel={d.nav.remove_file}
+      existingFileUrl={documentUrls?.[name]?.url}
+      existingFileName={documentUrls?.[name]?.name}
+      existingFileType={documentUrls?.[name]?.type}
+      existingFileSize={documentUrls?.[name]?.size} />
   )
 }
 
@@ -1152,7 +1153,8 @@ function S10DocumentosAceite({ data, isBrazilian, estadoCivil, documentUrls }: {
   data?: Record<string, string>; isBrazilian: boolean; estadoCivil: string; documentUrls?: DocumentUrls
 }) {
   const d = useContext(DictCtx)
-  const docs: Array<{ name: string; label: string; required: boolean; icon: 'foto' | 'id'; hint?: string }> = [
+  type DocDef = { name: string; label: string; required: boolean; conditional?: boolean; icon: 'foto' | 'id'; hint?: string }
+  const docs: DocDef[] = [
     { name: 'doc_foto', label: d.s10.doc_foto, required: true, icon: 'foto' },
     ...(isBrazilian ? [
       { name: 'doc_rg_frente', label: d.s10.doc_rg_frente, required: true, icon: 'id' as const },
@@ -1163,7 +1165,7 @@ function S10DocumentosAceite({ data, isBrazilian, estadoCivil, documentUrls }: {
       { name: 'doc_id_outro', label: d.s10.doc_id_outro, required: false, icon: 'id' as const, hint: d.s10.doc_id_outro_hint },
     ]),
     ...(estadoCivil === 'casado' ? [
-      { name: 'doc_certidao_casamento_s10', label: d.s3.certidao_casamento, required: false, icon: 'id' as const },
+      { name: 'doc_certidao_casamento_s10', label: d.s3.certidao_casamento, required: false, conditional: true, icon: 'id' as const },
     ] : []),
   ]
   return (
@@ -1172,26 +1174,26 @@ function S10DocumentosAceite({ data, isBrazilian, estadoCivil, documentUrls }: {
 
       <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 text-sm text-amber-800 leading-relaxed">
         {d.s10.docs_intro}
-        <strong className="block mt-2">{d.s10.foto_instrucoes_label}</strong>
-        {d.s10.foto_instrucoes}
       </div>
 
       <div className="grid gap-4">
         {docs.map(doc => (
           <div key={doc.name}>
-            <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1">
-              {doc.icon === 'foto'
-                ? <Camera size={15} className="text-amber-500 shrink-0" aria-hidden />
-                : <IdCard size={15} className="text-amber-500 shrink-0" aria-hidden />}
-              {doc.label}{doc.required && <span className="text-red-500 ml-0.5">*</span>}
-            </label>
-            {doc.hint && <p className="text-xs text-gray-400 mb-1.5">{doc.hint}</p>}
+            {doc.hint && <p className="text-xs text-gray-400 mb-1.5 px-1">{doc.hint}</p>}
             <FileInputField name={doc.name} accept="image/jpeg,image/png,image/webp,application/pdf"
-              required={doc.required} chooseLabel={d.nav.choose_file} noFileLabel={d.nav.no_file_chosen}
+              required={doc.required} tone="amber"
+              icon={doc.icon === 'foto' ? <Camera size={16} aria-hidden /> : <IdCard size={16} aria-hidden />}
+              title={doc.label} subtitle={doc.icon === 'foto' ? d.s10.foto_instrucoes : undefined}
+              badgeLabel={doc.required ? d.nav.doc_required : doc.conditional ? d.nav.doc_conditional : d.nav.doc_optional}
+              readyLabel={d.nav.doc_ready}
+              dropLabel={doc.icon === 'foto' ? d.s10.foto_drop_label : d.nav.doc_drop_generic}
+              dropHint={d.nav.doc_drop_hint} attachedLabel={d.nav.doc_attached}
               changeLabel={d.nav.change_file} removeLabel={d.nav.remove_file}
+              modelGraphic={doc.icon === 'foto' ? <PhotoFramingGuide tone="amber" caption={d.nav.photo_model_caption} /> : undefined}
               existingFileUrl={documentUrls?.[doc.name]?.url}
               existingFileName={documentUrls?.[doc.name]?.name}
-              existingFileType={documentUrls?.[doc.name]?.type} />
+              existingFileType={documentUrls?.[doc.name]?.type}
+              existingFileSize={documentUrls?.[doc.name]?.size} />
           </div>
         ))}
         <p className="text-xs text-gray-400 -mt-1">{d.s10.doc_hint_generic}</p>
@@ -1481,24 +1483,27 @@ export function FormularioObreiro({
   return (
     <DictCtx.Provider value={d}>
     <div>
-      <div className="flex justify-end mb-4">
-        <LangSwitcher lang={lang} onChange={l => setLang(l as StaffLang)} uiLabel={d.langSwitcher.label} />
-      </div>
-
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-semibold text-gray-500">
+      <div className="sticky top-0 z-20 -mx-4 sm:-mx-6 md:-mx-8 -mt-4 sm:-mt-6 md:-mt-8 px-4 sm:px-6 md:px-8 pt-4 sm:pt-6 md:pt-8 pb-3 bg-white/95 backdrop-blur-sm rounded-t-2xl border-b border-gray-100 mb-6">
+        <div className="flex items-center justify-between gap-2 mb-2.5">
+          <span className="inline-flex items-center gap-2 text-xs font-semibold text-gray-500">
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-50 text-amber-600 font-bold text-[11px]">
+              {currentIndex + 1}
+            </span>
             {tStaff(d.nav.section_of, { n: String(currentIndex + 1), total: String(sections.length) })}
           </span>
-          <span className="text-xs font-semibold text-amber-600">{progress}%</span>
+          <LangSwitcher lang={lang} onChange={l => setLang(l as StaffLang)} tone="amber" />
         </div>
-        <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-[11px] text-gray-400">{d.langSwitcher.label}</span>
+          <span className="text-xs font-bold text-amber-600">{progress}%</span>
+        </div>
+        <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
           <div className="h-full bg-amber-500 rounded-full transition-all duration-500"
             style={{ width: `${progress}%` }} />
         </div>
       </div>
 
-      <form ref={formRef} onSubmit={handleNext} className="space-y-6">
+      <form ref={formRef} onSubmit={handleNext} className="space-y-6 pb-24">
         {sections[currentIndex].component}
 
         {error && (
@@ -1506,21 +1511,27 @@ export function FormularioObreiro({
             {error}
           </div>
         )}
+        {/* Mantém o Enter dentro de um campo submetendo a seção — o botão
+            visível fica fora do form (barra fixa), então sem isso o form
+            perderia o envio implícito por teclado. */}
+        <button type="submit" className="sr-only" aria-hidden="true" tabIndex={-1} />
+      </form>
 
-        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 pt-6 border-t border-gray-100">
+      <div className="fixed inset-x-0 bottom-0 z-30 bg-white/95 backdrop-blur-sm border-t border-gray-100">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           {currentIndex > 0 ? (
             <button type="button" onClick={handleBack}
-              className="w-full sm:w-auto px-6 py-3 sm:py-2.5 text-sm font-semibold text-gray-600 hover:text-gray-900 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-center">
+              className="px-5 py-2.5 text-sm font-semibold text-gray-600 hover:text-gray-900 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-center shrink-0">
               {d.nav.back}
             </button>
           ) : <div className="hidden sm:block" />}
 
-          <button type="submit" disabled={saving}
-            className="w-full sm:w-auto px-8 py-3 sm:py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-60 text-white text-sm font-bold rounded-xl transition-colors text-center">
+          <button type="button" onClick={() => formRef.current?.requestSubmit()} disabled={saving}
+            className="flex-1 px-8 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-60 text-white text-sm font-bold rounded-xl transition-colors text-center">
             {saving ? d.nav.saving : isLast ? d.nav.submit : d.nav.next}
           </button>
         </div>
-      </form>
+      </div>
     </div>
     </DictCtx.Provider>
   )

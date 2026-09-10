@@ -53,13 +53,13 @@ export default async function FormularioObreiroPage({ params, searchParams }: Pr
   // form_data — o bucket é privado, então pra mostrar a miniatura de volta
   // no formulário (em vez de só "nenhum arquivo escolhido" de novo) cada um
   // precisa de uma URL assinada, gerada aqui no server component.
-  const documentUrls: Record<string, { url: string; name: string; type: string }> = {}
-  const docEntries: Array<[string, { path: string; name: string; type: string }]> = []
+  const documentUrls: Record<string, { url: string; name: string; type: string; size?: number }> = {}
+  const docEntries: Array<[string, { path: string; name: string; type: string; size?: number }]> = []
   for (const section of Object.values(formData)) {
     if (!section || typeof section !== 'object') continue
     for (const [key, value] of Object.entries(section as Record<string, unknown>)) {
-      const doc = value as { path?: string; name?: string; type?: string } | undefined
-      if (doc?.path && doc.name && doc.type) docEntries.push([key, doc as { path: string; name: string; type: string }])
+      const doc = value as { path?: string; name?: string; type?: string; size?: number } | undefined
+      if (doc?.path && doc.name && doc.type) docEntries.push([key, doc as { path: string; name: string; type: string; size?: number }])
     }
   }
   if (docEntries.length) {
@@ -68,7 +68,7 @@ export default async function FormularioObreiroPage({ params, searchParams }: Pr
     )
     docEntries.forEach(([key, doc], i) => {
       const url = signedUrls[i].data?.signedUrl
-      if (url) documentUrls[key] = { url, name: doc.name, type: doc.type }
+      if (url) documentUrls[key] = { url, name: doc.name, type: doc.type, size: doc.size }
     })
   }
   const prefill = {
@@ -140,7 +140,7 @@ export default async function FormularioObreiroPage({ params, searchParams }: Pr
         </div>
       </div>
 
-      <main className="max-w-2xl mx-auto px-4 sm:px-6 pb-16 sm:pb-20">
+      <main className="max-w-2xl mx-auto px-4 sm:px-6 pb-28 sm:pb-24">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6 md:p-8">
           <FormularioObreiro
             slug={slug}

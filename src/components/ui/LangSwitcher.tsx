@@ -12,11 +12,15 @@ export function LangSwitcher({
   lang,
   onChange,
   uiLabel,
+  tone = 'indigo',
 }: {
   lang: Lang
   onChange: (l: Lang) => void
   uiLabel?: string
+  tone?: 'amber' | 'indigo'
 }) {
+  const activeClass = tone === 'amber' ? 'bg-amber-600 text-white border-amber-600' : 'bg-indigo-600 text-white border-indigo-600'
+  const hoverClass = tone === 'amber' ? 'hover:border-amber-300 hover:text-amber-600' : 'hover:border-indigo-300 hover:text-indigo-600'
   return (
     <div className="flex items-center gap-2 flex-wrap">
       {uiLabel && (
@@ -30,9 +34,7 @@ export function LangSwitcher({
             onClick={() => onChange(o.lang)}
             className={[
               'px-3 py-1 text-xs font-bold rounded-lg border transition-colors',
-              lang === o.lang
-                ? 'bg-indigo-600 text-white border-indigo-600'
-                : 'bg-white text-gray-500 border-gray-200 hover:border-indigo-300 hover:text-indigo-600',
+              lang === o.lang ? activeClass : `bg-white text-gray-500 border-gray-200 ${hoverClass}`,
             ].join(' ')}
           >
             <span className="mr-1">{o.flag}</span>{o.label}

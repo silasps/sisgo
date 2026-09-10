@@ -18,6 +18,14 @@ export interface FormDict {
     searching_cep: string
     change_file: string
     remove_file: string
+    doc_required: string
+    doc_optional: string
+    doc_conditional: string
+    doc_ready: string
+    doc_attached: string
+    doc_drop_generic: string
+    doc_drop_hint: string
+    photo_model_caption: string
   }
 
   // ── Lang switcher ──────────────────────────────────────────────────────

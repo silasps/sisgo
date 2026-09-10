@@ -256,7 +256,17 @@ export async function anexarDocumentos(slug: string, token: string, formData: Fo
 
   for (const key of DOCUMENT_KEYS) {
     const file = formData.get(key)
-    if (!(file instanceof File) || file.size === 0) continue
+    if (!(file instanceof File) || file.size === 0) {
+      // Nenhum arquivo novo pra essa chave — se o botão "excluir" marcou o
+      // campo oculto de remoção (ver FileInputField), apaga o que já
+      // estava salvo em vez de manter o antigo.
+      if (formData.get(`remove_${key}`) === '1') {
+        const previous = existingS15[key]
+        if (previous?.path) toRemove.push(previous.path)
+        delete updatedS15[key]
+      }
+      continue
+    }
     if (!DOCUMENT_TYPES[file.type]) return { error: 'Envie imagens (JPG, PNG ou WebP) ou PDF nos documentos.' }
     if (file.size > 10 * 1024 * 1024) return { error: 'Cada arquivo deve ter no máximo 10 MB.' }
 

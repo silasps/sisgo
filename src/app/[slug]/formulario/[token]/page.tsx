@@ -48,6 +48,28 @@ export default async function FormularioPage({ params, searchParams }: Props) {
   } | null
   const formData = (app.form_data as Record<string, unknown>) ?? {}
   const prefillFromForm = (formData.prefill as Record<string, string | undefined>) ?? {}
+
+  // Documentos da seção 15 (bucket application-documents) já enviados em
+  // visitas anteriores — bucket privado, então precisam de URL assinada pra
+  // mostrar a miniatura de volta no formulário em vez de "nenhum arquivo
+  // escolhido" de novo. (O comprovante de pagamento não entra aqui: a tela
+  // que pede ele só aparece quando ainda não existe um salvo.)
+  type DocMeta = { path: string; name: string; type: string; size?: number }
+  const documentUrls: Record<string, { url: string; name: string; type: string; size?: number }> = {}
+  const s15Entries = Object.entries((formData.s15 as Record<string, unknown>) ?? {})
+    .filter((entry): entry is [string, DocMeta] => {
+      const doc = entry[1] as DocMeta | undefined
+      return !!doc?.path && !!doc.name && !!doc.type
+    })
+  if (s15Entries.length) {
+    const signedUrls = await Promise.all(
+      s15Entries.map(([, doc]) => sb.storage.from('application-documents').createSignedUrl(doc.path, 3600))
+    )
+    s15Entries.forEach(([key, doc], i) => {
+      const url = signedUrls[i].data?.signedUrl
+      if (url) documentUrls[key] = { url, name: doc.name, type: doc.type, size: doc.size }
+    })
+  }
   const prefill = {
     nome:     preform?.full_name  ?? prefillFromForm.nome,
     email:    preform?.email      ?? prefillFromForm.email,
@@ -127,7 +149,7 @@ export default async function FormularioPage({ params, searchParams }: Props) {
       </div>
 
       {/* Form */}
-      <main className="max-w-2xl mx-auto px-4 sm:px-6 pb-16 sm:pb-20">
+      <main className="max-w-2xl mx-auto px-4 sm:px-6 pb-28 sm:pb-24">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6 md:p-8">
           <FormularioInscricao
             slug={slug}
@@ -143,6 +165,7 @@ export default async function FormularioPage({ params, searchParams }: Props) {
             paymentInfo={paymentInfo}
             initialLang={pageLang}
             printMode={printMode}
+            documentUrls={documentUrls}
           />
         </div>
 
