@@ -25,6 +25,12 @@ export interface StaffFormDict {
     doc_drop_generic: string
     doc_drop_hint: string
     photo_model_caption: string
+    crop_title: string
+    crop_zoom_label: string
+    crop_confirm_label: string
+    crop_cancel_label: string
+    crop_error_label: string
+    crop_edit_label: string
   }
 
   // ── Lang switcher ──────────────────────────────────────────────────────

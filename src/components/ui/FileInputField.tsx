@@ -1,7 +1,8 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { FileText, RotateCw, Trash2, CheckCircle2 } from 'lucide-react'
+import { FileText, RotateCw, Trash2, CheckCircle2, Pencil } from 'lucide-react'
+import { PhotoCropperModal } from './PhotoCropperModal'
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -22,11 +23,21 @@ function formatBytes(bytes: number): string {
 // bucket é privado). Botões de trocar (reabre o seletor) e remover.
 // Remover um arquivo já salvo não apaga nada aqui: só marca um campo oculto
 // (`remove_<name>`) que a Server Action decide o que fazer ao salvar a seção.
+type CropOptions = {
+  aspect: number
+  title: string
+  zoomLabel: string
+  confirmLabel: string
+  cancelLabel: string
+  errorLabel: string
+  editLabel: string
+}
+
 export function FileInputField({
   name, accept, required, tone = 'amber', onFileChange,
   title, subtitle, icon, badgeLabel, readyLabel,
   dropLabel, dropHint, attachedLabel,
-  changeLabel, removeLabel, modelGraphic,
+  changeLabel, removeLabel, modelGraphic, crop,
   existingFileUrl, existingFileName, existingFileType, existingFileSize,
 }: {
   name: string
@@ -46,6 +57,8 @@ export function FileInputField({
   removeLabel: string
   /** Ex.: um guia visual de enquadramento pra foto — só aparece antes de anexar. */
   modelGraphic?: React.ReactNode
+  /** Quando definido, todo arquivo (novo ou já anexado) passa por recorte/zoom antes de valer — com um lápis pra reabrir o ajuste sem escolher o arquivo de novo. */
+  crop?: CropOptions
   existingFileUrl?: string | null
   existingFileName?: string | null
   existingFileType?: string | null
@@ -54,11 +67,18 @@ export function FileInputField({
   const [file, setFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [removedExisting, setRemovedExisting] = useState(false)
+  const [cropSource, setCropSource] = useState<{ url: string; revoke: boolean; fileName: string } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const toneText = tone === 'amber' ? 'text-amber-600' : tone === 'green' ? 'text-green-700' : 'text-indigo-600'
   const toneBg = tone === 'amber' ? 'bg-amber-50' : tone === 'green' ? 'bg-green-50' : 'bg-indigo-50'
   const toneBorderHover = tone === 'amber' ? 'hover:border-amber-400 hover:bg-amber-50/30' : tone === 'green' ? 'hover:border-green-400 hover:bg-green-50/30' : 'hover:border-indigo-400 hover:bg-indigo-50/30'
 
+  // O <input type="file"> nativo é quem de fato viaja no FormData no
+  // submit — depois de um recorte, o resultado só existe como File em
+  // memória (não veio de uma seleção real do usuário), então precisa ser
+  // sincronizado de volta pro input via DataTransfer. Sem isso, o card
+  // mostraria a prévia recortada mas o envio real levaria a foto original
+  // inteira, sem o recorte.
   function pickFile(f: File | null) {
     setFile(f)
     setPreviewUrl(prev => {
@@ -66,13 +86,50 @@ export function FileInputField({
       return f && f.type.startsWith('image/') ? URL.createObjectURL(f) : null
     })
     if (f) setRemovedExisting(false)
+    if (inputRef.current) {
+      if (f) {
+        const dt = new DataTransfer()
+        dt.items.add(f)
+        inputRef.current.files = dt.files
+      } else {
+        inputRef.current.value = ''
+      }
+    }
     onFileChange?.(f)
   }
 
   function handleRemove() {
-    if (inputRef.current) inputRef.current.value = ''
     pickFile(null)
     if (existingFileUrl) setRemovedExisting(true)
+  }
+
+  function handleSelected(f: File | null) {
+    if (f && crop && f.type.startsWith('image/')) {
+      setCropSource({ url: URL.createObjectURL(f), revoke: true, fileName: f.name })
+      return
+    }
+    pickFile(f)
+  }
+
+  function handleEditCrop() {
+    if (!crop || !displayUrl) return
+    setCropSource({ url: displayUrl, revoke: false, fileName: displayName ?? `${name}.jpg` })
+  }
+
+  function handleConfirmCrop(croppedFile: File) {
+    if (cropSource?.revoke) URL.revokeObjectURL(cropSource.url)
+    setCropSource(null)
+    pickFile(croppedFile)
+  }
+
+  function handleCancelCrop() {
+    if (cropSource?.revoke) {
+      URL.revokeObjectURL(cropSource.url)
+      // Sem isso, cancelar e tentar escolher o mesmo arquivo de novo não
+      // dispara onChange em alguns navegadores (o valor do input "não mudou").
+      if (inputRef.current) inputRef.current.value = ''
+    }
+    setCropSource(null)
   }
 
   const hasExisting = !!existingFileUrl && !removedExisting && !file
@@ -115,7 +172,7 @@ export function FileInputField({
         name={name}
         accept={accept}
         required={required && !showingSomething}
-        onChange={e => pickFile(e.target.files?.[0] ?? null)}
+        onChange={e => handleSelected(e.target.files?.[0] ?? null)}
         className="sr-only"
         id={`file-${name}`}
       />
@@ -135,6 +192,13 @@ export function FileInputField({
             <p className="text-xs font-semibold text-gray-800 truncate">{displayName}</p>
             {displaySize != null && <p className="text-[10px] text-gray-400">{formatBytes(displaySize)}</p>}
           </div>
+          {crop && isImage && displayUrl && (
+            <button type="button" onClick={handleEditCrop}
+              title={crop.editLabel} aria-label={crop.editLabel}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-200 transition-colors shrink-0">
+              <Pencil size={15} />
+            </button>
+          )}
           <button type="button" onClick={() => inputRef.current?.click()}
             title={changeLabel} aria-label={changeLabel}
             className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-200 transition-colors shrink-0">
@@ -157,6 +221,22 @@ export function FileInputField({
             {dropHint && <span className="text-[10px] text-gray-400 mt-1">{dropHint}</span>}
           </label>
         </>
+      )}
+
+      {crop && cropSource && (
+        <PhotoCropperModal
+          imageSrc={cropSource.url}
+          aspect={crop.aspect}
+          fileName={cropSource.fileName}
+          tone={tone === 'green' ? 'amber' : tone}
+          title={crop.title}
+          zoomLabel={crop.zoomLabel}
+          confirmLabel={crop.confirmLabel}
+          cancelLabel={crop.cancelLabel}
+          errorLabel={crop.errorLabel}
+          onCancel={handleCancelCrop}
+          onConfirm={handleConfirmCrop}
+        />
       )}
     </article>
   )

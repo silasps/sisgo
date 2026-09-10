@@ -25,6 +25,12 @@ export const ptDict: FormDict = {
     doc_drop_generic: 'Tirar foto ou anexar arquivo',
     doc_drop_hint: 'PDF, JPG, PNG até 10MB',
     photo_model_caption: 'Foto de rosto tipo 3x4: fundo claro e neutro, rosto centralizado, ombros visíveis, boa iluminação — sem selfies ou filtros, como no modelo ao lado.',
+    crop_title: 'Ajustar foto',
+    crop_zoom_label: 'Zoom',
+    crop_confirm_label: 'Usar esta foto',
+    crop_cancel_label: 'Cancelar',
+    crop_error_label: 'Não foi possível ajustar a foto. Tente novamente.',
+    crop_edit_label: 'Ajustar recorte',
   },
 
   langSwitcher: { label: 'Idioma do formulário:' },

@@ -25,6 +25,12 @@ export const esDict: FormDict = {
     doc_drop_generic: 'Tomar foto o adjuntar archivo',
     doc_drop_hint: 'PDF, JPG, PNG hasta 10MB',
     photo_model_caption: 'Foto tipo carnet 3x4: fondo claro y neutro, rostro centrado, hombros visibles, buena iluminación — sin selfies ni filtros, como en el modelo al lado.',
+    crop_title: 'Ajustar foto',
+    crop_zoom_label: 'Zoom',
+    crop_confirm_label: 'Usar esta foto',
+    crop_cancel_label: 'Cancelar',
+    crop_error_label: 'No se pudo ajustar la foto. Inténtalo de nuevo.',
+    crop_edit_label: 'Ajustar recorte',
   },
 
   langSwitcher: { label: 'Idioma del formulario:' },

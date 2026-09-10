@@ -1221,6 +1221,11 @@ function S10DocumentosAceite({ data, isBrazilian, estadoCivil, temPassaporte, se
           dropHint={d.nav.doc_drop_hint} attachedLabel={d.nav.doc_attached}
           changeLabel={d.nav.change_file} removeLabel={d.nav.remove_file}
           modelGraphic={doc.icon === 'foto' ? <PhotoFramingGuide sexo={sexo} caption={d.nav.photo_model_caption} /> : undefined}
+          crop={doc.icon === 'foto' ? {
+            aspect: 3 / 4, title: d.nav.crop_title, zoomLabel: d.nav.crop_zoom_label,
+            confirmLabel: d.nav.crop_confirm_label, cancelLabel: d.nav.crop_cancel_label,
+            errorLabel: d.nav.crop_error_label, editLabel: d.nav.crop_edit_label,
+          } : undefined}
           existingFileUrl={documentUrls?.[doc.name]?.url}
           existingFileName={documentUrls?.[doc.name]?.name}
           existingFileType={documentUrls?.[doc.name]?.type}

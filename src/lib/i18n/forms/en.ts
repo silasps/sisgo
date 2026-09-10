@@ -25,6 +25,12 @@ export const enDict: FormDict = {
     doc_drop_generic: 'Take a photo or attach a file',
     doc_drop_hint: 'PDF, JPG, PNG up to 10MB',
     photo_model_caption: '3x4 headshot: light, neutral background, face centered, shoulders visible, good lighting — no selfies or filters, like the example alongside.',
+    crop_title: 'Adjust photo',
+    crop_zoom_label: 'Zoom',
+    crop_confirm_label: 'Use this photo',
+    crop_cancel_label: 'Cancel',
+    crop_error_label: 'Could not adjust the photo. Please try again.',
+    crop_edit_label: 'Adjust crop',
   },
 
   langSwitcher: { label: 'Form language:' },
