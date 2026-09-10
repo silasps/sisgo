@@ -618,7 +618,7 @@ function S6Historia({ data }: { data?: Record<string, string> }) {
   return (
     <div className="space-y-4">
       <SectionTitle number={d.s6.section} title={d.s6.title} />
-      <div className="grid gap-4">
+      <div className="grid grid-cols-1 gap-4">
         <TextArea label={d.s6.sobre_voce} name="sobre_voce" defaultValue={data?.sobre_voce} required rows={5} />
         <TextArea label={d.s6.processo_decisao} name="processo_decisao"
           defaultValue={data?.processo_decisao} required rows={4} />
@@ -914,7 +914,7 @@ function S11Espiritual({ data }: { data?: Record<string, string> }) {
         </div>
       </div>
 
-      <div className="grid gap-4">
+      <div className="grid grid-cols-1 gap-4">
         <div className="mt-2 border-t pt-3"><p className="text-sm font-semibold text-gray-700">{d.s11.vida_section}</p></div>
         <Field label={d.s11.tempo_convertido} name="tempo_convertido"
           defaultValue={data?.tempo_convertido} required />
@@ -1150,7 +1150,7 @@ function S15Documentos({ hasRg, hasCpf, hasPassaporte, sexo, documentUrls }: {
     <div className="space-y-4">
       <SectionTitle number={d.s15.section} title={d.s15.title} />
       <InfoBox>{d.s15.infobox}</InfoBox>
-      <div className="grid gap-4">
+      <div className="grid grid-cols-1 gap-4">
         {docs.map(doc => (
           <FileInputField key={doc.name} name={doc.name} accept="image/jpeg,image/png,image/webp,application/pdf"
             required={doc.required} tone="indigo"

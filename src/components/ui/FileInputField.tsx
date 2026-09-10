@@ -83,7 +83,7 @@ export function FileInputField({
   const isImage = file ? file.type.startsWith('image/') : (existingFileType?.startsWith('image/') ?? false)
 
   return (
-    <article className={`rounded-2xl border p-4 transition-colors ${showingSomething ? 'border-green-200 bg-white' : 'border-gray-200 bg-white'}`}>
+    <article className={`w-full min-w-0 rounded-2xl border p-4 transition-colors ${showingSomething ? 'border-green-200 bg-white' : 'border-gray-200 bg-white'}`}>
       <div className="flex items-center justify-between mb-2.5 gap-2">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${showingSomething ? 'bg-green-50 text-green-600' : `${toneBg} ${toneText}`}`}>

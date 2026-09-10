@@ -949,7 +949,7 @@ function S7Saude({ data, documentUrls }: { data?: Record<string, string>; docume
   return (
     <div className="space-y-4">
       <SectionTitle number={d.s7.section} title={d.s7.title} />
-      <div className="grid gap-4">
+      <div className="grid grid-cols-1 gap-4">
         <Select label={d.s7.problema_saude} name="problema_saude" required
           defaultValue={data?.problema_saude}
           options={[{ value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no }]}
@@ -1076,7 +1076,7 @@ function S8Legal({ data, institutionRulesText, candidateEmail, slug, token, lang
   return (
     <div className="space-y-4">
       <SectionTitle number={d.s8.section} title={d.s8.title} />
-      <div className="grid gap-4">
+      <div className="grid grid-cols-1 gap-4">
         <Select label={d.s8.pendencia_judicial} name="pendencia_judicial" required
           defaultValue={data?.pendencia_judicial}
           options={[{ value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no }]}
@@ -1154,29 +1154,46 @@ function S10DocumentosAceite({ data, isBrazilian, estadoCivil, temPassaporte, se
   documentUrls?: DocumentUrls
 }) {
   const d = useContext(DictCtx)
-  const [idDocType, setIdDocType] = useState<'rg' | 'cnh'>(
-    data?.doc_tipo_identificacao === 'cnh' ? 'cnh' : 'rg'
-  )
-  type DocDef = { name: string; label: string; required: boolean; icon: 'foto' | 'id'; hint?: string }
+  // RG e CNH ficam os dois visíveis (não é mais uma escolha por botão) — o
+  // que importa é ter pelo menos um completo. Assim que um dos dois estiver
+  // anexado, o outro vira opcional (o badge e a validação do "Próximo"
+  // reagem em tempo real via esse estado local; a validação de fato — pra
+  // cobrir também o que já veio salvo de uma visita anterior — mora no
+  // handleNext do componente pai, que já tem acesso a documentUrls).
+  const [hasRgFrente, setHasRgFrente] = useState(!!documentUrls?.doc_rg_frente)
+  const [hasRgVerso, setHasRgVerso] = useState(!!documentUrls?.doc_rg_verso)
+  const [hasCnh, setHasCnh] = useState(!!documentUrls?.doc_cnh)
+  const rgCompleta = hasRgFrente && hasRgVerso
+  const rgObrigatoria = !hasCnh
+  const cnhObrigatoria = !rgCompleta
+
+  type DocDef = {
+    name: string; label: string; required: boolean; icon: 'foto' | 'id'; hint?: string
+    onFileChange?: (f: File | null) => void
+    // RG e CNH têm required "OU" entre si (satisfazer um dos dois basta) —
+    // o atributo required nativo do <input> não sabe expressar isso (ele
+    // bloquearia o envio exigindo AMBOS ao mesmo tempo). Por isso esses dois
+    // grupos não usam o required nativo; a validação de fato roda no
+    // handleNext do componente pai. O badge "Obrigatório/Opcional" continua
+    // refletindo `required` normalmente, só a checagem do navegador que fica
+    // de fora pra esses casos.
+    noNativeRequired?: boolean
+  }
   // A página se ajusta ao que a pessoa já respondeu nas seções anteriores:
-  // brasileiro escolhe aqui mesmo (na hora do upload) se vai usar RG ou CNH
-  // como documento de identificação — só um dos dois é pedido, e é
-  // obrigatório. Passaporte só entra aqui (e, se entrar, é obrigatório) se
-  // ela já tiver informado o número dele na seção 2 — não faz sentido pedir
-  // upload de um documento que ela disse não ter. Estrangeiro sempre
-  // precisa do passaporte. Certidão de casamento só aparece pra quem se
-  // declarou casado(a), e aí é obrigatória (não "se aplicável" — já
-  // filtramos por quem realmente precisa dela).
-  const docs: DocDef[] = [
-    { name: 'doc_foto', label: d.s10.doc_foto, required: true, icon: 'foto' },
-    ...(isBrazilian ? (
-      idDocType === 'cnh'
-        ? [{ name: 'doc_cnh', label: d.s10.doc_cnh, required: true, icon: 'id' as const }]
-        : [
-          { name: 'doc_rg_frente', label: d.s10.doc_rg_frente, required: true, icon: 'id' as const },
-          { name: 'doc_rg_verso', label: d.s10.doc_rg_verso, required: true, icon: 'id' as const },
-        ]
-    ) : []),
+  // passaporte só entra aqui (e, se entrar, é obrigatório) se ela já tiver
+  // informado o número dele na seção 2 — não faz sentido pedir upload de um
+  // documento que ela disse não ter. Estrangeiro sempre precisa do
+  // passaporte. Certidão de casamento só aparece pra quem se declarou
+  // casado(a), e aí é obrigatória (não "se aplicável" — já filtramos por
+  // quem realmente precisa dela).
+  const docsRg: DocDef[] = isBrazilian ? [
+    { name: 'doc_rg_frente', label: d.s10.doc_rg_frente, required: rgObrigatoria, icon: 'id', noNativeRequired: true, onFileChange: f => setHasRgFrente(!!f) },
+    { name: 'doc_rg_verso', label: d.s10.doc_rg_verso, required: rgObrigatoria, icon: 'id', noNativeRequired: true, onFileChange: f => setHasRgVerso(!!f) },
+  ] : []
+  const docsCnh: DocDef[] = isBrazilian ? [
+    { name: 'doc_cnh', label: d.s10.doc_cnh, required: cnhObrigatoria, icon: 'id', noNativeRequired: true, onFileChange: f => setHasCnh(!!f) },
+  ] : []
+  const docsOutros: DocDef[] = [
     ...(isBrazilian && temPassaporte ? [{ name: 'doc_passaporte', label: d.s10.doc_passaporte, required: true, icon: 'id' as const }] : []),
     ...(!isBrazilian ? [
       { name: 'doc_passaporte', label: d.s10.doc_passaporte, required: true, icon: 'id' as const },
@@ -1186,6 +1203,29 @@ function S10DocumentosAceite({ data, isBrazilian, estadoCivil, temPassaporte, se
       { name: 'doc_certidao_casamento_s10', label: d.s3.certidao_casamento, required: true, icon: 'id' as const },
     ] : []),
   ]
+
+  function renderDoc(doc: DocDef) {
+    return (
+      <div key={doc.name} className="min-w-0">
+        {doc.hint && <p className="text-xs text-gray-400 mb-1.5 px-1">{doc.hint}</p>}
+        <FileInputField name={doc.name} accept="image/jpeg,image/png,image/webp,application/pdf"
+          required={doc.noNativeRequired ? false : doc.required} tone="amber" onFileChange={doc.onFileChange}
+          icon={doc.icon === 'foto' ? <Camera size={16} aria-hidden /> : <IdCard size={16} aria-hidden />}
+          title={doc.label} subtitle={doc.icon === 'foto' ? d.s10.foto_instrucoes : undefined}
+          badgeLabel={doc.required ? d.nav.doc_required : d.nav.doc_optional}
+          readyLabel={d.nav.doc_ready}
+          dropLabel={doc.icon === 'foto' ? d.s10.foto_drop_label : d.nav.doc_drop_generic}
+          dropHint={d.nav.doc_drop_hint} attachedLabel={d.nav.doc_attached}
+          changeLabel={d.nav.change_file} removeLabel={d.nav.remove_file}
+          modelGraphic={doc.icon === 'foto' ? <PhotoFramingGuide sexo={sexo} caption={d.nav.photo_model_caption} /> : undefined}
+          existingFileUrl={documentUrls?.[doc.name]?.url}
+          existingFileName={documentUrls?.[doc.name]?.name}
+          existingFileType={documentUrls?.[doc.name]?.type}
+          existingFileSize={documentUrls?.[doc.name]?.size} />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
       <SectionTitle number={d.s10.section} title={d.s10.title} />
@@ -1194,45 +1234,24 @@ function S10DocumentosAceite({ data, isBrazilian, estadoCivil, temPassaporte, se
         {d.s10.docs_intro}
       </div>
 
-      {isBrazilian && (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">{d.s10.doc_tipo_identificacao}</label>
-          <div className="flex gap-2">
-            {(['rg', 'cnh'] as const).map(opt => (
-              <button key={opt} type="button" onClick={() => setIdDocType(opt)}
-                className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors ${
-                  idDocType === opt
-                    ? 'bg-amber-600 text-white border-amber-600'
-                    : 'bg-white text-gray-600 border-gray-200 hover:border-amber-300'
-                }`}>
-                {opt === 'rg' ? d.s10.doc_tipo_rg : d.s10.doc_tipo_cnh}
-              </button>
-            ))}
-          </div>
-          <input type="hidden" name="doc_tipo_identificacao" value={idDocType} />
-        </div>
-      )}
+      <div className="grid grid-cols-1 gap-4">
+        {renderDoc({ name: 'doc_foto', label: d.s10.doc_foto, required: true, icon: 'foto' })}
 
-      <div className="grid gap-4">
-        {docs.map(doc => (
-          <div key={doc.name}>
-            {doc.hint && <p className="text-xs text-gray-400 mb-1.5 px-1">{doc.hint}</p>}
-            <FileInputField name={doc.name} accept="image/jpeg,image/png,image/webp,application/pdf"
-              required={doc.required} tone="amber"
-              icon={doc.icon === 'foto' ? <Camera size={16} aria-hidden /> : <IdCard size={16} aria-hidden />}
-              title={doc.label} subtitle={doc.icon === 'foto' ? d.s10.foto_instrucoes : undefined}
-              badgeLabel={doc.required ? d.nav.doc_required : d.nav.doc_optional}
-              readyLabel={d.nav.doc_ready}
-              dropLabel={doc.icon === 'foto' ? d.s10.foto_drop_label : d.nav.doc_drop_generic}
-              dropHint={d.nav.doc_drop_hint} attachedLabel={d.nav.doc_attached}
-              changeLabel={d.nav.change_file} removeLabel={d.nav.remove_file}
-              modelGraphic={doc.icon === 'foto' ? <PhotoFramingGuide sexo={sexo} caption={d.nav.photo_model_caption} /> : undefined}
-              existingFileUrl={documentUrls?.[doc.name]?.url}
-              existingFileName={documentUrls?.[doc.name]?.name}
-              existingFileType={documentUrls?.[doc.name]?.type}
-              existingFileSize={documentUrls?.[doc.name]?.size} />
+        {docsRg.length > 0 && (
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">{d.s10.doc_tipo_rg}</p>
+            <div className="grid grid-cols-1 gap-4">{docsRg.map(renderDoc)}</div>
           </div>
-        ))}
+        )}
+        {docsCnh.length > 0 && (
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">{d.s10.doc_tipo_cnh}</p>
+            <div className="grid grid-cols-1 gap-4">{docsCnh.map(renderDoc)}</div>
+          </div>
+        )}
+        {docsOutros.map(renderDoc)}
+        {renderDoc({ name: 'doc_outro_extra', label: d.s10.doc_outro_extra, required: false, icon: 'id' })}
+
         <p className="text-xs text-gray-400 -mt-1">{d.s10.doc_hint_generic}</p>
       </div>
 
@@ -1484,6 +1503,25 @@ export function FormularioObreiro({
         const tel = (fd.get('pastor_telefone') as string)?.trim()
         if (!email && (!tel || tel === '+55')) {
           setError(d.s4.pastor_hint)
+          setSaving(false)
+          return
+        }
+      }
+
+      if (sections[currentIndex].id === 10 && isBrazilian) {
+        // RG (frente + verso) OU CNH — pelo menos um dos dois completo,
+        // seja porque veio nesse envio (fd) ou já estava salvo de uma
+        // visita anterior (documentUrls) e não foi marcado pra remoção.
+        const hasDoc = (key: string) => {
+          const file = fd.get(key)
+          if (file instanceof File && file.size > 0) return true
+          if (fd.get(`remove_${key}`) === '1') return false
+          return !!documentUrls?.[key]
+        }
+        const rgOk = hasDoc('doc_rg_frente') && hasDoc('doc_rg_verso')
+        const cnhOk = hasDoc('doc_cnh')
+        if (!rgOk && !cnhOk) {
+          setError(d.s10.doc_id_required_error)
           setSaving(false)
           return
         }
