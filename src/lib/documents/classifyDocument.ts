@@ -1,4 +1,4 @@
-export type DocumentKind = 'foto' | 'rg_frente' | 'rg_verso' | 'cpf' | 'passaporte' | 'comprovante_pagamento' | 'certidao_casamento'
+export type DocumentKind = 'foto' | 'rg_frente' | 'rg_verso' | 'cpf' | 'passaporte' | 'comprovante_pagamento' | 'certidao_casamento' | 'cnh'
 
 const KIND_DESCRIPTIONS: Record<DocumentKind, string> = {
   foto: 'uma foto de rosto/retrato pessoal (tipo 3x4), mostrando o rosto de uma pessoa',
@@ -8,6 +8,7 @@ const KIND_DESCRIPTIONS: Record<DocumentKind, string> = {
   passaporte: 'uma página de passaporte com foto e dados pessoais',
   comprovante_pagamento: 'um comprovante de pagamento (recibo bancário, print de PIX, comprovante de transferência)',
   certidao_casamento: 'uma certidão de casamento',
+  cnh: 'uma CNH (Carteira Nacional de Habilitação) brasileira',
 }
 
 export type ClassifyResult = { valid: boolean; reason?: string }

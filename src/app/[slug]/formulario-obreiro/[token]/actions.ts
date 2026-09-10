@@ -73,6 +73,7 @@ const DOCUMENT_KIND_BY_KEY: Record<string, DocumentKind> = {
   doc_foto: 'foto',
   doc_rg_frente: 'rg_frente',
   doc_rg_verso: 'rg_verso',
+  doc_cnh: 'cnh',
   doc_passaporte: 'passaporte',
   doc_passaporte_opcional: 'passaporte',
   doc_certidao_casamento: 'certidao_casamento',
