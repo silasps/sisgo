@@ -23,7 +23,7 @@ export const esDict: StaffFormDict = {
     doc_attached: 'Archivo adjuntado con éxito',
     doc_drop_generic: 'Tomar foto o adjuntar archivo',
     doc_drop_hint: 'PDF, JPG, PNG hasta 10MB',
-    photo_model_caption: 'Rostro centrado, hombros visibles, fondo neutro — como en el modelo al lado.',
+    photo_model_caption: 'Foto tipo carnet 3x4: fondo claro y neutro, rostro centrado, hombros visibles, buena iluminación — sin selfies ni filtros, como en el modelo al lado.',
   },
 
   langSwitcher: { label: 'Idioma del formulario:' },

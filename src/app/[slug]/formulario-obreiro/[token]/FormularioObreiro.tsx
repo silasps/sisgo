@@ -1214,7 +1214,7 @@ function S10DocumentosAceite({ data, isBrazilian, estadoCivil, temPassaporte, se
         <FileInputField name={doc.name} accept="image/jpeg,image/png,image/webp,application/pdf"
           required={doc.noNativeRequired ? false : doc.required} tone="amber" onFileChange={doc.onFileChange}
           icon={doc.icon === 'foto' ? <Camera size={16} aria-hidden /> : <IdCard size={16} aria-hidden />}
-          title={doc.label} subtitle={doc.icon === 'foto' ? d.s10.foto_instrucoes : undefined}
+          title={doc.label}
           badgeLabel={doc.required ? d.nav.doc_required : d.nav.doc_optional}
           readyLabel={d.nav.doc_ready}
           dropLabel={doc.icon === 'foto' ? d.s10.foto_drop_label : d.nav.doc_drop_generic}

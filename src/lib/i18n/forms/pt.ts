@@ -24,7 +24,7 @@ export const ptDict: FormDict = {
     doc_attached: 'Arquivo anexado com sucesso',
     doc_drop_generic: 'Tirar foto ou anexar arquivo',
     doc_drop_hint: 'PDF, JPG, PNG até 10MB',
-    photo_model_caption: 'Rosto centralizado, ombros visíveis, fundo neutro — como no modelo ao lado.',
+    photo_model_caption: 'Foto de rosto tipo 3x4: fundo claro e neutro, rosto centralizado, ombros visíveis, boa iluminação — sem selfies ou filtros, como no modelo ao lado.',
   },
 
   langSwitcher: { label: 'Idioma do formulário:' },

@@ -24,7 +24,7 @@ export const enDict: FormDict = {
     doc_attached: 'File attached successfully',
     doc_drop_generic: 'Take a photo or attach a file',
     doc_drop_hint: 'PDF, JPG, PNG up to 10MB',
-    photo_model_caption: 'Face centered, shoulders visible, neutral background — like the example alongside.',
+    photo_model_caption: '3x4 headshot: light, neutral background, face centered, shoulders visible, good lighting — no selfies or filters, like the example alongside.',
   },
 
   langSwitcher: { label: 'Form language:' },
