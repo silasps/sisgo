@@ -115,7 +115,7 @@ export function PhotoCropperModal({
   const modal = (
     <div className="fixed inset-0 z-[60] bg-black sm:bg-black/70 sm:flex sm:items-center sm:justify-center sm:p-4" onClick={onCancel}>
       <div
-        className="absolute inset-0 sm:static sm:inset-auto w-full sm:w-auto sm:max-w-sm sm:max-h-[85dvh] sm:rounded-2xl sm:shadow-xl sm:overflow-hidden bg-black sm:bg-white sm:mx-auto"
+        className="absolute inset-0 sm:static sm:inset-auto w-full sm:w-auto sm:max-w-md sm:max-h-[85dvh] sm:rounded-2xl sm:shadow-xl sm:overflow-hidden bg-black sm:bg-white sm:mx-auto"
         onClick={e => e.stopPropagation()}
       >
         <div
@@ -126,7 +126,7 @@ export function PhotoCropperModal({
           <button type="button" onClick={onCancel} className="text-white/70 hover:text-white sm:text-gray-400 sm:hover:text-gray-700 text-xl leading-none px-1">×</button>
         </div>
 
-        <div className="absolute sm:relative top-14 sm:top-auto bottom-[172px] sm:bottom-auto inset-x-0 sm:inset-x-auto sm:h-80 bg-gray-900">
+        <div className="absolute sm:relative top-14 sm:top-auto bottom-[172px] sm:bottom-auto inset-x-0 sm:inset-x-auto sm:h-[28rem] bg-gray-900">
           <Cropper
             image={imageSrc}
             crop={crop}
@@ -153,11 +153,11 @@ export function PhotoCropperModal({
           <p className="text-xs text-red-400 sm:text-red-600 h-4">{error ? errorLabel : ''}</p>
           <div className="flex gap-2">
             <button type="button" onClick={onCancel}
-              className="flex-1 px-4 py-2.5 text-sm font-semibold text-white/80 sm:text-gray-600 border border-white/20 sm:border-gray-200 rounded-xl hover:bg-white/10 sm:hover:bg-gray-50 transition-colors">
+              className="flex-1 px-4 py-2.5 text-sm font-semibold text-white/80 sm:text-gray-600 border border-white/20 sm:border-gray-200 rounded-xl hover:bg-white/10 sm:hover:bg-gray-50 transition-colors whitespace-nowrap">
               {cancelLabel}
             </button>
             <button type="button" onClick={handleConfirm} disabled={saving || !croppedAreaPixels}
-              className="flex-1 px-4 py-2.5 text-sm font-bold text-white rounded-xl transition-colors disabled:opacity-60"
+              className="flex-1 px-4 py-2.5 text-sm font-bold text-white rounded-xl transition-colors disabled:opacity-60 whitespace-nowrap"
               style={{ backgroundColor: accent }}>
               {saving ? '…' : confirmLabel}
             </button>
