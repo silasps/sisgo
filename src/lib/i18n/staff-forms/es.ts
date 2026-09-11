@@ -354,7 +354,7 @@ export const esDict: StaffFormDict = {
     registration_eyebrow: 'Preinscripción',
     registration_title: 'Da el primer paso',
     registration_subtitle: 'Completa el formulario y nuestro equipo se pondrá en contacto con más detalles.',
-    footer_tagline: 'Juventud Con Una Misión',
+    footer_tagline: 'Organización Misionera',
     footer_other_opportunities: 'Ver otras oportunidades →',
     footer_rights: 'Todos los derechos reservados',
   },

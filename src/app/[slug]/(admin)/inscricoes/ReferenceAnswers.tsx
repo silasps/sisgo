@@ -9,8 +9,8 @@ export const RECOMENDAM_COR: Record<string, string> = {
   nao: 'bg-red-100 text-red-700',
 }
 export const APOIA: Record<string, string> = {
-  sim: 'Apoia e autoriza',
-  nao: 'Não apoia',
+  sim: 'Libera e abençoa',
+  nao: 'Não libera',
 }
 export const APOIA_COR: Record<string, string> = {
   sim: 'bg-green-100 text-green-700',

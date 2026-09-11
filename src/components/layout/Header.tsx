@@ -14,7 +14,7 @@ type HeaderProps = {
 }
 
 export function Header({ title, backHref, actions }: HeaderProps) {
-  const { logoUrl, sisgoLogo, collapsed } = useBrand()
+  const { logoUrl } = useBrand()
 
   return (
     <header className="h-16 shrink-0 border-b border-dark-800 bg-dark-950 flex items-center justify-between px-4 md:px-6 sticky top-0 z-10">
@@ -23,25 +23,11 @@ export function Header({ title, backHref, actions }: HeaderProps) {
           {logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element -- logo tem proporção variável por organização; largura livre preserva o aspecto
             <img src={logoUrl} alt="Logo" className="h-full w-auto max-w-[140px] object-contain" />
-          ) : sisgoLogo ? (
-            <SisgoLogo size={26} />
           ) : (
-            // Marca padrão do sisgo. No mobile é sempre o ícone compacto (o
-            // espaço ali é do título da página, igual Instagram/Slack/Notion
-            // no topo mobile). No desktop (md+), troca pra wordmark quando a
-            // sidebar colapsa e sobra espaço no header.
-            <>
-              <img
-                src="/images/logo-at-icon-white.png"
-                alt="JOCUM Almirante Tamandaré"
-                className={`h-full w-8 object-contain ${collapsed ? 'md:hidden' : ''}`}
-              />
-              <img
-                src="/images/logo-at-full-white.png"
-                alt="JOCUM Almirante Tamandaré"
-                className={`hidden h-full w-auto object-contain ${collapsed ? 'md:block' : ''}`}
-              />
-            </>
+            // Marca padrão do sisgo — usada até a organização configurar seu
+            // próprio logo em Configurações. Não deve ser específica de
+            // nenhuma organização (o sistema é multi-tenant).
+            <SisgoLogo size={26} />
           )}
         </span>
         {backHref && (

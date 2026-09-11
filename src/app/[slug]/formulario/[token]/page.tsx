@@ -129,7 +129,7 @@ export default async function FormularioPage({ params, searchParams }: Props) {
       <header className="bg-white border-b border-gray-100 px-4 sm:px-6 py-4">
         <div className="max-w-2xl mx-auto">
           <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest">
-            {d.org_label}
+            {org.name ?? d.org_label}
           </p>
           <h1 className="text-lg font-bold text-gray-900 mt-0.5">
             {escola?.name ?? d.fallback_title}

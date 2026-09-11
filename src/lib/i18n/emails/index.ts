@@ -2,7 +2,7 @@ export type EmailLang = 'pt' | 'en' | 'es'
 
 const dict = {
   pt: {
-    org: 'Jovens Com Uma Missão',
+    org: 'Organização Missionária',
     subtitle: 'Formulário de Inscrição',
     greeting: 'Olá, {name}! 👋',
     body: 'Seu formulário de inscrição para a <strong style="color:#111827;">{school}</strong> está disponível. Clique no botão abaixo para acessá-lo e preencher com atenção.',
@@ -16,7 +16,7 @@ const dict = {
     disclaimer: 'Este e-mail foi enviado automaticamente. O preenchimento do formulário não garante aceitação.',
   },
   en: {
-    org: 'Youth With A Mission',
+    org: 'Missionary Organization',
     subtitle: 'Application Form',
     greeting: 'Hello, {name}! 👋',
     body: 'Your application form for <strong style="color:#111827;">{school}</strong> is ready. Click the button below to access and complete it carefully.',
@@ -30,7 +30,7 @@ const dict = {
     disclaimer: 'This email was sent automatically. Completing the form does not guarantee acceptance.',
   },
   es: {
-    org: 'Jóvenes Con Una Misión',
+    org: 'Organización Misionera',
     subtitle: 'Formulario de Inscripción',
     greeting: '¡Hola, {name}! 👋',
     body: 'Tu formulario de inscripción para <strong style="color:#111827;">{school}</strong> está disponible. Haz clic en el botón de abajo para acceder y completarlo con atención.',
@@ -53,7 +53,7 @@ export function emailLocale(lang: EmailLang) { return localeMap[lang] }
 // ── E-mail de aprovação (aluno) ─────────────────────────────────────────────
 const approvalDict = {
   pt: {
-    org: 'Jovens Com Uma Missão',
+    org: 'Organização Missionária',
     title: 'Parabéns, você foi aceito!',
     greeting: 'Olá, {name}! 🎉',
     body: 'Temos uma ótima notícia: sua inscrição para a <strong style="color:#111827;">{school}</strong> foi analisada e você foi <strong style="color:#16a34a;">aceito(a)</strong> na turma <strong style="color:#111827;">{class}</strong>.',
@@ -68,7 +68,7 @@ const approvalDict = {
     subject: 'Você foi aceito(a) — {school} · {class}',
   },
   en: {
-    org: 'Youth With A Mission',
+    org: 'Missionary Organization',
     title: 'Congratulations, you’ve been accepted!',
     greeting: 'Hello, {name}! 🎉',
     body: 'Great news: your application for <strong style="color:#111827;">{school}</strong> has been reviewed and you have been <strong style="color:#16a34a;">accepted</strong> into the <strong style="color:#111827;">{class}</strong> class.',
@@ -83,7 +83,7 @@ const approvalDict = {
     subject: 'You’ve been accepted — {school} · {class}',
   },
   es: {
-    org: 'Jóvenes Con Una Misión',
+    org: 'Organización Misionera',
     title: '¡Felicidades, has sido aceptado!',
     greeting: '¡Hola, {name}! 🎉',
     body: 'Tenemos una excelente noticia: tu inscripción para <strong style="color:#111827;">{school}</strong> fue analizada y fuiste <strong style="color:#16a34a;">aceptado(a)</strong> en la clase <strong style="color:#111827;">{class}</strong>.',
@@ -102,7 +102,7 @@ const approvalDict = {
 // ── E-mail de reprovação (aluno) ────────────────────────────────────────────
 const rejectionDict = {
   pt: {
-    org: 'Jovens Com Uma Missão',
+    org: 'Organização Missionária',
     title: 'Atualização sobre sua inscrição',
     greeting: 'Olá, {name}',
     body: 'Sua inscrição para a <strong style="color:#111827;">{school}</strong> foi analisada e, neste momento, <strong style="color:#374151;">não foi aprovada</strong>.',
@@ -111,7 +111,7 @@ const rejectionDict = {
     subject: 'Atualização sobre sua inscrição — {school}',
   },
   en: {
-    org: 'Youth With A Mission',
+    org: 'Missionary Organization',
     title: 'Update on your application',
     greeting: 'Hello, {name}',
     body: 'Your application for <strong style="color:#111827;">{school}</strong> has been reviewed and, at this time, <strong style="color:#374151;">was not approved</strong>.',
@@ -120,7 +120,7 @@ const rejectionDict = {
     subject: 'Update on your application — {school}',
   },
   es: {
-    org: 'Jóvenes Con Una Misión',
+    org: 'Organización Misionera',
     title: 'Actualización sobre tu inscripción',
     greeting: 'Hola, {name}',
     body: 'Tu inscripción para <strong style="color:#111827;">{school}</strong> fue analizada y, por el momento, <strong style="color:#374151;">no fue aprobada</strong>.',

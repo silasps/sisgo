@@ -48,7 +48,7 @@ export default async function SuperAdminLayout({ children }: { children: React.R
     <div className="flex flex-col h-dvh">
       <style>{`:root{${accentCssVars(accentKey)}}`}</style>
       <div className="shrink-0 h-[env(safe-area-inset-top)] bg-white" />
-      <AppShell items={NAV} subtitle="Super Admin" logoUrl={logoUrl} sisgoLogo user={currentUser} className="flex flex-1 min-h-0 overflow-hidden">
+      <AppShell items={NAV} subtitle="Super Admin" logoUrl={logoUrl} user={currentUser} className="flex flex-1 min-h-0 overflow-hidden">
         {children}
       </AppShell>
     </div>

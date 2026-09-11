@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { PrintControls } from './PrintControls'
+import { orgShortName } from '@/lib/orgShortName'
 
 type Props = { params: Promise<{ slug: string; id: string; classId: string; personId: string }> }
 
@@ -67,7 +68,7 @@ export default async function CertificadoPage({ params }: Props) {
           {/* Header */}
           <div className="relative z-10">
             <p className="text-xs font-semibold tracking-[0.2em] text-gray-400 uppercase mb-1">
-              Jovens Com Uma Missão · {org.name}
+              {orgShortName(org.name)} · {org.name}
             </p>
             <h1 className="text-4xl font-black text-gray-800 tracking-tight">CERTIFICADO</h1>
             <p className="text-sm text-gray-500 mt-0.5">de Conclusão</p>

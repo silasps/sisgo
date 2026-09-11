@@ -5,6 +5,7 @@ import { getRejectionDict, type EmailLang } from '@/lib/i18n/emails'
 type Params = {
   to: string
   candidateName: string
+  organizationName: string
   schoolName: string
   replyTo: string
   organizationId: string
@@ -25,7 +26,7 @@ function buildHtml(p: Params): string {
       <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
         <tr>
           <td style="background:#374151;padding:40px 40px 32px;text-align:center;">
-            <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:0.1em;">${d.org}</p>
+            <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:0.1em;">${p.organizationName || d.org}</p>
             <h1 style="margin:0;font-size:24px;font-weight:800;color:#fff;line-height:1.2;">${d.title}</h1>
             <p style="margin:12px 0 0;font-size:14px;color:rgba(255,255,255,0.85);">${p.schoolName}</p>
           </td>

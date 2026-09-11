@@ -55,8 +55,8 @@ async function sendFormLink(params: SendFormLinkParams): Promise<StaffInviteResu
     const emailResult = await sendFormEmail({
       to: params.email,
       candidateName: params.fullName,
-      orgName: orgRow?.name ?? 'JOCUM',
-      schoolName: ministryName ?? orgRow?.name ?? 'JOCUM',
+      orgName: orgRow?.name ?? 'Organização',
+      schoolName: ministryName ?? orgRow?.name ?? 'Organização',
       formUrl: formUrlForEmail,
       expiresAt: params.expiresAt,
       replyTo: orgRow?.email || 'noreply@sisgomission.com',

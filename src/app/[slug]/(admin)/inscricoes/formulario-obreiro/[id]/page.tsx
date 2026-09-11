@@ -16,6 +16,7 @@ import { HospedagemHandoffCard } from './HospedagemHandoffCard'
 import { HospedagemSolicitacaoCard } from './HospedagemSolicitacaoCard'
 import { HospedagemGate } from './HospedagemGate'
 import { avancarEtapaObreiro, reenviarLinkFormularioObreiro, reenviarEmailFormularioObreiro, editarEmailInteresseObreiro } from './actions'
+import { RefreshOnFocus } from '@/components/ui/RefreshOnFocus'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
@@ -525,6 +526,7 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
 
   return (
     <>
+      <RefreshOnFocus />
       <header className="bg-white border-b border-gray-100 px-4 sm:px-6 py-4 sticky top-0 z-10">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <div>
@@ -602,7 +604,9 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
           return (
             <SectionCard key={sKey} title={section.title}>
               {section.fields.map(f => (
-                <FieldRow key={f.key} label={f.label} value={sData[f.key] ?? allFields[f.key]} type={f.type} />
+                <FieldRow key={f.key} label={f.label}
+                  value={f.key === 'ministerio_escolhido' ? (ministry?.name ?? sData[f.key]) : (sData[f.key] ?? allFields[f.key])}
+                  type={f.type} />
               ))}
             </SectionCard>
           )

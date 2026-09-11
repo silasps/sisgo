@@ -886,7 +886,7 @@ export function InscricoesList({
                     {!finalizado && item.email && (
                       <Tooltip label="Enviar e-mail">
                         <a
-                          href={`mailto:${item.email}?subject=Sua inscrição - ${item.escola ?? 'JOCUM'}&body=Olá ${item.nome},%0A%0A`}
+                          href={`mailto:${item.email}?subject=Sua inscrição - ${item.escola ?? 'Organização'}&body=Olá ${item.nome},%0A%0A`}
                           className="p-1.5 border border-gray-200 text-gray-500 hover:bg-gray-50 rounded-lg transition-colors"
                           aria-label="Enviar e-mail"
                         >

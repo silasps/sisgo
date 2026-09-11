@@ -100,7 +100,7 @@ export async function enviarRegrasInstituicaoEmail(slug: string, token: string, 
 
   const sendResult = await sendInstitutionRulesEmail({
     to: email,
-    orgName: org?.name ?? 'JOCUM',
+    orgName: org?.name ?? 'Organização',
     rulesText,
     organizationId: app.organization_id,
     language: lang,
@@ -249,7 +249,7 @@ async function enviarPedidosDeReferencia(
   formData: Record<string, Record<string, string>>
 ) {
   const { data: org } = await sb.from('organizations').select('name, email').eq('id', organizationId).maybeSingle()
-  let contextLabel = org?.name ?? 'JOCUM'
+  let contextLabel = org?.name ?? 'Organização'
   if (appFull?.ministry_id) {
     const { data: ministry } = await sb.from('ministries').select('name').eq('id', appFull.ministry_id).maybeSingle()
     if (ministry?.name) contextLabel = ministry.name

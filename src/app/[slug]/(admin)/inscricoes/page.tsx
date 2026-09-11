@@ -315,6 +315,8 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     const decisionNoteShared = formData.get('decision_note_shared') === 'on'
     if (!reason) return
     const now = new Date().toISOString()
+    const { data: orgRowForEmail } = await db.from('organizations').select('name').eq('id', orgId).maybeSingle()
+    const organizationName = orgRowForEmail?.name ?? 'Organização'
     if (tipo === 'pre_inscricao') {
       const status = kind === 'exclusao' ? 'excluido' : 'descartado'
       const { data: row, error } = await db.from('school_interest_forms')
@@ -331,7 +333,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       if (decisionNoteShared && row?.email && escola?.contact_email) {
         const { sendRejectionEmail } = await import('@/lib/email/sendRejectionEmail')
         sendRejectionEmail({
-          to: row.email, candidateName: row.full_name, schoolName: escola.name,
+          to: row.email, candidateName: row.full_name, organizationName, schoolName: escola.name,
           replyTo: escola.contact_email, organizationId: orgId, schoolId: row.school_id ?? '',
           decisionNote, language: (row as unknown as { language?: string }).language,
         }).catch(() => {})
@@ -372,6 +374,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           sendRejectionEmail({
             to: contact.value,
             candidateName: (row.people as unknown as { full_name: string } | null)?.full_name ?? 'Candidato',
+            organizationName,
             schoolName: escola.name, replyTo: escola.contact_email, organizationId: orgId,
             schoolId: row.school_id ?? '', decisionNote, language: interestForm?.language,
           }).catch(() => {})
@@ -506,10 +509,12 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         }
         if (recipientEmail) {
           const { data: personRow } = await db.from('people').select('full_name').eq('id', personId).maybeSingle()
+          const { data: orgRowForEmail } = await db.from('organizations').select('name').eq('id', orgIdForm).maybeSingle()
           const { sendApprovalEmail } = await import('@/lib/email/sendApprovalEmail')
           sendApprovalEmail({
             to: recipientEmail,
             candidateName: (personRow as { full_name?: string } | null)?.full_name ?? 'Candidato',
+            organizationName: orgRowForEmail?.name ?? 'Organização',
             schoolName: schoolInfo.name,
             className: approvedClassRow.name,
             startsAt: approvedClassRow.starts_at,
@@ -686,7 +691,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     sendStaffApprovalEmail({
       to: email,
       candidateName: (formData.get('name') as string | null) || 'Obreiro',
-      organizationName: orgRow?.name ?? 'JOCUM',
+      organizationName: orgRow?.name ?? 'Organização',
       ministryName,
       replyTo: orgRow?.email || 'noreply@sisgomission.com',
       organizationId: orgIdForm,
@@ -777,9 +782,12 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       // usuário escolheu "copiar link" — não é falha, não gera aviso
     } else if (escola?.contact_email) {
       const { sendFormEmail } = await import('@/lib/email/sendFormEmail')
+      const { data: orgRowForEmail } = await db.from('organizations')
+        .select('name').eq('id', (form as unknown as { organization_id: string }).organization_id).maybeSingle()
       const emailResult = await sendFormEmail({
         to: form.email,
         candidateName: form.full_name,
+        orgName: orgRowForEmail?.name,
         schoolName: escola.name,
         formUrl: formUrlForEmail,
         expiresAt,

@@ -5,6 +5,7 @@ import { RegistrationForm } from './RegistrationForm'
 import { schoolTypeShortLabel } from '@/lib/schools'
 import { getFormDict, normalizeLang, detectLangFromHeader } from '@/lib/i18n/forms'
 import { resolveLocalizedText } from '@/lib/i18n/resolveLocalizedText'
+import { orgShortName } from '@/lib/orgShortName'
 
 type Props = {
   params: Promise<{ slug: string; schoolSlug: string }>
@@ -348,7 +349,7 @@ export default async function SchoolPublicPage({ params, searchParams }: Props) 
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 sm:gap-6 text-center md:text-left">
           <div>
             <p className="font-bold text-lg">{org.name}</p>
-            <p className="text-gray-500 text-sm">{d.landingChrome.footer_tagline}</p>
+            <p className="text-gray-500 text-sm">{orgShortName(org.name, d.landingChrome.footer_tagline)}</p>
           </div>
           <div className="flex flex-wrap justify-center gap-4 sm:gap-6 text-sm text-gray-400">
             <a href={`/${slug}`} className="hover:text-white transition-colors">{d.landingChrome.footer_home}</a>

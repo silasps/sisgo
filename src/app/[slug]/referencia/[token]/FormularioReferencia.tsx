@@ -22,12 +22,12 @@ function Field({ label, name, placeholder, required, type = 'text' }: {
   label: string; name: string; placeholder?: string; required?: boolean; type?: string
 }) {
   return (
-    <div>
+    <div className="flex flex-col h-full">
       <label className="block text-sm font-medium text-gray-700 mb-1">
         {label}{required && <span className="text-red-500 ml-0.5">*</span>}
       </label>
       <input name={name} type={type} placeholder={placeholder} required={required}
-        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-gray-50" />
+        className="mt-auto w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-gray-50" />
     </div>
   )
 }

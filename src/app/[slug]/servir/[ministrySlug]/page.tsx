@@ -6,6 +6,7 @@ import { HeartHandshake } from 'lucide-react'
 import { getStaffFormDict, normalizeStaffLang } from '@/lib/i18n/staff-forms'
 import { detectLangFromHeader } from '@/lib/i18n/forms'
 import { resolveLocalizedText } from '@/lib/i18n/resolveLocalizedText'
+import { orgShortName } from '@/lib/orgShortName'
 
 type Props = {
   params: Promise<{ slug: string; ministrySlug: string }>
@@ -121,7 +122,7 @@ export default async function MinistryPublicPage({ params, searchParams }: Props
       <footer className="bg-gray-950 text-white px-5 py-10">
         <div className="max-w-2xl mx-auto text-center">
           <p className="font-bold">{org.name}</p>
-          <p className="text-gray-500 text-sm mt-1">{d.servirChrome.footer_tagline}</p>
+          <p className="text-gray-500 text-sm mt-1">{orgShortName(org.name, d.servirChrome.footer_tagline)}</p>
           <a href={`/${slug}/servir`} className="inline-block mt-4 text-sm text-amber-400 hover:text-amber-300 transition-colors">
             {d.servirChrome.footer_other_opportunities}
           </a>

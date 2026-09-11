@@ -354,7 +354,7 @@ export const ptDict: StaffFormDict = {
     registration_eyebrow: 'Pré-inscrição',
     registration_title: 'Dê o primeiro passo',
     registration_subtitle: 'Preencha abaixo e nossa equipe entrará em contato com mais detalhes.',
-    footer_tagline: 'Jovens Com Uma Missão',
+    footer_tagline: 'Organização Missionária',
     footer_other_opportunities: 'Ver outras oportunidades →',
     footer_rights: 'Todos os direitos reservados',
   },

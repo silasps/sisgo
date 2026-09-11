@@ -18,7 +18,6 @@ export function AppShell({
   bottomBarItems,
   subtitle,
   logoUrl,
-  sisgoLogo,
   className,
   children,
   user,
@@ -30,7 +29,6 @@ export function AppShell({
   bottomBarItems?: BottomBarItem[]
   subtitle?: string
   logoUrl?: string
-  sisgoLogo?: boolean
   className?: string
   children: React.ReactNode
   user?: { name?: string; email: string; badge?: string }
@@ -65,7 +63,7 @@ export function AppShell({
 
   return (
     <AccountCtx.Provider value={account ?? null}>
-      <BrandCtx.Provider value={{ logoUrl, sisgoLogo, subtitle, collapsed }}>
+      <BrandCtx.Provider value={{ logoUrl, subtitle, collapsed }}>
         <AllAppsCtx.Provider value={allAppsValue}>
           <NavCtx.Provider value={{ openNav: () => setOpen(true) }}>
             <div className={className ?? 'flex h-dvh overflow-hidden'}>

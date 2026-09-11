@@ -354,7 +354,7 @@ export const enDict: StaffFormDict = {
     registration_eyebrow: 'Pre-registration',
     registration_title: 'Take the first step',
     registration_subtitle: "Fill out the form below and our team will reach out with more details.",
-    footer_tagline: 'Youth With A Mission',
+    footer_tagline: 'Missionary Organization',
     footer_other_opportunities: 'See other opportunities →',
     footer_rights: 'All rights reserved',
   },

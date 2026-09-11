@@ -17,7 +17,7 @@ export type AccountInfo = {
 export const AccountCtx = createContext<AccountInfo | null>(null)
 export const useAccount = () => useContext(AccountCtx)
 
-export type BrandInfo = { logoUrl?: string; sisgoLogo?: boolean; subtitle?: string; collapsed?: boolean }
+export type BrandInfo = { logoUrl?: string; subtitle?: string; collapsed?: boolean }
 export const BrandCtx = createContext<BrandInfo>({})
 export const useBrand = () => useContext(BrandCtx)
 

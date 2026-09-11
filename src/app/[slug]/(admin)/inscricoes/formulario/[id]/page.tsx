@@ -11,6 +11,7 @@ import { PipelineStepper, stagesFromFlags } from '@/components/inscricoes/Pipeli
 import { AvancarEtapaControl, AdvanceHistoryList } from '@/components/inscricoes/AvancarEtapaControl'
 import { getStageAdvances, resolveAdvancerNames } from '@/lib/pipelineStageAdvance'
 import { avancarEtapaAluno, reenviarLinkFormulario } from './actions'
+import { RefreshOnFocus } from '@/components/ui/RefreshOnFocus'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
@@ -453,6 +454,7 @@ export default async function FormularioViewerPage({ params }: Props) {
 
   return (
     <>
+      <RefreshOnFocus />
       {/* Header */}
       <div className="h-16 shrink-0 sticky top-0 z-10 bg-white border-b border-gray-200 px-4 md:px-6 flex items-center">
         <div className="flex items-center gap-3 flex-wrap">

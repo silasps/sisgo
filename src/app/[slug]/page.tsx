@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { SuperAdminContextBar } from '@/components/layout/SuperAdminContextBar'
 import { notFound } from 'next/navigation'
 import { schoolTypeShortLabel } from '@/lib/schools'
+import { orgShortName } from '@/lib/orgShortName'
 import { BookOpen } from 'lucide-react'
 
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ preview?: string }> }
@@ -129,7 +130,7 @@ export default async function PublicBasePage({ params, searchParams }: Props) {
         <div className="max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 sm:gap-8">
           <div>
             <p className="font-bold text-lg mb-2">{org.name}</p>
-            <p className="text-gray-400 text-sm">Jovens Com Uma Missão</p>
+            <p className="text-gray-400 text-sm">{orgShortName(org.name, 'Organização Missionária')}</p>
             {org.city && <p className="text-gray-400 text-sm mt-1">{org.city}{org.state ? `, ${org.state}` : ''}</p>}
           </div>
           <div>
