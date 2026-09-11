@@ -115,7 +115,7 @@ export function PhotoCropperModal({
   const modal = (
     <div className="fixed inset-0 z-[60] bg-black sm:bg-black/70 sm:flex sm:items-center sm:justify-center sm:p-4" onClick={onCancel}>
       <div
-        className="absolute inset-0 sm:static sm:inset-auto w-full sm:w-auto sm:max-w-md sm:max-h-[85dvh] sm:rounded-2xl sm:shadow-xl sm:overflow-hidden bg-black sm:bg-white sm:mx-auto"
+        className="absolute inset-0 sm:static sm:inset-auto w-full sm:w-[min(90vw,42rem)] sm:max-h-[90vh] sm:rounded-2xl sm:shadow-xl sm:overflow-hidden bg-black sm:bg-white sm:mx-auto"
         onClick={e => e.stopPropagation()}
       >
         <div
@@ -126,7 +126,7 @@ export function PhotoCropperModal({
           <button type="button" onClick={onCancel} className="text-white/70 hover:text-white sm:text-gray-400 sm:hover:text-gray-700 text-xl leading-none px-1">×</button>
         </div>
 
-        <div className="absolute sm:relative top-14 sm:top-auto bottom-[172px] sm:bottom-auto inset-x-0 sm:inset-x-auto sm:h-[28rem] bg-gray-900">
+        <div className="absolute sm:relative top-14 sm:top-auto bottom-[172px] sm:bottom-auto inset-x-0 sm:inset-x-auto sm:h-[min(70vh,44rem)] bg-gray-900">
           <Cropper
             image={imageSrc}
             crop={crop}
