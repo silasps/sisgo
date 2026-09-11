@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useState } from 'react'
+import { createPortal } from 'react-dom'
 import Cropper, { type Area } from 'react-easy-crop'
 import { ZoomIn } from 'lucide-react'
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock'
@@ -92,15 +93,26 @@ export function PhotoCropperModal({
   //
   // O cartão em si usa `absolute inset-0` (não `h-[100dvh]`) dentro do
   // wrapper `fixed inset-0`: assim ele herda a altura do próprio wrapper
-  // (que já é a viewport visual de verdade, via position:fixed — suporte
-  // sólido em qualquer navegador) em vez de fazer uma SEGUNDA conta
-  // independente com a unidade `dvh`, que alguns navegadores mobile
-  // resolvem de forma desatualizada/instável. Com duas contas de altura
-  // supostamente iguais mas calculadas separadamente, qualquer divergência
-  // entre elas é exatamente o que sobra como área preta vazia. No desktop
-  // (sm:) tudo volta a ficar em fluxo normal (position: static), empilhado
-  // como um cartão comum dentro do wrapper centralizado.
-  return (
+  // em vez de fazer uma segunda conta independente com a unidade `dvh`,
+  // que alguns navegadores mobile resolvem de forma desatualizada. No
+  // desktop (sm:) tudo volta a ficar em fluxo normal (position: static),
+  // empilhado como um cartão comum dentro do wrapper centralizado.
+  //
+  // Todo o modal é renderizado via portal direto em document.body (em vez
+  // de inline na árvore do formulário) porque `position: fixed` só fica
+  // de fato preso à viewport se NENHUM ancestral tiver transform/filter/
+  // perspective/will-change/contain — qualquer um desses cria um novo
+  // "containing block" e o fixed passa a se comportar como absolute
+  // relativo a esse ancestral (some junto com o scroll da página em vez
+  // de ficar fixo na tela). Foi exatamente isso: `template.tsx` anima
+  // toda navegação com `filter`/`transform` e `animation-fill-mode: both`
+  // (fica aplicado pra sempre depois de terminar, mesmo em valor
+  // identidade), então o modal, montado dentro dessa árvore, herdava esse
+  // containing block e sua posição dependia de onde a página estava
+  // rolada. Portal pro body resolve isso de vez, e é a técnica padrão de
+  // mercado pra modal em tela cheia (nenhum ancestral, presente ou
+  // futuro, pode voltar a quebrar isso).
+  const modal = (
     <div className="fixed inset-0 z-[60] bg-black sm:bg-black/70 sm:flex sm:items-center sm:justify-center sm:p-4" onClick={onCancel}>
       <div
         className="absolute inset-0 sm:static sm:inset-auto w-full sm:w-auto sm:max-w-sm sm:max-h-[85dvh] sm:rounded-2xl sm:shadow-xl sm:overflow-hidden bg-black sm:bg-white sm:mx-auto"
@@ -154,4 +166,6 @@ export function PhotoCropperModal({
       </div>
     </div>
   )
+
+  return createPortal(modal, document.body)
 }
