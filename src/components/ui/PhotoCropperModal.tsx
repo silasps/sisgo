@@ -88,12 +88,22 @@ export function PhotoCropperModal({
   // tamanho da área do meio numa única conta de layout (CSS puro), sem
   // depender de flexbox "sobrar espaço" pro filho dividir com a lib de
   // recorte nem de nenhuma medição em JS (essa combinação se mostrou
-  // frágil na prática). No desktop (sm:) tudo volta a ficar em fluxo normal
-  // (position: relative), empilhado como um cartão comum.
+  // frágil na prática).
+  //
+  // O cartão em si usa `absolute inset-0` (não `h-[100dvh]`) dentro do
+  // wrapper `fixed inset-0`: assim ele herda a altura do próprio wrapper
+  // (que já é a viewport visual de verdade, via position:fixed — suporte
+  // sólido em qualquer navegador) em vez de fazer uma SEGUNDA conta
+  // independente com a unidade `dvh`, que alguns navegadores mobile
+  // resolvem de forma desatualizada/instável. Com duas contas de altura
+  // supostamente iguais mas calculadas separadamente, qualquer divergência
+  // entre elas é exatamente o que sobra como área preta vazia. No desktop
+  // (sm:) tudo volta a ficar em fluxo normal (position: static), empilhado
+  // como um cartão comum dentro do wrapper centralizado.
   return (
     <div className="fixed inset-0 z-[60] bg-black sm:bg-black/70 sm:flex sm:items-center sm:justify-center sm:p-4" onClick={onCancel}>
       <div
-        className="relative w-full h-[100dvh] sm:h-auto sm:max-w-sm sm:max-h-[85dvh] sm:rounded-2xl sm:shadow-xl sm:overflow-hidden bg-black sm:bg-white mx-auto"
+        className="absolute inset-0 sm:static sm:inset-auto w-full sm:w-auto sm:max-w-sm sm:max-h-[85dvh] sm:rounded-2xl sm:shadow-xl sm:overflow-hidden bg-black sm:bg-white sm:mx-auto"
         onClick={e => e.stopPropagation()}
       >
         <div
