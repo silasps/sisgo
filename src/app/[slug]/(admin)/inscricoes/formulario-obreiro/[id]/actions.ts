@@ -286,6 +286,24 @@ export async function pularHospedagem(params: {
   revalidatePath(`/${params.slug}/inscricoes/formulario-obreiro/${params.staffApplicationId}`)
 }
 
+// Desfaz a marcação de "não vai se hospedar na base" — volta a liberar a
+// solicitação normal à hospitalidade. A pessoa pode mudar de ideia (ou o DH
+// ter marcado errado) depois de já ter pulado a etapa.
+export async function reverterSkipHospedagem(params: {
+  staffApplicationId: string
+  organizationId: string
+  slug: string
+}) {
+  await assertDh(params.organizationId)
+  const sb = createAdminClient()
+  await sb.from('staff_applications').update({
+    hospedagem_skip_reason: null,
+    hospedagem_skipped_by: null,
+    hospedagem_skipped_at: null,
+  }).eq('id', params.staffApplicationId)
+  revalidatePath(`/${params.slug}/inscricoes/formulario-obreiro/${params.staffApplicationId}`)
+}
+
 export async function criarAlocacaoObreiro(params: {
   slug: string
   organizationId: string
@@ -339,7 +357,11 @@ export async function updateBackgroundCheck(params: {
     reviewed_by: userId,
     reviewed_at: new Date().toISOString(),
   }).eq('id', params.id)
-  revalidatePath(`/${params.slug}/inscricoes/formulario-obreiro/${params.staffApplicationId}`)
+  // Sem revalidatePath aqui de propósito: a página inteira (docs com signed
+  // URL, referências, hospedagem etc.) é pesada pra recarregar a cada campo
+  // salvo, e a linha já reflete o valor salvo via estado local no client. Só
+  // o stepper no topo (que depende do status geral dos checks) fica
+  // potencialmente desatualizado até o client disparar um refresh à parte.
 }
 
 export async function addBackgroundCheck(params: {

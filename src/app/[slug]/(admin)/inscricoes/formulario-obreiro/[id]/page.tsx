@@ -17,6 +17,8 @@ import { HospedagemSolicitacaoCard } from './HospedagemSolicitacaoCard'
 import { HospedagemGate } from './HospedagemGate'
 import { avancarEtapaObreiro, reenviarLinkFormularioObreiro, reenviarEmailFormularioObreiro, editarEmailInteresseObreiro } from './actions'
 import { RefreshOnFocus } from '@/components/ui/RefreshOnFocus'
+import { StickyPageHeader } from '@/components/inscricoes/StickyPageHeader'
+import { SectionCard } from '@/components/inscricoes/SectionCard'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
@@ -159,20 +161,6 @@ const SECTIONS: FormSection[] = [
   },
 ]
 
-function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <details className="group bg-white rounded-xl border border-gray-200 overflow-hidden" open>
-      <summary className="flex items-center justify-between px-5 py-4 cursor-pointer select-none list-none hover:bg-gray-50">
-        <h3 className="font-semibold text-gray-900 text-sm">{title}</h3>
-        <span className="text-gray-400 text-xs transition-transform group-open:rotate-180">▼</span>
-      </summary>
-      <div className="px-5 pb-5 border-t border-gray-100">
-        {children}
-      </div>
-    </details>
-  )
-}
-
 // "Escolas/especializações JOCUM" passou a ser uma lista (nome + mês/ano de
 // conclusão) serializada como JSON dentro do mesmo campo de texto — aceita
 // também o formato antigo (texto livre) salvo antes dessa mudança.
@@ -248,6 +236,83 @@ function parseChildren(value: unknown): ChildRow[] {
     }
   } catch { /* valor legado em texto livre */ }
   return [{ nome: value, sexo: '', data_nascimento: '' }]
+}
+
+function capitalizeFirst(s: string): string {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s
+}
+
+// As respostas de referência (pastor/liderança/amigo/responsável) são
+// despejadas direto das chaves do form_data — sem prefixo do tipo de
+// referência nem maiúscula inicial fica ilegível ("pastor nome", "carater").
+// Pra chaves cujo nome bruto não deixa claro o que a pergunta pedia (ex.:
+// "autoridade"), um título mais descritivo é usado em vez de só capitalizar.
+const REF_FIELD_PREFIXES = ['pastor_', 'lideranca_', 'amigo_', 'responsavel_']
+
+const REF_FIELD_LABELS: Record<string, string> = {
+  nome: 'Nome',
+  cargo: 'Cargo / função',
+  igreja: 'Igreja / ministério / base',
+  cidade: 'Cidade da igreja / ministério / base',
+  email: 'E-mail',
+  ref_nome: 'Nome',
+  ref_email: 'E-mail',
+  nome_confirma: 'Nome do responsável',
+  funcao: 'Cargo/função durante o período',
+  periodo: 'Período em que acompanhou',
+  tempo_conhece: 'Há quanto tempo conhece o(a) candidato(a)',
+  como_conheceu: 'Como se conheceram',
+  crista: 'É cristão(ã)?',
+  parentesco: 'Parentesco',
+  carater: 'Caráter e maturidade',
+  responsabilidade: 'Responsabilidade e comprometimento',
+  autoridade: 'Resposta a autoridade e correção',
+  pontos_fortes: 'Pontos fortes',
+  areas_crescimento: 'Áreas de crescimento',
+  areas_atencao: 'Dificuldade relacional, emocional ou de conduta',
+  sob_pressao: 'Comportamento sob pressão ou conflito',
+  relacionamentos: 'Relacionamento com outras pessoas',
+  dificuldades: 'Conhece alguma dificuldade relacional, emocional ou de caráter?',
+  dificuldades_detalhe: 'Descrição da dificuldade',
+  conduta_menores: 'Conhece alguma conduta inadequada envolvendo crianças/adolescentes?',
+  conduta_menores_detalhe: 'Detalhes da preocupação',
+  recomenda: 'Recomenda o(a) candidato(a)?',
+  apoia: 'Libera e dá a bênção para participar?',
+  observacoes: 'Observações adicionais',
+}
+
+function formatRefFieldLabel(key: string): string {
+  const prefix = REF_FIELD_PREFIXES.find(p => key.startsWith(p))
+  const stripped = prefix ? key.slice(prefix.length) : key
+  return REF_FIELD_LABELS[stripped] ?? capitalizeFirst(stripped.replace(/_/g, ' '))
+}
+
+// Ordem das perguntas tal como aparecem no formulário de referência
+// (FormularioReferencia.tsx) — Object.entries(form_data) segue a ordem de
+// inserção do JSON salvo, que não bate com a ordem visual do formulário.
+const REF_FIELD_ORDER = {
+  pastor: ['pastor_nome', 'pastor_cargo', 'pastor_igreja', 'pastor_cidade', 'tempo_conhece', 'pastor_email', 'pastor_telefone', 'carater', 'responsabilidade', 'autoridade', 'dificuldades', 'dificuldades_detalhe', 'recomenda', 'observacoes', 'apoia', 'conduta_menores', 'conduta_menores_detalhe'],
+  lideranca: ['lideranca_funcao', 'lideranca_periodo', 'carater', 'pontos_fortes', 'areas_atencao', 'recomenda', 'observacoes', 'conduta_menores', 'conduta_menores_detalhe'],
+  amigo: ['ref_nome', 'como_conheceu', 'tempo_conhece', 'crista', 'ref_email', 'ref_telefone', 'carater', 'pontos_fortes', 'areas_crescimento', 'sob_pressao', 'relacionamentos', 'recomenda', 'observacoes', 'conduta_menores', 'conduta_menores_detalhe'],
+  responsavel: ['responsavel_nome_confirma', 'parentesco', 'observacoes'],
+} as const
+
+const REF_FIELD_SKIP = new Set(['decl_verdadeiro', 'decl_autorizacao', 'pastor_telefone_country', 'ref_telefone_country', 'resolvido_manualmente', 'resolvido_por', 'resolvido_em'])
+
+function orderedRefEntries(data: Record<string, unknown>, order: readonly string[]): [string, unknown][] {
+  const seen = new Set<string>()
+  const ordered: [string, unknown][] = []
+  for (const key of order) {
+    if (key in data) { ordered.push([key, data[key]]); seen.add(key) }
+  }
+  for (const [key, value] of Object.entries(data)) {
+    if (!seen.has(key) && !REF_FIELD_SKIP.has(key)) ordered.push([key, value])
+  }
+  return ordered
+}
+
+function formatRefFieldValue(value: string): string {
+  return capitalizeFirst(value)
 }
 
 function FieldRow({ label, value, type }: { label: string; value: unknown; type?: 'textarea' | 'jocum_schools' | 'languages' | 'warning' | 'date_anos' | 'children' }) {
@@ -472,7 +537,7 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
 
   const { data: hospRequest } = await sb
     .from('service_requests')
-    .select('status, requested_arrival_date, description')
+    .select('status, requested_arrival_date, requested_departure_date, description')
     .eq('staff_application_id', id)
     .eq('request_type', 'hospedagem_obreiro')
     .order('created_at', { ascending: false })
@@ -527,7 +592,8 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
   return (
     <>
       <RefreshOnFocus />
-      <header className="bg-white border-b border-gray-100 px-4 sm:px-6 py-4 sticky top-0 z-10">
+      <StickyPageHeader header={
+      <header className="bg-white border-b border-gray-100 px-4 sm:px-6 py-4">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <div>
             <Link href={`/${slug}/inscricoes?tab=obreiro`} className="text-xs text-gray-400 hover:text-gray-600">
@@ -568,6 +634,7 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
           </p>
         )}
       </header>
+      }>
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-4">
         {app.status === 'rascunho' && (() => {
@@ -639,8 +706,8 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
                       ⚠ Referência sinalizou preocupação sobre conduta com menores
                     </p>
                   )}
-                  {Object.entries(pastorRef.form_data as Record<string, string>).map(([k, v]) => (
-                    <FieldRow key={k} label={k.replace(/_/g, ' ')} value={v} />
+                  {orderedRefEntries(pastorRef.form_data as Record<string, unknown>, REF_FIELD_ORDER.pastor).map(([k, v]) => (
+                    <FieldRow key={k} label={formatRefFieldLabel(k)} value={formatRefFieldValue(String(v ?? ''))} />
                   ))}
                 </div>
               )}
@@ -668,8 +735,8 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
                         ⚠ Referência sinalizou preocupação sobre conduta com menores
                       </p>
                     )}
-                    {Object.entries(liderancaRef.form_data as Record<string, string>).map(([k, v]) => (
-                      <FieldRow key={k} label={k.replace(/_/g, ' ')} value={v} />
+                    {orderedRefEntries(liderancaRef.form_data as Record<string, unknown>, REF_FIELD_ORDER.lideranca).map(([k, v]) => (
+                      <FieldRow key={k} label={formatRefFieldLabel(k)} value={formatRefFieldValue(String(v ?? ''))} />
                     ))}
                   </div>
                 )}
@@ -688,8 +755,8 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
                         ⚠ Referência sinalizou preocupação sobre conduta com menores
                       </p>
                     )}
-                    {Object.entries(amigoRef.form_data as Record<string, string>).map(([k, v]) => (
-                      <FieldRow key={k} label={k.replace(/_/g, ' ')} value={v} />
+                    {orderedRefEntries(amigoRef.form_data as Record<string, unknown>, REF_FIELD_ORDER.amigo).map(([k, v]) => (
+                      <FieldRow key={k} label={formatRefFieldLabel(k)} value={formatRefFieldValue(String(v ?? ''))} />
                     ))}
                   </div>
                 )}
@@ -706,11 +773,9 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
                     {(responsavelRef.form_data as Record<string, unknown>).resolvido_manualmente === true && (
                       <p className="text-xs font-medium text-gray-500">Resolvido manualmente pelo DH</p>
                     )}
-                    {Object.entries(responsavelRef.form_data as Record<string, unknown>)
-                      .filter(([k]) => !['resolvido_manualmente', 'resolvido_por', 'resolvido_em'].includes(k))
-                      .map(([k, v]) => (
-                        <FieldRow key={k} label={k.replace(/_/g, ' ')} value={String(v ?? '')} />
-                      ))}
+                    {orderedRefEntries(responsavelRef.form_data as Record<string, unknown>, REF_FIELD_ORDER.responsavel).map(([k, v]) => (
+                      <FieldRow key={k} label={formatRefFieldLabel(k)} value={formatRefFieldValue(String(v ?? ''))} />
+                    ))}
                   </div>
                 )}
                 <ResponsavelReferenceGate
@@ -750,6 +815,7 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
                   guestName={nomeCandidato}
                   status={hospRequest?.status ?? null}
                   requestedArrivalDate={hospRequest?.requested_arrival_date ?? null}
+                  requestedDepartureDate={hospRequest?.requested_departure_date ?? null}
                   requestNotes={hospRequest?.description ?? null}
                 />
               )}
@@ -778,6 +844,7 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
           </SectionCard>
         )}
       </main>
+      </StickyPageHeader>
     </>
   )
 }

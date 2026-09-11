@@ -70,18 +70,18 @@ type Props = {
   organizationId?: string
 }
 
-function HospedagemResolver({ req, organizationId, resolverComAlocacao, resolverSemAlocacao, onDone }: {
+function HospedagemResolver({ req, organizationId, resolverComAlocacao, resolverSemAlocacao, handleStatusUpdate, onDone }: {
   req: ServiceReq
   organizationId: string
   resolverComAlocacao: (params: ResolverComAlocacaoParams) => Promise<void>
   resolverSemAlocacao: (params: ResolverSemAlocacaoParams) => Promise<void>
+  handleStatusUpdate: (fd: FormData) => Promise<void>
   onDone: () => void
 }) {
   const guestType: 'obreiro' | 'aluno' = req.request_type === 'hospedagem_aluno' ? 'aluno' : 'obreiro'
   const guestName = req.subject.replace(/^Hospedagem\s*—\s*/, '')
   const departureAlreadyIndefinite = isIndefiniteCheckout(req.requested_departure_date)
   const [checkOut, setCheckOut] = useState(departureAlreadyIndefinite ? '' : req.requested_departure_date ?? '')
-  const [indefinite, setIndefinite] = useState(departureAlreadyIndefinite)
   const [rooms, setRooms] = useState<AvailableRoom[] | null>(null)
   const [chosenRoom, setChosenRoom] = useState<AvailableRoom | null>(null)
   const [chosenBed, setChosenBed] = useState('')
@@ -89,11 +89,13 @@ function HospedagemResolver({ req, organizationId, resolverComAlocacao, resolver
   const [error, setError] = useState('')
 
   const checkIn = req.requested_arrival_date ?? ''
-  const effectiveCheckOut = indefinite ? INDEFINITE_CHECKOUT : checkOut
+  // Sem data de saída = permanente — quem define isso é o DH/líder ao abrir
+  // a solicitação (ou fica em aberto pra hospitalidade ajustar aqui mesmo);
+  // não é uma escolha própria da hospitalidade, então não tem checkbox.
+  const effectiveCheckOut = checkOut || INDEFINITE_CHECKOUT
 
   function buscar() {
     setError('')
-    if (!effectiveCheckOut) { setError('Informe a saída prevista, ou marque "sem data de saída definida".'); return }
     startTransition(async () => {
       const available = await getAvailableRooms({ organizationId, guestType, checkIn, checkOut: effectiveCheckOut })
       setRooms(available)
@@ -123,6 +125,18 @@ function HospedagemResolver({ req, organizationId, resolverComAlocacao, resolver
     })
   }
 
+  // A hospitalidade só diz se tem quarto ou não — se não tem, a decisão de
+  // como resolver (esperar vaga, buscar fora, etc.) é do líder, não dela.
+  function semQuartoDisponivel() {
+    startTransition(async () => {
+      const fd = new FormData()
+      fd.set('request_id', req.id)
+      fd.set('status', 'rejeitado')
+      await handleStatusUpdate(fd)
+      onDone()
+    })
+  }
+
   return (
     <div className="space-y-3 border-t border-gray-100 pt-4">
       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Resolver hospedagem</p>
@@ -133,24 +147,34 @@ function HospedagemResolver({ req, organizationId, resolverComAlocacao, resolver
         </div>
         <div className="flex-1">
           <label className="block text-xs text-gray-500 mb-1">Saída prevista</label>
-          <input type="date" value={checkOut} disabled={indefinite}
+          <input type="date" value={checkOut}
             onChange={e => { setCheckOut(e.target.value); setRooms(null) }}
-            className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-700 disabled:bg-gray-50 disabled:text-gray-400" />
+            placeholder="Em branco = permanente"
+            className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-700" />
         </div>
       </div>
-      <label className="flex items-center gap-2 text-xs text-gray-600">
-        <input type="checkbox" checked={indefinite}
-          onChange={e => { setIndefinite(e.target.checked); if (e.target.checked) setCheckOut(''); setRooms(null) }} />
-        Sem data de saída definida {guestType === 'obreiro' ? '(obreiro permanente)' : '(ajustar depois)'}
-      </label>
-      <button type="button" onClick={buscar} disabled={pending || !effectiveCheckOut}
+      {!checkOut && (
+        <p className="text-xs text-gray-400">
+          Sem data de saída informada — entendido como {guestType === 'obreiro' ? 'obreiro permanente' : 'hospedagem sem data definida'}.
+        </p>
+      )}
+      <button type="button" onClick={buscar} disabled={pending}
         className="w-full px-4 py-2 bg-gray-900 text-white text-xs font-semibold rounded-xl hover:bg-gray-800 disabled:opacity-50">
         {pending ? 'Buscando…' : 'Buscar quartos disponíveis'}
       </button>
 
       {rooms && (
         rooms.length === 0 ? (
-          <p className="text-xs text-red-600">Nenhum quarto disponível nessa janela de datas.</p>
+          <div className="space-y-2">
+            <p className="text-xs text-red-600">Nenhum quarto disponível nessa janela de datas.</p>
+            <button type="button" onClick={semQuartoDisponivel} disabled={pending}
+              className="w-full px-4 py-2.5 bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-50 rounded-xl text-sm font-semibold transition-colors">
+              Sem quarto disponível — repassar decisão ao líder
+            </button>
+            <p className="text-xs text-gray-400">
+              A hospitalidade só confirma se há vaga. Sem vaga, cabe ao líder decidir como resolver com a pessoa.
+            </p>
+          </div>
         ) : (
           <div className="space-y-1.5">
             <p className="text-xs text-gray-500">Escolha um quarto{rooms.some(r => r.allocationMode === 'cama') ? ' (e cama, se for o caso)' : ''} pra habilitar "Confirmar e alocar agora":</p>
@@ -343,6 +367,7 @@ export function ServiceRequestsPanel({ requests, title, handleStatusUpdate, reso
                     organizationId={organizationId}
                     resolverComAlocacao={resolverComAlocacao}
                     resolverSemAlocacao={resolverSemAlocacao}
+                    handleStatusUpdate={handleStatusUpdate}
                     onDone={() => setSelected(null)}
                   />
                 ) : selected.status !== 'resolvido' && (

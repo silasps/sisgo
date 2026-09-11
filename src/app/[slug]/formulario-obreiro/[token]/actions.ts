@@ -226,12 +226,28 @@ export async function enviarFormularioObreiro(slug: string, token: string) {
       const checkTypes = isBrasileiro
         ? ['pf_federal', 'ssp_estadual', 'autodeclaracao_conduta', 'referencia_conduta_menores']
         : ['police_clearance_estrangeiro', 'autodeclaracao_conduta', 'referencia_conduta_menores']
-      await sb.from('background_checks').insert(checkTypes.map(check_type => ({
-        organization_id: appFull.organization_id,
-        staff_application_id: app.id,
-        person_id: appFull.person_id,
-        check_type,
-      })))
+      // "Autodeclaração de conduta" já foi respondida pelo próprio candidato no
+      // formulário (checkbox obrigatório decl_sem_condenacao_menor, seção 8) —
+      // não faz sentido o DH preencher de novo, então já entra aprovada.
+      const today = new Date().toISOString().slice(0, 10)
+      await sb.from('background_checks').insert(checkTypes.map(check_type => (
+        check_type === 'autodeclaracao_conduta'
+          ? {
+              organization_id: appFull.organization_id,
+              staff_application_id: app.id,
+              person_id: appFull.person_id,
+              check_type,
+              status: 'aprovado',
+              issued_at: today,
+              notes: 'Autodeclarado pelo(a) candidato(a) no formulário de inscrição.',
+            }
+          : {
+              organization_id: appFull.organization_id,
+              staff_application_id: app.id,
+              person_id: appFull.person_id,
+              check_type,
+            }
+      )))
     }
   }
 

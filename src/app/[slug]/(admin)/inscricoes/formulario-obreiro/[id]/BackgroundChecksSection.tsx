@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { updateBackgroundCheck, addBackgroundCheck } from './actions'
 import { daysUntil, expiryUrgency, expiryLabel, EXPIRY_URGENCY_STYLE } from '@/lib/background-checks/expiry'
 
@@ -64,24 +65,32 @@ function CheckRow({ check, organizationId, slug, staffApplicationId, readOnly }:
   const [expiresAt, setExpiresAt] = useState(check.expires_at ?? '')
   const [flagged, setFlagged] = useState(check.flagged_concern)
   const [isPending, startTransition] = useTransition()
+  const router = useRouter()
 
   const daysLeft = expiresAt ? daysUntil(expiresAt) : null
   const urgency = daysLeft !== null ? expiryUrgency(daysLeft) : null
 
-  function save() {
-    startTransition(() => {
-      updateBackgroundCheck({
-        id: check.id,
-        organizationId,
-        slug,
-        staffApplicationId,
-        status,
-        notes,
-        issuedAt,
-        expiresAt,
-        flaggedConcern: flagged,
-      })
+  // Aceita overrides pra poder salvar imediatamente no onChange do status
+  // (o state ainda não teria o valor novo aplicado no mesmo tick). O
+  // router.refresh() fica fora da transition que trava o botão — só o
+  // stepper lá em cima (que depende do status geral dos checks) precisa
+  // dele, e não faz sentido o "Salvando…" esperar a página inteira recarregar.
+  function persist(overrides?: Partial<{ status: string; issuedAt: string; expiresAt: string; notes: string; flagged: boolean }>) {
+    const payload = {
+      id: check.id,
+      organizationId,
+      slug,
+      staffApplicationId,
+      status: overrides?.status ?? status,
+      notes: overrides?.notes ?? notes,
+      issuedAt: overrides?.issuedAt ?? issuedAt,
+      expiresAt: overrides?.expiresAt ?? expiresAt,
+      flaggedConcern: overrides?.flagged ?? flagged,
+    }
+    startTransition(async () => {
+      await updateBackgroundCheck(payload)
     })
+    setTimeout(() => router.refresh(), 0)
   }
 
   return (
@@ -107,39 +116,68 @@ function CheckRow({ check, organizationId, slug, staffApplicationId, readOnly }:
         notes && <p className="text-xs text-gray-500 whitespace-pre-wrap">{notes}</p>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-end">
-          <select
-            value={status}
-            onChange={e => setStatus(e.target.value)}
-            className="col-span-2 sm:col-span-1 rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-700"
-          >
-            {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-          <input
-            type="date" value={issuedAt} onChange={e => setIssuedAt(e.target.value)}
-            title="Data de emissão"
-            className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-700"
-          />
-          <input
-            type="date" value={expiresAt} onChange={e => setExpiresAt(e.target.value)}
-            title="Data de validade"
-            className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-700"
-          />
+          <div className="col-span-2 sm:col-span-1 flex flex-col gap-0.5">
+            <span className="text-[10px] uppercase tracking-wide text-gray-400">Status</span>
+            <select
+              value={status}
+              onChange={e => {
+                const newStatus = e.target.value
+                const newIssuedAt = (newStatus === 'aprovado' && !issuedAt)
+                  ? new Date().toISOString().slice(0, 10)
+                  : issuedAt
+                setStatus(newStatus)
+                if (newIssuedAt !== issuedAt) setIssuedAt(newIssuedAt)
+                persist({ status: newStatus, issuedAt: newIssuedAt })
+              }}
+              className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-700"
+            >
+              {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] uppercase tracking-wide text-gray-400">Emissão</span>
+            <input
+              type="date" value={issuedAt} onChange={e => {
+                const value = e.target.value
+                setIssuedAt(value)
+                persist({ issuedAt: value })
+              }}
+              title="Data de emissão"
+              className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-700"
+            />
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] uppercase tracking-wide text-gray-400">Validade</span>
+            <input
+              type="date" value={expiresAt} onChange={e => {
+                const value = e.target.value
+                setExpiresAt(value)
+                persist({ expiresAt: value })
+              }}
+              title="Data de validade"
+              className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-700"
+            />
+          </div>
           <label className="flex items-center gap-1.5 text-xs text-red-700 whitespace-nowrap">
-            <input type="checkbox" checked={flagged} onChange={e => setFlagged(e.target.checked)} />
+            <input type="checkbox" checked={flagged} onChange={e => {
+              const newFlagged = e.target.checked
+              setFlagged(newFlagged)
+              persist({ flagged: newFlagged })
+            }} />
             Preocupante
           </label>
           <textarea
             value={notes} onChange={e => setNotes(e.target.value)}
+            onBlur={e => {
+              if (e.target.value !== (check.notes ?? '')) persist({ notes: e.target.value })
+            }}
             placeholder="Observação do DH"
             rows={2}
             className="col-span-2 sm:col-span-3 rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-700"
           />
-          <button
-            type="button" onClick={save} disabled={isPending}
-            className="rounded-lg bg-gray-900 text-white text-xs px-3 py-1.5 hover:bg-gray-800 disabled:opacity-50"
-          >
-            {isPending ? 'Salvando…' : 'Salvar'}
-          </button>
+          {isPending && (
+            <p className="col-span-2 sm:col-span-4 text-[11px] text-gray-400">Salvando…</p>
+          )}
         </div>
       )}
     </div>
