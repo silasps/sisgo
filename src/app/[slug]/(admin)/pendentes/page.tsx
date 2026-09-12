@@ -714,6 +714,15 @@ export default async function PendentesPage({ params, searchParams }: Props) {
     redirect(`/${slug}/pendentes`)
   }
 
+  // Sem redirect de propósito — chamado no meio da busca de quartos (abrir a
+  // busca já conta como "estou analisando"), não pode recarregar a página no
+  // meio do fluxo.
+  const handleMarkEmAnalise = async (requestId: string) => {
+    'use server'
+    if (!user) return
+    await updateServiceStatus(requestId, 'em_analise', user.id)
+  }
+
   const handleResolverHospedagemComAlocacao = async (params: {
     requestId: string; roomId: string; bedId: string | null; personId: string | null
     guestName: string; guestType: 'obreiro' | 'aluno'; checkIn: string; checkOut: string
@@ -722,16 +731,6 @@ export default async function PendentesPage({ params, searchParams }: Props) {
     if (!user) return
     const { resolverHospedagemComAlocacao } = await import('../hospedagem/actions')
     await resolverHospedagemComAlocacao({ ...params, organizationId: orgId, reviewedBy: user.id })
-    redirect(`/${slug}/pendentes`)
-  }
-
-  const handleResolverHospedagemSemAlocacao = async (params: {
-    requestId: string; guestName: string; staffApplicationId: string | null; schoolApplicationId: string | null; requestedArrivalDate: string | null
-  }) => {
-    'use server'
-    if (!user) return
-    const { resolverHospedagemSemAlocacao } = await import('../hospedagem/actions')
-    await resolverHospedagemSemAlocacao({ ...params, organizationId: orgId, reviewedBy: user.id })
     redirect(`/${slug}/pendentes`)
   }
 
@@ -1159,7 +1158,7 @@ export default async function PendentesPage({ params, searchParams }: Props) {
                 }))}
                 handleStatusUpdate={handleServiceStatusUpdate}
                 resolverComAlocacao={handleResolverHospedagemComAlocacao}
-                resolverSemAlocacao={handleResolverHospedagemSemAlocacao}
+                markEmAnalise={handleMarkEmAnalise}
                 organizationId={orgId}
               />
             )}
@@ -1218,15 +1217,21 @@ export default async function PendentesPage({ params, searchParams }: Props) {
                     const urg   = urgencyBadge(dias)
                     const requester = requesterMap.get(req.requested_by)
                     return (
-                      <Link
+                      // WhatsAppButton renderiza um <a> de verdade — dentro de um <Link>
+                      // isso é um <a> aninhado em outro <a> (inválido em HTML e dispara
+                      // navegação + barra de progresso além de abrir o WhatsApp). Troca
+                      // pro padrão de "link esticado": o <Link> vira um overlay absoluto
+                      // (z-0) por trás de todo o conteúdo real, que fica com z-10 —
+                      // clicar em qualquer lugar navega, clicar no botão específico não.
+                      <div
                         key={req.id}
-                        href={`/${slug}/ministerios/${req.ministry_id}`}
-                        className="group flex items-start gap-3 bg-gray-50 rounded-xl border border-gray-200 px-4 py-3 shadow-sm transition-all duration-150 hover:shadow-md hover:-translate-y-0.5"
+                        className="group relative flex items-start gap-3 bg-gray-50 rounded-xl border border-gray-200 px-4 py-3 shadow-sm transition-all duration-150 hover:shadow-md hover:-translate-y-0.5"
                       >
-                        <span className={`flex-shrink-0 inline-flex items-center justify-center min-w-[2.5rem] px-2 py-0.5 rounded-full text-xs font-bold ${urg.color}`}>
+                        <Link href={`/${slug}/ministerios/${req.ministry_id}`} className="absolute inset-0 z-0 rounded-xl" aria-label="Abrir ministério" />
+                        <span className={`relative z-10 flex-shrink-0 inline-flex items-center justify-center min-w-[2.5rem] px-2 py-0.5 rounded-full text-xs font-bold ${urg.color}`}>
                           {urg.label}
                         </span>
-                        <div className="flex-1 min-w-0">
+                        <div className="relative z-10 flex-1 min-w-0">
                           <p className="text-sm font-semibold text-gray-900 group-hover:text-brand-600 transition-colors">
                             {REQUEST_LABELS[req.request_type] ?? req.request_type}
                             {pName && ` — ${pName}`}
@@ -1236,13 +1241,13 @@ export default async function PendentesPage({ params, searchParams }: Props) {
                           {req.notes && <p className="text-xs text-gray-400 italic mt-0.5">&ldquo;{req.notes}&rdquo;</p>}
                           <div className="mt-1.5 flex flex-wrap items-center gap-2">
                             <span className="text-xs text-gray-500">{requester?.name ?? '—'}</span>
-                            <WhatsAppButton phone={requester?.phone} />
+                            <span className="relative z-10"><WhatsAppButton phone={requester?.phone} /></span>
                           </div>
                         </div>
-                        <span className="flex-shrink-0 text-xs font-semibold text-brand-500 group-hover:text-brand-700 transition-colors">
+                        <span className="relative z-10 flex-shrink-0 text-xs font-semibold text-brand-500 group-hover:text-brand-700 transition-colors">
                           Abrir →
                         </span>
-                      </Link>
+                      </div>
                     )
                   })}
                 </div>
@@ -1268,15 +1273,15 @@ export default async function PendentesPage({ params, searchParams }: Props) {
                     const urg   = urgencyBadge(dias)
                     const requester = requesterMap.get(req.requested_by)
                     return (
-                      <Link
+                      <div
                         key={req.id}
-                        href={`/${slug}/escolas/${req.school_id}`}
-                        className="group flex items-start gap-3 bg-gray-50 rounded-xl border border-gray-200 px-4 py-3 shadow-sm transition-all duration-150 hover:shadow-md hover:-translate-y-0.5"
+                        className="group relative flex items-start gap-3 bg-gray-50 rounded-xl border border-gray-200 px-4 py-3 shadow-sm transition-all duration-150 hover:shadow-md hover:-translate-y-0.5"
                       >
-                        <span className={`flex-shrink-0 inline-flex items-center justify-center min-w-[2.5rem] px-2 py-0.5 rounded-full text-xs font-bold ${urg.color}`}>
+                        <Link href={`/${slug}/escolas/${req.school_id}`} className="absolute inset-0 z-0 rounded-xl" aria-label="Abrir escola" />
+                        <span className={`relative z-10 flex-shrink-0 inline-flex items-center justify-center min-w-[2.5rem] px-2 py-0.5 rounded-full text-xs font-bold ${urg.color}`}>
                           {urg.label}
                         </span>
-                        <div className="flex-1 min-w-0">
+                        <div className="relative z-10 flex-1 min-w-0">
                           <p className="text-sm font-semibold text-gray-900 group-hover:text-brand-600 transition-colors">
                             Adicionar obreiro
                             {pName && ` — ${pName}`}
@@ -1286,13 +1291,13 @@ export default async function PendentesPage({ params, searchParams }: Props) {
                           {req.notes && <p className="text-xs text-gray-400 italic mt-0.5">&ldquo;{req.notes}&rdquo;</p>}
                           <div className="mt-1.5 flex flex-wrap items-center gap-2">
                             <span className="text-xs text-gray-500">{requester?.name ?? '—'}</span>
-                            <WhatsAppButton phone={requester?.phone} />
+                            <span className="relative z-10"><WhatsAppButton phone={requester?.phone} /></span>
                           </div>
                         </div>
-                        <span className="flex-shrink-0 text-xs font-semibold text-brand-500 group-hover:text-brand-700 transition-colors">
+                        <span className="relative z-10 flex-shrink-0 text-xs font-semibold text-brand-500 group-hover:text-brand-700 transition-colors">
                           Abrir →
                         </span>
-                      </Link>
+                      </div>
                     )
                   })}
                 </div>
@@ -1312,7 +1317,7 @@ export default async function PendentesPage({ params, searchParams }: Props) {
                 }))}
                 handleStatusUpdate={handleServiceStatusUpdate}
                 resolverComAlocacao={handleResolverHospedagemComAlocacao}
-                resolverSemAlocacao={handleResolverHospedagemSemAlocacao}
+                markEmAnalise={handleMarkEmAnalise}
                 organizationId={orgId}
               />
             )}

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 import { AlertTriangle, BedDouble, Building2, GraduationCap, LogIn, LogOut, UserPlus, Users, Wrench } from 'lucide-react'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -470,26 +471,26 @@ export function BedGrid({
                   return <p className="text-sm text-blue-600 text-center font-medium">{d} dia(s) restante(s)</p>
                 })()}
                 {selectedBedAlloc.allocStatus === 'confirmada' && (
-                  <form action={checkinAction} onSubmit={() => setSelectedBed(null)}>
+                  <form action={checkinAction}>
                     <input type="hidden" name="id" value={selectedBedAlloc.id} />
                     <input type="hidden" name="bed_id" value={selectedBed.id} />
-                    <button type="submit" className="w-full py-3 rounded-lg bg-green-500 hover:bg-green-600 text-white font-semibold transition-colors flex items-center justify-center gap-2">
+                    <SubmitButton className="w-full py-3 rounded-lg bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white font-semibold transition-colors flex items-center justify-center gap-2">
                       <LogIn size={18} /> Fazer Check-in
-                    </button>
+                    </SubmitButton>
                   </form>
                 )}
                 {selectedBedAlloc.allocStatus === 'checkin' && (
-                  <form action={checkoutAction} onSubmit={() => setSelectedBed(null)}>
+                  <form action={checkoutAction}>
                     <input type="hidden" name="id" value={selectedBedAlloc.id} />
                     <input type="hidden" name="bed_id" value={selectedBed.id} />
-                    <button type="submit" className="w-full py-3 rounded-lg bg-gray-700 hover:bg-gray-800 text-white font-semibold transition-colors flex items-center justify-center gap-2">
+                    <SubmitButton className="w-full py-3 rounded-lg bg-gray-700 hover:bg-gray-800 disabled:opacity-50 text-white font-semibold transition-colors flex items-center justify-center gap-2">
                       <LogOut size={18} /> Fazer Check-out
-                    </button>
+                    </SubmitButton>
                   </form>
                 )}
               </>
             ) : (
-              <form action={allocateAction} onSubmit={() => setSelectedBed(null)} className="space-y-4">
+              <form action={allocateAction} className="space-y-4">
                 <div className="flex items-center gap-2 text-green-600">
                   <UserPlus size={20} />
                   <p className="text-sm font-semibold">Alocar hóspede</p>
@@ -520,9 +521,9 @@ export function BedGrid({
                   <label className="block text-xs font-medium text-gray-600 mb-1">Check-out *</label>
                   <input name="check_out" type="date" required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
                 </div>
-                <button type="submit" className="w-full py-3 rounded-lg bg-brand-500 hover:bg-brand-600 text-white font-semibold transition-colors flex items-center justify-center gap-2">
+                <SubmitButton className="w-full py-3 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold transition-colors flex items-center justify-center gap-2">
                   <BedDouble size={18} /> Alocar
-                </button>
+                </SubmitButton>
               </form>
             )}
 
@@ -581,24 +582,24 @@ export function BedGrid({
                   return <p className="text-sm text-blue-600 text-center font-medium">{d} dia(s) restante(s)</p>
                 })()}
                 {selectedRoomFirstAlloc.allocStatus === 'confirmada' && (
-                  <form action={checkinRoomAction} onSubmit={() => setSelectedRoom(null)}>
+                  <form action={checkinRoomAction}>
                     <input type="hidden" name="room_id" value={selectedRoom.id} />
-                    <button type="submit" className="w-full py-3 rounded-lg bg-green-500 hover:bg-green-600 text-white font-semibold transition-colors flex items-center justify-center gap-2">
+                    <SubmitButton className="w-full py-3 rounded-lg bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white font-semibold transition-colors flex items-center justify-center gap-2">
                       <LogIn size={18} /> Check-in do Quarto
-                    </button>
+                    </SubmitButton>
                   </form>
                 )}
                 {selectedRoomFirstAlloc.allocStatus === 'checkin' && (
-                  <form action={checkoutRoomAction} onSubmit={() => setSelectedRoom(null)}>
+                  <form action={checkoutRoomAction}>
                     <input type="hidden" name="room_id" value={selectedRoom.id} />
-                    <button type="submit" className="w-full py-3 rounded-lg bg-gray-700 hover:bg-gray-800 text-white font-semibold transition-colors flex items-center justify-center gap-2">
+                    <SubmitButton className="w-full py-3 rounded-lg bg-gray-700 hover:bg-gray-800 disabled:opacity-50 text-white font-semibold transition-colors flex items-center justify-center gap-2">
                       <LogOut size={18} /> Check-out do Quarto
-                    </button>
+                    </SubmitButton>
                   </form>
                 )}
               </>
             ) : (
-              <form action={allocateRoomAction} onSubmit={() => setSelectedRoom(null)} className="space-y-4">
+              <form action={allocateRoomAction} className="space-y-4">
                 <div className="flex items-center gap-2 text-green-600">
                   <UserPlus size={20} />
                   <p className="text-sm font-semibold">
@@ -650,9 +651,9 @@ export function BedGrid({
                     <input name="check_out" type="date" required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
                   </div>
                 </div>
-                <button type="submit" className="w-full py-3 rounded-lg bg-brand-500 hover:bg-brand-600 text-white font-semibold transition-colors flex items-center justify-center gap-2">
+                <SubmitButton className="w-full py-3 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold transition-colors flex items-center justify-center gap-2">
                   <BedDouble size={18} /> Alocar Quarto Inteiro
-                </button>
+                </SubmitButton>
               </form>
             )}
 

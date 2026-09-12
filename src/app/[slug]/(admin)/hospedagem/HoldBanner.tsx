@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { BellRing } from 'lucide-react'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = {
   cancelAction: (formData: FormData) => Promise<void>
@@ -23,7 +24,7 @@ export function HoldBanner({ cancelAction, holdId, groupName, startsAt, endsAt, 
 
   if (confirming) {
     return (
-      <form action={cancelAction} onSubmit={() => setConfirming(false)} className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
+      <form action={cancelAction} className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
         <input type="hidden" name="id" value={holdId} />
         <input type="hidden" name="back_block" value={backBlockId} />
         {backFloorId && <input type="hidden" name="back_floor" value={backFloorId} />}
@@ -37,9 +38,9 @@ export function HoldBanner({ cancelAction, holdId, groupName, startsAt, endsAt, 
           <button type="button" onClick={() => setConfirming(false)} className="flex-1 py-1.5 rounded-lg border border-gray-200 text-gray-600 text-xs font-medium hover:bg-white transition-colors">
             Voltar
           </button>
-          <button type="submit" className="flex-1 py-1.5 rounded-lg bg-red-500 hover:bg-red-600 text-white text-xs font-semibold transition-colors">
+          <SubmitButton className="flex-1 py-1.5 rounded-lg bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white text-xs font-semibold transition-colors" pendingText="Cancelando…">
             Confirmar cancelamento
-          </button>
+          </SubmitButton>
         </div>
       </form>
     )

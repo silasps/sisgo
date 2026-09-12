@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = {
   createAction: (formData: FormData) => Promise<void>
@@ -25,7 +26,7 @@ export function BlockForm({ createAction, editAction, block, trigger }: Props) {
       </span>
 
       <Modal open={open} onClose={() => setOpen(false)} title={isEdit ? 'Editar bloco' : 'Novo bloco'} hideFooter>
-        <form action={isEdit ? editAction : createAction} className="p-5 space-y-4" onSubmit={() => setOpen(false)}>
+        <form action={isEdit ? editAction : createAction} className="p-5 space-y-4">
           {isEdit && <input type="hidden" name="id" value={block.id} />}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Nome do bloco *</label>
@@ -37,9 +38,9 @@ export function BlockForm({ createAction, editAction, block, trigger }: Props) {
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
             />
           </div>
-          <button type="submit" className="w-full px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
+          <SubmitButton pendingText={isEdit ? 'Salvando…' : 'Criando…'}>
             {isEdit ? 'Salvar' : 'Criar bloco'}
-          </button>
+          </SubmitButton>
         </form>
       </Modal>
     </>

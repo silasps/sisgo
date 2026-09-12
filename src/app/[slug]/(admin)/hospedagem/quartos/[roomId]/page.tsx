@@ -298,15 +298,19 @@ export default async function RoomDetailPage({ params, searchParams }: Props) {
           </div>
         </div>
 
-        {/* Beds section */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <BedManager
-            beds={bedsWithOccupants}
-            addAction={handleAddBed}
-            editAction={handleEditBed}
-            removeAction={handleRemoveBed}
-          />
-        </div>
+        {/* Beds section — só faz sentido em modo "cama"; quarto inteiro é
+            alocado de uma vez (AllocationManager abaixo), sem granularidade
+            de cama nenhuma. */}
+        {room.allocation_mode === 'cama' && (
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <BedManager
+              beds={bedsWithOccupants}
+              addAction={handleAddBed}
+              editAction={handleEditBed}
+              removeAction={handleRemoveBed}
+            />
+          </div>
+        )}
 
         {/* Allocations section */}
         <div className="bg-white rounded-xl border border-gray-200 p-4">

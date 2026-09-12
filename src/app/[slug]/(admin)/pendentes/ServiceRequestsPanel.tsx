@@ -1,9 +1,12 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { usePendingAction } from '@/hooks/usePendingAction'
 import { getAvailableRooms, type AvailableRoom } from '../hospedagem/actions'
 import { INDEFINITE_CHECKOUT, isIndefiniteCheckout } from '@/lib/hospedagem'
 import { useSidebarLeftClass } from '@/components/layout/account-context'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type ServiceReq = {
   id: string
@@ -26,7 +29,7 @@ type ServiceReq = {
   diasAberto: number
 }
 
-const HOSPEDAGEM_TYPES = ['hospedagem_obreiro', 'hospedagem_aluno']
+const HOSPEDAGEM_TYPES = ['hospedagem_obreiro', 'hospedagem_aluno', 'alocar_quarto']
 
 const SERVICE_STATUS_LABELS: Record<string, { label: string; color: string }> = {
   pendente:   { label: 'Pendente',   color: 'bg-yellow-100 text-yellow-700' },
@@ -57,36 +60,49 @@ type ResolverComAlocacaoParams = {
   requestId: string; roomId: string; bedId: string | null; personId: string | null
   guestName: string; guestType: 'obreiro' | 'aluno'; checkIn: string; checkOut: string
 }
-type ResolverSemAlocacaoParams = {
-  requestId: string; guestName: string; staffApplicationId: string | null; schoolApplicationId: string | null; requestedArrivalDate: string | null
-}
 
 type Props = {
   requests: ServiceReq[]
   title: string
   handleStatusUpdate: (fd: FormData) => Promise<void>
   resolverComAlocacao?: (params: ResolverComAlocacaoParams) => Promise<void>
-  resolverSemAlocacao?: (params: ResolverSemAlocacaoParams) => Promise<void>
+  markEmAnalise?: (requestId: string) => Promise<void>
   organizationId?: string
 }
 
-function HospedagemResolver({ req, organizationId, resolverComAlocacao, resolverSemAlocacao, handleStatusUpdate, onDone }: {
+function summarizeByGender(list: AvailableRoom[]) {
+  const forGender = (g: 'masculino' | 'feminino') =>
+    list.filter(r => r.genderConstraint === g || r.genderConstraint === 'misto' || !r.genderConstraint)
+  const count = (l: AvailableRoom[]) => ({
+    quartos: l.filter(r => r.allocationMode === 'quarto').length,
+    camas: l.filter(r => r.allocationMode === 'cama').reduce((sum, r) => sum + r.availableBeds.length, 0),
+  })
+  return { masculino: count(forGender('masculino')), feminino: count(forGender('feminino')) }
+}
+
+function HospedagemResolver({ req, organizationId, resolverComAlocacao, markEmAnalise, handleStatusUpdate, onDone }: {
   req: ServiceReq
   organizationId: string
   resolverComAlocacao: (params: ResolverComAlocacaoParams) => Promise<void>
-  resolverSemAlocacao: (params: ResolverSemAlocacaoParams) => Promise<void>
+  markEmAnalise?: (requestId: string) => Promise<void>
   handleStatusUpdate: (fd: FormData) => Promise<void>
   onDone: () => void
 }) {
-  const guestType: 'obreiro' | 'aluno' = req.request_type === 'hospedagem_aluno' ? 'aluno' : 'obreiro'
-  const guestName = req.subject.replace(/^Hospedagem\s*—\s*/, '')
+  // "alocar_quarto" (follow-up de "definir quarto depois") não carrega o tipo
+  // no request_type — só um dos ids de candidatura fica preenchido.
+  const guestType: 'obreiro' | 'aluno' = req.request_type === 'alocar_quarto'
+    ? (req.school_application_id ? 'aluno' : 'obreiro')
+    : (req.request_type === 'hospedagem_aluno' ? 'aluno' : 'obreiro')
+  const guestName = req.subject.replace(/^(Hospedagem|Definir quarto)\s*—\s*/, '')
   const departureAlreadyIndefinite = isIndefiniteCheckout(req.requested_departure_date)
   const [checkOut, setCheckOut] = useState(departureAlreadyIndefinite ? '' : req.requested_departure_date ?? '')
   const [rooms, setRooms] = useState<AvailableRoom[] | null>(null)
+  const [summary, setSummary] = useState<ReturnType<typeof summarizeByGender> | null>(null)
   const [chosenRoom, setChosenRoom] = useState<AvailableRoom | null>(null)
   const [chosenBed, setChosenBed] = useState('')
-  const [pending, startTransition] = useTransition()
+  const { isPending: pending, run } = usePendingAction()
   const [error, setError] = useState('')
+  const router = useRouter()
 
   const checkIn = req.requested_arrival_date ?? ''
   // Sem data de saída = permanente — quem define isso é o DH/líder ao abrir
@@ -94,18 +110,33 @@ function HospedagemResolver({ req, organizationId, resolverComAlocacao, resolver
   // não é uma escolha própria da hospitalidade, então não tem checkbox.
   const effectiveCheckOut = checkOut || INDEFINITE_CHECKOUT
 
+  // Resumo de vagas por gênero aparece sozinho, sem precisar clicar em nada —
+  // só reflete a disponibilidade real, não trava a decisão de ninguém.
+  useEffect(() => {
+    let cancelled = false
+    getAvailableRooms({ organizationId, guestType, checkIn, checkOut: effectiveCheckOut }).then(available => {
+      if (!cancelled) setSummary(summarizeByGender(available))
+    })
+    return () => { cancelled = true }
+  }, [organizationId, guestType, checkIn, effectiveCheckOut])
+
   function buscar() {
     setError('')
-    startTransition(async () => {
+    run(true, async () => {
+      // Abrir a busca já conta como "estou analisando" — evita um clique à
+      // parte só pra marcar o status (fica invisível se der erro, sem problema).
+      if (req.status === 'pendente' && markEmAnalise) markEmAnalise(req.id).catch(() => {})
       const available = await getAvailableRooms({ organizationId, guestType, checkIn, checkOut: effectiveCheckOut })
       setRooms(available)
+      setSummary(summarizeByGender(available))
+      router.refresh()
     })
   }
 
   function confirmarComQuarto() {
     if (!chosenRoom) return
     if (chosenRoom.allocationMode === 'cama' && !chosenBed) { setError('Selecione uma cama.'); return }
-    startTransition(async () => {
+    run(true, async () => {
       await resolverComAlocacao({
         requestId: req.id, roomId: chosenRoom.roomId, bedId: chosenRoom.allocationMode === 'cama' ? chosenBed : null,
         personId: null, guestName, guestType, checkIn, checkOut: effectiveCheckOut,
@@ -114,21 +145,10 @@ function HospedagemResolver({ req, organizationId, resolverComAlocacao, resolver
     })
   }
 
-  function confirmarSemQuarto() {
-    startTransition(async () => {
-      await resolverSemAlocacao({
-        requestId: req.id, guestName,
-        staffApplicationId: req.staff_application_id, schoolApplicationId: req.school_application_id,
-        requestedArrivalDate: req.requested_arrival_date,
-      })
-      onDone()
-    })
-  }
-
   // A hospitalidade só diz se tem quarto ou não — se não tem, a decisão de
   // como resolver (esperar vaga, buscar fora, etc.) é do líder, não dela.
   function semQuartoDisponivel() {
-    startTransition(async () => {
+    run(true, async () => {
       const fd = new FormData()
       fd.set('request_id', req.id)
       fd.set('status', 'rejeitado')
@@ -138,7 +158,7 @@ function HospedagemResolver({ req, organizationId, resolverComAlocacao, resolver
   }
 
   return (
-    <div className="space-y-3 border-t border-gray-100 pt-4">
+    <div className="space-y-3">
       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Resolver hospedagem</p>
       <div className="flex items-center gap-2">
         <div className="flex-1">
@@ -158,23 +178,35 @@ function HospedagemResolver({ req, organizationId, resolverComAlocacao, resolver
           Sem data de saída informada — entendido como {guestType === 'obreiro' ? 'obreiro permanente' : 'hospedagem sem data definida'}.
         </p>
       )}
-      <button type="button" onClick={buscar} disabled={pending}
-        className="w-full px-4 py-2 bg-gray-900 text-white text-xs font-semibold rounded-xl hover:bg-gray-800 disabled:opacity-50">
-        {pending ? 'Buscando…' : 'Buscar quartos disponíveis'}
-      </button>
+      {summary && (
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="rounded-lg bg-blue-50 border border-blue-100 px-3 py-2">
+            <p className="font-semibold text-blue-700">Masculino</p>
+            <p className="text-blue-600">{summary.masculino.quartos} quarto(s) · {summary.masculino.camas} cama(s)</p>
+          </div>
+          <div className="rounded-lg bg-pink-50 border border-pink-100 px-3 py-2">
+            <p className="font-semibold text-pink-700">Feminino</p>
+            <p className="text-pink-600">{summary.feminino.quartos} quarto(s) · {summary.feminino.camas} cama(s)</p>
+          </div>
+        </div>
+      )}
+      <div className="flex gap-2">
+        <button type="button" onClick={buscar} disabled={pending}
+          className="flex-1 px-4 py-2 bg-gray-900 text-white text-xs font-semibold rounded-xl hover:bg-gray-800 disabled:opacity-50">
+          {pending ? 'Buscando…' : 'Buscar quartos disponíveis'}
+        </button>
+        <button type="button" onClick={semQuartoDisponivel} disabled={pending}
+          className="flex-1 px-4 py-2 bg-red-50 text-red-700 text-xs font-semibold rounded-xl hover:bg-red-100 disabled:opacity-50">
+          Não há disponibilidade
+        </button>
+      </div>
+      <p className="text-xs text-gray-400">
+        Sem vaga, a decisão de como resolver com a pessoa fica com o líder — a hospitalidade só confirma se há espaço.
+      </p>
 
       {rooms && (
         rooms.length === 0 ? (
-          <div className="space-y-2">
-            <p className="text-xs text-red-600">Nenhum quarto disponível nessa janela de datas.</p>
-            <button type="button" onClick={semQuartoDisponivel} disabled={pending}
-              className="w-full px-4 py-2.5 bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-50 rounded-xl text-sm font-semibold transition-colors">
-              Sem quarto disponível — repassar decisão ao líder
-            </button>
-            <p className="text-xs text-gray-400">
-              A hospitalidade só confirma se há vaga. Sem vaga, cabe ao líder decidir como resolver com a pessoa.
-            </p>
-          </div>
+          <p className="text-xs text-red-600">Nenhum quarto disponível nessa janela de datas — use "Não há disponibilidade" acima.</p>
         ) : (
           <div className="space-y-1.5">
             <p className="text-xs text-gray-500">Escolha um quarto{rooms.some(r => r.allocationMode === 'cama') ? ' (e cama, se for o caso)' : ''} pra habilitar "Confirmar e alocar agora":</p>
@@ -208,18 +240,11 @@ function HospedagemResolver({ req, organizationId, resolverComAlocacao, resolver
           ✓ Confirmar e alocar agora
         </button>
       )}
-      <button type="button" onClick={confirmarSemQuarto} disabled={pending}
-        className="w-full px-4 py-2.5 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50 rounded-xl text-sm font-semibold transition-colors">
-        Confirmar disponibilidade, definir quarto depois
-      </button>
-      <p className="text-xs text-gray-400">
-        "Definir depois" já libera a candidatura (não fica mais pendente do líder/DH) — a escolha do quarto vira uma tarefa só da hospitalidade.
-      </p>
     </div>
   )
 }
 
-export function ServiceRequestsPanel({ requests, title, handleStatusUpdate, resolverComAlocacao, resolverSemAlocacao, organizationId }: Props) {
+export function ServiceRequestsPanel({ requests, title, handleStatusUpdate, resolverComAlocacao, markEmAnalise, organizationId }: Props) {
   const [selected, setSelected] = useState<ServiceReq | null>(null)
   const sidebarLeftClass = useSidebarLeftClass()
 
@@ -350,35 +375,36 @@ export function ServiceRequestsPanel({ requests, title, handleStatusUpdate, reso
 
               {/* Ações */}
               <div className="border-t border-gray-100 pt-4 flex flex-col gap-2">
-                {selected.status === 'pendente' && (
-                  <form action={handleStatusUpdate} onSubmit={() => setSelected(null)}>
+                {selected.status === 'pendente' && !HOSPEDAGEM_TYPES.includes(selected.request_type) && (
+                  <form action={handleStatusUpdate}>
                     <input type="hidden" name="request_id" value={selected.id} />
-                    <button
-                      name="status" value="em_analise" type="submit"
-                      className="w-full px-4 py-2.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-xl text-sm font-semibold transition-colors"
+                    <SubmitButton
+                      name="status" value="em_analise"
+                      className="w-full px-4 py-2.5 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50 rounded-xl text-sm font-semibold transition-colors"
                     >
                       Marcar como Em análise
-                    </button>
+                    </SubmitButton>
                   </form>
                 )}
-                {selected.status !== 'resolvido' && HOSPEDAGEM_TYPES.includes(selected.request_type) && resolverComAlocacao && resolverSemAlocacao && organizationId ? (
+                {selected.status !== 'resolvido' && HOSPEDAGEM_TYPES.includes(selected.request_type) && resolverComAlocacao && organizationId ? (
                   <HospedagemResolver
                     req={selected}
                     organizationId={organizationId}
                     resolverComAlocacao={resolverComAlocacao}
-                    resolverSemAlocacao={resolverSemAlocacao}
+                    markEmAnalise={markEmAnalise}
                     handleStatusUpdate={handleStatusUpdate}
                     onDone={() => setSelected(null)}
                   />
                 ) : selected.status !== 'resolvido' && (
-                  <form action={handleStatusUpdate} onSubmit={() => setSelected(null)}>
+                  <form action={handleStatusUpdate}>
                     <input type="hidden" name="request_id" value={selected.id} />
-                    <button
-                      name="status" value="resolvido" type="submit"
-                      className="w-full px-4 py-2.5 bg-green-500 text-white hover:bg-green-600 rounded-xl text-sm font-semibold transition-colors"
+                    <SubmitButton
+                      name="status" value="resolvido"
+                      className="w-full px-4 py-2.5 bg-green-500 text-white hover:bg-green-600 disabled:opacity-50 rounded-xl text-sm font-semibold transition-colors"
+                      pendingText="Salvando…"
                     >
                       ✓ Marcar como Resolvido
-                    </button>
+                    </SubmitButton>
                   </form>
                 )}
                 <button

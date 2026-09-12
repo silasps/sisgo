@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 const GUEST_TYPES = [
   { value: 'visitante', label: 'Visitante' },
@@ -115,36 +116,36 @@ export function AllocationManager({
                     <form action={checkinAction}>
                       <input type="hidden" name="id" value={a.id} />
                       <input type="hidden" name="bed_id" value={a.bed_id ?? ''} />
-                      <button
-                        type="submit"
-                        className="px-3 py-1 text-[10px] font-medium bg-green-500 hover:bg-green-600 text-white rounded-md transition-colors"
+                      <SubmitButton
+                        className="px-3 py-1 text-[10px] font-medium bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white rounded-md transition-colors"
+                        pendingText="…"
                       >
                         Check-in
-                      </button>
+                      </SubmitButton>
                     </form>
                   )}
                   {a.status === 'checkin' && (
                     <form action={checkoutAction}>
                       <input type="hidden" name="id" value={a.id} />
                       <input type="hidden" name="bed_id" value={a.bed_id ?? ''} />
-                      <button
-                        type="submit"
-                        className="px-3 py-1 text-[10px] font-medium bg-gray-500 hover:bg-gray-600 text-white rounded-md transition-colors"
+                      <SubmitButton
+                        className="px-3 py-1 text-[10px] font-medium bg-gray-500 hover:bg-gray-600 disabled:opacity-50 text-white rounded-md transition-colors"
+                        pendingText="…"
                       >
                         Check-out
-                      </button>
+                      </SubmitButton>
                     </form>
                   )}
                   {(a.status === 'confirmada' || a.status === 'checkin') && (
                     <form action={cancelAction}>
                       <input type="hidden" name="id" value={a.id} />
                       <input type="hidden" name="bed_id" value={a.bed_id ?? ''} />
-                      <button
-                        type="submit"
-                        className="px-3 py-1 text-[10px] font-medium border border-red-200 text-red-500 rounded-md hover:bg-red-50 transition-colors"
+                      <SubmitButton
+                        className="px-3 py-1 text-[10px] font-medium border border-red-200 text-red-500 disabled:opacity-50 rounded-md hover:bg-red-50 transition-colors"
+                        pendingText="…"
                       >
                         Cancelar
-                      </button>
+                      </SubmitButton>
                     </form>
                   )}
                 </div>
@@ -182,7 +183,7 @@ export function AllocationManager({
 
       {/* New Allocation Modal */}
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Nova Alocação" hideFooter>
-        <form action={createAction} className="p-5 space-y-4" onSubmit={() => setShowAdd(false)}>
+        <form action={createAction} className="p-5 space-y-4">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Nome do hóspede *</label>
             <input
@@ -251,12 +252,9 @@ export function AllocationManager({
             />
           </div>
 
-          <button
-            type="submit"
-            className="w-full px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors"
-          >
+          <SubmitButton pendingText="Alocando…">
             Alocar Hóspede
-          </button>
+          </SubmitButton>
         </form>
       </Modal>
     </div>

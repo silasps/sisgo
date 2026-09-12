@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { usePendingAction } from '@/hooks/usePendingAction'
 import { updateBackgroundCheck, addBackgroundCheck } from './actions'
 import { daysUntil, expiryUrgency, expiryLabel, EXPIRY_URGENCY_STYLE } from '@/lib/background-checks/expiry'
 
@@ -64,17 +65,14 @@ function CheckRow({ check, organizationId, slug, staffApplicationId, readOnly }:
   const [issuedAt, setIssuedAt] = useState(check.issued_at ?? '')
   const [expiresAt, setExpiresAt] = useState(check.expires_at ?? '')
   const [flagged, setFlagged] = useState(check.flagged_concern)
-  const [isPending, startTransition] = useTransition()
+  const { isPending, run } = usePendingAction()
   const router = useRouter()
 
   const daysLeft = expiresAt ? daysUntil(expiresAt) : null
   const urgency = daysLeft !== null ? expiryUrgency(daysLeft) : null
 
   // Aceita overrides pra poder salvar imediatamente no onChange do status
-  // (o state ainda não teria o valor novo aplicado no mesmo tick). O
-  // router.refresh() fica fora da transition que trava o botão — só o
-  // stepper lá em cima (que depende do status geral dos checks) precisa
-  // dele, e não faz sentido o "Salvando…" esperar a página inteira recarregar.
+  // (o state ainda não teria o valor novo aplicado no mesmo tick).
   function persist(overrides?: Partial<{ status: string; issuedAt: string; expiresAt: string; notes: string; flagged: boolean }>) {
     const payload = {
       id: check.id,
@@ -87,10 +85,10 @@ function CheckRow({ check, organizationId, slug, staffApplicationId, readOnly }:
       expiresAt: overrides?.expiresAt ?? expiresAt,
       flaggedConcern: overrides?.flagged ?? flagged,
     }
-    startTransition(async () => {
+    run(true, async () => {
       await updateBackgroundCheck(payload)
+      router.refresh()
     })
-    setTimeout(() => router.refresh(), 0)
   }
 
   return (

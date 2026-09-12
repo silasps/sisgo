@@ -133,39 +133,6 @@ export async function resolverHospedagemComAlocacao(params: {
   }).eq('id', params.requestId)
 }
 
-// Confirma que há vaga (desbloqueia a candidatura) sem travar na escolha do
-// quarto específico agora — isso vira uma pendência só da hospitalidade,
-// separada do processo de admissão.
-export async function resolverHospedagemSemAlocacao(params: {
-  requestId: string
-  organizationId: string
-  guestName: string
-  staffApplicationId: string | null
-  schoolApplicationId: string | null
-  requestedArrivalDate: string | null
-  reviewedBy: string
-}) {
-  const sb = createAdminClient()
-
-  await sb.from('service_requests').update({
-    status: 'resolvido',
-    reviewed_by: params.reviewedBy,
-    reviewed_at: new Date().toISOString(),
-  }).eq('id', params.requestId)
-
-  await sb.from('service_requests').insert({
-    organization_id: params.organizationId,
-    requester_id: params.reviewedBy,
-    requester_role: 'hospitalidade',
-    target_department: 'hospitalidade',
-    request_type: 'alocar_quarto',
-    subject: `Definir quarto — ${params.guestName}`,
-    description: 'Disponibilidade já confirmada — falta escolher o quarto/cama específico.',
-    staff_application_id: params.staffApplicationId,
-    school_application_id: params.schoolApplicationId,
-    requested_arrival_date: params.requestedArrivalDate,
-  })
-}
 
 // ── Blocos e Andares ────────────────────────────────────────────────────────
 // Hierarquia real: Bloco > Andar > Quarto > Cama. Andar carrega um público/
@@ -190,10 +157,36 @@ export async function updateBlock(data: { id: string; organizationId: string; na
   if (error) throw new Error(error.message)
 }
 
+// Bloqueia a exclusão em cascata se sobrar hóspede com estadia ativa em
+// algum quarto da área (bloco/andar/quarto) — isso a cascata não deveria
+// levar junto silenciosamente, mesmo com o usuário já tendo confirmado.
+async function assertNoActiveAllocations(sb: ReturnType<typeof createAdminClient>, roomIds: string[]) {
+  if (roomIds.length === 0) return
+  const { count } = await sb.from('room_allocations')
+    .select('id', { count: 'exact', head: true })
+    .in('room_id', roomIds)
+    .in('status', ['confirmada', 'checkin'])
+  if ((count ?? 0) > 0) throw new Error('Tem hóspede alocado em algum quarto dessa área — resolva a alocação antes de apagar.')
+}
+
 export async function deleteBlock(data: { id: string; organizationId: string }) {
   const sb = createAdminClient()
-  const { count } = await sb.from('floors').select('id', { count: 'exact', head: true }).eq('block_id', data.id)
-  if ((count ?? 0) > 0) throw new Error('Esse bloco tem andar dentro — mova ou apague os andares primeiro.')
+
+  const { data: floors } = await sb.from('floors').select('id')
+    .eq('block_id', data.id).eq('organization_id', data.organizationId)
+  const floorIds = (floors ?? []).map(f => f.id)
+
+  if (floorIds.length > 0) {
+    const { data: rooms } = await sb.from('rooms').select('id')
+      .in('floor_id', floorIds).eq('organization_id', data.organizationId)
+    const roomIds = (rooms ?? []).map(r => r.id)
+    await assertNoActiveAllocations(sb, roomIds)
+    // beds e room_allocations têm ON DELETE CASCADE a partir de rooms —
+    // apagar os quartos já leva tudo isso junto.
+    if (roomIds.length > 0) await sb.from('rooms').delete().in('id', roomIds)
+    await sb.from('floors').delete().in('id', floorIds)
+  }
+
   const { error } = await sb.from('blocks').delete().eq('id', data.id).eq('organization_id', data.organizationId)
   if (error) throw new Error(error.message)
 }
@@ -234,8 +227,13 @@ export async function updateFloor(data: {
 
 export async function deleteFloor(data: { id: string; organizationId: string }) {
   const sb = createAdminClient()
-  const { count } = await sb.from('rooms').select('id', { count: 'exact', head: true }).eq('floor_id', data.id)
-  if ((count ?? 0) > 0) throw new Error('Esse andar tem quarto dentro — mova ou apague os quartos primeiro.')
+
+  const { data: rooms } = await sb.from('rooms').select('id')
+    .eq('floor_id', data.id).eq('organization_id', data.organizationId)
+  const roomIds = (rooms ?? []).map(r => r.id)
+  await assertNoActiveAllocations(sb, roomIds)
+  if (roomIds.length > 0) await sb.from('rooms').delete().in('id', roomIds)
+
   const { error } = await sb.from('floors').delete().eq('id', data.id).eq('organization_id', data.organizationId)
   if (error) throw new Error(error.message)
 }
@@ -336,6 +334,15 @@ export async function updateRoom(data: {
     notes:             data.notes,
     updated_at:        new Date().toISOString(),
   }).eq('id', data.id).eq('organization_id', data.organizationId)
+  if (error) throw new Error(error.message)
+}
+
+export async function deleteRoom(data: { id: string; organizationId: string }) {
+  const sb = createAdminClient()
+  await assertNoActiveAllocations(sb, [data.id])
+  // beds tem ON DELETE CASCADE a partir de rooms — apagar o quarto já leva
+  // as camas cadastradas nele junto.
+  const { error } = await sb.from('rooms').delete().eq('id', data.id).eq('organization_id', data.organizationId)
   if (error) throw new Error(error.message)
 }
 

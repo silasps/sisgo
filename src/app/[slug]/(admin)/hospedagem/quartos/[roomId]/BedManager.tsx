@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 const BED_TYPES = [
   { value: 'solteiro', label: 'Solteiro' },
@@ -104,7 +105,7 @@ export function BedManager({ beds, addAction, editAction, removeAction }: Props)
 
       {/* Add Bed Modal */}
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Adicionar Cama" hideFooter>
-        <form action={addAction} className="p-5 space-y-4" onSubmit={() => setShowAdd(false)}>
+        <form action={addAction} className="p-5 space-y-4">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Nome/Rótulo *</label>
             <input
@@ -134,19 +135,14 @@ export function BedManager({ beds, addAction, editAction, removeAction }: Props)
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 resize-none"
             />
           </div>
-          <button
-            type="submit"
-            className="w-full px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            Adicionar
-          </button>
+          <SubmitButton pendingText="Adicionando…">Adicionar</SubmitButton>
         </form>
       </Modal>
 
       {/* Edit Bed Modal */}
       {editBed && (
         <Modal open onClose={() => setEditBed(null)} title={`Editar: ${editBed.label}`} hideFooter>
-          <form action={editAction} className="p-5 space-y-4" onSubmit={() => setEditBed(null)}>
+          <form action={editAction} className="p-5 space-y-4">
             <input type="hidden" name="id" value={editBed.id} />
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Nome/Rótulo *</label>
@@ -193,12 +189,9 @@ export function BedManager({ beds, addAction, editAction, removeAction }: Props)
               />
             </div>
             <div className="flex gap-2">
-              <button
-                type="submit"
-                className="flex-1 px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors"
-              >
+              <SubmitButton className="flex-1 px-4 py-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors" pendingText="Salvando…">
                 Salvar
-              </button>
+              </SubmitButton>
               <ConfirmDialog
                 title="Remover cama"
                 message={`Tem certeza que deseja remover "${editBed.label}"? Esta ação não pode ser desfeita.`}

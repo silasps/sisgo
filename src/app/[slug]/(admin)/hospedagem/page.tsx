@@ -10,6 +10,8 @@ import {
   allocateWholeRoom, checkinWholeRoom, checkoutWholeRoom,
   toggleRoomMaintenance, toggleBedMaintenance, updateAdvanceHours,
   createHold, cancelHold,
+  createBlock, updateBlock, deleteBlock,
+  createFloor, updateFloor, deleteFloor,
 } from './actions'
 import { BedGrid } from './BedGrid'
 import { ReservationTimeline } from './agenda/ReservationTimeline'
@@ -17,17 +19,21 @@ import { BlockCard } from './BlockCard'
 import { FloorCard } from './FloorCard'
 import { HoldForm } from './HoldForm'
 import { HoldBanner } from './HoldBanner'
-import { Hotel, BedDouble, DoorOpen, LogIn, LogOut } from 'lucide-react'
+import { BlockForm } from './quartos/BlockForm'
+import { FloorForm } from './quartos/FloorForm'
+import { CascadeDeleteDialog } from '@/components/ui/CascadeDeleteDialog'
+import { StopClickPropagation } from '@/components/ui/StopClickPropagation'
+import { Hotel, BedDouble, DoorOpen, LogIn, LogOut, Pencil, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 
 type Props = {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ msg?: string; view?: string; block?: string; floor?: string }>
+  searchParams: Promise<{ msg?: string; error?: string; view?: string; block?: string; floor?: string }>
 }
 
 export default async function HospedagemPage({ params, searchParams }: Props) {
   const { slug } = await params
-  const { msg, view: viewParam, block: blockId, floor: floorId } = await searchParams
+  const { msg, error, view: viewParam, block: blockId, floor: floorId } = await searchParams
   const view = viewParam === 'timeline' ? 'timeline' : 'grid'
 
   const supabase = await createClient()
@@ -95,7 +101,11 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
   const advanceHours = (org as { hospedagem_advance_hours?: number }).hospedagem_advance_hours ?? 120
 
   // ── KPIs (ocupação real de HOJE, não pelo status da cama) ────────────────
-  const activeBeds = bedsList.filter(b => b.status !== 'manutencao')
+  // Só conta cama de quarto em modo "cama" — quarto em modo "quarto inteiro"
+  // é alocado de uma vez só, então uma cama cadastrada nele (dado legado/
+  // adicionada por engano) não deveria contar pra disponibilidade.
+  const camaRoomIds = new Set(roomsList.filter(r => r.allocation_mode === 'cama').map(r => r.id))
+  const activeBeds = bedsList.filter(b => b.status !== 'manutencao' && camaRoomIds.has(b.room_id))
   const bedsOccupiedToday = new Set(
     allocsList
       .filter(a => a.bed_id && a.check_in <= today && a.check_out > today)
@@ -122,7 +132,7 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
   }
   function bedStatsForRooms(roomsIn: RoomRow[]) {
     const roomIds = new Set(roomsIn.map(r => r.id))
-    const beds = bedsList.filter(b => roomIds.has(b.room_id) && b.status !== 'manutencao')
+    const beds = activeBeds.filter(b => roomIds.has(b.room_id))
     const occupied = beds.filter(b => bedsOccupiedToday.has(b.id)).length
     return { total: beds.length, occupied }
   }
@@ -133,6 +143,15 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
     const blockFloors = floorsByBlock.get(blockIdIn) ?? []
     const blockRooms = blockFloors.flatMap(f => roomsByFloor.get(f.id) ?? [])
     return bedStatsForRooms(blockRooms)
+  }
+  // Total de camas cadastradas (sem filtrar manutenção/modo de alocação) —
+  // usado só pra avisar quanto vai junto numa exclusão em cascata.
+  function bedsLabel(n: number) {
+    return `${n} cama${n !== 1 ? 's' : ''} cadastrada${n !== 1 ? 's' : ''}`
+  }
+  function totalBedsForRooms(roomsIn: RoomRow[]) {
+    const roomIds = new Set(roomsIn.map(r => r.id))
+    return bedsList.filter(b => roomIds.has(b.room_id)).length
   }
 
   // ── Data for BedGrid ────────────────────────────────────────────────────────
@@ -358,6 +377,79 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
     redirect(`/${slug}/hospedagem?${backTo}&msg=hold_cancelado`)
   }
 
+  const handleCreateBlockHere = async (formData: FormData) => {
+    'use server'
+    const name = (formData.get('name') as string).trim()
+    if (!name) return
+    await createBlock({ organizationId: org.id, name, createdBy: user.id })
+    redirect(`/${slug}/hospedagem?msg=bloco_criado`)
+  }
+
+  const handleEditBlockHere = async (formData: FormData) => {
+    'use server'
+    const name = (formData.get('name') as string).trim()
+    if (!name) return
+    await updateBlock({ id: formData.get('id') as string, organizationId: org.id, name })
+    redirect(`/${slug}/hospedagem?msg=bloco_atualizado`)
+  }
+
+  const handleDeleteBlockHere = async (id: string) => {
+    'use server'
+    // redirect() precisa ficar FORA do try/catch: ele funciona lançando um
+    // erro especial (NEXT_REDIRECT) que o Next intercepta — dentro do try,
+    // o catch capturava esse "erro" e mandava pra ?error=NEXT_REDIRECT em
+    // vez de completar o redirect de sucesso.
+    let redirectTo: string
+    try {
+      await deleteBlock({ id, organizationId: org.id })
+      redirectTo = `/${slug}/hospedagem?msg=bloco_removido`
+    } catch (e) {
+      redirectTo = `/${slug}/hospedagem?error=${encodeURIComponent((e as Error).message)}`
+    }
+    redirect(redirectTo)
+  }
+
+  const handleCreateFloorHere = async (formData: FormData) => {
+    'use server'
+    const name = (formData.get('name') as string).trim()
+    if (!name) return
+    await createFloor({
+      organizationId: org.id,
+      blockId: formData.get('block_id') as string,
+      name,
+      destination: (formData.get('destination') as string) || null,
+      genderConstraint: (formData.get('gender_constraint') as string) || null,
+      createdBy: user.id,
+    })
+    redirect(`/${slug}/hospedagem?msg=andar_criado`)
+  }
+
+  const handleEditFloorHere = async (formData: FormData) => {
+    'use server'
+    const name = (formData.get('name') as string).trim()
+    if (!name) return
+    await updateFloor({
+      id: formData.get('id') as string,
+      organizationId: org.id,
+      name,
+      destination: (formData.get('destination') as string) || null,
+      genderConstraint: (formData.get('gender_constraint') as string) || null,
+    })
+    redirect(`/${slug}/hospedagem?msg=andar_atualizado`)
+  }
+
+  const handleDeleteFloorHere = async (id: string) => {
+    'use server'
+    let redirectTo: string
+    try {
+      await deleteFloor({ id, organizationId: org.id })
+      redirectTo = `/${slug}/hospedagem?msg=andar_removido`
+    } catch (e) {
+      redirectTo = `/${slug}/hospedagem?error=${encodeURIComponent((e as Error).message)}`
+    }
+    redirect(redirectTo)
+  }
+
   const kpis = [
     { label: 'Quartos',           value: roomsList.length, icon: Hotel,     color: 'text-gray-600' },
     { label: 'Camas Ocupadas',    value: occupiedBeds,     icon: BedDouble, color: 'text-blue-600' },
@@ -382,6 +474,12 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
     alocacao_cancelada: 'Alocação cancelada.',
     hold_criado: 'Reserva registrada.',
     hold_cancelado: 'Reserva cancelada.',
+    bloco_criado: 'Bloco criado.',
+    bloco_atualizado: 'Bloco atualizado.',
+    bloco_removido: 'Bloco removido.',
+    andar_criado: 'Andar criado.',
+    andar_atualizado: 'Andar atualizado.',
+    andar_removido: 'Andar removido.',
   }
 
   // ── Navegação por camada: sem bloco selecionado → cards de bloco; só
@@ -413,6 +511,11 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
         {msg && msgInfo[msg] && (
           <div className="border rounded-lg px-4 py-3 text-sm bg-blue-50 border-blue-200 text-blue-700">
             {msgInfo[msg]}
+          </div>
+        )}
+        {error && (
+          <div className="border rounded-lg px-4 py-3 text-sm bg-red-50 border-red-200 text-red-700">
+            {error}
           </div>
         )}
 
@@ -544,8 +647,16 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {blocksList.map(b => {
-              const floorsCount = (floorsByBlock.get(b.id) ?? []).length
-              const roomsCount = (floorsByBlock.get(b.id) ?? []).reduce((sum, f) => sum + (roomsByFloor.get(f.id) ?? []).length, 0)
+              const blockFloorsList = floorsByBlock.get(b.id) ?? []
+              const floorsCount = blockFloorsList.length
+              const blockRoomsList = blockFloorsList.flatMap(f => roomsByFloor.get(f.id) ?? [])
+              const roomsCount = blockRoomsList.length
+              const blockBedsTotal = totalBedsForRooms(blockRoomsList)
+              const blockDetails = [
+                ...(floorsCount > 0 ? [`${floorsCount} andar${floorsCount !== 1 ? 'es' : ''}`] : []),
+                ...(roomsCount > 0 ? [`${roomsCount} quarto${roomsCount !== 1 ? 's' : ''}`] : []),
+                ...(blockBedsTotal > 0 ? [bedsLabel(blockBedsTotal)] : []),
+              ]
               const stats = blockStats(b.id)
               const hold = holdByBlock.get(b.id)
               return (
@@ -558,6 +669,30 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
                   occupiedBeds={stats.occupied}
                   totalBeds={stats.total}
                   hold={hold ? { groupName: hold.group_name } : null}
+                  actions={canWrite && (
+                    <StopClickPropagation>
+                      <BlockForm
+                        createAction={handleCreateBlockHere}
+                        editAction={handleEditBlockHere}
+                        block={b}
+                        trigger={
+                          <span className="p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-white hover:shadow-sm cursor-pointer" title="Editar bloco">
+                            <Pencil size={14} />
+                          </span>
+                        }
+                      />
+                      <CascadeDeleteDialog
+                        itemLabel="bloco"
+                        itemName={b.name}
+                        details={blockDetails}
+                        onConfirm={handleDeleteBlockHere.bind(null, b.id)}
+                      >
+                        <span className="p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-white hover:shadow-sm cursor-pointer" title="Remover bloco">
+                          <Trash2 size={14} />
+                        </span>
+                      </CascadeDeleteDialog>
+                    </StopClickPropagation>
+                  )}
                 />
               )
             })}
@@ -601,6 +736,13 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {floorsOfCurrentBlock.map(f => {
+                  const floorRoomsList = roomsByFloor.get(f.id) ?? []
+                  const floorRoomsCount = floorRoomsList.length
+                  const floorBedsTotal = totalBedsForRooms(floorRoomsList)
+                  const floorDetails = [
+                    ...(floorRoomsCount > 0 ? [`${floorRoomsCount} quarto${floorRoomsCount !== 1 ? 's' : ''}`] : []),
+                    ...(floorBedsTotal > 0 ? [bedsLabel(floorBedsTotal)] : []),
+                  ]
                   const stats = floorStats(f.id)
                   const hold = holdByFloor.get(f.id) ?? currentBlockHold
                   return (
@@ -614,6 +756,31 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
                       occupiedBeds={stats.occupied}
                       totalBeds={stats.total}
                       hold={hold ? { groupName: hold.group_name } : null}
+                      actions={canWrite && (
+                        <StopClickPropagation>
+                          <FloorForm
+                            createAction={handleCreateFloorHere}
+                            editAction={handleEditFloorHere}
+                            blockId={blockId}
+                            floor={f}
+                            trigger={
+                              <span className="p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-white hover:shadow-sm cursor-pointer" title="Editar andar">
+                                <Pencil size={14} />
+                              </span>
+                            }
+                          />
+                          <CascadeDeleteDialog
+                            itemLabel="andar"
+                            itemName={f.name}
+                            details={floorDetails}
+                            onConfirm={handleDeleteFloorHere.bind(null, f.id)}
+                          >
+                            <span className="p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-white hover:shadow-sm cursor-pointer" title="Remover andar">
+                              <Trash2 size={14} />
+                            </span>
+                          </CascadeDeleteDialog>
+                        </StopClickPropagation>
+                      )}
                     />
                   )
                 })}

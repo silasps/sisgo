@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, LogIn, LogOut, Search, UserPlus, X } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -378,7 +379,7 @@ export function ReservationTimeline({ rooms, beds, allocs, schools, today, alloc
           <Modal open onClose={() => setCreateTarget(null)} title={room.name} subtitle={fmtShort(createTarget.date)} hideFooter>
             <div className="p-5">
               {room.allocationMode === 'cama' ? (
-                <form action={allocateAction} onSubmit={() => setCreateTarget(null)} className="space-y-4">
+                <form action={allocateAction} className="space-y-4">
                   <div className="flex items-center gap-2 text-green-600">
                     <UserPlus size={20} />
                     <p className="text-sm font-semibold">Alocar hóspede</p>
@@ -410,12 +411,12 @@ export function ReservationTimeline({ rooms, beds, allocs, schools, today, alloc
                     <label className="block text-xs font-medium text-gray-600 mb-1">Check-out *</label>
                     <input name="check_out" type="date" required defaultValue={addDays(createTarget.date, 1)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
                   </div>
-                  <button type="submit" className="w-full py-3 rounded-lg bg-brand-500 hover:bg-brand-600 text-white font-semibold transition-colors">
+                  <SubmitButton pendingText="Alocando…">
                     Alocar
-                  </button>
+                  </SubmitButton>
                 </form>
               ) : (
-                <form action={allocateRoomAction} onSubmit={() => setCreateTarget(null)} className="space-y-4">
+                <form action={allocateRoomAction} className="space-y-4">
                   <div className="flex items-center gap-2 text-green-600">
                     <UserPlus size={20} />
                     <p className="text-sm font-semibold">{room.destination === 'aluno' ? 'Alocar escola neste quarto' : 'Alocar visitante neste quarto'}</p>
@@ -463,9 +464,9 @@ export function ReservationTimeline({ rooms, beds, allocs, schools, today, alloc
                       <input name="check_out" type="date" required defaultValue={addDays(createTarget.date, 1)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
                     </div>
                   </div>
-                  <button type="submit" className="w-full py-3 rounded-lg bg-brand-500 hover:bg-brand-600 text-white font-semibold transition-colors">
+                  <SubmitButton pendingText="Alocando…">
                     Alocar Quarto Inteiro
-                  </button>
+                  </SubmitButton>
                 </form>
               )}
             </div>
@@ -502,21 +503,21 @@ export function ReservationTimeline({ rooms, beds, allocs, schools, today, alloc
               {!confirmingCancel ? (
                 <>
                   {manageAlloc.status === 'confirmada' && (
-                    <form action={checkinAction} onSubmit={closeManageModal}>
+                    <form action={checkinAction}>
                       <input type="hidden" name="id" value={manageAlloc.id} />
                       <input type="hidden" name="bed_id" value={manageAlloc.bedId ?? ''} />
-                      <button type="submit" className="w-full py-3 rounded-lg bg-green-500 hover:bg-green-600 text-white font-semibold transition-colors flex items-center justify-center gap-2">
+                      <SubmitButton className="w-full py-3 rounded-lg bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white font-semibold transition-colors flex items-center justify-center gap-2">
                         <LogIn size={18} /> Fazer Check-in
-                      </button>
+                      </SubmitButton>
                     </form>
                   )}
                   {manageAlloc.status === 'checkin' && (
-                    <form action={checkoutAction} onSubmit={closeManageModal}>
+                    <form action={checkoutAction}>
                       <input type="hidden" name="id" value={manageAlloc.id} />
                       <input type="hidden" name="bed_id" value={manageAlloc.bedId ?? ''} />
-                      <button type="submit" className="w-full py-3 rounded-lg bg-gray-700 hover:bg-gray-800 text-white font-semibold transition-colors flex items-center justify-center gap-2">
+                      <SubmitButton className="w-full py-3 rounded-lg bg-gray-700 hover:bg-gray-800 disabled:opacity-50 text-white font-semibold transition-colors flex items-center justify-center gap-2">
                         <LogOut size={18} /> Fazer Check-out
-                      </button>
+                      </SubmitButton>
                     </form>
                   )}
                   <button
@@ -528,7 +529,7 @@ export function ReservationTimeline({ rooms, beds, allocs, schools, today, alloc
                   </button>
                 </>
               ) : (
-                <form action={cancelAction} onSubmit={closeManageModal} className="space-y-3 border-t border-gray-100 pt-4">
+                <form action={cancelAction} className="space-y-3 border-t border-gray-100 pt-4">
                   <p className="text-sm text-gray-700">
                     Tem certeza que quer cancelar a reserva de <strong>{manageAlloc.guestName}</strong>?
                   </p>
@@ -551,9 +552,9 @@ export function ReservationTimeline({ rooms, beds, allocs, schools, today, alloc
                     >
                       Voltar
                     </button>
-                    <button type="submit" className="flex-1 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-semibold transition-colors">
+                    <SubmitButton className="flex-1 py-2 rounded-lg bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white text-sm font-semibold transition-colors" pendingText="Cancelando…">
                       Confirmar cancelamento
-                    </button>
+                    </SubmitButton>
                   </div>
                 </form>
               )}

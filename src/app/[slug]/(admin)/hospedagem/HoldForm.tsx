@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Option = { id: string; name: string }
 
@@ -47,7 +48,7 @@ export function HoldForm({ createAction, scope, label, blockOptions, blockId, fl
       </span>
 
       <Modal open={open} onClose={() => setOpen(false)} title={`Reservar ${SCOPE_LABEL[scope]} inteiro`} hideFooter>
-        <form action={createAction} className="p-5 space-y-4" onSubmit={() => setOpen(false)}>
+        <form action={createAction} className="p-5 space-y-4">
           <input type="hidden" name="scope" value={scope} />
           {scope !== 'block' && <input type="hidden" name="block_id" value={blockId} />}
           {scope === 'room' && <input type="hidden" name="floor_id" value={floorId} />}
@@ -100,9 +101,9 @@ export function HoldForm({ createAction, scope, label, blockOptions, blockId, fl
             />
           </div>
 
-          <button type="submit" className="w-full px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
+          <SubmitButton pendingText="Reservando…">
             Reservar {SCOPE_LABEL[scope]}
-          </button>
+          </SubmitButton>
         </form>
       </Modal>
     </>

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 const DESTINATION_OPTIONS = [
   { value: '', label: 'Sem padrão' },
@@ -42,7 +43,7 @@ export function FloorForm({ createAction, editAction, blockId, floor, trigger }:
       </span>
 
       <Modal open={open} onClose={() => setOpen(false)} title={isEdit ? 'Editar andar' : 'Novo andar'} hideFooter>
-        <form action={isEdit ? editAction : createAction} className="p-5 space-y-4" onSubmit={() => setOpen(false)}>
+        <form action={isEdit ? editAction : createAction} className="p-5 space-y-4">
           {isEdit && <input type="hidden" name="id" value={floor.id} />}
           <input type="hidden" name="block_id" value={blockId} />
           <div>
@@ -80,9 +81,9 @@ export function FloorForm({ createAction, editAction, blockId, floor, trigger }:
               </select>
             </div>
           </div>
-          <button type="submit" className="w-full px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
+          <SubmitButton pendingText={isEdit ? 'Salvando…' : 'Criando…'}>
             {isEdit ? 'Salvar' : 'Criar andar'}
-          </button>
+          </SubmitButton>
         </form>
       </Modal>
     </>

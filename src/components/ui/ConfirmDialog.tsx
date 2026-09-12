@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { AlertTriangle } from 'lucide-react'
 import { useSidebarLeftClass } from '@/components/layout/account-context'
 
@@ -45,7 +46,11 @@ export function ConfirmDialog({
     <>
       <span onClick={() => setOpen(true)}>{children}</span>
 
-      {open && (
+      {/* Portal pro <body> — sem isso, um <div fixed> nascido dentro de um
+          ancestral com transform (ex.: card com hover:-translate-y-0.5)
+          vira "fixed" em relação a esse ancestral, não à viewport, e o modal
+          aparece preso perto do botão que abriu em vez de centralizado. */}
+      {open && createPortal(
         <div
           className={`fixed inset-0 ${sidebarLeftClass} z-50 flex items-center justify-center bg-black/50 p-4`}
           onClick={e => { if (e.target === e.currentTarget && !loading) setOpen(false) }}
@@ -84,7 +89,8 @@ export function ConfirmDialog({
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   )

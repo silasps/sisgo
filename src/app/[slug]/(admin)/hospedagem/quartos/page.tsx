@@ -2,20 +2,20 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/Header'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { ConfirmSubmitButton } from '@/components/ui/ConfirmSubmitButton'
+import { CascadeDeleteDialog } from '@/components/ui/CascadeDeleteDialog'
 import { StopClickPropagation } from '@/components/ui/StopClickPropagation'
 import { notFound, redirect } from 'next/navigation'
 import { isManagementRole, userHasAnyRole, HOSPEDAGEM_ROLES } from '@/lib/auth/permissions'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import {
-  createRoom, updateRoom,
+  createRoom, updateRoom, deleteRoom,
   createBlock, updateBlock, deleteBlock,
   createFloor, updateFloor, deleteFloor,
 } from '../actions'
 import { RoomForm } from './RoomForm'
 import { BlockForm } from './BlockForm'
 import { FloorForm } from './FloorForm'
-import { BedDouble, Building2 } from 'lucide-react'
+import { BedDouble, Building2, Pencil, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 
 type Props = {
@@ -69,7 +69,7 @@ export default async function QuartosPage({ params, searchParams }: Props) {
     sbAdmin.from('floors').select('id, block_id, name, destination, gender_constraint, display_order').eq('organization_id', org.id).order('display_order').order('name'),
     (async () => {
       let query = sbAdmin.from('rooms')
-        .select('id, name, floor_id, type, gender_constraint, destination, capacity, status, notes, display_order')
+        .select('id, name, floor_id, type, gender_constraint, destination, allocation_mode, capacity, status, notes, display_order')
         .eq('organization_id', org.id)
         .order('display_order')
         .order('name')
@@ -83,7 +83,7 @@ export default async function QuartosPage({ params, searchParams }: Props) {
   const floorsList = (floorsData ?? []) as Array<{ id: string; block_id: string; name: string; destination: string | null; gender_constraint: string | null; display_order: number }>
   const roomsList = (rooms ?? []) as Array<{
     id: string; name: string; floor_id: string; type: string
-    gender_constraint: string | null; destination: string; capacity: number; status: string
+    gender_constraint: string | null; destination: string; allocation_mode: string; capacity: number; status: string
     notes: string | null; display_order: number
   }>
 
@@ -102,6 +102,10 @@ export default async function QuartosPage({ params, searchParams }: Props) {
     entry.total++
     if (bed.status === 'ocupada') entry.occupied++
     bedsByRoom.set(bed.room_id, entry)
+  }
+
+  function bedsLabel(n: number) {
+    return `${n} cama${n !== 1 ? 's' : ''} cadastrada${n !== 1 ? 's' : ''}`
   }
 
   const floorOptions = floorsList.map(f => ({
@@ -129,14 +133,20 @@ export default async function QuartosPage({ params, searchParams }: Props) {
     redirect(`/${slug}/hospedagem/quartos?msg=bloco_atualizado`)
   }
 
-  const handleDeleteBlock = async (formData: FormData) => {
+  const handleDeleteBlock = async (id: string) => {
     'use server'
+    // redirect() precisa ficar FORA do try/catch: ele funciona lançando um
+    // erro especial (NEXT_REDIRECT) que o Next intercepta — se ficasse
+    // dentro do try, o catch abaixo capturava esse "erro" e mandava pra
+    // ?error=NEXT_REDIRECT em vez de completar o redirect de sucesso.
+    let redirectTo: string
     try {
-      await deleteBlock({ id: formData.get('id') as string, organizationId: org.id })
-      redirect(`/${slug}/hospedagem/quartos?msg=bloco_removido`)
+      await deleteBlock({ id, organizationId: org.id })
+      redirectTo = `/${slug}/hospedagem/quartos?msg=bloco_removido`
     } catch (e) {
-      redirect(`/${slug}/hospedagem/quartos?error=${encodeURIComponent((e as Error).message)}`)
+      redirectTo = `/${slug}/hospedagem/quartos?error=${encodeURIComponent((e as Error).message)}`
     }
+    redirect(redirectTo)
   }
 
   const handleCreateFloor = async (formData: FormData) => {
@@ -168,14 +178,28 @@ export default async function QuartosPage({ params, searchParams }: Props) {
     redirect(`/${slug}/hospedagem/quartos?msg=andar_atualizado`)
   }
 
-  const handleDeleteFloor = async (formData: FormData) => {
+  const handleDeleteFloor = async (id: string) => {
     'use server'
+    let redirectTo: string
     try {
-      await deleteFloor({ id: formData.get('id') as string, organizationId: org.id })
-      redirect(`/${slug}/hospedagem/quartos?msg=andar_removido`)
+      await deleteFloor({ id, organizationId: org.id })
+      redirectTo = `/${slug}/hospedagem/quartos?msg=andar_removido`
     } catch (e) {
-      redirect(`/${slug}/hospedagem/quartos?error=${encodeURIComponent((e as Error).message)}`)
+      redirectTo = `/${slug}/hospedagem/quartos?error=${encodeURIComponent((e as Error).message)}`
     }
+    redirect(redirectTo)
+  }
+
+  const handleDeleteRoom = async (id: string) => {
+    'use server'
+    let redirectTo: string
+    try {
+      await deleteRoom({ id, organizationId: org.id })
+      redirectTo = `/${slug}/hospedagem/quartos?msg=quarto_removido`
+    } catch (e) {
+      redirectTo = `/${slug}/hospedagem/quartos?error=${encodeURIComponent((e as Error).message)}`
+    }
+    redirect(redirectTo)
   }
 
   const handleCreate = async (formData: FormData) => {
@@ -227,6 +251,7 @@ export default async function QuartosPage({ params, searchParams }: Props) {
     andar_criado: 'Andar criado.',
     andar_atualizado: 'Andar atualizado.',
     andar_removido: 'Andar removido.',
+    quarto_removido: 'Quarto removido.',
   }
 
   const statusTabs = [
@@ -244,11 +269,49 @@ export default async function QuartosPage({ params, searchParams }: Props) {
     const pct    = beds.total > 0 ? Math.round((beds.occupied / beds.total) * 100) : 0
 
     return (
-      <Link
-        href={`/${slug}/hospedagem/quartos/${room.id}`}
-        className="group bg-white rounded-xl border border-gray-200 p-4 space-y-3 transition-all hover:shadow-md hover:-translate-y-0.5"
-      >
-        <div className="min-w-0">
+      <div className="relative">
+        {/* Ações fora do <Link> de propósito — um clique que chega a um <a>
+            aciona a barra de progresso de navegação (nextjs-toploader) antes
+            do React conseguir interceptar, mesmo com stopPropagation. */}
+        <div className="absolute top-2 right-2 z-10 flex items-center gap-2">
+          <RoomForm
+            createAction={handleCreate}
+            editAction={handleEdit}
+            floors={floorOptions}
+            room={{
+              id: room.id,
+              name: room.name,
+              floorId: room.floor_id ?? '',
+              type: room.type,
+              gender_constraint: room.gender_constraint,
+              destination: room.destination,
+              allocation_mode: room.allocation_mode,
+              status: room.status,
+              notes: room.notes,
+            }}
+            trigger={
+              <span className="p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 cursor-pointer" title="Editar quarto">
+                <Pencil size={14} />
+              </span>
+            }
+          />
+          <CascadeDeleteDialog
+            itemLabel="quarto"
+            itemName={room.name}
+            details={beds.total > 0 ? [bedsLabel(beds.total)] : []}
+            onConfirm={handleDeleteRoom.bind(null, room.id)}
+          >
+            <span className="p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 cursor-pointer" title="Remover quarto">
+              <Trash2 size={14} />
+            </span>
+          </CascadeDeleteDialog>
+        </div>
+
+        <Link
+          href={`/${slug}/hospedagem/quartos/${room.id}`}
+          className="group relative block bg-white rounded-xl border border-gray-200 p-4 space-y-3 transition-all hover:shadow-md hover:-translate-y-0.5"
+        >
+        <div className="min-w-0 pr-14">
           <p className="font-medium text-gray-900 group-hover:text-brand-600 transition-colors">
             {room.name}
           </p>
@@ -289,7 +352,8 @@ export default async function QuartosPage({ params, searchParams }: Props) {
         <p className="text-[10px] text-brand-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
           Abrir →
         </p>
-      </Link>
+        </Link>
+      </div>
     )
   }
 
@@ -337,6 +401,14 @@ export default async function QuartosPage({ params, searchParams }: Props) {
           <div className="space-y-4">
             {blocksList.map(block => {
               const blockFloors = floorsList.filter(f => f.block_id === block.id)
+              const blockFloorIds = new Set(blockFloors.map(f => f.id))
+              const blockRooms = roomsList.filter(r => blockFloorIds.has(r.floor_id))
+              const blockBeds = blockRooms.reduce((sum, r) => sum + (bedsByRoom.get(r.id)?.total ?? 0), 0)
+              const blockDetails = [
+                ...(blockFloors.length > 0 ? [`${blockFloors.length} andar${blockFloors.length !== 1 ? 'es' : ''}`] : []),
+                ...(blockRooms.length > 0 ? [`${blockRooms.length} quarto${blockRooms.length !== 1 ? 's' : ''}`] : []),
+                ...(blockBeds > 0 ? [bedsLabel(blockBeds)] : []),
+              ]
               return (
                 <details key={block.id} className="group bg-white rounded-xl border border-gray-200 overflow-hidden [&_summary::-webkit-details-marker]:hidden" open>
                   <summary className="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2 hover:bg-gray-50 transition-colors">
@@ -352,17 +424,22 @@ export default async function QuartosPage({ params, searchParams }: Props) {
                         createAction={handleCreateBlock}
                         editAction={handleEditBlock}
                         block={block}
-                        trigger={<span className="text-xs text-gray-400 hover:text-gray-600 cursor-pointer">Editar</span>}
+                        trigger={
+                          <span className="p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 cursor-pointer" title="Editar bloco">
+                            <Pencil size={14} />
+                          </span>
+                        }
                       />
-                      <form action={handleDeleteBlock}>
-                        <input type="hidden" name="id" value={block.id} />
-                        <ConfirmSubmitButton
-                          confirmMessage={`Remover o bloco "${block.name}"? Só funciona se não tiver andar dentro.`}
-                          className="text-xs text-gray-400 hover:text-red-500"
-                        >
-                          Remover
-                        </ConfirmSubmitButton>
-                      </form>
+                      <CascadeDeleteDialog
+                        itemLabel="bloco"
+                        itemName={block.name}
+                        details={blockDetails}
+                        onConfirm={handleDeleteBlock.bind(null, block.id)}
+                      >
+                        <span className="p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 cursor-pointer" title="Remover bloco">
+                          <Trash2 size={14} />
+                        </span>
+                      </CascadeDeleteDialog>
                       <FloorForm createAction={handleCreateFloor} editAction={handleEditFloor} blockId={block.id} />
                     </StopClickPropagation>
                   </summary>
@@ -373,6 +450,11 @@ export default async function QuartosPage({ params, searchParams }: Props) {
                     ) : (
                       blockFloors.map(floor => {
                         const floorRooms = roomsList.filter(r => r.floor_id === floor.id)
+                        const floorBeds = floorRooms.reduce((sum, r) => sum + (bedsByRoom.get(r.id)?.total ?? 0), 0)
+                        const floorDetails = [
+                          ...(floorRooms.length > 0 ? [`${floorRooms.length} quarto${floorRooms.length !== 1 ? 's' : ''}`] : []),
+                          ...(floorBeds > 0 ? [bedsLabel(floorBeds)] : []),
+                        ]
                         return (
                           <details key={floor.id} className="[&_summary::-webkit-details-marker]:hidden" open>
                             <summary className="cursor-pointer list-none px-4 py-2.5 flex items-center justify-between gap-2 hover:bg-gray-50 transition-colors bg-gray-50/50">
@@ -398,17 +480,22 @@ export default async function QuartosPage({ params, searchParams }: Props) {
                                   editAction={handleEditFloor}
                                   blockId={block.id}
                                   floor={floor}
-                                  trigger={<span className="text-xs text-gray-400 hover:text-gray-600 cursor-pointer">Editar</span>}
+                                  trigger={
+                                    <span className="p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 cursor-pointer" title="Editar andar">
+                                      <Pencil size={14} />
+                                    </span>
+                                  }
                                 />
-                                <form action={handleDeleteFloor}>
-                                  <input type="hidden" name="id" value={floor.id} />
-                                  <ConfirmSubmitButton
-                                    confirmMessage={`Remover o andar "${floor.name}"? Só funciona se não tiver quarto dentro.`}
-                                    className="text-xs text-gray-400 hover:text-red-500"
-                                  >
-                                    Remover
-                                  </ConfirmSubmitButton>
-                                </form>
+                                <CascadeDeleteDialog
+                                  itemLabel="andar"
+                                  itemName={floor.name}
+                                  details={floorDetails}
+                                  onConfirm={handleDeleteFloor.bind(null, floor.id)}
+                                >
+                                  <span className="p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 cursor-pointer" title="Remover andar">
+                                    <Trash2 size={14} />
+                                  </span>
+                                </CascadeDeleteDialog>
                                 <RoomForm
                                   createAction={handleCreate}
                                   editAction={handleEdit}

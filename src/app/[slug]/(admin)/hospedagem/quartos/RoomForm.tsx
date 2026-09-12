@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 const ROOM_TYPES = [
   { value: 'quarto', label: 'Quarto' },
@@ -30,8 +31,16 @@ const DESTINATION_OPTIONS = [
 ] as const
 
 const MODE_OPTIONS = [
-  { value: 'quarto', label: 'Quarto inteiro' },
-  { value: 'cama', label: 'Cama individual' },
+  {
+    value: 'quarto',
+    label: 'Quarto inteiro',
+    description: 'O quarto é alocado de uma vez só, pra uma pessoa ou grupo — não tem cama controlada separadamente. Use pra suíte, quarto de casal, ou quarto reservado pra uma família/grupo inteiro.',
+  },
+  {
+    value: 'cama',
+    label: 'Cama individual',
+    description: 'Cada cama do quarto é cadastrada e alocada separadamente — pessoas diferentes podem dividir o mesmo quarto, cada uma na sua cama. Use pra dormitório/alojamento coletivo.',
+  },
 ] as const
 
 type RoomData = {
@@ -67,6 +76,7 @@ export function RoomForm({ createAction, editAction, floors, room, defaultFloorI
   const [open, setOpen] = useState(false)
   const isEdit = !!room
   const [floorId, setFloorId] = useState(room?.floorId ?? defaultFloorId ?? floors[0]?.id ?? '')
+  const [mode, setMode] = useState(room?.allocation_mode ?? 'quarto')
 
   const floorsByBlock = useMemo(() => {
     const map = new Map<string, FloorOption[]>()
@@ -104,7 +114,6 @@ export function RoomForm({ createAction, editAction, floors, room, defaultFloorI
         <form
           action={isEdit ? editAction : createAction}
           className="p-5 space-y-4"
-          onSubmit={() => setOpen(false)}
         >
           {isEdit && <input type="hidden" name="id" value={room.id} />}
 
@@ -168,34 +177,37 @@ export function RoomForm({ createAction, editAction, floors, room, defaultFloorI
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Destinado a *</label>
-              <select
-                key={isEdit ? 'edit-destination' : `destination-${floorId}`}
-                name="destination"
-                required
-                defaultValue={destinationDefault}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-              >
-                {DESTINATION_OPTIONS.map(d => (
-                  <option key={d.value} value={d.value}>{d.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Modo de alocação *</label>
-              <select
-                name="allocation_mode"
-                required
-                defaultValue={room?.allocation_mode ?? 'quarto'}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-              >
-                {MODE_OPTIONS.map(m => (
-                  <option key={m.value} value={m.value}>{m.label}</option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Destinado a *</label>
+            <select
+              key={isEdit ? 'edit-destination' : `destination-${floorId}`}
+              name="destination"
+              required
+              defaultValue={destinationDefault}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+            >
+              {DESTINATION_OPTIONS.map(d => (
+                <option key={d.value} value={d.value}>{d.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Modo de alocação *</label>
+            <select
+              name="allocation_mode"
+              required
+              value={mode}
+              onChange={e => setMode(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+            >
+              {MODE_OPTIONS.map(m => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
+              {MODE_OPTIONS.find(m => m.value === mode)?.description}
+            </p>
           </div>
 
           {isEdit && (
@@ -224,13 +236,9 @@ export function RoomForm({ createAction, editAction, floors, room, defaultFloorI
             />
           </div>
 
-          <button
-            type="submit"
-            disabled={floors.length === 0}
-            className="w-full px-4 py-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
-          >
+          <SubmitButton disabled={floors.length === 0} pendingText={isEdit ? 'Salvando…' : 'Criando…'}>
             {isEdit ? 'Salvar Alterações' : 'Criar Quarto'}
-          </button>
+          </SubmitButton>
         </form>
       </Modal>
     </>
