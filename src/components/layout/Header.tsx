@@ -57,26 +57,19 @@ export function Header({ title, backHref, actions }: HeaderProps) {
   )
 }
 
-/** Botão único de navegação, antes da logo. Em telas pequenas (sem a barra
- * lateral fixa) abre o menu deslizante; em telas grandes a barra lateral já
- * fica visível e se expande sozinha ao passar o mouse, então o clique aqui
- * abre a busca em tudo (mesmo painel do "Pesquisar menus…" da sidebar). */
+/** Botão de navegação, antes da logo — só em telas pequenas (sem a barra
+ * lateral fixa), pra abrir o menu deslizante. Em telas grandes a barra
+ * lateral já fica visível e tem seu próprio gatilho ("Pesquisar menus…"). */
 function MenuButton() {
-  const { items, openAllApps } = useAllApps()
+  const { items } = useAllApps()
   const { openNav } = useMobileNav()
 
   if (items.length === 0) return null
 
-  function handleClick() {
-    const isDesktop = typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
-    if (isDesktop) openAllApps()
-    else openNav()
-  }
-
   return (
     <button
-      onClick={handleClick}
-      className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-white/10 hover:text-white transition-colors shrink-0"
+      onClick={openNav}
+      className="md:hidden w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-white/10 hover:text-white transition-colors shrink-0"
       aria-label="Menu"
     >
       <Menu size={18} />
