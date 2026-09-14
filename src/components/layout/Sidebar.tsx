@@ -9,7 +9,7 @@ import {
   ChefHat, Package, Boxes, DollarSign, Receipt, Settings, LogOut,
   UserCheck, CalendarDays, Wrench, Building2, Eye, Code2, Inbox, CookingPot,
   Hotel, DoorOpen, WashingMachine, Shirt, IdCard, Megaphone,
-  Menu, Search,
+  Menu,
   type LucideIcon,
 } from 'lucide-react'
 import { useAllApps } from './all-apps-context'
@@ -64,10 +64,10 @@ function NavIcon({ name, className, size = 16 }: { name: string; className?: str
   return <Icon size={size} className={className} aria-hidden />
 }
 
-export function Sidebar({ items, isOpen = false, onClose, user, collapsed = false, onToggleCollapsed }: SidebarProps) {
+export function Sidebar({ items, isOpen = false, onClose, user, collapsed = false }: SidebarProps) {
   const pathname = usePathname()
   const [hovering, setHovering] = useState(false)
-  const { items: allAppsItems, openAllApps } = useAllApps()
+  const { openAllApps } = useAllApps()
 
   // `collapsed` é a preferência fixada (persistida) pelo usuário. Em telas
   // grandes, passar o mouse por cima expande temporariamente por cima do
@@ -92,10 +92,10 @@ export function Sidebar({ items, isOpen = false, onClose, user, collapsed = fals
     >
       <div className="flex items-center border-b border-dark-800 shrink-0">
         <button
-          onClick={onToggleCollapsed}
+          onClick={openAllApps}
           className="hidden md:flex flex-1 items-center justify-center py-4 text-gray-500 hover:text-white transition-colors"
-          aria-label={collapsed ? 'Fixar menu aberto' : 'Recolher menu'}
-          title={collapsed ? 'Fixar menu aberto' : 'Recolher menu'}
+          aria-label="Pesquisar"
+          title="Pesquisar"
         >
           <Menu size={18} aria-hidden />
         </button>
@@ -109,21 +109,6 @@ export function Sidebar({ items, isOpen = false, onClose, user, collapsed = fals
           </svg>
         </button>
       </div>
-
-      {allAppsItems.length > 0 && (
-        <div className="px-3 pt-3 shrink-0">
-          <button
-            onClick={openAllApps}
-            title={!expanded ? 'Pesquisar' : undefined}
-            className={`flex items-center gap-3 px-3 py-2.5 w-full rounded-lg text-sm text-gray-400 bg-dark-800/50 hover:bg-dark-800 hover:text-white transition-colors ${
-              !expanded ? 'md:justify-center md:px-0' : ''
-            }`}
-          >
-            <Search size={18} aria-hidden className="shrink-0" />
-            <span className={!expanded ? 'md:hidden' : ''}>Pesquisar menus…</span>
-          </button>
-        </div>
-      )}
 
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto overflow-x-hidden">
         {items.map((item, idx) => {

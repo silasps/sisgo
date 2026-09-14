@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
-type Segment = { label: string; value: number; color: string }
+type Segment = { label: string; value: number; color: string; key?: string }
 
 function useCountUp(target: number, active: boolean, duration = 700): number {
   const [val, setVal] = useState(0)
@@ -22,9 +23,30 @@ function useCountUp(target: number, active: boolean, duration = 700): number {
   return val
 }
 
-export function AnimatedDonutChart({ segments, title }: { segments: Segment[]; title?: string }) {
+export function AnimatedDonutChart({ segments, title, filterParam, activeValue }: {
+  segments: Segment[]
+  title?: string
+  /** Nome do parâmetro de URL usado pro filtro (ex.: "categoria"). Se
+   * presente, cada fatia/legenda vira clicável e navega alterando esse
+   * parâmetro — clicar na fatia já ativa remove o filtro. */
+  filterParam?: string
+  /** Valor atualmente ativo desse parâmetro (pra destacar a fatia selecionada). */
+  activeValue?: string
+}) {
   const [visible, setVisible] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
+  function handleSegmentClick(seg: Segment) {
+    if (!filterParam || seg.value === 0) return
+    const key = seg.key ?? seg.label
+    const params = new URLSearchParams(searchParams.toString())
+    if (activeValue === key) params.delete(filterParam)
+    else params.set(filterParam, key)
+    router.push(params.toString() ? `${pathname}?${params.toString()}` : pathname)
+  }
 
   useEffect(() => {
     const el = ref.current
@@ -58,22 +80,29 @@ export function AnimatedDonutChart({ segments, title }: { segments: Segment[]; t
       <div className="shrink-0">
         <svg viewBox="0 0 136 136" className="w-28 h-28 sm:w-36 sm:h-36">
           <circle cx={cx} cy={cy} r={r} fill="none" stroke="#F3F4F6" strokeWidth={sw} />
-          {total > 0 && arcs.map(a => (
-            <circle
-              key={a.label}
-              cx={cx} cy={cy} r={r}
-              fill="none"
-              stroke={a.color}
-              strokeWidth={sw}
-              strokeDasharray={visible ? `${a.dl} ${C}` : `0 ${C}`}
-              strokeDashoffset={a.off}
-              strokeLinecap="butt"
-              transform={`rotate(-90 ${cx} ${cy})`}
-              style={{
-                transition: `stroke-dasharray 0.9s cubic-bezier(0.34,1.56,0.64,1) ${a.i * 0.1}s`,
-              }}
-            />
-          ))}
+          {total > 0 && arcs.map(a => {
+            const key = a.key ?? a.label
+            const dimmed = filterParam && activeValue && activeValue !== key
+            return (
+              <circle
+                key={a.label}
+                cx={cx} cy={cy} r={r}
+                fill="none"
+                stroke={a.color}
+                strokeWidth={sw}
+                strokeDasharray={visible ? `${a.dl} ${C}` : `0 ${C}`}
+                strokeDashoffset={a.off}
+                strokeLinecap="butt"
+                transform={`rotate(-90 ${cx} ${cy})`}
+                opacity={dimmed ? 0.3 : 1}
+                onClick={() => handleSegmentClick(a)}
+                style={{
+                  cursor: filterParam ? 'pointer' : undefined,
+                  transition: `stroke-dasharray 0.9s cubic-bezier(0.34,1.56,0.64,1) ${a.i * 0.1}s, opacity 0.2s ease`,
+                }}
+              />
+            )
+          })}
           <circle cx={cx} cy={cy} r={r - sw / 2 - 1} fill="white" />
           <text
             x={cx} y={cy - 5} textAnchor="middle"
@@ -95,23 +124,31 @@ export function AnimatedDonutChart({ segments, title }: { segments: Segment[]; t
       </div>
 
       <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 gap-x-4 sm:gap-x-6 gap-y-2 sm:gap-y-2.5 flex-1 w-full">
-        {segments.map((seg, i) => (
-          <div
-            key={seg.label}
-            className="flex items-center gap-2 min-w-0"
-            style={{
-              opacity: visible ? 1 : 0,
-              transform: visible ? 'translateY(0)' : 'translateY(8px)',
-              transition: `opacity 0.4s ease ${i * 0.04 + 0.4}s, transform 0.4s ease ${i * 0.04 + 0.4}s`,
-            }}
-          >
-            <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
-            <div className="min-w-0">
-              <p className="text-xs text-gray-500 truncate leading-tight">{seg.label}</p>
-              <p className="text-sm font-bold text-gray-900 leading-tight">{seg.value}</p>
-            </div>
-          </div>
-        ))}
+        {segments.map((seg, i) => {
+          const key = seg.key ?? seg.label
+          const clickable = Boolean(filterParam) && seg.value > 0
+          const dimmed = filterParam && activeValue && activeValue !== key
+          const Tag = clickable ? 'button' : 'div'
+          return (
+            <Tag
+              key={seg.label}
+              type={clickable ? 'button' : undefined}
+              onClick={clickable ? () => handleSegmentClick(seg) : undefined}
+              className={`flex items-center gap-2 min-w-0 text-left ${clickable ? 'cursor-pointer hover:opacity-80' : ''}`}
+              style={{
+                opacity: visible ? (dimmed ? 0.4 : 1) : 0,
+                transform: visible ? 'translateY(0)' : 'translateY(8px)',
+                transition: `opacity 0.2s ease, transform 0.4s ease ${i * 0.04 + 0.4}s`,
+              }}
+            >
+              <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
+              <div className="min-w-0">
+                <p className={`text-xs truncate leading-tight ${activeValue === key ? 'text-gray-800 font-semibold' : 'text-gray-500'}`}>{seg.label}</p>
+                <p className="text-sm font-bold text-gray-900 leading-tight">{seg.value}</p>
+              </div>
+            </Tag>
+          )
+        })}
       </div>
     </div>
   )
