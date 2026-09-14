@@ -52,18 +52,37 @@ a tela. Estudo completo, com fontes citadas e aplicação tela a tela:
 fluxo novo ou revisão de UX deve ser avaliada contra estes princípios antes
 de ser dada como pronta:**
 
-1. **Feedback tem que corresponder a trabalho de verdade.** Nunca mostrar
-   sinal de carregamento/progresso sem uma ação real acontecendo por trás —
-   é a origem deste próprio estudo (bug real: o `nextjs-toploader` disparava
-   a barra verde de navegação ao clicar num botão de excluir dentro de um
-   `<Link>` de card, sem nenhuma navegação de verdade ocorrendo — corrigido
-   tirando a ação da árvore DOM do `<Link>`, nunca aninhando elemento
-   clicável independente dentro dele). Toda ação de escrita usa
-   `usePendingAction` (`src/hooks/usePendingAction.ts`) ou `SubmitButton`
+1. **Feedback tem que corresponder a trabalho de verdade — e o oposto é
+   igualmente proibido: nenhuma ação de escrita pode ficar muda.** Nunca
+   mostrar sinal de carregamento/progresso sem uma ação real acontecendo por
+   trás (bug real: o `nextjs-toploader` disparava a barra verde de
+   navegação ao clicar num botão de excluir dentro de um `<Link>` de card,
+   sem nenhuma navegação de verdade ocorrendo — corrigido tirando a ação da
+   árvore DOM do `<Link>`, nunca aninhando elemento clicável independente
+   dentro dele). E nunca deixar um clique sem *nenhum* feedback enquanto o
+   servidor processa (outro bug real, mesma origem: um botão com
+   `disabled={pending}` só via `opacity-50` — sem trocar o texto — passava a
+   sensação de tela travada, porque o `disabled`/dimming sozinho é sutil
+   demais pra registrar como "algo está acontecendo"). Toda ação de escrita
+   usa `usePendingAction` (`src/hooks/usePendingAction.ts`) ou `SubmitButton`
    (`src/components/ui/SubmitButton.tsx`, via `useFormStatus`) pra
    reconhecer o clique instantaneamente e manter o estado de "salvando…" até
    o servidor responder de verdade — nunca fechar modal/navegar antes da
-   Server Action terminar.
+   Server Action terminar. **`SubmitButton` já troca o texto do botão
+   sozinho (`pendingText`, default `"Salvando…"`) — prefira ele pra qualquer
+   botão dentro de `<form action={serverAction}>`.** Quando o botão não é um
+   submit de formulário (ação disparada via `onClick` + `usePendingAction`
+   direto), a troca de texto NÃO é automática — o call site precisa fazer
+   `{pending ? 'Verbo-ando…' : 'Texto normal'}` manualmente; `disabled`/
+   `opacity-50` sozinhos não contam como feedback suficiente pra este
+   princípio. **Buscas independentes não esperam uma pela outra**: se uma
+   tela/modal precisa de mais de uma consulta ao banco pra montar (ex.: KPIs
+   + lista filtrada), cada uma dispara e atualiza seu próprio pedaço da UI
+   assim que volta — nunca um único `Promise.all` que trava a tela inteira
+   atrás da consulta mais lenta das duas (visto em `AllocationScreen`,
+   `pendentes/ServiceRequestsPanel.tsx`: KPIs da hospitalidade e lista de
+   quartos disponíveis são duas buscas separadas, cada uma com seu próprio
+   estado de carregamento).
 2. **Reduzir fricção é reduzir passos, não adicionar recurso.** Antes de
    adicionar um botão/confirmação/etapa nova, perguntar se um passo
    existente pode sumir. Aplicado: unificação de "marcar em análise" +

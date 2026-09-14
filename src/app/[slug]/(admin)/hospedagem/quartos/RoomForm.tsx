@@ -1,8 +1,11 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
+import { CheckCircle2 } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { SubmitButton } from '@/components/ui/SubmitButton'
+import { rememberValue, recallValue } from './lastValues'
 
 const ROOM_TYPES = [
   { value: 'quarto', label: 'Quarto' },
@@ -26,7 +29,7 @@ const STATUS_OPTIONS = [
 
 const DESTINATION_OPTIONS = [
   { value: 'visita', label: 'Visitantes' },
-  { value: 'aluno', label: 'Alunos (ETED/EMF)' },
+  { value: 'aluno', label: 'Alunos' },
   { value: 'obreiro', label: 'Obreiros' },
 ] as const
 
@@ -34,12 +37,12 @@ const MODE_OPTIONS = [
   {
     value: 'quarto',
     label: 'Quarto inteiro',
-    description: 'O quarto é alocado de uma vez só, pra uma pessoa ou grupo — não tem cama controlada separadamente. Use pra suíte, quarto de casal, ou quarto reservado pra uma família/grupo inteiro.',
+    description: 'Sugestão padrão: o quarto é oferecido de uma vez só, pra uma pessoa, casal ou família. Se o quarto estiver 100% livre, ainda dá pra alocar cama a cama se precisar.',
   },
   {
     value: 'cama',
     label: 'Cama individual',
-    description: 'Cada cama do quarto é cadastrada e alocada separadamente — pessoas diferentes podem dividir o mesmo quarto, cada uma na sua cama. Use pra dormitório/alojamento coletivo.',
+    description: 'Sugestão padrão: cada cama do quarto é oferecida separadamente, pra pessoas diferentes dividirem o mesmo quarto. Se o quarto estiver 100% livre, também dá pra alocar ele inteiro pra uma família ou grupo.',
   },
 ] as const
 
@@ -74,9 +77,13 @@ type Props = {
 
 export function RoomForm({ createAction, editAction, floors, room, defaultFloorId, trigger }: Props) {
   const [open, setOpen] = useState(false)
+  const [justCreated, setJustCreated] = useState(false)
   const isEdit = !!room
-  const [floorId, setFloorId] = useState(room?.floorId ?? defaultFloorId ?? floors[0]?.id ?? '')
-  const [mode, setMode] = useState(room?.allocation_mode ?? 'quarto')
+  const initialFloorId = room?.floorId ?? defaultFloorId ?? floors[0]?.id ?? ''
+  const [floorId, setFloorId] = useState(initialFloorId)
+  const [mode, setMode] = useState(room?.allocation_mode ?? recallValue('room:allocation_mode', 'cama'))
+  const [resetTick, setResetTick] = useState(0)
+  const formRef = useRef<HTMLFormElement>(null)
 
   const floorsByBlock = useMemo(() => {
     const map = new Map<string, FloorOption[]>()
@@ -87,10 +94,42 @@ export function RoomForm({ createAction, editAction, floors, room, defaultFloorI
   // Andar carrega um público/gênero padrão — só pré-preenche o quarto NOVO
   // (troca o `key` do select pra remontar com o novo default quando o andar
   // muda); editando um quarto existente, o valor de sempre é o do próprio
-  // quarto, o andar não sobrescreve nada.
+  // quarto, o andar não sobrescreve nada. Se um quarto foi criado há menos de
+  // 5 min, o tipo/gênero/destino dele "vence" o padrão do andar — sinal de
+  // que a pessoa tá cadastrando vários quartos parecidos em sequência.
   const selectedFloor = floors.find(f => f.id === floorId)
-  const destinationDefault = isEdit ? (room?.destination ?? 'visita') : (selectedFloor?.destination ?? 'visita')
-  const genderDefault = isEdit ? (room?.gender_constraint ?? '') : (selectedFloor?.genderConstraint ?? '')
+  const typeDefault = isEdit ? (room?.type ?? 'quarto') : recallValue('room:type', 'quarto')
+  const destinationDefault = isEdit ? (room?.destination ?? 'visita') : recallValue('room:destination', selectedFloor?.destination ?? 'visita')
+  const genderDefault = isEdit ? (room?.gender_constraint ?? '') : recallValue('room:gender_constraint', selectedFloor?.genderConstraint ?? '')
+
+  async function submit(formData: FormData) {
+    try {
+      await (isEdit ? editAction : createAction)(formData)
+      if (isEdit) {
+        toast.success('Quarto atualizado.')
+        setOpen(false)
+      } else {
+        // Fica no mesmo andar e limpa só o nome/notas — tipo/gênero/destino/
+        // modo ficam guardados por 5 min (lastValues.ts), pensado pra
+        // cadastrar vários quartos parecidos em sequência. Modal continua
+        // aberto, então a confirmação é um aviso dentro dele (o toast fica
+        // atrás do blur do backdrop nesse caso).
+        rememberValue('room:type', String(formData.get('type') ?? ''))
+        rememberValue('room:gender_constraint', String(formData.get('gender_constraint') ?? ''))
+        rememberValue('room:destination', String(formData.get('destination') ?? ''))
+        rememberValue('room:allocation_mode', String(formData.get('allocation_mode') ?? ''))
+        formRef.current?.reset()
+        setFloorId(initialFloorId)
+        setMode(recallValue('room:allocation_mode', 'cama'))
+        setResetTick(t => t + 1)
+        formRef.current?.querySelector<HTMLInputElement>('input[name="name"]')?.focus()
+        setJustCreated(true)
+        setTimeout(() => setJustCreated(false), 2500)
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Não foi possível salvar o quarto.')
+    }
+  }
 
   return (
     <>
@@ -112,7 +151,8 @@ export function RoomForm({ createAction, editAction, floors, room, defaultFloorI
         hideFooter
       >
         <form
-          action={isEdit ? editAction : createAction}
+          ref={formRef}
+          action={submit}
           className="p-5 space-y-4"
         >
           {isEdit && <input type="hidden" name="id" value={room.id} />}
@@ -122,6 +162,7 @@ export function RoomForm({ createAction, editAction, floors, room, defaultFloorI
             <input
               name="name"
               required
+              autoFocus
               defaultValue={room?.name ?? ''}
               placeholder="Ex: Quarto 101, Alojamento A"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
@@ -152,9 +193,10 @@ export function RoomForm({ createAction, editAction, floors, room, defaultFloorI
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Tipo *</label>
               <select
+                key={isEdit ? 'edit-type' : `type-${resetTick}`}
                 name="type"
                 required
-                defaultValue={room?.type ?? 'quarto'}
+                defaultValue={typeDefault}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
               >
                 {ROOM_TYPES.map(t => (
@@ -165,7 +207,7 @@ export function RoomForm({ createAction, editAction, floors, room, defaultFloorI
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Gênero</label>
               <select
-                key={isEdit ? 'edit-gender' : `gender-${floorId}`}
+                key={isEdit ? 'edit-gender' : `gender-${floorId}-${resetTick}`}
                 name="gender_constraint"
                 defaultValue={genderDefault}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
@@ -180,7 +222,7 @@ export function RoomForm({ createAction, editAction, floors, room, defaultFloorI
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Destinado a *</label>
             <select
-              key={isEdit ? 'edit-destination' : `destination-${floorId}`}
+              key={isEdit ? 'edit-destination' : `destination-${floorId}-${resetTick}`}
               name="destination"
               required
               defaultValue={destinationDefault}
@@ -193,7 +235,7 @@ export function RoomForm({ createAction, editAction, floors, room, defaultFloorI
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Modo de alocação *</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Modo de alocação (padrão sugerido) *</label>
             <select
               name="allocation_mode"
               required
@@ -236,6 +278,11 @@ export function RoomForm({ createAction, editAction, floors, room, defaultFloorI
             />
           </div>
 
+          {justCreated && (
+            <p className="flex items-center gap-1.5 text-sm text-green-600 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+              <CheckCircle2 size={16} /> Quarto criado — pode cadastrar o próximo.
+            </p>
+          )}
           <SubmitButton disabled={floors.length === 0} pendingText={isEdit ? 'Salvando…' : 'Criando…'}>
             {isEdit ? 'Salvar Alterações' : 'Criar Quarto'}
           </SubmitButton>

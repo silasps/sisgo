@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { SubmitButton } from '@/components/ui/SubmitButton'
@@ -53,6 +54,30 @@ type Props = {
 export function BedManager({ beds, addAction, editAction, removeAction }: Props) {
   const [showAdd, setShowAdd] = useState(false)
   const [editBed, setEditBed] = useState<BedData | null>(null)
+  const addFormRef = useRef<HTMLFormElement>(null)
+
+  // Sem redirect no server action — limpa o formulário e deixa o modal
+  // aberto, pra cadastrar várias camas do mesmo quarto em sequência sem
+  // reabrir o modal a cada uma.
+  async function submitAdd(formData: FormData) {
+    try {
+      await addAction(formData)
+      toast.success('Cama adicionada.')
+      addFormRef.current?.reset()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Não foi possível adicionar a cama.')
+    }
+  }
+
+  async function submitEdit(formData: FormData) {
+    try {
+      await editAction(formData)
+      toast.success('Cama atualizada.')
+      setEditBed(null)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Não foi possível salvar a cama.')
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -105,7 +130,7 @@ export function BedManager({ beds, addAction, editAction, removeAction }: Props)
 
       {/* Add Bed Modal */}
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Adicionar Cama" hideFooter>
-        <form action={addAction} className="p-5 space-y-4">
+        <form ref={addFormRef} action={submitAdd} className="p-5 space-y-4">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Nome/Rótulo *</label>
             <input
@@ -142,7 +167,7 @@ export function BedManager({ beds, addAction, editAction, removeAction }: Props)
       {/* Edit Bed Modal */}
       {editBed && (
         <Modal open onClose={() => setEditBed(null)} title={`Editar: ${editBed.label}`} hideFooter>
-          <form action={editAction} className="p-5 space-y-4">
+          <form action={submitEdit} className="p-5 space-y-4">
             <input type="hidden" name="id" value={editBed.id} />
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Nome/Rótulo *</label>
@@ -200,6 +225,7 @@ export function BedManager({ beds, addAction, editAction, removeAction }: Props)
                   const fd = new FormData()
                   fd.set('id', editBed.id)
                   await removeAction(fd)
+                  toast.success('Cama removida.')
                   setEditBed(null)
                 }}
               >

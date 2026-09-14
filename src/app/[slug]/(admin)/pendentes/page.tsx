@@ -9,6 +9,7 @@ import { confirmMealPayment, rejectMealPayment, requestMealPaymentProof } from '
 import { getRolePreview } from '@/lib/role-preview'
 import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
 import { ServiceRequestsPanel } from './ServiceRequestsPanel'
+import { HOSPEDAGEM_TYPES, extractFamilyInfo, extractGuestGender, guestTypeForServiceRequest, type FamilyInfo } from '@/lib/hospedagem'
 import { PendentesCardList } from './PendentesCardList'
 import { SearchBar } from '@/components/ui/SearchBar'
 import { Suspense } from 'react'
@@ -332,6 +333,45 @@ export default async function PendentesPage({ params, searchParams }: Props) {
     if (!isManagement) q = q.in('target_department', myDepts.length > 0 ? myDepts : ['hospitalidade'])
     const { data } = await q
     serviceRequests = (data ?? []) as unknown as ServiceReqRaw[]
+  }
+
+  // ── 5b. Família (cônjuge/filhos) vindo junto, só pras pendências de
+  // hospedagem — busca form_data em lote, não uma query por pendência ────────
+  const hospedagemReqs = serviceRequests.filter(r => HOSPEDAGEM_TYPES.includes(r.request_type))
+  const staffAppIds  = [...new Set(hospedagemReqs.map(r => r.staff_application_id).filter((id): id is string => !!id))]
+  const schoolAppIds = [...new Set(hospedagemReqs.map(r => r.school_application_id).filter((id): id is string => !!id))]
+  const formDataByStaffApp  = new Map<string, Record<string, unknown>>()
+  const formDataBySchoolApp = new Map<string, Record<string, unknown>>()
+  if (staffAppIds.length > 0 || schoolAppIds.length > 0) {
+    const sbAdmin = createAdminClient()
+    const [{ data: staffApps }, { data: schoolApps }] = await Promise.all([
+      staffAppIds.length > 0
+        ? sbAdmin.from('staff_applications').select('id, form_data').in('id', staffAppIds)
+        : Promise.resolve({ data: [] }),
+      schoolAppIds.length > 0
+        ? sbAdmin.from('school_applications').select('id, form_data').in('id', schoolAppIds)
+        : Promise.resolve({ data: [] }),
+    ])
+    for (const a of (staffApps ?? []) as Array<{ id: string; form_data: Record<string, unknown> | null }>) {
+      formDataByStaffApp.set(a.id, a.form_data ?? {})
+    }
+    for (const a of (schoolApps ?? []) as Array<{ id: string; form_data: Record<string, unknown> | null }>) {
+      formDataBySchoolApp.set(a.id, a.form_data ?? {})
+    }
+  }
+  const familyInfoByRequest = new Map<string, FamilyInfo>()
+  const guestGenderByRequest = new Map<string, 'masculino' | 'feminino' | null>()
+  for (const r of hospedagemReqs) {
+    const guestType = guestTypeForServiceRequest(r.request_type, r.school_application_id)
+    const formData = r.staff_application_id
+      ? formDataByStaffApp.get(r.staff_application_id)
+      : r.school_application_id
+        ? formDataBySchoolApp.get(r.school_application_id)
+        : null
+    if (formData) {
+      familyInfoByRequest.set(r.id, extractFamilyInfo(formData, guestType))
+      guestGenderByRequest.set(r.id, extractGuestGender(formData, guestType))
+    }
   }
 
   // ── 6. Visão lider_ministerio: suas solicitações abertas ────────────────────
@@ -731,6 +771,17 @@ export default async function PendentesPage({ params, searchParams }: Props) {
     if (!user) return
     const { resolverHospedagemComAlocacao } = await import('../hospedagem/actions')
     await resolverHospedagemComAlocacao({ ...params, organizationId: orgId, reviewedBy: user.id })
+    redirect(`/${slug}/pendentes`)
+  }
+
+  const handleResolverHospedagemComAlocacaoQuarto = async (params: {
+    requestId: string; roomId: string
+    guestName: string; guestType: 'obreiro' | 'aluno'; checkIn: string; checkOut: string
+  }) => {
+    'use server'
+    if (!user) return
+    const { resolverHospedagemComAlocacaoQuarto } = await import('../hospedagem/actions')
+    await resolverHospedagemComAlocacaoQuarto({ ...params, organizationId: orgId, reviewedBy: user.id })
     redirect(`/${slug}/pendentes`)
   }
 
@@ -1155,9 +1206,13 @@ export default async function PendentesPage({ params, searchParams }: Props) {
                   requesterEmail: requesterMap.get(sr.requester_id)?.email ?? '—',
                   requesterPhone: requesterMap.get(sr.requester_id)?.phone ?? null,
                   diasAberto: daysAgo(sr.created_at),
+                  familyInfo: familyInfoByRequest.get(sr.id) ?? null,
+                  guestGender: guestGenderByRequest.get(sr.id) ?? null,
                 }))}
                 handleStatusUpdate={handleServiceStatusUpdate}
                 resolverComAlocacao={handleResolverHospedagemComAlocacao}
+                resolverComAlocacaoQuarto={handleResolverHospedagemComAlocacaoQuarto}
+                slug={slug}
                 markEmAnalise={handleMarkEmAnalise}
                 organizationId={orgId}
               />
@@ -1314,9 +1369,13 @@ export default async function PendentesPage({ params, searchParams }: Props) {
                   requesterEmail: requesterMap.get(sr.requester_id)?.email ?? '—',
                   requesterPhone: requesterMap.get(sr.requester_id)?.phone ?? null,
                   diasAberto: daysAgo(sr.created_at),
+                  familyInfo: familyInfoByRequest.get(sr.id) ?? null,
+                  guestGender: guestGenderByRequest.get(sr.id) ?? null,
                 }))}
                 handleStatusUpdate={handleServiceStatusUpdate}
                 resolverComAlocacao={handleResolverHospedagemComAlocacao}
+                resolverComAlocacaoQuarto={handleResolverHospedagemComAlocacaoQuarto}
+                slug={slug}
                 markEmAnalise={handleMarkEmAnalise}
                 organizationId={orgId}
               />

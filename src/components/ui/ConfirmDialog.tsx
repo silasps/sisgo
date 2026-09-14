@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertTriangle } from 'lucide-react'
+import { toast } from 'sonner'
 import { useSidebarLeftClass } from '@/components/layout/account-context'
 
 type Props = {
@@ -32,6 +33,8 @@ export function ConfirmDialog({
     setLoading(true)
     try {
       await onConfirm()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Não foi possível concluir a ação.')
     } finally {
       setLoading(false)
       setOpen(false)
@@ -53,7 +56,13 @@ export function ConfirmDialog({
       {open && createPortal(
         <div
           className={`fixed inset-0 ${sidebarLeftClass} z-50 flex items-center justify-center bg-black/50 p-4`}
-          onClick={e => { if (e.target === e.currentTarget && !loading) setOpen(false) }}
+          onClick={e => {
+            // stopPropagation sempre — sem isso, clicar em qualquer coisa
+            // aqui dentro borbulha via portal até o card clicável por trás
+            // (bloco/andar/quarto), disparando a navegação dele.
+            e.stopPropagation()
+            if (e.target === e.currentTarget && !loading) setOpen(false)
+          }}
         >
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
             <div className="p-6 space-y-4">

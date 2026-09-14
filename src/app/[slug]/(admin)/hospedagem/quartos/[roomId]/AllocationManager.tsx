@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { Modal } from '@/components/ui/Modal'
 import { SubmitButton } from '@/components/ui/SubmitButton'
 
@@ -62,6 +63,16 @@ export function AllocationManager({
   const [showAdd, setShowAdd] = useState(false)
   const active  = allocations.filter(a => a.status !== 'checkout' && a.status !== 'cancelada')
   const history = allocations.filter(a => a.status === 'checkout' || a.status === 'cancelada')
+
+  async function submitCreate(formData: FormData) {
+    try {
+      await createAction(formData)
+      toast.success('Hóspede alocado.')
+      setShowAdd(false)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Não foi possível alocar o hóspede.')
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -183,7 +194,7 @@ export function AllocationManager({
 
       {/* New Allocation Modal */}
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Nova Alocação" hideFooter>
-        <form action={createAction} className="p-5 space-y-4">
+        <form action={submitCreate} className="p-5 space-y-4">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Nome do hóspede *</label>
             <input

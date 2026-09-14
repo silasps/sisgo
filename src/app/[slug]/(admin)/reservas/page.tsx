@@ -924,19 +924,18 @@ export default async function ReservasPage({ params, searchParams }: Props) {
                           <select name="room_choice" defaultValue=""
                             className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 bg-white">
                             <option value="">Não atribuir quarto agora</option>
-                            {(availableRoomsByReservation.get(r.id) ?? []).map(room => (
-                              room.allocationMode === 'quarto'
-                                ? (
-                                  <option key={room.roomId} value={`quarto:${room.roomId}`}>
-                                    {room.roomName} (quarto inteiro)
-                                  </option>
-                                )
-                                : room.availableBeds.map(bed => (
-                                  <option key={bed.id} value={`cama:${room.roomId}:${bed.id}`}>
-                                    {room.roomName} — {bed.label}
-                                  </option>
-                                ))
-                            ))}
+                            {(availableRoomsByReservation.get(r.id) ?? []).flatMap(room => [
+                              ...(room.wholeRoomAvailable ? [
+                                <option key={`quarto-${room.roomId}`} value={`quarto:${room.roomId}`}>
+                                  {room.roomName} (quarto inteiro)
+                                </option>,
+                              ] : []),
+                              ...room.availableBeds.map(bed => (
+                                <option key={bed.id} value={`cama:${room.roomId}:${bed.id}`}>
+                                  {room.roomName} — {bed.label}
+                                </option>
+                              )),
+                            ])}
                           </select>
                         )}
                         <input name="final_cost" type="number" step="0.01" placeholder="Custo R$ (opcional)"
