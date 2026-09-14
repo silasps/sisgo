@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { LayoutGrid, Search, X } from 'lucide-react'
+import { Search, X } from 'lucide-react'
 import { useAllApps, type NavItem } from './all-apps-context'
 import { useAccount } from './account-context'
 import { ICON_MAP } from './Sidebar'
@@ -67,25 +67,6 @@ function matchesItem(item: { label: string; icon: string }, query: string) {
   if (matchesLabel(item.label, query)) return true
   const keywords = ICON_KEYWORDS[item.icon]
   return keywords ? keywords.some(k => matchesLabel(k, query)) : false
-}
-
-/** Botão de gatilho — usado no Header. O painel em si mora em AllAppsPanel,
- * montado uma vez pelo AppShell, pra funcionar mesmo em páginas sem Header
- * (ex.: formulários públicos sem layout próprio). */
-export function AllAppsMenu() {
-  const { items, openAllApps } = useAllApps()
-
-  if (items.length === 0) return null
-
-  return (
-    <button
-      onClick={openAllApps}
-      className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-white/10 hover:text-white transition-colors shrink-0"
-      aria-label="Ver tudo"
-    >
-      <LayoutGrid size={18} />
-    </button>
-  )
 }
 
 /** O painel de fato (busca + grid). Sempre montado pelo AppShell — reage ao

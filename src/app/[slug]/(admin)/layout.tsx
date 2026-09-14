@@ -572,7 +572,7 @@ export default async function SlugLayout({ children, params }: Props) {
   // ── Menu de conta: modo Pessoal x Administração + troca de base ──────────
   const { universal, admin: adminNavItems, personal: personalNavItems } = splitNavByMode(navItems)
   const canSwitchMode = adminNavItems.length > 0
-  const navMode = canSwitchMode ? await getNavMode() : 'pessoal'
+  const navMode = canSwitchMode ? await getNavMode(isManagementUser ? 'administracao' : 'pessoal') : 'pessoal'
   const sidebarItems: NavItem[] = navMode === 'administracao'
     ? [...universal, ...sectionize(adminNavItems)]
     : [...universal, ...personalNavItems]
@@ -632,7 +632,7 @@ export default async function SlugLayout({ children, params }: Props) {
         {children}
       </AppShell>
       <FeedbackButton />
-      <Toaster position="top-right" richColors closeButton />
+      <Toaster position="top-right" richColors closeButton style={{ zIndex: 9999 }} />
       <Suspense>
         <FlashToast />
       </Suspense>

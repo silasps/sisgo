@@ -1053,10 +1053,16 @@ function StatCard({ label, value, icon: Icon, href, color }: {
 }) {
   const c = colorMap[color]
   return (
-    <Link href={href} className={`${c.bg} rounded-xl p-4 flex flex-col gap-2 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm`}>
-      <Icon className={`size-6 ${c.icon}`} />
-      <p className={`text-3xl font-bold leading-none ${c.num}`}><AnimatedNumber value={value} /></p>
-      <p className={`text-xs font-semibold uppercase tracking-wide ${c.label}`}>{label}</p>
+    <Link
+      href={href}
+      title={label}
+      className={`${c.bg} rounded-xl p-2.5 flex items-center gap-2.5 min-w-0 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm`}
+    >
+      <Icon className={`size-5 shrink-0 ${c.icon}`} />
+      <div className="min-w-0">
+        <p className={`text-xl font-bold leading-none ${c.num}`}><AnimatedNumber value={value} /></p>
+        <p className={`text-[11px] font-semibold uppercase tracking-wide truncate ${c.label}`}>{label}</p>
+      </div>
     </Link>
   )
 }

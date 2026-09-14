@@ -1,9 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Menu } from 'lucide-react'
 import { AccountMenu } from './AccountMenu'
-import { AllAppsMenu } from './AllAppsMenu'
+import { useAllApps } from './all-apps-context'
+import { useMobileNav } from './nav-context'
 import { SisgoLogo } from './Logo'
 import { useBrand } from './account-context'
 
@@ -19,6 +20,7 @@ export function Header({ title, backHref, actions }: HeaderProps) {
   return (
     <header className="h-16 shrink-0 border-b border-dark-800 bg-dark-950 flex items-center justify-between px-4 md:px-6 sticky top-0 z-10">
       <div className="flex items-center gap-3 min-w-0">
+        <MenuButton />
         <span className="flex shrink-0 items-center h-8">
           {logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element -- logo tem proporção variável por organização; largura livre preserva o aspecto
@@ -48,11 +50,37 @@ export function Header({ title, backHref, actions }: HeaderProps) {
           </div>
         )}
         <div className="flex items-center gap-2 shrink-0">
-          <AllAppsMenu />
           <AccountMenu />
         </div>
       </div>
     </header>
+  )
+}
+
+/** Botão único de navegação, antes da logo. Em telas pequenas (sem a barra
+ * lateral fixa) abre o menu deslizante; em telas grandes a barra lateral já
+ * fica visível e se expande sozinha ao passar o mouse, então o clique aqui
+ * abre a busca em tudo (mesmo painel do "Pesquisar menus…" da sidebar). */
+function MenuButton() {
+  const { items, openAllApps } = useAllApps()
+  const { openNav } = useMobileNav()
+
+  if (items.length === 0) return null
+
+  function handleClick() {
+    const isDesktop = typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
+    if (isDesktop) openAllApps()
+    else openNav()
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-white/10 hover:text-white transition-colors shrink-0"
+      aria-label="Menu"
+    >
+      <Menu size={18} />
+    </button>
   )
 }
 

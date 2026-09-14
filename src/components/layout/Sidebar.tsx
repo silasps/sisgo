@@ -82,13 +82,12 @@ export function Sidebar({ items, isOpen = false, onClose, user, collapsed = fals
       onMouseLeave={() => setHovering(false)}
       className={[
         'fixed inset-y-0 z-30 w-64 bg-dark-950 flex flex-col',
-        'right-0 border-l border-dark-800',
-        'md:left-0 md:right-auto md:border-l-0 md:border-r md:border-dark-800',
+        'left-0 border-r border-dark-800',
         'transition-[transform,width] duration-200 ease-in-out',
         expanded ? 'md:w-60' : 'md:w-16',
         collapsed && hovering ? 'md:shadow-2xl md:shadow-black/50' : '',
         'md:translate-x-0',
-        isOpen ? 'translate-x-0' : 'translate-x-full',
+        isOpen ? 'translate-x-0' : '-translate-x-full',
       ].join(' ')}
     >
       <div className="flex items-center border-b border-dark-800 shrink-0">
