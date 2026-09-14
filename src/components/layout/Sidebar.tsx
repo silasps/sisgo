@@ -9,7 +9,7 @@ import {
   ChefHat, Package, Boxes, DollarSign, Receipt, Settings, LogOut,
   UserCheck, CalendarDays, Wrench, Building2, Eye, Code2, Inbox, CookingPot,
   Hotel, DoorOpen, WashingMachine, Shirt, IdCard, Megaphone,
-  Menu,
+  Menu, Search,
   type LucideIcon,
 } from 'lucide-react'
 import { useAllApps } from './all-apps-context'
@@ -97,7 +97,7 @@ export function Sidebar({ items, isOpen = false, onClose, user, collapsed = fals
           aria-label="Pesquisar"
           title="Pesquisar"
         >
-          <Menu size={18} aria-hidden />
+          {expanded ? <Search size={18} aria-hidden /> : <Menu size={18} aria-hidden />}
         </button>
         <button
           onClick={onClose}
