@@ -32,6 +32,10 @@ const SECTIONS: FormSection[] = [
       { label: 'Conversou com alguém da escola?', key: 'conversou_equipe' },
       { label: 'Com quem conversou', key: 'conversou_com_quem' },
       { label: 'Motivação', key: 'motivacao', type: 'textarea' },
+      { label: 'Data de chegada', key: 'data_chegada' },
+      { label: 'Horário de chegada', key: 'horario_chegada' },
+      { label: 'Data de saída', key: 'data_saida' },
+      { label: 'Horário de saída', key: 'horario_saida' },
     ],
   },
   {
@@ -290,7 +294,7 @@ function FieldRow({ label, value, type }: { label: string; value: unknown; type?
     const rows = parseChildren(value)
     if (!rows.length) return null
     return (
-      <div className="py-2.5 border-b border-gray-50 last:border-0">
+      <div className="col-span-full py-2.5 border-b border-gray-50 last:border-0">
         <p className="text-xs font-medium text-gray-400 mb-0.5">{label} <span className="text-indigo-700 font-semibold">({rows.length})</span></p>
         <div className="text-sm text-gray-800 space-y-0.5">
           {rows.map((r, i) => {
@@ -306,7 +310,7 @@ function FieldRow({ label, value, type }: { label: string; value: unknown; type?
   const str = typeof value === 'string' ? value.trim() : ''
   if (!str) return null
   return (
-    <div className="py-2.5 border-b border-gray-50 last:border-0">
+    <div className={`py-2.5 border-b border-gray-50 last:border-0 ${type === 'textarea' ? 'col-span-full' : ''}`}>
       <p className="text-xs font-medium text-gray-400 mb-0.5">{label}</p>
       {type === 'textarea'
         ? <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{str}</p>
@@ -486,7 +490,7 @@ export default async function FormularioViewerPage({ params }: Props) {
         )}
       </div>
 
-      <main className="p-4 md:p-6 space-y-5 max-w-4xl mx-auto">
+      <main className="p-4 md:p-6 space-y-5 max-w-4xl xl:max-w-6xl mx-auto">
 
         {/* Info do candidato */}
         <div className="bg-indigo-600 text-white rounded-2xl p-5">
@@ -597,7 +601,7 @@ export default async function FormularioViewerPage({ params }: Props) {
 
               return (
                 <SectionCard key={section.title} title={section.title}>
-                  <div className="mt-1">
+                  <div className="mt-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6">
                     {visibleFields.map(f => (
                       <FieldRow key={f.key} label={f.label} value={data[f.key]} type={f.type} />
                     ))}

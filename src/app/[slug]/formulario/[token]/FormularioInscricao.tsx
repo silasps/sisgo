@@ -226,10 +226,10 @@ function S4Escola({ schoolName, className, data, orgName }: { schoolName: string
             defaultValue={data?.motivacao} required rows={4} />
         </div></H>
         <H id="s4.data_chegada">
-          <Field label={d.s4.data_chegada} name="data_chegada" type="date" defaultValue={data?.data_chegada} />
+          <Field label={d.s4.data_chegada} name="data_chegada" type="date" defaultValue={data?.data_chegada} required />
         </H>
         <H id="s4.horario_chegada">
-          <Field label={d.s4.horario_chegada} name="horario_chegada" type="time" defaultValue={data?.horario_chegada} />
+          <Field label={d.s4.horario_chegada} name="horario_chegada" type="time" defaultValue={data?.horario_chegada} required />
         </H>
         <H id="s4.data_chegada">
           <p className="sm:col-span-2 text-xs text-gray-400 -mt-2">{d.s4.data_chegada_hint}</p>
