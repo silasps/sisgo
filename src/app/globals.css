@@ -22,7 +22,12 @@
     padding-right: env(safe-area-inset-right);
   }
   .page-transition {
-    animation: page-enter 220ms ease-out both;
+    /* Sem `forwards`/`both`: o `transform` do último frame não pode ficar
+       aplicado pra sempre — isso torna este wrapper (que envolve TODA
+       página) o containing block dos elementos `fixed` dentro dele (ex.:
+       a sidebar), corrompendo o empilhamento (z-index) contra qualquer
+       conteúdo estático concorrente (ex.: SuperAdminContextBar). */
+    animation: page-enter 220ms ease-out;
   }
   /* Offset para nav fixa nas âncoras */
   [id] {

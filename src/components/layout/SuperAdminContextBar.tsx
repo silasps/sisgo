@@ -17,7 +17,7 @@ export function SuperAdminContextBar({ mode, slug, baseName, preview, schools = 
     const dashboardPath = `/${slug}/dashboard`
 
     return (
-      <div className="flex items-center gap-3 px-4 py-1.5 bg-gray-900 text-white text-xs shrink-0 z-50">
+      <div className="flex items-center gap-3 px-4 py-1.5 bg-gray-900 text-white text-xs shrink-0">
         <Link
           href="/superadmin"
           className="flex items-center gap-1 text-gray-400 hover:text-white transition-colors font-medium"
@@ -57,7 +57,7 @@ export function SuperAdminContextBar({ mode, slug, baseName, preview, schools = 
   }
 
   return (
-    <div className="flex items-center gap-3 px-4 py-2 bg-gray-900 text-white text-xs z-50">
+    <div className="flex items-center gap-3 px-4 py-2 bg-gray-900 text-white text-xs">
       <span className="text-gray-400">Visualizando página pública</span>
       <Link
         href={`/${slug}/pessoas`}

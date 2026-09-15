@@ -44,6 +44,7 @@ export default async function BaseDashboard({ params }: Props) {
   const deptAssignments = (org?.department_assignments as Record<string, string> | null)
     ?? { hospitalidade: 'hospitalidade', secretaria: 'secretaria' }
   const today = new Date().toISOString()
+  const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
   // ── Discover current user role ──────────────────────────────
   const { data: { user } } = await supabase.auth.getUser()
@@ -807,7 +808,6 @@ export default async function BaseDashboard({ params }: Props) {
   const despesas = curMonthLanc.filter(l => l.type === 'expense').reduce((s, l) => s + (l.amount ?? 0), 0)
   const saldo = receitas - despesas
   const temFinanceiro = lancamentos.length > 0
-  const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
   // Dados mensais para o gráfico de barras (últimos 6 meses)
   const MONTH_NAMES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
