@@ -93,11 +93,11 @@ export function Sidebar({ items, isOpen = false, onClose, user, collapsed = fals
       <div className="flex items-center border-b border-dark-800 shrink-0">
         <button
           onClick={openAllApps}
-          className="hidden md:flex flex-1 items-center justify-center py-4 text-gray-500 hover:text-white transition-colors"
+          className="flex flex-1 items-center justify-center py-4 text-gray-500 hover:text-white transition-colors"
           aria-label="Pesquisar"
           title="Pesquisar"
         >
-          {expanded ? <Search size={18} aria-hidden /> : <Menu size={18} aria-hidden />}
+          {(expanded || isOpen) ? <Search size={18} aria-hidden /> : <Menu size={18} aria-hidden />}
         </button>
         <button
           onClick={onClose}
