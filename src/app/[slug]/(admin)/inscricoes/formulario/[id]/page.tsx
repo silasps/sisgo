@@ -280,7 +280,7 @@ function parseChildren(value: unknown): ChildRow[] {
 function FieldRow({ label, value, type }: { label: string; value: unknown; type?: 'textarea' | 'radio' | 'date_anos' | 'children' }) {
   if (type === 'date_anos') {
     const str = typeof value === 'string' ? value.trim() : ''
-    if (!str) return null
+    if (!str) return <EmptyFieldRow label={label} />
     const anos = anosDesde(str)
     const formatted = new Date(str + 'T00:00:00').toLocaleDateString('pt-BR')
     return (
@@ -292,7 +292,7 @@ function FieldRow({ label, value, type }: { label: string; value: unknown; type?
   }
   if (type === 'children') {
     const rows = parseChildren(value)
-    if (!rows.length) return null
+    if (!rows.length) return <EmptyFieldRow label={label} />
     return (
       <div className="col-span-full py-2.5 border-b border-gray-50 last:border-0">
         <p className="text-xs font-medium text-gray-400 mb-0.5">{label} <span className="text-indigo-700 font-semibold">({rows.length})</span></p>
@@ -308,7 +308,7 @@ function FieldRow({ label, value, type }: { label: string; value: unknown; type?
     )
   }
   const str = typeof value === 'string' ? value.trim() : ''
-  if (!str) return null
+  if (!str) return <EmptyFieldRow label={label} />
   return (
     <div className={`py-2.5 border-b border-gray-50 last:border-0 ${type === 'textarea' ? 'col-span-full' : ''}`}>
       <p className="text-xs font-medium text-gray-400 mb-0.5">{label}</p>
@@ -316,6 +316,15 @@ function FieldRow({ label, value, type }: { label: string; value: unknown; type?
         ? <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{str}</p>
         : <p className="text-sm text-gray-800">{str}</p>
       }
+    </div>
+  )
+}
+
+function EmptyFieldRow({ label }: { label: string }) {
+  return (
+    <div className="py-2.5 border-b border-gray-50 last:border-0">
+      <p className="text-xs font-medium text-gray-400 mb-0.5">{label}</p>
+      <p className="text-sm text-gray-400">— não informado —</p>
     </div>
   )
 }
@@ -566,19 +575,22 @@ export default async function FormularioViewerPage({ params }: Props) {
             )}
 
             {/* Autoavaliação */}
-            {!!formData.s11 && (
+            {(
               <SectionCard title="Autoavaliação">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
                   {AUTOAVAL_AREAS.map(area => {
                     const key = `autoaval_${area.toLowerCase().replace(/\s/g, '_')}`
                     const val = (formData.s11 as Record<string, string>)?.[key]
-                    if (!val) return null
                     return (
                       <div key={area} className="flex items-center justify-between gap-2 bg-gray-50 rounded-lg px-3 py-2">
                         <span className="text-xs text-gray-700">{area}</span>
-                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${AVAL_COLORS[val] ?? 'bg-gray-100 text-gray-500'}`}>
-                          {AVAL_LABELS[val] ?? val}
-                        </span>
+                        {val ? (
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${AVAL_COLORS[val] ?? 'bg-gray-100 text-gray-500'}`}>
+                            {AVAL_LABELS[val] ?? val}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-400">— não informado —</span>
+                        )}
                       </div>
                     )
                   })}
@@ -590,19 +602,12 @@ export default async function FormularioViewerPage({ params }: Props) {
             {SECTIONS.map((section, i) => {
               const sectionKeys = ['s1', 's4', 's5', 's6', 's7', 's8', 's9', 's10', 's11', 's12', 's13', 's14']
               const sectionKey = sectionKeys[i] as keyof typeof formData
-              const data = formData[sectionKey] as Record<string, string> | undefined
-              if (!data) return null
-
-              const visibleFields = section.fields.filter(f => {
-                const val = data[f.key]
-                return typeof val === 'string' && val.trim()
-              })
-              if (!visibleFields.length) return null
+              const data = (formData[sectionKey] as Record<string, string> | undefined) ?? {}
 
               return (
                 <SectionCard key={section.title} title={section.title}>
                   <div className="mt-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6">
-                    {visibleFields.map(f => (
+                    {section.fields.map(f => (
                       <FieldRow key={f.key} label={f.label} value={data[f.key]} type={f.type} />
                     ))}
                   </div>
