@@ -69,7 +69,7 @@ export default async function ServirPage({ params, searchParams }: Props) {
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-amber-50 via-white to-orange-50">
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-sm border-b border-gray-100 sticky top-0 z-10">
+      <header className="bg-white/80 backdrop-blur-sm border-b border-gray-100 sticky top-0 z-10 pt-[env(safe-area-inset-top)]">
         <div className="max-w-2xl mx-auto px-5 py-4 flex items-center gap-3">
           <a href={`/${slug}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
             {org.logo_url ? (

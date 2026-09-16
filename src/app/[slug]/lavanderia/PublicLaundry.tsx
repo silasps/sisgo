@@ -445,7 +445,7 @@ export function PublicLaundry({ slug, orgName, machines, pricing, paymentsEnable
     <div className={embedded ? '' : 'min-h-dvh bg-gray-50'}>
       {/* Header (a versão interna usa o shell do painel) */}
       {!embedded && (
-        <header className="bg-white border-b border-gray-100 px-4 py-4 sticky top-0 z-10">
+        <header className="bg-white border-b border-gray-100 px-4 py-4 sticky top-0 z-10 pt-[calc(1rem+env(safe-area-inset-top))]">
           <div className="max-w-2xl mx-auto flex items-center gap-3">
             <div className="p-2 rounded-xl bg-brand-50">
               <WashingMachine className="w-5 h-5 text-brand-500" />

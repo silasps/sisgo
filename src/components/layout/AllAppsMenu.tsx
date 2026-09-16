@@ -110,7 +110,7 @@ export function AllAppsPanel() {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] bg-white flex flex-col md:bg-black/30 md:items-start md:justify-center md:pt-20"
+      className="fixed inset-0 z-[100] bg-white flex flex-col pt-[env(safe-area-inset-top)] md:bg-black/30 md:items-start md:justify-center md:pt-20"
       onClick={e => { if (e.target === e.currentTarget) closeAllApps() }}
     >
       <div className="flex flex-col w-full h-full md:h-auto md:max-h-[80vh] md:max-w-2xl md:mx-auto md:rounded-2xl md:shadow-xl bg-white overflow-hidden">
