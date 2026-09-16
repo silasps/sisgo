@@ -132,7 +132,7 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
     { href: `/${slug}/financeiro`,   label: 'Financeiro',       icon: 'financeiro',    show: canSeeGeneralFinance },
     { href: `/${slug}/caixa`,        label: 'Caixa da área',    icon: 'caixa',         show: hasOwnCashScope },
     { href: `/${slug}/minhas-contas`, label: 'Minhas Contas',   icon: 'contas',        show: true },
-    { href: `/${slug}/minha-lavanderia`, label: 'Lavanderia',   icon: 'minha-lavanderia', show: laundryEnabled },
+    { href: `/${slug}/minha-lavanderia`, label: 'Minha Lavanderia', icon: 'minha-lavanderia', show: laundryEnabled },
     { href: `/${slug}/minha-carteirinha`, label: 'Minha Carteirinha', icon: 'carteirinha', show: idCardEnabled },
     { href: `/${slug}/configuracoes`, label: 'Configurações',   icon: 'configuracoes', show: isManagement },
   ]

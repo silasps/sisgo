@@ -48,7 +48,7 @@ export default async function MinhaLavanderiaPage({ params }: Props) {
 
   return (
     <>
-      <Header title="Lavanderia" />
+      <Header title="Minha Lavanderia" />
       <main className="p-4 md:p-6">
         <PublicLaundry
           slug={slug}
