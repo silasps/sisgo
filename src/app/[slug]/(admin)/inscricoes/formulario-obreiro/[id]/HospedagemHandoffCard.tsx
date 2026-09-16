@@ -60,7 +60,10 @@ export function HospedagemHandoffCard({ slug, organizationId, ministryId, staffA
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-gray-500">Defina onde e quando {guestName} vai chegar.</p>
+      <p className="text-xs text-gray-500">
+        Hospedagem já confirmada — isso não bloqueia a aprovação. Defina onde e quando {guestName} vai
+        chegar quando for conveniente, até a chegada.
+      </p>
       <div className="grid sm:grid-cols-2 gap-3">
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">Quarto</label>

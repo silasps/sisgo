@@ -2,11 +2,11 @@
 
 import { useStickyHeaderHeight } from './StickyPageHeader'
 
-export function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+export function SectionCard({ id, title, children }: { id?: string; title: string; children: React.ReactNode }) {
   const headerHeight = useStickyHeaderHeight()
 
   return (
-    <details className="group bg-white rounded-xl border border-gray-200" open>
+    <details id={id} className="group bg-white rounded-xl border border-gray-200" style={{ scrollMarginTop: headerHeight }} open>
       <summary
         className="flex items-center justify-between px-5 py-4 cursor-pointer select-none list-none hover:bg-gray-50 sticky z-[5] bg-white rounded-t-xl group-open:border-b group-open:border-gray-100"
         style={{ top: headerHeight }}

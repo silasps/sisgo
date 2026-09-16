@@ -588,6 +588,17 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
   ]
   const stages = stagesFromFlags(STAGE_LABELS, naturalFlags.map((f, i) => f || advancedLabels.has(STAGE_LABELS[i])))
   const currentStageLabel = stages.find(s => s.status === 'current')?.label ?? null
+  // Pra onde o "Detalhes →" do stepper deve levar: a seção desta página que
+  // resolve a etapa pendente — exceto "Aprovado", que não tem seção aqui
+  // (a aprovação em si é feita na lista de inscrições).
+  const STAGE_ANCHORS: Record<string, string> = {
+    'Recomendação do pastor': '#referencias',
+    'Verificação de antecedentes': '#antecedentes',
+    'Hospedagem': '#hospitalidade',
+  }
+  const stepperHref = currentStageLabel === 'Aprovado'
+    ? `/${slug}/inscricoes?tab=obreiro`
+    : (currentStageLabel ? STAGE_ANCHORS[currentStageLabel] : undefined)
 
   return (
     <>
@@ -610,7 +621,7 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
               </span>
             </div>
             <div className="mt-2">
-              <PipelineStepper stages={stages} />
+              <PipelineStepper stages={stages} href={stepperHref} />
               {canManagePastorSkip && (
                 <AvancarEtapaControl
                   currentStageLabel={currentStageLabel}
@@ -693,7 +704,7 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
 
         {/* Referências */}
         {(pastorRef || amigoRef || liderancaRef || app.pastor_reference_skip_reason || responsavelRef || isMinorCandidate) && (
-          <SectionCard title="Referências">
+          <SectionCard id="referencias" title="Referências">
             <div className="py-2">
               <p className="text-xs font-semibold text-gray-500 mb-1">Pastor / Líder (obrigatória)</p>
               <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${pastorRef?.status === 'enviado' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
@@ -791,7 +802,7 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
         )}
 
         {/* Verificação de antecedentes */}
-        <SectionCard title="Verificação de Antecedentes">
+        <SectionCard id="antecedentes" title="Verificação de Antecedentes">
           <BackgroundChecksSection
             checks={backgroundChecks ?? []}
             organizationId={app.organization_id}
@@ -804,7 +815,7 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
 
         {/* Hospitalidade — solicitação pode ser feita a qualquer momento, bloqueia a aprovação final */}
         {(canRequestHospedagem || app.hospedagem_skip_reason) && (
-          <SectionCard title="Hospitalidade">
+          <SectionCard id="hospitalidade" title="Hospitalidade">
             <div className="space-y-3">
               {canRequestHospedagem && (
                 <HospedagemSolicitacaoCard
