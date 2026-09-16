@@ -54,6 +54,14 @@ export function AnimatedDonutChart({ segments, title, activeValue, onSelect }: {
   const total = segments.reduce((s, seg) => s + seg.value, 0)
   const displayTotal = useCountUp(total, visible)
 
+  // Legenda cabe pouco ao lado da rosquinha — acima de 4 itens, esconde o
+  // resto atrás de um "···" que a pessoa expande, em vez de empurrar a
+  // lista de baixo (o motivo de ela estar filtrando) pra fora da tela.
+  const LEGEND_LIMIT = 4
+  const [showAllLegend, setShowAllLegend] = useState(false)
+  const visibleSegments = showAllLegend ? segments : segments.slice(0, LEGEND_LIMIT)
+  const hiddenCount = segments.length - LEGEND_LIMIT
+
   const r = 52, cx = 68, cy = 68, sw = 22, gap = 3
   const C = 2 * Math.PI * r
   const active = segments.filter(s => s.value > 0)
@@ -68,9 +76,9 @@ export function AnimatedDonutChart({ segments, title, activeValue, onSelect }: {
   })
 
   return (
-    <div ref={ref} className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 w-full">
+    <div ref={ref} className="flex flex-row items-center gap-4 sm:gap-6 w-full">
       <div className="shrink-0">
-        <svg viewBox="0 0 136 136" className="w-28 h-28 sm:w-36 sm:h-36">
+        <svg viewBox="0 0 136 136" className="w-24 h-24 sm:w-36 sm:h-36">
           <circle cx={cx} cy={cy} r={r} fill="none" stroke="#F3F4F6" strokeWidth={sw} />
           {total > 0 && arcs.map(a => {
             const key = a.key ?? a.label
@@ -115,8 +123,8 @@ export function AnimatedDonutChart({ segments, title, activeValue, onSelect }: {
         </svg>
       </div>
 
-      <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 gap-x-4 sm:gap-x-6 gap-y-2 sm:gap-y-2.5 flex-1 w-full">
-        {segments.map((seg, i) => {
+      <div className="flex flex-col gap-y-2 sm:gap-y-2.5 flex-1 min-w-0 w-full sm:grid sm:grid-cols-2 sm:gap-x-6">
+        {visibleSegments.map((seg, i) => {
           const key = seg.key ?? seg.label
           const clickable = Boolean(onSelect) && seg.value > 0
           const dimmed = onSelect && activeValue && activeValue !== key
@@ -141,6 +149,16 @@ export function AnimatedDonutChart({ segments, title, activeValue, onSelect }: {
             </Tag>
           )
         })}
+        {!showAllLegend && hiddenCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowAllLegend(true)}
+            className="flex items-center gap-2 min-w-0 text-left text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <div className="w-2.5 h-2.5 shrink-0 flex items-center justify-center text-sm leading-none">···</div>
+            <span className="text-xs font-medium">mais {hiddenCount}</span>
+          </button>
+        )}
       </div>
     </div>
   )
