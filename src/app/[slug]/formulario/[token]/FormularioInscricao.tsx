@@ -343,7 +343,7 @@ function S5Dados({ prefill, data, onNationalityChange }: {
   // o aviso "preencha ao menos um" sem nenhum campo embaixo.
   const showDocumentos = estrangeiro
     ? !hidden.has('s5.passaporte')
-    : !hidden.has('s5.rg') || !hidden.has('s5.cpf') || !hidden.has('s5.passaporte')
+    : !hidden.has('s5.rg') || !hidden.has('s5.cnh') || !hidden.has('s5.cpf') || !hidden.has('s5.passaporte')
 
   return (
     <div className="space-y-4">
@@ -351,6 +351,8 @@ function S5Dados({ prefill, data, onNationalityChange }: {
       <div className="grid sm:grid-cols-2 gap-4">
         <Field label={d.s5.email} name="email" type="email"
           defaultValue={data?.email ?? prefill?.email} required />
+        <InternationalPhoneField phoneName="celular" countryName="celular_country"
+          label={d.s5.celular} defaultCountryIso="BR" defaultPhone={data?.celular ?? prefill?.telefone} />
         <Select label={d.s5.sexo} name="sexo" required defaultValue={data?.sexo} options={[
           { value: 'M', label: d.opts.gender_m },
           { value: 'F', label: d.opts.gender_f },
@@ -446,7 +448,11 @@ function S5Dados({ prefill, data, onNationalityChange }: {
             {!estrangeiro && <p className="text-xs text-gray-400 mt-1">{d.s5.documentos_hint}</p>}
           </div>
           {!estrangeiro ? (<>
-            <H id="s5.rg"><MaskedInput mask="rg" name="rg" label={d.s5.rg} defaultValue={data?.rg} /></H>
+            {/* RG sem máscara — alguns estados emitem números fora do padrão
+                00.000.000-0 (mais dígitos, sem dígito verificador etc.) e a
+                máscara truncava/rejeitava esses casos. */}
+            <H id="s5.rg"><Field label={d.s5.rg} name="rg" defaultValue={data?.rg} maxLength={20} /></H>
+            <H id="s5.cnh"><Field label={d.s5.cnh} name="cnh" defaultValue={data?.cnh} maxLength={20} /></H>
             <H id="s5.cpf"><MaskedInput mask="cpf" name="cpf" label={d.s5.cpf} defaultValue={data?.cpf} /></H>
             <H id="s5.passaporte"><Field label={d.s5.passaporte_opcional} name="passaporte" defaultValue={data?.passaporte} maxLength={20} /></H>
           </>) : (<>
@@ -497,9 +503,6 @@ function S5Dados({ prefill, data, onNationalityChange }: {
           defaultPhone={data?.emergencia_telefone} required />
         <Field label={d.s5.emergencia_email} name="emergencia_email" type="email" defaultValue={data?.emergencia_email} />
         <Field label={d.s5.emergencia_cidade} name="emergencia_cidade" defaultValue={data?.emergencia_cidade} />
-
-        <InternationalPhoneField phoneName="celular" countryName="celular_country"
-          label={d.s5.celular} defaultCountryIso="BR" defaultPhone={data?.celular ?? prefill?.telefone} />
       </div>
     </div>
   )
@@ -1129,22 +1132,38 @@ function S14Financeiro({ data }: { data?: Record<string, string> }) {
   )
 }
 
-function S15Documentos({ hasRg, hasCpf, hasPassaporte, sexo, documentUrls }: {
-  hasRg: boolean; hasCpf: boolean; hasPassaporte: boolean; sexo?: string; documentUrls?: DocumentUrls
+function S15Documentos({ hasRg, hasCnh, hasCpf, hasPassaporte, sexo, documentUrls }: {
+  hasRg: boolean; hasCnh: boolean; hasCpf: boolean; hasPassaporte: boolean; sexo?: string; documentUrls?: DocumentUrls
 }) {
   const d = useContext(DictCtx)
-  // Só pede upload do(s) documento(s) que a pessoa de fato preencheu na seção 5
-  // (lá é exigido pelo menos um entre RG/CPF/Passaporte) — se por algum motivo
-  // nenhum dos três estiver disponível (ex: todos escondidos pela escola),
-  // não força upload de documento nenhum.
-  const docs: Array<{ name: string; label: string; required: boolean; icon: 'foto' | 'id' }> = [
+  // RG e CNH servem igualmente como documento de identificação — se a pessoa
+  // preencheu os dois números na seção 5, não faz sentido exigir foto dos
+  // dois aqui, só de um. Os badges/validação reagem em tempo real conforme
+  // os arquivos vão sendo anexados (a validação de fato, cobrindo também o
+  // que já veio salvo de uma visita anterior, mora no handleNext do
+  // componente pai). Passaporte nunca exige foto — o número já informado na
+  // seção 5 basta.
+  const [hasRgFrenteFile, setHasRgFrenteFile] = useState(!!documentUrls?.doc_rg_frente)
+  const [hasRgVersoFile, setHasRgVersoFile] = useState(!!documentUrls?.doc_rg_verso)
+  const [hasCnhFile, setHasCnhFile] = useState(!!documentUrls?.doc_cnh)
+  const rgCompleta = hasRgFrenteFile && hasRgVersoFile
+  const rgObrigatoria = hasRg && !hasCnhFile
+  const cnhObrigatoria = hasCnh && !rgCompleta
+
+  const docs: Array<{
+    name: string; label: string; required: boolean; icon: 'foto' | 'id'
+    noNativeRequired?: boolean; onFileChange?: (f: File | null) => void
+  }> = [
     { name: 'doc_foto', label: d.s15.doc_foto, required: true, icon: 'foto' },
     ...(hasRg ? [
-      { name: 'doc_rg_frente', label: d.s15.doc_rg_frente_br, required: true, icon: 'id' as const },
-      { name: 'doc_rg_verso', label: d.s15.doc_rg_verso_br, required: true, icon: 'id' as const },
+      { name: 'doc_rg_frente', label: d.s15.doc_rg_frente_br, required: rgObrigatoria, icon: 'id' as const, noNativeRequired: true, onFileChange: (f: File | null) => setHasRgFrenteFile(!!f) },
+      { name: 'doc_rg_verso', label: d.s15.doc_rg_verso_br, required: rgObrigatoria, icon: 'id' as const, noNativeRequired: true, onFileChange: (f: File | null) => setHasRgVersoFile(!!f) },
+    ] : []),
+    ...(hasCnh ? [
+      { name: 'doc_cnh', label: d.s15.doc_cnh, required: cnhObrigatoria, icon: 'id' as const, noNativeRequired: true, onFileChange: (f: File | null) => setHasCnhFile(!!f) },
     ] : []),
     ...(hasCpf ? [{ name: 'doc_cpf', label: d.s15.doc_cpf, required: true, icon: 'id' as const }] : []),
-    ...(hasPassaporte ? [{ name: 'doc_passaporte', label: d.s15.doc_passaporte_estrangeiro, required: true, icon: 'id' as const }] : []),
+    ...(hasPassaporte ? [{ name: 'doc_passaporte', label: d.s15.doc_passaporte_estrangeiro, required: false, icon: 'id' as const }] : []),
   ]
   return (
     <div className="space-y-4">
@@ -1153,10 +1172,10 @@ function S15Documentos({ hasRg, hasCpf, hasPassaporte, sexo, documentUrls }: {
       <div className="grid grid-cols-1 gap-4">
         {docs.map(doc => (
           <FileInputField key={doc.name} name={doc.name} accept="image/jpeg,image/png,image/webp,application/pdf"
-            required={doc.required} tone="indigo"
+            required={doc.noNativeRequired ? false : doc.required} tone="indigo" onFileChange={doc.onFileChange}
             icon={doc.icon === 'foto' ? <Camera size={16} aria-hidden /> : <IdCard size={16} aria-hidden />}
             title={doc.label}
-            badgeLabel={d.nav.doc_required} readyLabel={d.nav.doc_ready}
+            badgeLabel={doc.required ? d.nav.doc_required : d.nav.doc_optional} readyLabel={d.nav.doc_ready}
             dropLabel={doc.icon === 'foto' ? d.nav.doc_drop_generic : d.nav.doc_drop_generic}
             dropHint={d.nav.doc_drop_hint} attachedLabel={d.nav.doc_attached}
             changeLabel={d.nav.change_file} removeLabel={d.nav.remove_file}
@@ -1412,6 +1431,7 @@ export function FormularioInscricao({
     { id: 14, component: <S14Financeiro data={localData.s14} /> },
     { id: 15, component: <S15Documentos
         hasRg={!!localData.s5?.rg?.trim()}
+        hasCnh={!!localData.s5?.cnh?.trim()}
         hasCpf={!!localData.s5?.cpf?.trim()}
         hasPassaporte={!!localData.s5?.passaporte?.trim()}
         sexo={localData.s5?.sexo}
@@ -1498,12 +1518,19 @@ export function FormularioInscricao({
   async function handleBack() {
     if (currentIndex === 0) return
     const target = visibleSections[currentIndex - 1].id
-    // Seção 15 é só arquivo — não tem texto pra guardar em dataRecord (viraria
-    // {} e apagaria os documentos já enviados via anexarDocumentos). Os
-    // arquivos já ficam salvos assim que a pessoa avança por lá; nada a
-    // fazer aqui além de navegar.
+    // Seção 15 é só arquivo — salvarSecao apagaria os documentos já enviados
+    // (viraria {} no jsonb). Usa a mesma action de upload do "Avançar" pra
+    // não perder arquivos escolhidos nessa visita mas ainda não enviados —
+    // sem isso, quem escolhia os arquivos e clicava em "Voltar" (em vez de
+    // avançar) via-los sumirem ao retornar pra seção 15, já que eles nunca
+    // tinham de fato subido pro Storage.
     if (visibleSections[currentIndex].id === 15) {
-      await atualizarSecaoAtual(slug, token, target).catch(() => {})
+      if (formRef.current) {
+        const fd = new FormData(formRef.current)
+        await anexarDocumentos(slug, token, fd, target).catch(() => {})
+      } else {
+        await atualizarSecaoAtual(slug, token, target).catch(() => {})
+      }
     } else if (formRef.current) {
       const fd = new FormData(formRef.current)
       const dataRecord: Record<string, string> = {}
@@ -1522,19 +1549,21 @@ export function FormularioInscricao({
     try {
       const fd = new FormData(e.currentTarget)
 
-      // Validação customizada: seção 5 — ao menos um documento (RG, CPF ou
-      // Passaporte) obrigatório entre os que a escola não escondeu; estrangeiro
-      // só tem o campo de passaporte, que já é required no próprio input.
-      // Se a escola escondeu os três, não há nada pra exigir aqui.
+      // Validação customizada: seção 5 — ao menos um documento (RG, CNH, CPF
+      // ou Passaporte) obrigatório entre os que a escola não escondeu;
+      // estrangeiro só tem o campo de passaporte, que já é required no
+      // próprio input. Se a escola escondeu todos, não há nada pra exigir aqui.
       if (visibleSections[currentIndex].id === 5 && fd.get('is_brasileiro') !== 'nao') {
         const rgVisible = !hiddenSet.has('s5.rg')
+        const cnhVisible = !hiddenSet.has('s5.cnh')
         const cpfVisible = !hiddenSet.has('s5.cpf')
         const passaporteVisible = !hiddenSet.has('s5.passaporte')
-        if (rgVisible || cpfVisible || passaporteVisible) {
+        if (rgVisible || cnhVisible || cpfVisible || passaporteVisible) {
           const rg = rgVisible ? (fd.get('rg') as string)?.trim() : ''
+          const cnh = cnhVisible ? (fd.get('cnh') as string)?.trim() : ''
           const cpf = cpfVisible ? (fd.get('cpf') as string)?.trim() : ''
           const passaporte = passaporteVisible ? (fd.get('passaporte') as string)?.trim() : ''
-          if (!rg && !cpf && !passaporte) {
+          if (!rg && !cnh && !cpf && !passaporte) {
             setError(d.s5.documentos_hint)
             setSaving(false)
             return
@@ -1557,6 +1586,32 @@ export function FormularioInscricao({
       // Atualiza estado de nationalidade após salvar S5
       if (visibleSections[currentIndex].id === 5) {
         setIsBrazilian(fd.get('is_brasileiro') !== 'nao')
+      }
+
+      // Validação customizada: seção 15 — RG (frente + verso) OU CNH, pelo
+      // menos um completo, quando a pessoa informou algum dos dois números
+      // na seção 5. O atributo required nativo não dá pra usar aqui (exigiria
+      // os dois ao mesmo tempo), então a checagem roda aqui, olhando tanto o
+      // que veio nesse envio (fd) quanto o que já estava salvo de uma visita
+      // anterior (documentUrls).
+      if (visibleSections[currentIndex].id === 15) {
+        const hasRg = !!localData.s5?.rg?.trim()
+        const hasCnh = !!localData.s5?.cnh?.trim()
+        if (hasRg || hasCnh) {
+          const hasDoc = (key: string) => {
+            const file = fd.get(key)
+            if (file instanceof File && file.size > 0) return true
+            if (fd.get(`remove_${key}`) === '1') return false
+            return !!documentUrls?.[key]
+          }
+          const rgOk = hasDoc('doc_rg_frente') && hasDoc('doc_rg_verso')
+          const cnhOk = hasDoc('doc_cnh')
+          if (!rgOk && !cnhOk) {
+            setError(d.s15.doc_id_required_error)
+            setSaving(false)
+            return
+          }
+        }
       }
 
       const dataRecord: Record<string, string> = {}

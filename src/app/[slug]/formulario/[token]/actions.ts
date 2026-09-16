@@ -223,11 +223,12 @@ export async function anexarComprovante(slug: string, token: string, formData: F
   return { success: true, fileName: file.name }
 }
 
-const DOCUMENT_KEYS = ['doc_foto', 'doc_rg_frente', 'doc_rg_verso', 'doc_cpf', 'doc_passaporte'] as const
+const DOCUMENT_KEYS = ['doc_foto', 'doc_rg_frente', 'doc_rg_verso', 'doc_cnh', 'doc_cpf', 'doc_passaporte'] as const
 const DOCUMENT_KIND_BY_KEY: Record<typeof DOCUMENT_KEYS[number], DocumentKind> = {
   doc_foto: 'foto',
   doc_rg_frente: 'rg_frente',
   doc_rg_verso: 'rg_verso',
+  doc_cnh: 'cnh',
   doc_cpf: 'cpf',
   doc_passaporte: 'passaporte',
 }

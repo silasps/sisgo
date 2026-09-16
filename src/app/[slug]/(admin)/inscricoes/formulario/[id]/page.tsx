@@ -415,6 +415,7 @@ export default async function FormularioViewerPage({ params }: Props) {
     doc_foto: 'Foto do rosto',
     doc_rg_frente: 'RG (frente)',
     doc_rg_verso: 'RG (verso)',
+    doc_cnh: 'CNH',
     doc_cpf: 'CPF',
     doc_passaporte: 'Passaporte',
   }

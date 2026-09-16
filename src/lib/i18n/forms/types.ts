@@ -156,6 +156,7 @@ export interface FormDict {
     documentos_section: string
     documentos_hint: string
     rg: string
+    cnh: string
     cpf: string
     passaporte_opcional: string
     passaporte_required: string
@@ -372,11 +373,13 @@ export interface FormDict {
     doc_foto: string
     doc_rg_frente_br: string
     doc_rg_verso_br: string
+    doc_cnh: string
     doc_cpf: string
     doc_passaporte_br: string
     doc_passaporte_estrangeiro: string
     doc_id_frente: string
     doc_id_verso: string
+    doc_id_required_error: string
   }
 
   // ── Section 16 ─────────────────────────────────────────────────────────
