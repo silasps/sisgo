@@ -83,6 +83,7 @@ export function Sidebar({ items, isOpen = false, onClose, user, collapsed = fals
       className={[
         'fixed inset-y-0 z-30 w-64 bg-dark-950 flex flex-col',
         'left-0 border-r border-dark-800',
+        'pt-[env(safe-area-inset-top)]',
         'transition-[transform,width] duration-200 ease-in-out',
         expanded ? 'md:w-60' : 'md:w-16',
         collapsed && hovering ? 'md:shadow-2xl md:shadow-black/50' : '',
