@@ -2,7 +2,6 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/Header'
-import { AnimatedDonutChart } from '@/components/ui/AnimatedDonutChart'
 import { redirect } from 'next/navigation'
 import { updateServiceStatus, cancelRequest } from '../ministerios/[id]/actions'
 import { confirmMealPayment, rejectMealPayment, requestMealPaymentProof } from '../cozinha/actions'
@@ -10,25 +9,11 @@ import { getRolePreview } from '@/lib/role-preview'
 import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
 import { ServiceRequestsPanel } from './ServiceRequestsPanel'
 import { HOSPEDAGEM_TYPES, extractFamilyInfo, extractGuestGender, guestTypeForServiceRequest, type FamilyInfo } from '@/lib/hospedagem'
-import { PendentesCardList } from './PendentesCardList'
-import { SearchBar } from '@/components/ui/SearchBar'
-import { Suspense } from 'react'
+import { PendentesFilterPanel } from './PendentesFilterPanel'
 
 type Props = {
   params: Promise<{ slug: string }>
   searchParams: Promise<{ q?: string; categoria?: string; urgencia?: string }>
-}
-
-const CATEGORIA_KEY_TO_LABEL: Record<string, string> = {
-  pre_inscricao: 'Pré-inscrição',
-  candidato_aluno: 'Candidato a Aluno',
-  candidato_obreiro: 'Candidato a Obreiro',
-}
-
-function urgencyBucket(dias: number): 'ok' | 'atencao' | 'urgente' {
-  if (dias <= 1) return 'ok'
-  if (dias === 2) return 'atencao'
-  return 'urgente'
 }
 
 type PendenteItem = {
@@ -283,12 +268,6 @@ export default async function PendentesPage({ params, searchParams }: Props) {
   }
 
   items.sort((a, b) => b.diasAberto - a.diasAberto)
-  const filteredItems = items.filter(i => {
-    if (q && !i.nome.toLowerCase().includes(q.toLowerCase())) return false
-    if (categoria && i.categoria !== CATEGORIA_KEY_TO_LABEL[categoria]) return false
-    if (urgencia && urgencyBucket(i.diasAberto) !== urgencia) return false
-    return true
-  })
   const totalUrgentes = items.filter(i => i.diasAberto >= 3).length
 
   // ── 4. Solicitações de ministério (gestão) ──────────────────────────────────
@@ -1244,37 +1223,14 @@ export default async function PendentesPage({ params, searchParams }: Props) {
                 <p className="text-gray-400 text-sm">Nenhuma pendência no momento.</p>
               </div>
             ) : (
-              <>
-                {/* Gráficos */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="bg-white rounded-xl border border-gray-200 p-5">
-                    <h3 className="text-sm font-semibold text-gray-700 mb-4">Por categoria</h3>
-                    <AnimatedDonutChart segments={categorySegments} title="total" filterParam="categoria" activeValue={categoria} />
-                  </div>
-                  <div className="bg-white rounded-xl border border-gray-200 p-5">
-                    <h3 className="text-sm font-semibold text-gray-700 mb-4">Por urgência</h3>
-                    <AnimatedDonutChart segments={urgencySegments} title="total" filterParam="urgencia" activeValue={urgencia} />
-                  </div>
-                </div>
-
-                {/* Busca */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <Suspense>
-                    <SearchBar placeholder="Buscar por nome…" className="w-full sm:w-72" />
-                  </Suspense>
-                  {(categoria || urgencia) && (
-                    <Link
-                      href={`/${slug}/pendentes${q ? `?q=${encodeURIComponent(q)}` : ''}`}
-                      className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-200"
-                    >
-                      Limpar filtro do gráfico ✕
-                    </Link>
-                  )}
-                </div>
-
-                {/* Cards principais (client component com modal) */}
-                <PendentesCardList items={filteredItems} />
-              </>
+              <PendentesFilterPanel
+                items={items}
+                categorySegments={categorySegments}
+                urgencySegments={urgencySegments}
+                initialQ={q}
+                initialCategoria={categoria}
+                initialUrgencia={urgencia}
+              />
             )}
 
             {/* ── Seção: Solicitações de Ministério (gestão) ── */}

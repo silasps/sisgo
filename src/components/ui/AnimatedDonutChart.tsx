@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
 type Segment = { label: string; value: number; color: string; key?: string }
 
@@ -23,29 +22,22 @@ function useCountUp(target: number, active: boolean, duration = 700): number {
   return val
 }
 
-export function AnimatedDonutChart({ segments, title, filterParam, activeValue }: {
+export function AnimatedDonutChart({ segments, title, activeValue, onSelect }: {
   segments: Segment[]
   title?: string
-  /** Nome do parâmetro de URL usado pro filtro (ex.: "categoria"). Se
-   * presente, cada fatia/legenda vira clicável e navega alterando esse
-   * parâmetro — clicar na fatia já ativa remove o filtro. */
-  filterParam?: string
-  /** Valor atualmente ativo desse parâmetro (pra destacar a fatia selecionada). */
+  /** Valor atualmente ativo (pra destacar a fatia/legenda selecionada). */
   activeValue?: string
+  /** Chamado com a key/label da fatia clicada. Presença desse prop torna
+   * o gráfico clicável — cabe ao chamador decidir o que fazer com a
+   * seleção (ex.: alternar um filtro local). */
+  onSelect?: (key: string) => void
 }) {
   const [visible, setVisible] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-  const router = useRouter()
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
 
   function handleSegmentClick(seg: Segment) {
-    if (!filterParam || seg.value === 0) return
-    const key = seg.key ?? seg.label
-    const params = new URLSearchParams(searchParams.toString())
-    if (activeValue === key) params.delete(filterParam)
-    else params.set(filterParam, key)
-    router.push(params.toString() ? `${pathname}?${params.toString()}` : pathname)
+    if (!onSelect || seg.value === 0) return
+    onSelect(seg.key ?? seg.label)
   }
 
   useEffect(() => {
@@ -82,7 +74,7 @@ export function AnimatedDonutChart({ segments, title, filterParam, activeValue }
           <circle cx={cx} cy={cy} r={r} fill="none" stroke="#F3F4F6" strokeWidth={sw} />
           {total > 0 && arcs.map(a => {
             const key = a.key ?? a.label
-            const dimmed = filterParam && activeValue && activeValue !== key
+            const dimmed = onSelect && activeValue && activeValue !== key
             return (
               <circle
                 key={a.label}
@@ -97,7 +89,7 @@ export function AnimatedDonutChart({ segments, title, filterParam, activeValue }
                 opacity={dimmed ? 0.3 : 1}
                 onClick={() => handleSegmentClick(a)}
                 style={{
-                  cursor: filterParam ? 'pointer' : undefined,
+                  cursor: onSelect ? 'pointer' : undefined,
                   transition: `stroke-dasharray 0.9s cubic-bezier(0.34,1.56,0.64,1) ${a.i * 0.1}s, opacity 0.2s ease`,
                 }}
               />
@@ -126,8 +118,8 @@ export function AnimatedDonutChart({ segments, title, filterParam, activeValue }
       <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 gap-x-4 sm:gap-x-6 gap-y-2 sm:gap-y-2.5 flex-1 w-full">
         {segments.map((seg, i) => {
           const key = seg.key ?? seg.label
-          const clickable = Boolean(filterParam) && seg.value > 0
-          const dimmed = filterParam && activeValue && activeValue !== key
+          const clickable = Boolean(onSelect) && seg.value > 0
+          const dimmed = onSelect && activeValue && activeValue !== key
           const Tag = clickable ? 'button' : 'div'
           return (
             <Tag
