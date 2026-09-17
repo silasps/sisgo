@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useEffect } from 'react'
 import { ArrowLeft, Menu } from 'lucide-react'
 import { AccountMenu } from './AccountMenu'
 import { useAllApps } from './all-apps-context'
@@ -16,6 +17,14 @@ type HeaderProps = {
 
 export function Header({ title, backHref, actions }: HeaderProps) {
   const { logoUrl } = useBrand()
+
+  // O <title> da aba/PWA ficava sempre fixo em "SISGO" — sem pista de onde
+  // a pessoa está ao alternar entre telas ou trocar de app. Esse Header é
+  // renderizado por quase toda página do admin com o título certo da seção,
+  // então é o lugar mais barato de refletir isso no documento também.
+  useEffect(() => {
+    document.title = title ? `${title} · SISGO` : 'SISGO'
+  }, [title])
 
   return (
     <header className="h-16 shrink-0 border-b border-dark-800 bg-dark-950 flex items-center justify-between px-4 md:px-6 sticky top-0 z-10">

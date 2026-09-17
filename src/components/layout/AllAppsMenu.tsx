@@ -42,7 +42,7 @@ const ICON_KEYWORDS: Record<string, string[]> = {
   pessoas: ['cadastro', 'diretorio', 'membros'],
   presenca: ['chamada', 'frequencia', 'ausencia', 'ausencias', 'falta', 'faltas'],
   obreiros: ['equipe', 'staff', 'funcionarios'],
-  escolas: ['cursos', 'turmas'],
+  escolas: ['cursos', 'turmas', 'obreiro', 'obreiros', 'equipe', 'quadro de obreiros'],
   inscricoes: ['candidatura', 'candidaturas', 'candidatos', 'matricula', 'matriculas'],
   ministerios: ['equipes', 'times'],
   reservas: ['reservar', 'agendar'],
