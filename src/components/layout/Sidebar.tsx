@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -76,6 +76,15 @@ export function Sidebar({ items, isOpen = false, onClose, user, collapsed = fals
   // mouse, volta a recolher — a menos que o usuário tenha fixado aberto.
   const expanded = !collapsed || hovering
 
+  // Sem isso, rolar até o fim da lista da gaveta (mobile) "vaza" o gesto de
+  // scroll pra página por baixo — trava o body enquanto ela está aberta, só
+  // a lista de navegação rola.
+  useEffect(() => {
+    if (!isOpen) return
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = '' }
+  }, [isOpen])
+
   return (
     <aside
       onMouseEnter={() => setHovering(true)}
@@ -111,7 +120,7 @@ export function Sidebar({ items, isOpen = false, onClose, user, collapsed = fals
         </button>
       </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto overflow-x-hidden">
+      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto overflow-x-hidden overscroll-contain">
         {items.map((item, idx) => {
           if ('divider' in item) {
             return (
