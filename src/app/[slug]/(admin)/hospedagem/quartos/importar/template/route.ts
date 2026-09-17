@@ -42,6 +42,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
 
   const dataSheet = workbook.addWorksheet('Quartos')
   dataSheet.columns = headerRow.map(h => ({ header: h, key: h, width: Math.max(h.length, 16) }))
+  dataSheet.views = [{ state: 'frozen', ySplit: 1 }]
   for (const row of EXAMPLE_ROWS) dataSheet.addRow(row)
 
   for (const { header, options } of VALIDATED_COLUMNS) {
@@ -62,6 +63,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
 
   const legendSheet = workbook.addWorksheet('Legenda')
   legendSheet.columns = [{ width: 45 }, { width: 70 }]
+  legendSheet.views = [{ state: 'frozen', ySplit: 1 }]
   legendSheet.addRow(['Campo', 'Valores aceitos'])
   for (const [campo, valores] of LEGENDA_ROWS) legendSheet.addRow([campo, valores])
   legendSheet.addRow([])
