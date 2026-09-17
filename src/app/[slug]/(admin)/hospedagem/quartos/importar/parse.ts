@@ -75,13 +75,17 @@ export async function parseImportRows(formData: FormData): Promise<{ rows: Parse
     const quartoTipo = normalizeEnum(quartoTipoRaw, TIPOS_QUARTO)
     if (!quartoTipo.recognized) warnings.push(`Tipo de quarto "${quartoTipoRaw}" não reconhecido — usando "${DEFAULTS.quartoTipo}".`)
 
+    // Quarto em branco herda o valor do andar (o caso mais comum — a maioria
+    // dos quartos de um andar compartilha o mesmo destino/gênero); só cai no
+    // padrão fixo se nem o andar tiver valor. Preencher a coluna do quarto
+    // continua funcionando pra sobrescrever num caso específico.
     const quartoGeneroRaw = cell(r, HEADERS.quartoGenero)
     const quartoGenero = normalizeEnum(quartoGeneroRaw, GENEROS)
-    if (!quartoGenero.recognized) warnings.push(`Restrição de gênero do quarto "${quartoGeneroRaw}" não reconhecida — deixada em branco.`)
+    if (!quartoGenero.recognized) warnings.push(`Restrição de gênero do quarto "${quartoGeneroRaw}" não reconhecida — usando a do andar.`)
 
     const quartoDestinoRaw = cell(r, HEADERS.quartoDestino)
     const quartoDestino = normalizeEnum(quartoDestinoRaw, DESTINOS)
-    if (!quartoDestino.recognized) warnings.push(`Destino de quarto "${quartoDestinoRaw}" não reconhecido — usando "${DEFAULTS.quartoDestino}".`)
+    if (!quartoDestino.recognized) warnings.push(`Destino de quarto "${quartoDestinoRaw}" não reconhecido — usando o do andar.`)
 
     const quartoModoRaw = cell(r, HEADERS.quartoModo)
     const quartoModo = normalizeEnum(quartoModoRaw, MODOS_ALOCACAO)
@@ -102,8 +106,8 @@ export async function parseImportRows(formData: FormData): Promise<{ rows: Parse
       andarDestino: andarDestino.value,
       andarGenero: andarGenero.value,
       quartoTipo: quartoTipo.value ?? DEFAULTS.quartoTipo,
-      quartoGenero: quartoGenero.value,
-      quartoDestino: quartoDestino.value ?? DEFAULTS.quartoDestino,
+      quartoGenero: quartoGenero.value ?? andarGenero.value,
+      quartoDestino: quartoDestino.value ?? andarDestino.value ?? DEFAULTS.quartoDestino,
       quartoModo: quartoModo.value ?? DEFAULTS.quartoModo,
       camaRotulo: camaRotuloRaw || null,
       camaTipo: camaTipo.value ?? DEFAULTS.camaTipo,

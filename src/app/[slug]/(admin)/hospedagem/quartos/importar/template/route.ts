@@ -1,8 +1,23 @@
-import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
 import { createClient } from '@/lib/supabase/server'
 import { isManagementRole, userHasAnyRole, HOSPEDAGEM_ROLES } from '@/lib/auth/permissions'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
-import { HEADERS, LEGENDA_ROWS, EXAMPLE_ROWS } from '../schema'
+import { HEADERS, LEGENDA_ROWS, EXAMPLE_ROWS, DESTINOS, GENEROS, TIPOS_QUARTO, MODOS_ALOCACAO, TIPOS_CAMA } from '../schema'
+
+// Colunas de opção fixa — ganham dropdown de verdade na planilha (em vez de
+// só listar os valores aceitos na aba Legenda, que é fácil de não notar).
+const VALIDATED_COLUMNS: Array<{ header: string; options: readonly string[] }> = [
+  { header: HEADERS.andarDestino, options: DESTINOS },
+  { header: HEADERS.andarGenero, options: GENEROS },
+  { header: HEADERS.quartoTipo, options: TIPOS_QUARTO },
+  { header: HEADERS.quartoGenero, options: GENEROS },
+  { header: HEADERS.quartoDestino, options: DESTINOS },
+  { header: HEADERS.quartoModo, options: MODOS_ALOCACAO },
+  { header: HEADERS.camaTipo, options: TIPOS_CAMA },
+]
+
+// Linhas suficientes pra planilha crescer bem além dos exemplos sem perder o dropdown.
+const DATA_VALIDATION_LAST_ROW = 500
 
 // Mesmo modelo pra toda organização — não depende de dados específicos, só
 // confere que quem baixa está autenticado e tem acesso de gestão de
@@ -22,25 +37,39 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
     return new Response('Sem permissão.', { status: 403 })
   }
 
-  const headerRow = Object.values(HEADERS)
-  const dataSheet = XLSX.utils.json_to_sheet(EXAMPLE_ROWS, { header: headerRow })
-  dataSheet['!cols'] = headerRow.map(h => ({ wch: Math.max(h.length, 16) }))
+  const workbook = new ExcelJS.Workbook()
+  const headerRow: string[] = Object.values(HEADERS)
 
-  const legendSheet = XLSX.utils.aoa_to_sheet([
-    ['Campo', 'Valores aceitos'],
-    ...LEGENDA_ROWS,
-    [],
-    ['Como preencher', 'Uma linha por CAMA. Repita Bloco/Andar/Quarto nas linhas seguintes pra adicionar mais camas ao mesmo quarto, ou pra criar mais quartos/andares/blocos.'],
-  ])
-  legendSheet['!cols'] = [{ wch: 45 }, { wch: 70 }]
+  const dataSheet = workbook.addWorksheet('Quartos')
+  dataSheet.columns = headerRow.map(h => ({ header: h, key: h, width: Math.max(h.length, 16) }))
+  for (const row of EXAMPLE_ROWS) dataSheet.addRow(row)
 
-  const workbook = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(workbook, dataSheet, 'Quartos')
-  XLSX.utils.book_append_sheet(workbook, legendSheet, 'Legenda')
+  for (const { header, options } of VALIDATED_COLUMNS) {
+    const colIndex = headerRow.indexOf(header) + 1
+    const validation = {
+      type: 'list' as const,
+      allowBlank: true,
+      formulae: [`"${options.join(',')}"`],
+      showErrorMessage: true,
+      errorStyle: 'warning' as const,
+      errorTitle: 'Valor fora da lista',
+      error: `Use um dos valores: ${options.join(', ')} (ou deixe em branco).`,
+    }
+    for (let r = 2; r <= DATA_VALIDATION_LAST_ROW; r++) {
+      dataSheet.getCell(r, colIndex).dataValidation = validation
+    }
+  }
 
-  const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer
+  const legendSheet = workbook.addWorksheet('Legenda')
+  legendSheet.columns = [{ width: 45 }, { width: 70 }]
+  legendSheet.addRow(['Campo', 'Valores aceitos'])
+  for (const [campo, valores] of LEGENDA_ROWS) legendSheet.addRow([campo, valores])
+  legendSheet.addRow([])
+  legendSheet.addRow(['Como preencher', 'Uma linha por CAMA. Repita Bloco/Andar/Quarto nas linhas seguintes pra adicionar mais camas ao mesmo quarto, ou pra criar mais quartos/andares/blocos.'])
 
-  return new Response(new Uint8Array(buffer), {
+  const buffer = await workbook.xlsx.writeBuffer()
+
+  return new Response(buffer, {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': 'attachment; filename="modelo-quartos.xlsx"',
