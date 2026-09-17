@@ -92,7 +92,7 @@ export function Sidebar({ items, isOpen = false, onClose, user, collapsed = fals
       className={[
         'fixed inset-y-0 z-30 w-64 bg-dark-950 flex flex-col',
         'left-0 border-r border-dark-800',
-        'pt-[env(safe-area-inset-top)]',
+        'pt-[env(safe-area-inset-top)] pb-20 md:pb-0',
         'transition-[transform,width] duration-200 ease-in-out',
         expanded ? 'md:w-60' : 'md:w-16',
         collapsed && hovering ? 'md:shadow-2xl md:shadow-black/50' : '',
@@ -155,7 +155,7 @@ export function Sidebar({ items, isOpen = false, onClose, user, collapsed = fals
               <NavIcon name={item.icon} className="relative shrink-0" size={20} />
               <span className={`relative ${!expanded ? 'md:hidden' : ''}`}>{item.label}</span>
               {item.alert && !active && (
-                <span className={`relative ml-auto w-2 h-2 rounded-full bg-red-500 animate-pulse ${!expanded ? 'md:hidden' : ''}`} />
+                <span className={`relative ml-auto w-2 h-2 rounded-full bg-red-500 ring-2 ring-dark-950 animate-pulse ${!expanded ? 'md:hidden' : ''}`} />
               )}
             </Link>
           )
