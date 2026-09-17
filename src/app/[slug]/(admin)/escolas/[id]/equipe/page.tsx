@@ -156,12 +156,9 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
 
   return (
     <main className="p-4 md:p-6 space-y-4 max-w-3xl overflow-y-auto flex-1">
-      <div>
-        <h1 className="text-lg font-bold text-gray-900">Quadro de Obreiros</h1>
-        <p className="text-xs text-gray-400 mt-0.5">
-          Vínculo de líderes e obreiros com esta escola — quem serve aqui e com que papel.
-        </p>
-      </div>
+      <p className="text-xs text-gray-400 -mt-2">
+        Vínculo de líderes e obreiros com esta escola — quem serve aqui e com que papel.
+      </p>
 
       {msgInfo && (
         <div className={`border rounded-lg px-4 py-3 text-sm ${msgInfo.cls}`}>{msgInfo.text}</div>
