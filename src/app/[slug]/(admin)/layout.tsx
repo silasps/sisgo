@@ -5,7 +5,6 @@ import { SuperAdminContextBar } from '@/components/layout/SuperAdminContextBar'
 import { notFound, redirect } from 'next/navigation'
 import { accentCssVars } from '@/lib/accent-colors'
 import { getRolePreview } from '@/lib/role-preview'
-import { getNavMode } from '@/lib/nav-mode'
 import { asLooseClient } from '@/lib/supabase/loose-client'
 import { FeedbackButton } from '@/components/layout/FeedbackButton'
 import { isManagementRole, isGeneralFinanceRole, MANUTENCAO_ROLES, HOSPEDAGEM_ROLES, userHasAnyRole } from '@/lib/auth/permissions'
@@ -569,20 +568,19 @@ export default async function SlugLayout({ children, params }: Props) {
   const navItems = buildNav(slug, role, [...accumulatedRoles, ...extraRoles, ...linkedRoles], hasPending, reservationsPending > 0, hasOwnCashScope, laundryEnabled, hasMinistryMessages, hasSchoolMessages, idCardEnabled)
   const bottomItems = pickBottomBarItems(navItems, role)
 
-  // ── Menu de conta: modo Pessoal x Administração + troca de base ──────────
+  // ── Menu de conta: tudo somado, sem alternância entre Pessoal/Administração ──
+  // Chegou a existir um toggle de modo (cookie) que trocava o que aparecia na
+  // sidebar — mas ele só filtrava a LISTA, não a navegação em si (dava pra
+  // acabar numa tela de admin com a sidebar ainda em modo Pessoal, e
+  // vice-versa, sem nada de fato "alternando"). Agora a sidebar sempre soma
+  // tudo que o papel (+ funções acumuladas) libera, igual o "Ver tudo" já
+  // fazia — só a organização em seções muda.
   const { universal, admin: adminNavItems, personal: personalNavItems } = splitNavByMode(navItems)
-  const canSwitchMode = adminNavItems.length > 0
-  const navMode = canSwitchMode ? await getNavMode(isManagementUser ? 'administracao' : 'pessoal') : 'pessoal'
-  const sidebarItems: NavItem[] = navMode === 'administracao'
-    ? [...universal, ...sectionize(adminNavItems)]
-    : [...universal, ...personalNavItems]
-  // A GRADE do "Ver tudo" (e a busca no mesmo painel) mostram SEMPRE tudo que
-  // o papel tem acesso, nos dois modos — mesmo o que já está fixo na sidebar
-  // do modo atual. Antes a grade filtrava pra não repetir atalho já visível,
-  // mas isso fazia a sidebar e o painel mostrarem conjuntos sem sobreposição
-  // nenhuma (ex.: sidebar em modo Pessoal x grade só com itens de
-  // Administração), o que parecia informação desencontrada. Repetir alguns
-  // ícones é um preço pequeno perto de manter as duas telas consistentes.
+  const sidebarItems: NavItem[] = [
+    ...universal,
+    ...sectionize(adminNavItems),
+    ...(personalNavItems.length ? [PESSOAL_DIVIDER, ...personalNavItems] : []),
+  ]
   const allNavItemsFull = dropEmptySections(buildAllAppsItems(universal, adminNavItems, personalNavItems))
 
   const myOrgs = userOrgRows
@@ -625,8 +623,6 @@ export default async function SlugLayout({ children, params }: Props) {
           orgSlug: slug,
           orgName: org.name,
           orgs: myOrgs,
-          canSwitchMode,
-          mode: navMode,
         }}
       >
         {children}
