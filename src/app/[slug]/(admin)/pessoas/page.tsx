@@ -153,6 +153,12 @@ export default async function PessoasPage({ params, searchParams }: Props) {
   // nem por link direto — bloqueio de rota, não só esconder do menu.
   if (!PESSOAS_ROLES.includes(userRole as never)) redirect(`/${slug}/dashboard`)
 
+  // Hospitalidade só cuida de estrutura/hospedagem, não do processo seletivo
+  // de aluno/obreiro — a aba de Inscrições fica fora do alcance dela, com
+  // bloqueio de rota (não só escondida do menu/abas) igual ao resto da página.
+  const isHospitalidade = userRole === 'hospitalidade'
+  if (isHospitalidade && tab === 'inscricoes') redirect(`/${slug}/pessoas`)
+
   const isEtedLeader = userRole === 'lider_eted'
 
   let allowedSchoolIds: string[] | null = null
@@ -200,25 +206,31 @@ export default async function PessoasPage({ params, searchParams }: Props) {
   const allSchools = (allSchoolsRaw ?? []) as Array<{ id: string; name: string }>
   const allMinistries = (allMinistriesRaw ?? []) as Array<{ id: string; name: string }>
 
+  // "+ Nova pessoa" só cria candidatos (pré-inscrição de aluno/obreiro), que
+  // caem direto na aba Inscrições — sem sentido pra quem não vê essa aba.
+  const visibleTabs = TABS.filter(t => !(isHospitalidade && t.key === 'inscricoes'))
+
   return (
     <>
       <Header
         title="Pessoas"
         actions={
-          <NovaPessoaButton
-            slug={slug}
-            openClasses={headerOpenClasses.map(c => ({
-              id: c.id,
-              school_id: c.school_id,
-              name: c.name,
-              starts_at: c.starts_at,
-              schoolName: c.schools?.name ?? null,
-            }))}
-            ministries={allMinistries}
-            schools={allSchools}
-            criarPreInscricaoManual={criarPreInscricaoManual.bind(null, orgId, slug)}
-            criarPreInscricaoObreiroManual={criarPreInscricaoObreiroManual.bind(null, orgId, slug)}
-          />
+          isHospitalidade ? undefined : (
+            <NovaPessoaButton
+              slug={slug}
+              openClasses={headerOpenClasses.map(c => ({
+                id: c.id,
+                school_id: c.school_id,
+                name: c.name,
+                starts_at: c.starts_at,
+                schoolName: c.schools?.name ?? null,
+              }))}
+              ministries={allMinistries}
+              schools={allSchools}
+              criarPreInscricaoManual={criarPreInscricaoManual.bind(null, orgId, slug)}
+              criarPreInscricaoObreiroManual={criarPreInscricaoObreiroManual.bind(null, orgId, slug)}
+            />
+          )
         }
       />
       <main className="p-4 md:p-6 space-y-4">
@@ -229,7 +241,7 @@ export default async function PessoasPage({ params, searchParams }: Props) {
 
         {/* Tabs — ficam fora do Suspense: não recarregam nem piscam ao trocar de aba */}
         <div className="flex gap-1 bg-gray-100 p-1 rounded-xl overflow-x-auto scrollbar-none">
-          {TABS.map(t => (
+          {visibleTabs.map(t => (
             <Link
               key={t.key}
               href={`/${slug}/pessoas?tab=${t.key}`}

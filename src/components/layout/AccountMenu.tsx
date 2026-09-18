@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Building2, LogOut, Settings } from 'lucide-react'
+import { Building2, LogOut, Settings, User } from 'lucide-react'
 import { useAccount, type AccountInfo } from './account-context'
 
 export function AccountMenu() {
@@ -15,8 +15,6 @@ export function AccountMenu() {
   useEffect(() => setOpen(false), [pathname])
 
   if (!account) return null
-
-  const initial = (account.name ?? account.email).charAt(0).toUpperCase()
 
   async function logout() {
     const { createClient } = await import('@/lib/supabase/client')
@@ -32,10 +30,10 @@ export function AccountMenu() {
         className="relative w-8 h-8 shrink-0"
         aria-label="Minha conta"
       >
-        <span className="flex w-full h-full rounded-full bg-brand-50 border border-brand-100 items-center justify-center text-brand-600 text-xs font-bold uppercase overflow-hidden hover:bg-brand-100 transition-colors">
+        <span className="flex w-full h-full rounded-full bg-brand-50 border border-brand-100 items-center justify-center text-brand-600 overflow-hidden hover:bg-brand-100 transition-colors">
           {account.avatarUrl
             ? <img src={account.avatarUrl} alt="" className="w-full h-full object-cover" />
-            : initial}
+            : <User size={16} strokeWidth={2.25} />}
         </span>
       </button>
 
@@ -74,10 +72,10 @@ function PanelContent({
   return (
     <div className="p-2">
       <div className="flex items-center gap-3 px-3 py-3">
-        <div className="w-10 h-10 rounded-full bg-brand-50 border border-brand-100 flex items-center justify-center text-brand-600 text-sm font-bold uppercase shrink-0 overflow-hidden">
+        <div className="w-10 h-10 rounded-full bg-brand-50 border border-brand-100 flex items-center justify-center text-brand-600 shrink-0 overflow-hidden">
           {account.avatarUrl
             ? <img src={account.avatarUrl} alt="" className="w-full h-full object-cover" />
-            : (account.name ?? account.email).charAt(0)}
+            : <User size={20} strokeWidth={2.25} />}
         </div>
         <div className="min-w-0">
           {account.name && <p className="text-sm font-semibold text-gray-900 truncate">{account.name}</p>}

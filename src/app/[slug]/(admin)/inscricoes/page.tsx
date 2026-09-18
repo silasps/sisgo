@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { ClipboardList, Mail, MessageCircle } from 'lucide-react'
 import { NovaPreInscricaoButton, NovaPreInscricaoObreiroButton, EditarPreInscricaoButton, EditarPreInscricaoObreiroButton, MarcarRecebidoExternoButton, LinksReferenciaAdminButton } from './InscricoesModals'
 import { EnviarFormularioObreiroDiretoButton } from '@/components/inscricoes/EnviarFormularioObreiroDiretoButton'
@@ -186,6 +186,12 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
   const realRole = superadminRow?.roles?.name ?? currentOrgRow?.roles?.name ?? ''
   const preview = await getRolePreview(realRole)
   const userRole = preview?.role ?? realRole
+
+  // Hospitalidade cuida só de estrutura/hospedagem, não do processo seletivo —
+  // o menu já não mostra este link pra ela, mas a rota em si não tinha bloqueio
+  // (só esconder do menu não impede acesso por URL direta).
+  if (userRole === 'hospitalidade') redirect(`/${slug}/dashboard`)
+
   const isEtedLeader = userRole === 'lider_eted'
   const isLiderMinisterio = userRole === 'lider_ministerio'
   const isManagement = ['superadmin', 'admin_base', 'lider_base', 'dh'].includes(userRole)
@@ -587,7 +593,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     const { data: pastorRef } = await db.from('reference_forms')
       .select('status').eq('staff_application_id', id).eq('type', 'pastor').maybeSingle()
     const { data: skipRow } = await db.from('staff_applications')
-      .select('pastor_reference_skip_reason, hospedagem_skip_reason, leader_word, leader_word_shared, interest_form_id').eq('id', id).maybeSingle()
+      .select('pastor_reference_skip_reason, hospedagem_skip_reason, leader_word, leader_word_shared, interest_form_id, form_data').eq('id', id).maybeSingle()
     if (pastorRef?.status !== 'enviado' && !skipRow?.pastor_reference_skip_reason) {
       redir(`/${slug}/inscricoes?tab=obreiro&flash_error=${encodeURIComponent('Referência do pastor pendente — aguarde a resposta ou registre uma justificativa para pular esta etapa.')}`)
       return
@@ -606,14 +612,29 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     let userId = existingAuthUser?.id
 
     if (!userId) {
+      const fullName = formData.get('name') as string
       const { data: created, error } = await db.auth.admin.createUser({
         email,
         password,
         email_confirm: true,
-        user_metadata: { full_name: formData.get('name') as string },
+        user_metadata: { full_name: fullName },
       })
       if (error || !created.user) return
       userId = created.user.id
+
+      // Reaproveita a foto já enviada no formulário de inscrição (seção 10)
+      // como avatar inicial — só faz sentido pra conta recém-criada, nunca
+      // sobrescrevendo um avatar que a pessoa já tenha escolhido depois.
+      const s10 = (skipRow as unknown as { form_data?: Record<string, unknown> } | null)?.form_data?.s10 as
+        { doc_foto?: { path?: string } } | undefined
+      const photoPath = s10?.doc_foto?.path
+      if (photoPath) {
+        const { copyApplicationPhotoToAvatar } = await import('@/lib/auth/copyApplicationPhotoToAvatar')
+        const avatarUrl = await copyApplicationPhotoToAvatar('staff-application-documents', photoPath, userId)
+        if (avatarUrl) {
+          await db.auth.admin.updateUserById(userId, { user_metadata: { full_name: fullName, avatar_url: avatarUrl } })
+        }
+      }
     }
 
     const { data: ministryRole } = await db.from('roles').select('id').eq('name', 'obreiro_ministerio').single()
