@@ -61,7 +61,7 @@ function Result({ icon: Icon, color, title, description, slug }: {
         <h1 className="text-xl font-bold text-gray-900 mb-2">{title}</h1>
         <p className="text-sm text-gray-500 leading-relaxed mb-8">{description}</p>
         <Link
-          href={slug ? `/${slug}/pessoas` : '/login'}
+          href={slug ? `/${slug}/dashboard` : '/login'}
           className="inline-block px-6 py-2.5 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg transition-colors"
         >
           {slug ? 'Ir para o painel' : 'Ir para o login'}

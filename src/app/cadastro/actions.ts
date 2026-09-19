@@ -157,7 +157,7 @@ export async function criarOrganizacaoWizard(payload: WizardPayload): Promise<{ 
     await supabase.auth.signInWithPassword({ email: responsavelEmail, password: responsavelSenha }).catch(() => {})
   }
 
-  return { redirectTo: `/${org.slug}/pessoas` }
+  return { redirectTo: `/${org.slug}/dashboard` }
 }
 
 async function siteUrl() {
