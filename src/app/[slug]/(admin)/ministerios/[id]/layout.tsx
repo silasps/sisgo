@@ -25,16 +25,21 @@ export default async function MinisterioWorkspaceLayout({ children, params }: Pr
   const isManagement = isManagementRole(role)
   const isLiderMinisterio = role === 'lider_ministerio'
   const isObreiroMinisterio = role === 'obreiro_ministerio'
-
-  if (!isManagement && !isLiderMinisterio && !isObreiroMinisterio) notFound()
+  // Papéis de departamento (hospitalidade, secretaria, cozinha, manutenção) só
+  // entram no ministério vinculado à própria função — /ministerios já os
+  // redireciona pra cá; sem essa checagem, batiam num notFound() indevido.
+  const DEPT_ROLES = ['hospitalidade', 'secretaria', 'cozinha', 'manutencao']
+  const isDeptRole = DEPT_ROLES.includes(role)
 
   const { data: ministry } = await supabase
     .from('ministries')
-    .select('id, name')
+    .select('id, name, linked_role')
     .eq('id', id)
     .eq('organization_id', orgId)
     .single()
   if (!ministry) notFound()
+
+  if (!isManagement && !isLiderMinisterio && !isObreiroMinisterio && !(isDeptRole && ministry.linked_role === role)) notFound()
 
   if (isLiderMinisterio) {
     if (preview?.ministryId) {

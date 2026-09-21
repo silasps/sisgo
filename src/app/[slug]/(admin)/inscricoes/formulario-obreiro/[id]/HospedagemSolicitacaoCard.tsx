@@ -13,6 +13,7 @@ type Props = {
   requestedArrivalDate: string | null
   requestedDepartureDate: string | null
   requestNotes: string | null
+  resolutionNotes?: string | null
 }
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -24,7 +25,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 }
 
 export function HospedagemSolicitacaoCard({
-  slug, organizationId, ministryId, staffApplicationId, guestName, status, requestedArrivalDate, requestedDepartureDate, requestNotes,
+  slug, organizationId, ministryId, staffApplicationId, guestName, status, requestedArrivalDate, requestedDepartureDate, requestNotes, resolutionNotes,
 }: Props) {
   const [arrivalDate, setArrivalDate] = useState(requestedArrivalDate ?? '')
   const [departureDate, setDepartureDate] = useState(requestedDepartureDate ?? '')
@@ -61,6 +62,11 @@ export function HospedagemSolicitacaoCard({
         <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${statusInfo.color}`}>
           {statusInfo.label}
         </span>
+      )}
+      {status === 'rejeitado' && resolutionNotes && (
+        <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          <span className="font-semibold">Motivo da hospitalidade:</span> {resolutionNotes}
+        </p>
       )}
       {done && <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">Solicitação enviada à hospitalidade.</p>}
 

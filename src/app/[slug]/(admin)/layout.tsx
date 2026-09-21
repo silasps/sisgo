@@ -7,7 +7,7 @@ import { accentCssVars } from '@/lib/accent-colors'
 import { getRolePreview } from '@/lib/role-preview'
 import { asLooseClient } from '@/lib/supabase/loose-client'
 import { FeedbackButton } from '@/components/layout/FeedbackButton'
-import { isManagementRole, isGeneralFinanceRole, MANUTENCAO_ROLES, HOSPEDAGEM_ROLES, userHasAnyRole } from '@/lib/auth/permissions'
+import { isManagementRole, isGeneralFinanceRole, MANUTENCAO_ROLES, HOSPEDAGEM_ROLES, KITCHEN_ROLES, userHasAnyRole } from '@/lib/auth/permissions'
 import { Toaster } from 'sonner'
 import { Suspense } from 'react'
 import { FlashToast } from '@/components/ui/FlashToast'
@@ -100,6 +100,7 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
   const canSeeGeneralFinance = isGeneralFinanceRole(role) || accumulatedRoles.some(r => isGeneralFinanceRole(r))
   const canSeeManutencao    = userHasAnyRole(allRoles, MANUTENCAO_ROLES)
   const canSeeHospedagem    = userHasAnyRole(allRoles, HOSPEDAGEM_ROLES)
+  const canSeeCozinha       = userHasAnyRole(allRoles, KITCHEN_ROLES)
   const canBuyMeals         = true
   const canSeeReservas      = isManagement || isHospitalidade || is('lider_eted') || isObreiroEted || isAluno || isAssociado || isLiderMinisterio || isObreiroMinisterio
 
@@ -123,9 +124,9 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
     { href: `/${slug}/hospedagem/quartos`, label: 'Quartos',    icon: 'quartos',       show: canSeeHospedagem },
     { href: `/${slug}/hospedagem/lavanderia`, label: 'Lavanderia', icon: 'lavanderia', show: canSeeHospedagem && laundryEnabled },
     { href: `/${slug}/refeicoes`,    label: 'Minhas refeições', icon: 'refeicoes',     show: canBuyMeals },
-    { href: `/${slug}/cozinha`,      label: 'Cozinha',          icon: 'cozinha',       show: isManagement || is('secretaria') || isCozinha },
-    { href: `/${slug}/cozinha/estoque`, label: 'Estoque',       icon: 'estoque',       show: isManagement || is('secretaria') || isCozinha },
-    { href: `/${slug}/cozinha/receitas`, label: 'Receitas',     icon: 'receitas',      show: isManagement || is('secretaria') || isCozinha },
+    { href: `/${slug}/cozinha`,      label: 'Cozinha',          icon: 'cozinha',       show: canSeeCozinha },
+    { href: `/${slug}/cozinha/estoque`, label: 'Estoque',       icon: 'estoque',       show: canSeeCozinha },
+    { href: `/${slug}/cozinha/receitas`, label: 'Receitas',     icon: 'receitas',      show: canSeeCozinha },
     { href: `/${slug}/manutencao`,   label: 'Solicitações',     icon: 'solicitacoes',  show: true },
     { href: `/${slug}/manutencao/estoque`, label: 'Est. Manutenção', icon: 'estoque-manutencao', show: canSeeManutencao },
     { href: `/${slug}/financeiro`,   label: 'Financeiro',       icon: 'financeiro',    show: canSeeGeneralFinance },

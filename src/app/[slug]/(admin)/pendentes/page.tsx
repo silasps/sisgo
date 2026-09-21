@@ -744,7 +744,8 @@ export default async function PendentesPage({ params, searchParams }: Props) {
   // ── Server actions inline ───────────────────────────────────────────────────
   const handleServiceStatusUpdate = async (formData: FormData) => {
     'use server'
-    await updateServiceStatus(formData.get('request_id') as string, formData.get('status') as string, user!.id)
+    const resolutionNotes = formData.has('resolution_notes') ? (formData.get('resolution_notes') as string) : undefined
+    await updateServiceStatus(formData.get('request_id') as string, formData.get('status') as string, user!.id, resolutionNotes)
     redirect(`/${slug}/pendentes`)
   }
 

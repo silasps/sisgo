@@ -14,13 +14,15 @@ type Props = {
   personId: string | null
   guestName: string
   rooms: Room[]
+  defaultCheckIn?: string | null
+  defaultCheckOut?: string | null
 }
 
-export function HospedagemHandoffCard({ slug, organizationId, ministryId, staffApplicationId, personId, guestName, rooms }: Props) {
+export function HospedagemHandoffCard({ slug, organizationId, ministryId, staffApplicationId, personId, guestName, rooms, defaultCheckIn, defaultCheckOut }: Props) {
   const [roomId, setRoomId] = useState('')
   const [bedId, setBedId] = useState('')
-  const [checkIn, setCheckIn] = useState('')
-  const [checkOut, setCheckOut] = useState('')
+  const [checkIn, setCheckIn] = useState(defaultCheckIn ?? '')
+  const [checkOut, setCheckOut] = useState(defaultCheckOut ?? '')
   const [notes, setNotes] = useState('')
   const [done, setDone] = useState(false)
   const [error, setError] = useState('')
@@ -61,8 +63,9 @@ export function HospedagemHandoffCard({ slug, organizationId, ministryId, staffA
   return (
     <div className="space-y-3">
       <p className="text-xs text-gray-500">
-        Hospedagem já confirmada — isso não bloqueia a aprovação. Defina onde e quando {guestName} vai
-        chegar quando for conveniente, até a chegada.
+        Isso não bloqueia a aprovação — defina onde e quando {guestName} vai chegar quando for
+        conveniente, até a chegada.
+        {defaultCheckIn && ' Datas pré-preenchidas com a chegada informada — confira antes de salvar.'}
       </p>
       <div className="grid sm:grid-cols-2 gap-3">
         <div>

@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Camera, Loader2, KeyRound, Link2, Unlink, Trash2 } from 'lucide-react'
+import { Camera, Loader2, KeyRound, Link2, Unlink, Trash2, User } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { AvatarCropperModal } from '@/components/ui/AvatarCropperModal'
 
@@ -142,10 +142,10 @@ function ProfileSection({
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
-          className="relative w-20 h-20 rounded-full bg-brand-50 border border-brand-100 flex items-center justify-center text-brand-600 text-xl font-bold uppercase shrink-0 overflow-hidden group"
+          className="relative w-20 h-20 rounded-full bg-brand-50 border border-brand-100 flex items-center justify-center text-brand-600 shrink-0 overflow-hidden group"
           aria-label="Trocar foto de perfil"
         >
-          {preview ? <img src={preview} alt="" className="w-full h-full object-cover" /> : (name || email).charAt(0)}
+          {preview ? <img src={preview} alt="" className="w-full h-full object-cover" /> : <User size={28} strokeWidth={2.25} />}
           <span className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
             {uploading ? <Loader2 size={18} className="text-white animate-spin" /> : <Camera size={18} className="text-white" />}
           </span>

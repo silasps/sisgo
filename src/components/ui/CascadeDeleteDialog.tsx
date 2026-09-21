@@ -39,6 +39,12 @@ export function CascadeDeleteDialog({ itemLabel, itemName, details, onConfirm, c
     try {
       await onConfirm()
     } catch (e) {
+      // redirect() do Next lança um erro especial (digest "NEXT_REDIRECT")
+      // pra ser tratado pelo RedirectBoundary — não é uma falha de verdade,
+      // é assim que o redirect de sucesso da Server Action se propaga aqui.
+      if (e && typeof e === 'object' && 'digest' in e && String(e.digest).startsWith('NEXT_REDIRECT')) {
+        throw e
+      }
       toast.error(e instanceof Error ? e.message : 'Não foi possível remover.')
     } finally {
       setLoading(false)

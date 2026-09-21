@@ -739,59 +739,61 @@ async function PessoasTabContent({
                   Gerenciar todas →
                 </Link>
               </div>
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 w-14">Dias</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Nome</th>
-                    <th className="hidden sm:table-cell text-left px-4 py-3 font-medium text-gray-600">Tipo</th>
-                    <th className="hidden md:table-cell text-left px-4 py-3 font-medium text-gray-600">Escola</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
-                    <th className="text-right px-4 py-3 font-medium text-gray-600"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {inscritoItems.map(item => {
-                    const urgency = urgencyBadge(item.diasAberto)
-                    const statusInfo = INTEREST_STATUS[item.status] ?? { label: item.status, color: 'bg-gray-100 text-gray-500' }
-                    const tabDestino = item.tipo === 'Pré-inscrição' ? 'pre_inscricao' : item.tipo === 'Candidato a Aluno' ? 'aluno' : 'obreiro'
-                    return (
-                      <tr key={`${item.tipo}-${item.id}`} className="hover:bg-gray-50">
-                        <td className="px-4 py-3">
-                          <span className={`inline-flex items-center justify-center min-w-[2.5rem] px-2 py-0.5 rounded-full text-xs font-bold tabular-nums ${urgency.color}`}>
-                            {urgency.label}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <p className="font-medium text-gray-900">{item.nome}</p>
-                          {item.email && <p className="text-xs text-gray-400">{item.email}</p>}
-                        </td>
-                        <td className="hidden sm:table-cell px-4 py-3">
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${item.tipoColor}`}>
-                            {item.tipo}
-                          </span>
-                        </td>
-                        <td className="hidden md:table-cell px-4 py-3 text-xs text-gray-500">
-                          {item.escola ?? '—'}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusInfo.color}`}>
-                            {statusInfo.label}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <Link
-                            href={`/${slug}/inscricoes?tab=${tabDestino}`}
-                            className="text-xs text-brand-500 hover:text-brand-700 font-medium"
-                          >
-                            Gerenciar →
-                          </Link>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[620px] text-sm">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="text-left px-4 py-3 font-medium text-gray-600 w-14">Dias</th>
+                      <th className="text-left px-4 py-3 font-medium text-gray-600">Nome</th>
+                      <th className="hidden sm:table-cell text-left px-4 py-3 font-medium text-gray-600">Tipo</th>
+                      <th className="hidden md:table-cell text-left px-4 py-3 font-medium text-gray-600">Escola</th>
+                      <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
+                      <th className="text-right px-4 py-3 font-medium text-gray-600"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {inscritoItems.map(item => {
+                      const urgency = urgencyBadge(item.diasAberto)
+                      const statusInfo = INTEREST_STATUS[item.status] ?? { label: item.status, color: 'bg-gray-100 text-gray-500' }
+                      const tabDestino = item.tipo === 'Pré-inscrição' ? 'pre_inscricao' : item.tipo === 'Candidato a Aluno' ? 'aluno' : 'obreiro'
+                      return (
+                        <tr key={`${item.tipo}-${item.id}`} className="hover:bg-gray-50">
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex items-center justify-center min-w-[2.5rem] px-2 py-0.5 rounded-full text-xs font-bold tabular-nums ${urgency.color}`}>
+                              {urgency.label}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <p className="font-medium text-gray-900">{item.nome}</p>
+                            {item.email && <p className="text-xs text-gray-400">{item.email}</p>}
+                          </td>
+                          <td className="hidden sm:table-cell px-4 py-3">
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${item.tipoColor}`}>
+                              {item.tipo}
+                            </span>
+                          </td>
+                          <td className="hidden md:table-cell px-4 py-3 text-xs text-gray-500">
+                            {item.escola ?? '—'}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusInfo.color}`}>
+                              {statusInfo.label}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <Link
+                              href={`/${slug}/inscricoes?tab=${tabDestino}`}
+                              className="text-xs text-brand-500 hover:text-brand-700 font-medium whitespace-nowrap"
+                            >
+                              Gerenciar →
+                            </Link>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </>

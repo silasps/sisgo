@@ -1,10 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { createPortal } from 'react-dom'
-import { AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
-import { useSidebarLeftClass } from '@/components/layout/account-context'
+import { ConfirmModal } from './ConfirmModal'
 
 type Props = {
   title?: string
@@ -27,13 +25,18 @@ export function ConfirmDialog({
 }: Props) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
-  const sidebarLeftClass = useSidebarLeftClass()
 
   async function handleConfirm() {
     setLoading(true)
     try {
       await onConfirm()
     } catch (e) {
+      // redirect() do Next lança um erro especial (digest "NEXT_REDIRECT")
+      // pra ser tratado pelo RedirectBoundary — não é uma falha de verdade,
+      // é assim que o redirect de sucesso da Server Action se propaga aqui.
+      if (e && typeof e === 'object' && 'digest' in e && String(e.digest).startsWith('NEXT_REDIRECT')) {
+        throw e
+      }
       toast.error(e instanceof Error ? e.message : 'Não foi possível concluir a ação.')
     } finally {
       setLoading(false)
@@ -41,66 +44,20 @@ export function ConfirmDialog({
     }
   }
 
-  const confirmBtnClass = variant === 'danger'
-    ? 'bg-red-500 hover:bg-red-600 text-white'
-    : 'bg-amber-500 hover:bg-amber-600 text-white'
-
   return (
     <>
       <span onClick={() => setOpen(true)}>{children}</span>
-
-      {/* Portal pro <body> — sem isso, um <div fixed> nascido dentro de um
-          ancestral com transform (ex.: card com hover:-translate-y-0.5)
-          vira "fixed" em relação a esse ancestral, não à viewport, e o modal
-          aparece preso perto do botão que abriu em vez de centralizado. */}
-      {open && createPortal(
-        <div
-          className={`fixed inset-0 ${sidebarLeftClass} z-50 flex items-center justify-center bg-black/50 p-4`}
-          onClick={e => {
-            // stopPropagation sempre — sem isso, clicar em qualquer coisa
-            // aqui dentro borbulha via portal até o card clicável por trás
-            // (bloco/andar/quarto), disparando a navegação dele.
-            e.stopPropagation()
-            if (e.target === e.currentTarget && !loading) setOpen(false)
-          }}
-        >
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
-            <div className="p-6 space-y-4">
-              <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-full ${variant === 'danger' ? 'bg-red-50' : 'bg-amber-50'}`}>
-                  <AlertTriangle
-                    size={20}
-                    className={variant === 'danger' ? 'text-red-500' : 'text-amber-500'}
-                  />
-                </div>
-                <h2 className="font-semibold text-gray-900">{title}</h2>
-              </div>
-
-              <p className="text-sm text-gray-600 leading-relaxed">{message}</p>
-
-              <div className="flex gap-3 justify-end pt-1">
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  disabled={loading}
-                  className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-                >
-                  {cancelLabel}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirm}
-                  disabled={loading}
-                  className={`px-5 py-2 text-sm font-semibold rounded-lg transition-colors disabled:opacity-60 ${confirmBtnClass}`}
-                >
-                  {loading ? 'Aguarde…' : confirmLabel}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>,
-        document.body,
-      )}
+      <ConfirmModal
+        open={open}
+        title={title}
+        message={message}
+        confirmLabel={confirmLabel}
+        cancelLabel={cancelLabel}
+        variant={variant}
+        loading={loading}
+        onConfirm={handleConfirm}
+        onCancel={() => setOpen(false)}
+      />
     </>
   )
 }

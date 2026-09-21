@@ -112,6 +112,11 @@ export default async function QuartosPage({ params, searchParams }: Props) {
   }
   const totalRoomsCount = (allRoomsStatus ?? []).length
 
+  // Também não filtrado por aba — mesma lógica do totalRoomsCount acima.
+  const { count: totalBedsCount } = await sbAdmin.from('beds')
+    .select('id', { count: 'exact', head: true })
+    .eq('organization_id', org.id)
+
   const floorOptions = floorsList.map(f => ({
     id: f.id,
     name: f.name,
@@ -318,6 +323,7 @@ export default async function QuartosPage({ params, searchParams }: Props) {
   const kpiTiles: Array<{ key: string; label: string; value: number; href?: string; valueCls?: string }> = [
     { key: 'blocos',  label: 'Blocos',  value: blocksList.length },
     { key: 'andares', label: 'Andares', value: floorsList.length },
+    { key: 'camas',   label: 'Camas',   value: totalBedsCount ?? 0 },
     { key: 'todos',       label: 'Todos',      value: totalRoomsCount,        href: '?status=todos' },
     { key: 'ativo',       label: 'Ativos',     value: statusCounts.ativo,      href: '?status=ativo',      valueCls: 'text-green-600' },
     { key: 'manutencao',  label: 'Manutenção', value: statusCounts.manutencao, href: '?status=manutencao', valueCls: 'text-yellow-600' },
@@ -338,7 +344,7 @@ export default async function QuartosPage({ params, searchParams }: Props) {
           </Link>
         </div>
 
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+        <div className="grid grid-cols-3 sm:grid-cols-7 gap-2">
           {kpiTiles.map(tile => {
             const isActive = !!tile.href && activeTab === tile.key
             const cls = `rounded-xl border px-3 py-2.5 transition-colors ${

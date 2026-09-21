@@ -19,6 +19,8 @@ import { MinistryLinkCard } from './MinistryLinkCard'
 import { InscricoesList } from './InscricoesList'
 import { criarPreInscricaoManual, criarPreInscricaoObreiroManual } from './actions'
 import { SearchBar } from '@/components/ui/SearchBar'
+import { getPeopleFinanceSummaries, type PersonFinanceSummary } from '@/lib/finance/personFinanceStatus'
+import { notifyFinancePendency } from '@/lib/finance/notifyFinancePendency'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -61,6 +63,7 @@ type InscricaoItem = {
   hospedagemArrivalDate?: string | null
   hospedagemDepartureDate?: string | null
   candidateArrivalDate?: string | null
+  financeSummary?: PersonFinanceSummary | null
 }
 
 type BackgroundCheckRow = { id: string; check_type: string; country: string | null; status: string; issued_at: string | null; expires_at: string | null; notes: string | null; flagged_concern: boolean }
@@ -477,6 +480,27 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     }
     if (personId && classId) {
       await enrollStudent({ organizationId: orgIdForm, personId, classId, acceptedBy: actingUser?.id ?? null })
+
+      const notifyCandidate = formData.get('notify_candidate') === 'on'
+      const notifyLeader = formData.get('notify_leader') === 'on'
+      if (notifyCandidate || notifyLeader) {
+        let leaderEmail: string | null = null
+        if (notifyLeader && approvedClassRow) {
+          const { data: leaderRow } = await db.from('school_leaders').select('user_id').eq('school_id', approvedClassRow.school_id).maybeSingle()
+          if (leaderRow?.user_id) {
+            const { data: leaderUser } = await db.auth.admin.getUserById(leaderRow.user_id)
+            leaderEmail = leaderUser.user?.email ?? null
+          }
+        }
+        const { data: personRowForNotify } = await db.from('people').select('full_name').eq('id', personId).maybeSingle()
+        await notifyFinancePendency({
+          organizationId: orgIdForm,
+          personId,
+          personName: personRowForNotify?.full_name ?? 'Pessoa',
+          notifyCandidate,
+          notifyLeaderEmail: leaderEmail,
+        })
+      }
     }
     let candidateLanguage: string | null | undefined
     if (tipo === 'pre_inscricao') {
@@ -694,6 +718,26 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       started_at: now,
       created_by: actingUser?.id ?? null,
     })
+
+    const notifyCandidate = formData.get('notify_candidate') === 'on'
+    const notifyLeader = formData.get('notify_leader') === 'on'
+    if (notifyCandidate || notifyLeader) {
+      let leaderEmail: string | null = null
+      if (notifyLeader && ministryId) {
+        const { data: leaderRow } = await db.from('ministry_leaders').select('user_id').eq('ministry_id', ministryId).maybeSingle()
+        if (leaderRow?.user_id) {
+          const { data: leaderUser } = await db.auth.admin.getUserById(leaderRow.user_id)
+          leaderEmail = leaderUser.user?.email ?? null
+        }
+      }
+      await notifyFinancePendency({
+        organizationId: orgIdForm,
+        personId,
+        personName: (formData.get('name') as string | null) || 'Pessoa',
+        notifyCandidate,
+        notifyLeaderEmail: leaderEmail,
+      })
+    }
 
     // E-mail de aprovação — best-effort, não bloqueia o redirect
     const { data: orgRow } = await db.from('organizations').select('name, email').eq('id', orgIdForm).maybeSingle()
@@ -1344,6 +1388,13 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     }
     const { data } = studentAppsRes
 
+    const studentPersonIds = [...new Set(
+      ((data ?? []) as unknown as SAraw[])
+        .map(r => (r.people as { id: string } | null)?.id)
+        .filter((pid): pid is string => Boolean(pid))
+    )]
+    const studentFinanceMap = await getPeopleFinanceSummaries(orgId, studentPersonIds)
+
     for (const r of ((data ?? []) as unknown as SAraw[])) {
       const pessoa = r.people as { id: string; full_name: string } | null
       const escola = r.schools as { id: string; name: string } | null
@@ -1372,6 +1423,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           criadoEm: r.applied_at, diasAberto: daysAgo(r.applied_at),
           diasNaEtapaAtual: daysAgo(r.reviewed_at ?? r.applied_at),
           personId: pessoa?.id ?? null,
+          financeSummary: pessoa?.id ? studentFinanceMap.get(pessoa.id) ?? null : null,
         })
       }
     }
@@ -1467,6 +1519,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       .filter((id): id is string => Boolean(id))
     const staffEmailsByPerson = new Map<string, string>()
     const staffLoginByPerson = new Set<string>()
+    const staffFinanceMap = await getPeopleFinanceSummaries(orgId, staffPersonIds)
 
     if (staffPersonIds.length > 0) {
       const [{ data: contacts }, { data: profiles }] = await Promise.all([
@@ -1528,6 +1581,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           pastorSkipped: !!r.pastor_reference_skip_reason,
           hospedagemSkipped: !!r.hospedagem_skip_reason,
           candidateArrivalDate: (r.form_data as Record<string, Record<string, string>> | null)?.s6?.data_chegada || null,
+          financeSummary: pessoa?.id ? staffFinanceMap.get(pessoa.id) ?? null : null,
         })
       }
     }

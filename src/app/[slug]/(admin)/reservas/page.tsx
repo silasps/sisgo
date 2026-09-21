@@ -8,7 +8,7 @@ import { createReservation, updateReservationStatus, cancelReservation, cancelAp
 import { getAvailableRoomsAnyDestination, createAllocation, allocateWholeRoom, cancelAllocation, type AvailableRoom } from '../hospedagem/actions'
 import { getRolePreview } from '@/lib/role-preview'
 import { ReservationFormSettingsEditor } from './ReservationFormSettingsEditor'
-import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
+import { isManagementRole, isOperationalManager, canSeeHospedagem } from '@/lib/auth/permissions'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -459,7 +459,7 @@ export default async function ReservasPage({ params, searchParams }: Props) {
 
   const handleUpdateFormSettings = async (formData: FormData) => {
     'use server'
-    if (!canWrite && !isHospitalidade) return
+    if (!canSeeHospedagem(role)) return
 
     const fields = RESERVATION_FORM_FIELDS.reduce((acc, field) => {
       const label = String(formData.get(`${field.key}_label`) ?? '').trim()
@@ -634,7 +634,7 @@ export default async function ReservasPage({ params, searchParams }: Props) {
           </div>
         )}
 
-        {(canWrite || isHospitalidade) && (
+        {canSeeHospedagem(role) && (
           <ReservationFormSettingsEditor
             action={handleUpdateFormSettings}
             fixedFields={RESERVATION_FORM_FIELDS.map(field => ({

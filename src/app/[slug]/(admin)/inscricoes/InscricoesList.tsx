@@ -7,7 +7,8 @@ import { Search, ClipboardList, Mail, MessageCircle, ChevronDown, Link2, Loader2
 import { Modal } from '@/components/ui/Modal'
 import { RecusarModal, ExcluirModal } from './RecusarModal'
 import { DisponibilizarFormularioButton } from './DisponibilizarFormularioButton'
-import { PipelineStepper, stagesFromFlags } from '@/components/inscricoes/PipelineStepper'
+import { PipelineStepper } from '@/components/inscricoes/PipelineStepper'
+import { stagesFromFlags } from '@/components/inscricoes/pipelineStages'
 import BackgroundChecksSection, { type BackgroundCheck } from './formulario-obreiro/[id]/BackgroundChecksSection'
 import { solicitarHospedagemObreiro, reenviarEmailFormularioObreiro } from './formulario-obreiro/[id]/actions'
 import { toast } from 'sonner'
@@ -20,6 +21,9 @@ import {
 } from './InscricoesModals'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { useAccount } from '@/components/layout/account-context'
+import type { PersonFinanceSummary } from '@/lib/finance/personFinanceStatus'
+import { PersonFinanceBadge } from '@/components/finance/PersonFinanceBadge'
+import { FinancePendingConfirmButton } from '@/components/finance/FinancePendingConfirmButton'
 
 type InscricaoItem = {
   id: string
@@ -57,6 +61,7 @@ type InscricaoItem = {
   hospedagemArrivalDate?: string | null
   hospedagemDepartureDate?: string | null
   candidateArrivalDate?: string | null
+  financeSummary?: PersonFinanceSummary | null
 }
 
 type HistoricoItem = {
@@ -1326,7 +1331,21 @@ export function InscricoesList({
                                 </div>
                               </details>
                             )}
-                            <AceitarAlunoButton formularioPreenchido={formularioPreenchido} />
+                            {item.financeSummary && (item.financeSummary.pendingCount > 0 || item.financeSummary.overdueCount > 0) && (
+                              <PersonFinanceBadge summary={item.financeSummary} />
+                            )}
+                            {formularioPreenchido && item.financeSummary && (item.financeSummary.pendingCount > 0 || item.financeSummary.overdueCount > 0) ? (
+                              <FinancePendingConfirmButton
+                                action={aprovar}
+                                financeSummary={item.financeSummary}
+                                personName={item.nome}
+                                className="w-full text-xs px-3 py-2 rounded-lg font-semibold transition-colors bg-green-50 text-green-700 hover:bg-green-100"
+                              >
+                                ✓ Aceitar aluno
+                              </FinancePendingConfirmButton>
+                            ) : (
+                              <AceitarAlunoButton formularioPreenchido={formularioPreenchido} />
+                            )}
                           </form>
                         )
                       })()}
@@ -1394,9 +1413,23 @@ export function InscricoesList({
                                   Estou ciente do alerta de antecedentes e assumo a decisão de finalizar mesmo assim.
                                 </label>
                               )}
-                              <button type="submit" className="w-full text-sm px-3 py-2.5 bg-green-600 text-white hover:bg-green-700 rounded-xl transition-colors font-semibold">
-                                Finalizar obreiro
-                              </button>
+                              {item.financeSummary && (item.financeSummary.pendingCount > 0 || item.financeSummary.overdueCount > 0) && (
+                                <PersonFinanceBadge summary={item.financeSummary} />
+                              )}
+                              {item.financeSummary && (item.financeSummary.pendingCount > 0 || item.financeSummary.overdueCount > 0) ? (
+                                <FinancePendingConfirmButton
+                                  action={finalizarObreiro}
+                                  financeSummary={item.financeSummary}
+                                  personName={item.nome}
+                                  className="w-full text-sm px-3 py-2.5 bg-green-600 text-white hover:bg-green-700 rounded-xl transition-colors font-semibold"
+                                >
+                                  Finalizar obreiro
+                                </FinancePendingConfirmButton>
+                              ) : (
+                                <button type="submit" className="w-full text-sm px-3 py-2.5 bg-green-600 text-white hover:bg-green-700 rounded-xl transition-colors font-semibold">
+                                  Finalizar obreiro
+                                </button>
+                              )}
                             </form>
                           </ActionModalButton>
                         </>

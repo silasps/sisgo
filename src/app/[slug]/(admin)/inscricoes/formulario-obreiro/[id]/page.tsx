@@ -4,7 +4,8 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getRolePreview } from '@/lib/role-preview'
 import { Pencil } from 'lucide-react'
-import { PipelineStepper, stagesFromFlags } from '@/components/inscricoes/PipelineStepper'
+import { PipelineStepper } from '@/components/inscricoes/PipelineStepper'
+import { stagesFromFlags } from '@/components/inscricoes/pipelineStages'
 import { AvancarEtapaControl, AdvanceHistoryList } from '@/components/inscricoes/AvancarEtapaControl'
 import { DocumentPreviewGrid } from '@/components/inscricoes/DocumentPreviewGrid'
 import { IncompleteFormLinkCard } from '@/components/inscricoes/IncompleteFormLinkCard'
@@ -19,6 +20,8 @@ import { avancarEtapaObreiro, reenviarLinkFormularioObreiro, reenviarEmailFormul
 import { RefreshOnFocus } from '@/components/ui/RefreshOnFocus'
 import { StickyPageHeader } from '@/components/inscricoes/StickyPageHeader'
 import { SectionCard } from '@/components/inscricoes/SectionCard'
+import { getPersonFinanceSummary, type PersonFinanceSummary } from '@/lib/finance/personFinanceStatus'
+import { PersonFinanceBadge } from '@/components/finance/PersonFinanceBadge'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
@@ -460,6 +463,17 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
 
   if (!app) notFound()
 
+  let wasStudentBefore = false
+  let exAlunoFinanceSummary: PersonFinanceSummary | null = null
+  if (canManageChecks && app.person_id) {
+    const [{ data: priorStudentProfile }, summary] = await Promise.all([
+      sb.from('student_profiles').select('id').eq('person_id', app.person_id).limit(1).maybeSingle(),
+      getPersonFinanceSummary(app.organization_id, app.person_id),
+    ])
+    wasStudentBefore = !!priorStudentProfile
+    exAlunoFinanceSummary = summary
+  }
+
   let skippedByName: string | null = null
   if (app.pastor_reference_skipped_by) {
     const { data: skipUser } = await sb.auth.admin.getUserById(app.pastor_reference_skipped_by)
@@ -537,7 +551,7 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
 
   const { data: hospRequest } = await sb
     .from('service_requests')
-    .select('status, requested_arrival_date, requested_departure_date, description')
+    .select('status, requested_arrival_date, requested_departure_date, description, resolution_notes')
     .eq('staff_application_id', id)
     .eq('request_type', 'hospedagem_obreiro')
     .order('created_at', { ascending: false })
@@ -548,6 +562,7 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
   const canHandoffHospedagem = canRequestHospedagem && hospedagemResolved
 
   let rooms: { id: string; name: string; floor: string | null; allocation_mode: string; beds: { id: string; label: string; status: string }[] }[] = []
+  let existingAllocation: { roomName: string; bedLabel: string | null; checkIn: string; checkOut: string } | null = null
   if (canHandoffHospedagem) {
     const { data: roomRows } = await sb
       .from('rooms')
@@ -557,6 +572,26 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
       .order('display_order', { ascending: true })
     rooms = ((roomRows ?? []) as unknown as Array<{ id: string; name: string; allocation_mode: string; beds: { id: string; label: string; status: string }[]; floors: { name: string } | null }>)
       .map(r => ({ id: r.id, name: r.name, floor: r.floors?.name ?? null, allocation_mode: r.allocation_mode, beds: r.beds }))
+
+    // O status "resolvido" da solicitação só diz que a hospitalidade
+    // confirmou ter vaga — não garante que um quarto/cama já foi de fato
+    // registrado (dado antigo, criado antes de existir a alocação
+    // obrigatória, por exemplo). Checa se já existe alocação de verdade
+    // antes de repetir o formulário de criação.
+    if (app.person_id) {
+      const { data: allocRow } = await sb
+        .from('room_allocations')
+        .select('check_in, check_out, rooms(name), beds(label)')
+        .eq('person_id', app.person_id)
+        .neq('status', 'cancelada')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      const alloc = allocRow as unknown as { check_in: string; check_out: string; rooms: { name: string } | null; beds: { label: string } | null } | null
+      if (alloc) {
+        existingAllocation = { roomName: alloc.rooms?.name ?? '—', bedLabel: alloc.beds?.label ?? null, checkIn: alloc.check_in, checkOut: alloc.check_out }
+      }
+    }
   }
 
   const { data: backgroundChecks } = await sb
@@ -574,6 +609,14 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
 
   const allFields = Object.values(sectionData).reduce<Record<string, string>>((acc, sec) => ({ ...acc, ...sec }), {})
 
+  // Encadeia as fontes de data de chegada: o que a hospitalidade/líder já
+  // confirmou na solicitação tem prioridade; na ausência disso, usa o que o
+  // próprio candidato informou no formulário — evita pedir de novo uma
+  // informação que já existe.
+  const candidateArrivalDate = allFields.data_chegada || null
+  const defaultArrivalDate = hospRequest?.requested_arrival_date ?? candidateArrivalDate
+  const defaultDepartureDate = hospRequest?.requested_departure_date ?? null
+
   const stageAdvances = await getStageAdvances(sb, 'obreiro', id)
   const advancerNames = await resolveAdvancerNames(sb, stageAdvances)
   const advancedLabels = new Set(stageAdvances.map(a => a.to_stage))
@@ -588,17 +631,6 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
   ]
   const stages = stagesFromFlags(STAGE_LABELS, naturalFlags.map((f, i) => f || advancedLabels.has(STAGE_LABELS[i])))
   const currentStageLabel = stages.find(s => s.status === 'current')?.label ?? null
-  // Pra onde o "Detalhes →" do stepper deve levar: a seção desta página que
-  // resolve a etapa pendente — exceto "Aprovado", que não tem seção aqui
-  // (a aprovação em si é feita na lista de inscrições).
-  const STAGE_ANCHORS: Record<string, string> = {
-    'Recomendação do pastor': '#referencias',
-    'Verificação de antecedentes': '#antecedentes',
-    'Hospedagem': '#hospitalidade',
-  }
-  const stepperHref = currentStageLabel === 'Aprovado'
-    ? `/${slug}/inscricoes?tab=obreiro`
-    : (currentStageLabel ? STAGE_ANCHORS[currentStageLabel] : undefined)
 
   return (
     <>
@@ -621,7 +653,7 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
               </span>
             </div>
             <div className="mt-2">
-              <PipelineStepper stages={stages} href={stepperHref} />
+              <PipelineStepper stages={stages} />
               {canManagePastorSkip && (
                 <AvancarEtapaControl
                   currentStageLabel={currentStageLabel}
@@ -648,6 +680,14 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
       }>
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-4">
+        {wasStudentBefore && exAlunoFinanceSummary && (
+          <SectionCard title="Situação financeira (ex-aluno)">
+            <p className="text-xs text-gray-500 mb-2">
+              Este candidato já foi aluno da instituição — situação financeira para sua avaliação. Não bloqueia a aprovação.
+            </p>
+            <PersonFinanceBadge summary={exAlunoFinanceSummary} />
+          </SectionCard>
+        )}
         {app.status === 'rascunho' && (() => {
           const organizationId = app.organization_id
           async function handleResendEmail() {
@@ -825,9 +865,10 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
                   staffApplicationId={id}
                   guestName={nomeCandidato}
                   status={hospRequest?.status ?? null}
-                  requestedArrivalDate={hospRequest?.requested_arrival_date ?? null}
-                  requestedDepartureDate={hospRequest?.requested_departure_date ?? null}
+                  requestedArrivalDate={defaultArrivalDate}
+                  requestedDepartureDate={defaultDepartureDate}
                   requestNotes={hospRequest?.description ?? null}
+                  resolutionNotes={hospRequest?.resolution_notes ?? null}
                 />
               )}
               <HospedagemGate
@@ -840,17 +881,36 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
                 skippedAt={app.hospedagem_skipped_at}
                 readOnly={!canManagePastorSkip}
               />
-              {canHandoffHospedagem && (
-                <HospedagemHandoffCard
-                  slug={slug}
-                  organizationId={app.organization_id}
-                  ministryId={app.ministry_id}
-                  staffApplicationId={id}
-                  personId={app.person_id}
-                  guestName={nomeCandidato}
-                  rooms={rooms}
-                />
-              )}
+              {canHandoffHospedagem && (existingAllocation ? (
+                <div className="rounded-lg bg-green-50 border border-green-200 px-3 py-2 text-sm text-green-800">
+                  <p className="font-semibold">
+                    Quarto já registrado: {existingAllocation.roomName}
+                    {existingAllocation.bedLabel ? ` — ${existingAllocation.bedLabel}` : ''}
+                  </p>
+                  <p className="text-xs text-green-700 mt-0.5">
+                    {new Date(existingAllocation.checkIn + 'T00:00:00').toLocaleDateString('pt-BR')} até{' '}
+                    {new Date(existingAllocation.checkOut + 'T00:00:00').toLocaleDateString('pt-BR')}
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    A hospitalidade confirmou que há vaga, mas nenhum quarto/cama foi registrado no
+                    sistema ainda — preencha abaixo para completar a alocação.
+                  </p>
+                  <HospedagemHandoffCard
+                    slug={slug}
+                    organizationId={app.organization_id}
+                    ministryId={app.ministry_id}
+                    staffApplicationId={id}
+                    personId={app.person_id}
+                    guestName={nomeCandidato}
+                    rooms={rooms}
+                    defaultCheckIn={defaultArrivalDate}
+                    defaultCheckOut={defaultDepartureDate}
+                  />
+                </>
+              ))}
             </div>
           </SectionCard>
         )}

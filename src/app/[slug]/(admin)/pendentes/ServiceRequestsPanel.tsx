@@ -94,6 +94,8 @@ function HospedagemResolver({ req, organizationId, resolverComAlocacao, resolver
   const departureAlreadyIndefinite = isIndefiniteCheckout(req.requested_departure_date)
   const [checkOut, setCheckOut] = useState(departureAlreadyIndefinite ? '' : req.requested_departure_date ?? '')
   const [showAllocation, setShowAllocation] = useState(false)
+  const [showNoRoomForm, setShowNoRoomForm] = useState(false)
+  const [noRoomReason, setNoRoomReason] = useState('')
   const { isPending: pending, run } = usePendingAction()
 
   // Cônjuge/filhos vindo junto (dado que já existe na candidatura) — quando
@@ -112,11 +114,15 @@ function HospedagemResolver({ req, organizationId, resolverComAlocacao, resolver
 
   // A hospitalidade só diz se tem quarto ou não — se não tem, a decisão de
   // como resolver (esperar vaga, buscar fora, etc.) é do líder, não dela.
-  function semQuartoDisponivel() {
+  // Exige justificativa: ela é o que aparece de volta no fluxo de aprovação
+  // pro líder/DH entenderem o motivo, em vez de um "rejeitado" seco.
+  function confirmarSemDisponibilidade() {
+    if (!noRoomReason.trim()) return
     run(true, async () => {
       const fd = new FormData()
       fd.set('request_id', req.id)
       fd.set('status', 'rejeitado')
+      fd.set('resolution_notes', noRoomReason.trim())
       await handleStatusUpdate(fd)
       onDone()
     })
@@ -154,16 +160,37 @@ function HospedagemResolver({ req, organizationId, resolverComAlocacao, resolver
           </p>
         </div>
       )}
-      <div className="flex gap-2">
-        <button type="button" onClick={() => setShowAllocation(true)} disabled={pending}
-          className="flex-1 px-4 py-2 bg-gray-900 text-white text-xs font-semibold rounded-xl hover:bg-gray-800 disabled:opacity-50">
-          {actionLabel}
-        </button>
-        <button type="button" onClick={semQuartoDisponivel} disabled={pending}
-          className="flex-1 px-4 py-2 bg-red-50 text-red-700 text-xs font-semibold rounded-xl hover:bg-red-100 disabled:opacity-50">
-          {pending ? 'Registrando…' : 'Não há disponibilidade'}
-        </button>
-      </div>
+      {!showNoRoomForm ? (
+        <div className="flex gap-2">
+          <button type="button" onClick={() => setShowAllocation(true)} disabled={pending}
+            className="flex-1 px-4 py-2 bg-gray-900 text-white text-xs font-semibold rounded-xl hover:bg-gray-800 disabled:opacity-50">
+            {actionLabel}
+          </button>
+          <button type="button" onClick={() => setShowNoRoomForm(true)} disabled={pending}
+            className="flex-1 px-4 py-2 bg-red-50 text-red-700 text-xs font-semibold rounded-xl hover:bg-red-100 disabled:opacity-50">
+            Não há disponibilidade
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-2 rounded-lg border border-red-200 bg-red-50 p-3">
+          <label className="block text-xs font-semibold text-red-800">
+            Explique o motivo — o líder/DH vai ver essa justificativa
+          </label>
+          <textarea value={noRoomReason} onChange={e => setNoRoomReason(e.target.value)} rows={2} autoFocus
+            placeholder="Ex.: sem cama disponível pro gênero na data pedida, só a partir de 10/10…"
+            className="w-full rounded-lg border border-red-200 px-2 py-1.5 text-xs text-gray-700" />
+          <div className="flex gap-2">
+            <button type="button" onClick={confirmarSemDisponibilidade} disabled={pending || !noRoomReason.trim()}
+              className="flex-1 px-4 py-2 bg-red-600 text-white text-xs font-semibold rounded-xl hover:bg-red-700 disabled:opacity-50">
+              {pending ? 'Registrando…' : 'Confirmar sem disponibilidade'}
+            </button>
+            <button type="button" onClick={() => setShowNoRoomForm(false)} disabled={pending}
+              className="px-4 py-2 bg-white border border-gray-200 text-gray-600 text-xs font-semibold rounded-xl hover:bg-gray-50 disabled:opacity-50">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
       <p className="text-xs text-gray-400">
         Sem vaga, a decisão de como resolver com a pessoa fica com o líder — a hospitalidade só confirma se há espaço.
       </p>
@@ -523,28 +550,39 @@ export function ServiceRequestsPanel({ requests, title, handleStatusUpdate, reso
                     </SubmitButton>
                   </form>
                 )}
-                {selected.status !== 'resolvido' && HOSPEDAGEM_TYPES.includes(selected.request_type) && resolverComAlocacao && organizationId ? (
-                  <HospedagemResolver
-                    req={selected}
-                    organizationId={organizationId}
-                    resolverComAlocacao={resolverComAlocacao}
-                    resolverComAlocacaoQuarto={resolverComAlocacaoQuarto}
-                    markEmAnalise={markEmAnalise}
-                    handleStatusUpdate={handleStatusUpdate}
-                    onDone={() => setSelected(null)}
-                    slug={slug}
-                  />
-                ) : selected.status !== 'resolvido' && (
-                  <form action={handleStatusUpdate}>
-                    <input type="hidden" name="request_id" value={selected.id} />
-                    <SubmitButton
-                      name="status" value="resolvido"
-                      className="w-full px-4 py-2.5 bg-green-500 text-white hover:bg-green-600 disabled:opacity-50 rounded-xl text-sm font-semibold transition-colors"
-                      pendingText="Salvando…"
-                    >
-                      ✓ Marcar como Resolvido
-                    </SubmitButton>
-                  </form>
+                {selected.status !== 'resolvido' && (
+                  HOSPEDAGEM_TYPES.includes(selected.request_type) ? (
+                    resolverComAlocacao && organizationId ? (
+                      <HospedagemResolver
+                        req={selected}
+                        organizationId={organizationId}
+                        resolverComAlocacao={resolverComAlocacao}
+                        resolverComAlocacaoQuarto={resolverComAlocacaoQuarto}
+                        markEmAnalise={markEmAnalise}
+                        handleStatusUpdate={handleStatusUpdate}
+                        onDone={() => setSelected(null)}
+                        slug={slug}
+                      />
+                    ) : (
+                      // Pedido de hospedagem sem os handlers de alocação disponíveis
+                      // nesta tela — nunca deixa "resolver" sem quarto/justificativa
+                      // pelo atalho genérico abaixo.
+                      <p className="text-xs text-gray-400 text-center py-2">
+                        Abra esta solicitação pelo módulo de Hospedagem para alocar ou justificar indisponibilidade.
+                      </p>
+                    )
+                  ) : (
+                    <form action={handleStatusUpdate}>
+                      <input type="hidden" name="request_id" value={selected.id} />
+                      <SubmitButton
+                        name="status" value="resolvido"
+                        className="w-full px-4 py-2.5 bg-green-500 text-white hover:bg-green-600 disabled:opacity-50 rounded-xl text-sm font-semibold transition-colors"
+                        pendingText="Salvando…"
+                      >
+                        ✓ Marcar como Resolvido
+                      </SubmitButton>
+                    </form>
+                  )
                 )}
                 <button
                   type="button"

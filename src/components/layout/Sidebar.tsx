@@ -126,11 +126,9 @@ export function Sidebar({ items, isOpen = false, onClose, user, collapsed = fals
             return (
               <div key={`div-${idx}`} className="pt-3 pb-1 mx-1">
                 <div className="border-t border-dark-800 mb-2" />
-                {expanded && (
-                  <span className="px-2 text-[10px] font-semibold uppercase tracking-widest text-gray-600 select-none">
-                    {item.label}
-                  </span>
-                )}
+                <span className={`px-2 text-[10px] font-semibold uppercase tracking-widest text-gray-600 select-none ${!expanded ? 'md:hidden' : ''}`}>
+                  {item.label}
+                </span>
               </div>
             )
           }

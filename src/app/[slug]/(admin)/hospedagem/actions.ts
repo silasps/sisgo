@@ -797,67 +797,122 @@ export async function bulkImportHospedagemStructure(params: {
     bedKeys.add(`${b.room_id}::${b.label.trim().toLowerCase()}`)
   }
 
-  let blocksCreated = 0, floorsCreated = 0, roomsCreated = 0, bedsCreated = 0
-  const roomsTouched = new Set<string>()
+  // Get-or-create em lote por nível (bloco → andar → quarto → cama), em vez
+  // de uma ida ao banco por LINHA da planilha — com 250+ camas isso trocava
+  // ~500 chamadas sequenciais por ~5, cada nível resolvido de uma vez só.
 
+  // ── Blocos ───────────────────────────────────────────────────────────────
+  const newBlockNames = new Map<string, string>() // key (lowercase) → nome original da 1ª ocorrência
   for (const row of params.rows) {
-    const blockKey = row.bloco.trim().toLowerCase()
-    let blockId = blockByName.get(blockKey)
-    if (!blockId) {
-      const { data, error } = await sb.from('blocks').insert({
-        organization_id: params.organizationId, name: row.bloco.trim(), created_by: params.createdBy,
-      }).select('id').single()
-      if (error) throw new Error(`Bloco "${row.bloco}": ${error.message}`)
-      blockId = (data as { id: string }).id
-      blockByName.set(blockKey, blockId)
-      blocksCreated++
-    }
-
-    const floorKey = `${blockId}::${row.andar.trim().toLowerCase()}`
-    let floorId = floorByKey.get(floorKey)
-    if (!floorId) {
-      const { data, error } = await sb.from('floors').insert({
-        organization_id: params.organizationId, block_id: blockId, name: row.andar.trim(),
-        destination: row.andarDestino, gender_constraint: row.andarGenero, created_by: params.createdBy,
-      }).select('id').single()
-      if (error) throw new Error(`Andar "${row.andar}" (bloco "${row.bloco}"): ${error.message}`)
-      floorId = (data as { id: string }).id
-      floorByKey.set(floorKey, floorId)
-      floorsCreated++
-    }
-
-    const roomKey = `${floorId}::${row.quarto.trim().toLowerCase()}`
-    let roomId = roomByKey.get(roomKey)
-    if (!roomId) {
-      const { data, error } = await sb.from('rooms').insert({
-        organization_id: params.organizationId, floor_id: floorId, name: row.quarto.trim(),
-        type: row.quartoTipo, gender_constraint: row.quartoGenero, destination: row.quartoDestino,
-        allocation_mode: row.quartoModo, capacity: 0, notes: null, created_by: params.createdBy,
-      }).select('id').single()
-      if (error) throw new Error(`Quarto "${row.quarto}" (andar "${row.andar}"): ${error.message}`)
-      roomId = (data as { id: string }).id
-      roomByKey.set(roomKey, roomId)
-      roomsCreated++
-    }
-
-    const label = row.camaRotulo?.trim()
-    if (label) {
-      const bedKey = `${roomId}::${label.toLowerCase()}`
-      if (bedKeys.has(bedKey)) {
-        warnings.push(`Cama "${label}" já existia no quarto "${row.quarto}" — não duplicada.`)
-      } else {
-        const { error } = await sb.from('beds').insert({
-          room_id: roomId, organization_id: params.organizationId, label, type: row.camaTipo, notes: null,
-        })
-        if (error) throw new Error(`Cama "${label}" (quarto "${row.quarto}"): ${error.message}`)
-        bedKeys.add(bedKey)
-        bedsCreated++
-        roomsTouched.add(roomId)
-      }
-    }
+    const key = row.bloco.trim().toLowerCase()
+    if (!blockByName.has(key) && !newBlockNames.has(key)) newBlockNames.set(key, row.bloco.trim())
+  }
+  let blocksCreated = 0
+  if (newBlockNames.size > 0) {
+    const { data, error } = await sb.from('blocks')
+      .insert([...newBlockNames.values()].map(name => ({ organization_id: params.organizationId, name, created_by: params.createdBy })))
+      .select('id, name')
+    if (error) throw new Error(`Blocos (${[...newBlockNames.values()].join(', ')}): ${error.message}`)
+    for (const b of data as Array<{ id: string; name: string }>) blockByName.set(b.name.trim().toLowerCase(), b.id)
+    blocksCreated = data.length
   }
 
-  for (const roomId of roomsTouched) await syncRoomCapacity(roomId, params.organizationId)
+  // ── Andares (dedup por bloco+nome; destino/gênero vêm da 1ª linha que os referencia) ──
+  const newFloors = new Map<string, { blockId: string; name: string; destino: string | null; genero: string | null }>()
+  for (const row of params.rows) {
+    const blockId = blockByName.get(row.bloco.trim().toLowerCase())!
+    const key = `${blockId}::${row.andar.trim().toLowerCase()}`
+    if (!floorByKey.has(key) && !newFloors.has(key)) {
+      newFloors.set(key, { blockId, name: row.andar.trim(), destino: row.andarDestino, genero: row.andarGenero })
+    }
+  }
+  let floorsCreated = 0
+  if (newFloors.size > 0) {
+    const entries = [...newFloors.values()]
+    const { data, error } = await sb.from('floors')
+      .insert(entries.map(f => ({
+        organization_id: params.organizationId, block_id: f.blockId, name: f.name,
+        destination: f.destino, gender_constraint: f.genero, created_by: params.createdBy,
+      })))
+      .select('id, block_id, name')
+    if (error) throw new Error(`Andares (${entries.map(f => f.name).join(', ')}): ${error.message}`)
+    for (const f of data as Array<{ id: string; block_id: string; name: string }>) {
+      floorByKey.set(`${f.block_id}::${f.name.trim().toLowerCase()}`, f.id)
+    }
+    floorsCreated = data.length
+  }
+
+  // ── Quartos (dedup por andar+nome) ──────────────────────────────────────
+  const newRooms = new Map<string, { floorId: string; name: string; tipo: string; genero: string | null; destino: string; modo: string }>()
+  for (const row of params.rows) {
+    const blockId = blockByName.get(row.bloco.trim().toLowerCase())!
+    const floorId = floorByKey.get(`${blockId}::${row.andar.trim().toLowerCase()}`)!
+    const key = `${floorId}::${row.quarto.trim().toLowerCase()}`
+    if (!roomByKey.has(key) && !newRooms.has(key)) {
+      newRooms.set(key, { floorId, name: row.quarto.trim(), tipo: row.quartoTipo, genero: row.quartoGenero, destino: row.quartoDestino, modo: row.quartoModo })
+    }
+  }
+  let roomsCreated = 0
+  if (newRooms.size > 0) {
+    const entries = [...newRooms.values()]
+    const { data, error } = await sb.from('rooms')
+      .insert(entries.map(r => ({
+        organization_id: params.organizationId, floor_id: r.floorId, name: r.name,
+        type: r.tipo, gender_constraint: r.genero, destination: r.destino,
+        allocation_mode: r.modo, capacity: 0, notes: null, created_by: params.createdBy,
+      })))
+      .select('id, floor_id, name')
+    if (error) throw new Error(`Quartos (${entries.map(r => r.name).join(', ')}): ${error.message}`)
+    for (const r of data as Array<{ id: string; floor_id: string; name: string }>) {
+      roomByKey.set(`${r.floor_id}::${r.name.trim().toLowerCase()}`, r.id)
+    }
+    roomsCreated = data.length
+  }
+
+  // ── Camas — já sabendo o roomId de cada linha, monta tudo e insere de uma vez ──
+  const roomsTouched = new Set<string>()
+  const bedsToInsert: Array<{ room_id: string; organization_id: string; label: string; type: string; notes: null }> = []
+  for (const row of params.rows) {
+    const label = row.camaRotulo?.trim()
+    if (!label) continue
+    const blockId = blockByName.get(row.bloco.trim().toLowerCase())!
+    const floorId = floorByKey.get(`${blockId}::${row.andar.trim().toLowerCase()}`)!
+    const roomId = roomByKey.get(`${floorId}::${row.quarto.trim().toLowerCase()}`)!
+    const bedKey = `${roomId}::${label.toLowerCase()}`
+    if (bedKeys.has(bedKey)) {
+      warnings.push(`Cama "${label}" já existia no quarto "${row.quarto}" — não duplicada.`)
+      continue
+    }
+    bedKeys.add(bedKey) // marca na hora — pega duplicata dentro da própria planilha também
+    bedsToInsert.push({ room_id: roomId, organization_id: params.organizationId, label, type: row.camaTipo, notes: null })
+    roomsTouched.add(roomId)
+  }
+  let bedsCreated = 0
+  if (bedsToInsert.length > 0) {
+    const { data, error } = await sb.from('beds').insert(bedsToInsert).select('id')
+    if (error) throw new Error(`Camas: ${error.message}`)
+    bedsCreated = (data ?? []).length
+  }
+
+  // ── Capacidade dos quartos tocados: 1 leitura pra todos + updates em paralelo ──
+  if (roomsTouched.size > 0) {
+    const touchedIds = [...roomsTouched]
+    const { data: bedsForCount } = await sb.from('beds')
+      .select('room_id, status')
+      .eq('organization_id', params.organizationId)
+      .in('room_id', touchedIds)
+    const countByRoom = new Map<string, number>()
+    for (const b of (bedsForCount ?? []) as Array<{ room_id: string; status: string }>) {
+      if (b.status === 'manutencao') continue
+      countByRoom.set(b.room_id, (countByRoom.get(b.room_id) ?? 0) + 1)
+    }
+    await Promise.all(touchedIds.map(roomId =>
+      sb.from('rooms').update({
+        capacity: countByRoom.get(roomId) ?? 0,
+        updated_at: new Date().toISOString(),
+      }).eq('id', roomId).eq('organization_id', params.organizationId)
+    ))
+  }
 
   return { blocksCreated, floorsCreated, roomsCreated, bedsCreated, warnings }
 }

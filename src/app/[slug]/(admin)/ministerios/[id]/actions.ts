@@ -242,12 +242,13 @@ export async function createServiceRequest(
 }
 
 // ── Hospitalidade / gestão: atualiza status de serviço ───────────────────────
-export async function updateServiceStatus(requestId: string, status: string, reviewedBy: string) {
+export async function updateServiceStatus(requestId: string, status: string, reviewedBy: string, resolutionNotes?: string | null) {
   const sb = createAdminClient()
   await sb.from('service_requests').update({
     status: status as 'pendente' | 'em_analise' | 'em_andamento' | 'resolvido' | 'rejeitado',
     reviewed_by: reviewedBy,
     reviewed_at: new Date().toISOString(),
+    ...(resolutionNotes !== undefined ? { resolution_notes: resolutionNotes } : {}),
   }).eq('id', requestId)
 }
 

@@ -165,5 +165,37 @@ const staffApprovalDict = {
 }
 
 export function getApprovalDict(lang: EmailLang) { return approvalDict[lang] }
+// ── E-mail de aviso de pendência financeira ─────────────────────────────────
+const financePendingDict = {
+  pt: {
+    title: 'Pendência financeira',
+    greeting: 'Olá, {name}',
+    bodyCandidate: 'Identificamos uma pendência financeira em seu nome junto à <strong style="color:#111827;">{org}</strong>: {amount}. Por favor, regularize sua situação o quanto antes.',
+    bodyLeader: '<strong style="color:#111827;">{person}</strong> tem uma pendência financeira junto à <strong style="color:#111827;">{org}</strong>: {amount}. Esta mensagem é só um aviso informativo.',
+    contact: 'Dúvidas? Entre em contato:',
+    disclaimer: 'Este e-mail foi enviado automaticamente por causa de uma pendência financeira em aberto.',
+    subject: 'Pendência financeira — {org}',
+  },
+  en: {
+    title: 'Outstanding balance',
+    greeting: 'Hello, {name}',
+    bodyCandidate: 'We found an outstanding balance under your name with <strong style="color:#111827;">{org}</strong>: {amount}. Please settle it as soon as possible.',
+    bodyLeader: '<strong style="color:#111827;">{person}</strong> has an outstanding balance with <strong style="color:#111827;">{org}</strong>: {amount}. This message is just an informational notice.',
+    contact: 'Questions? Contact us:',
+    disclaimer: 'This email was sent automatically because of an outstanding financial balance.',
+    subject: 'Outstanding balance — {org}',
+  },
+  es: {
+    title: 'Pendiente financiero',
+    greeting: 'Hola, {name}',
+    bodyCandidate: 'Identificamos un pendiente financiero a tu nombre con <strong style="color:#111827;">{org}</strong>: {amount}. Por favor, regulariza tu situación lo antes posible.',
+    bodyLeader: '<strong style="color:#111827;">{person}</strong> tiene un pendiente financiero con <strong style="color:#111827;">{org}</strong>: {amount}. Este mensaje es solo un aviso informativo.',
+    contact: '¿Dudas? Contáctanos:',
+    disclaimer: 'Este correo fue enviado automáticamente por un pendiente financiero abierto.',
+    subject: 'Pendiente financiero — {org}',
+  },
+}
+
 export function getRejectionDict(lang: EmailLang) { return rejectionDict[lang] }
 export function getStaffApprovalDict(lang: EmailLang) { return staffApprovalDict[lang] }
+export function getFinancePendingDict(lang: EmailLang) { return financePendingDict[lang] }
