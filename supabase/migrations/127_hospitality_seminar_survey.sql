@@ -1,5 +1,5 @@
 -- ============================================================
--- SISGO — Migration 121: Pesquisa de satisfação do Seminário
+-- SISGO — Migration 127: Pesquisa de satisfação do Seminário
 --   de Hospitalidade (formulário público + respostas no admin)
 -- ============================================================
 

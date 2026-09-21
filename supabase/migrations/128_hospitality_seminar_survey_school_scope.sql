@@ -1,5 +1,5 @@
 -- ============================================================
--- SISGO — Migration 122: Escopa a pesquisa de satisfação por
+-- SISGO — Migration 128: Escopa a pesquisa de satisfação por
 --   escola (a pesquisa passa a viver como aba dentro de cada
 --   escola/seminário em vez de item solto no menu)
 -- ============================================================
