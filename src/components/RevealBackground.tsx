@@ -17,6 +17,11 @@ const SAMPLE_GAP    = 4
 const LERP          = 0.18
 const MASK_EVERY    = 3
 const COVERAGE_TICK = 60
+const COVERAGE_TICK_AUTO = 100 // menos leituras de pixel/seg quando é auto-reveal (mobile)
+const AUTO_RADIUS   = 220
+const AUTO_SPEED_X  = 0.011
+const AUTO_SPEED_Y  = 0.019
+const TOUCH_IDLE_MS = 1400 // depois de tocar, espera antes de retomar o auto-reveal
 
 export function RevealBackground() {
   const curRef = useRef<HTMLDivElement>(null)
@@ -52,6 +57,9 @@ export function RevealBackground() {
     curEl.style.maskRepeat       = 'no-repeat'
     curEl.style.webkitMaskRepeat = 'no-repeat'
 
+    const canHover = typeof window.matchMedia === 'function'
+      && window.matchMedia('(hover: hover) and (pointer: fine)').matches
+
     const st = {
       mouse:  { x: -9999, y: -9999 },
       paint:  { x: -9999, y: -9999 },
@@ -61,6 +69,19 @@ export function RevealBackground() {
       ticker: 0,
       frame:  0,
       vel:    0,
+      usingAutoReveal: !canHover,
+      lastTouchAt: 0,
+    }
+
+    // Em telas touch não há mousemove — simula uma varredura circular lenta
+    // alimentando st.mouse, reaproveitando o mesmo paintAt/getCoverage/transition.
+    const autoPosition = (frame: number) => {
+      const cx = window.innerWidth * 0.5
+      const cy = window.innerHeight * 0.38
+      return {
+        x: cx + Math.cos(frame * AUTO_SPEED_X) * AUTO_RADIUS,
+        y: cy + Math.sin(frame * AUTO_SPEED_Y) * AUTO_RADIUS * 0.6,
+      }
     }
 
     const paintAt = (x: number, y: number, speed: number) => {
@@ -113,6 +134,10 @@ export function RevealBackground() {
     const tick = () => {
       st.frame++
 
+      if (st.usingAutoReveal && Date.now() - st.lastTouchAt > TOUCH_IDLE_MS) {
+        st.mouse = autoPosition(st.frame)
+      }
+
       if (st.mouse.x > -1000) {
         if (st.paint.x < -1000) st.paint = { ...st.mouse }
         st.paint.x += (st.mouse.x - st.paint.x) * LERP
@@ -136,7 +161,8 @@ export function RevealBackground() {
 
       st.vel *= 0.90
 
-      if (!st.fading && ++st.ticker % COVERAGE_TICK === 0 && getCoverage() <= (1 - COVERAGE_GOAL)) {
+      const coverageTick = st.usingAutoReveal ? COVERAGE_TICK_AUTO : COVERAGE_TICK
+      if (!st.fading && ++st.ticker % coverageTick === 0 && getCoverage() <= (1 - COVERAGE_GOAL)) {
         transition()
       }
 
@@ -150,12 +176,22 @@ export function RevealBackground() {
       st.mouse = { x: e.clientX, y: e.clientY }
     }
 
+    const onTouch = (e: TouchEvent) => {
+      const t = e.touches[0]
+      if (!t) return
+      st.lastTouchAt = Date.now()
+      if (st.mouse.x < -1000) st.prev = { x: t.clientX, y: t.clientY }
+      st.mouse = { x: t.clientX, y: t.clientY }
+    }
+
     window.addEventListener('mousemove', onMove, { passive: true })
+    window.addEventListener('touchmove', onTouch, { passive: true })
     raf = requestAnimationFrame(tick)
 
     return () => {
       window.removeEventListener('resize', setup)
       window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('touchmove', onTouch)
       cancelAnimationFrame(raf)
     }
   }, [])
@@ -167,23 +203,13 @@ export function RevealBackground() {
     position: 'absolute', top: 0, left: 0, right: 0,
     height: '88vh',
     backgroundSize: 'cover',
-    filter: 'brightness(0.82) saturate(0.65) hue-rotate(12deg)',
+    filter: 'brightness(0.8) saturate(0.8)',
   }
 
   return (
     <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden" aria-hidden>
-      <svg style={{ position: 'absolute', width: 0, height: 0 }}>
-        <defs>
-          <filter id="sisgo-liquid" x="-15%" y="-15%" width="130%" height="130%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.006 0.005" numOctaves="2" seed="5" result="noise" />
-            <feDisplacementMap id="sisgo-dm" in="SourceGraphic" in2="noise"
-              scale="10" xChannelSelector="R" yChannelSelector="G" />
-          </filter>
-        </defs>
-      </svg>
-
       <div className="absolute inset-0" style={{
-        background: 'radial-gradient(ellipse 110% 70% at 50% 15%, rgba(10,28,26,0.99) 0%, #030d0b 60%, #020b09 100%)',
+        background: 'radial-gradient(ellipse 110% 70% at 50% 15%, rgba(10,32,31,0.95) 0%, #081716 60%, #06120f 100%)',
       }} />
 
       {/* Próxima imagem — estática embaixo */}
@@ -191,19 +217,14 @@ export function RevealBackground() {
         <div style={{ ...imgBase, backgroundPosition: nextImg.pos, backgroundImage: `url(${nextImg.src})` }} />
       </div>
 
-      {/* Imagem atual — filtro SVG + máscara de erosão numa camada só */}
-      <div style={{
-        position: 'absolute', top: 0, left: 0, right: 0, height: '88vh',
-        filter: 'url(#sisgo-liquid)', willChange: 'filter',
-      }}>
-        <div
-          ref={curRef}
-          style={{ ...imgBase, backgroundPosition: curImg.pos, backgroundImage: `url(${curImg.src})` }}
-        />
-      </div>
+      {/* Imagem atual — máscara de erosão */}
+      <div
+        ref={curRef}
+        style={{ ...imgBase, backgroundPosition: curImg.pos, backgroundImage: `url(${curImg.src})` }}
+      />
 
       <div className="absolute inset-0" style={{
-        background: 'linear-gradient(to bottom, transparent 55vh, #030d0b 88vh)',
+        background: 'linear-gradient(to bottom, transparent 55vh, #081716 88vh)',
       }} />
     </div>
   )

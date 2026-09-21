@@ -13,7 +13,25 @@ export interface FormDict {
     error_save: string
     select_placeholder: string // "Selecione…"
     loading_cep: string
+    choose_file: string
+    no_file_chosen: string
     searching_cep: string
+    change_file: string
+    remove_file: string
+    doc_required: string
+    doc_optional: string
+    doc_conditional: string
+    doc_ready: string
+    doc_attached: string
+    doc_drop_generic: string
+    doc_drop_hint: string
+    photo_model_caption: string
+    crop_title: string
+    crop_zoom_label: string
+    crop_confirm_label: string
+    crop_cancel_label: string
+    crop_error_label: string
+    crop_edit_label: string
   }
 
   // ── Lang switcher ──────────────────────────────────────────────────────
@@ -138,6 +156,7 @@ export interface FormDict {
     documentos_section: string
     documentos_hint: string
     rg: string
+    cnh: string
     cpf: string
     passaporte_opcional: string
     passaporte_required: string
@@ -159,6 +178,7 @@ export interface FormDict {
     outros_links: string
     // Emergency
     emergencia_section: string
+    emergencia_hint: string
     emergencia_nome: string
     emergencia_parentesco: string
     emergencia_email: string
@@ -191,7 +211,8 @@ export interface FormDict {
     situacao_familiar: string
     // Married
     conjuge_nome_idade: string
-    tempo_casados: string
+    data_casamento: string
+    data_casamento_anos: string
     conjuge_apoia: string
     conjuge_participa: string
     // Engaged
@@ -201,6 +222,15 @@ export interface FormDict {
     // Children
     tem_filhos: string
     filhos_dados: string
+    filhos_contagem: string
+    filhos_nome_ph: string
+    filhos_sexo: string
+    filhos_nascimento: string
+    filhos_idade_anos: string     // "{anos} ano(s)"
+    filhos_idade_meses: string    // "{meses} mês(es)"
+    filhos_idade_anos_meses: string // "{anos} ano(s) e {meses} mês(es)"
+    filhos_add: string
+    filhos_remove: string
     filhos_virao: string
     filhos_ficam_com: string
   }
@@ -343,11 +373,13 @@ export interface FormDict {
     doc_foto: string
     doc_rg_frente_br: string
     doc_rg_verso_br: string
+    doc_cnh: string
     doc_cpf: string
     doc_passaporte_br: string
     doc_passaporte_estrangeiro: string
     doc_id_frente: string
     doc_id_verso: string
+    doc_id_required_error: string
   }
 
   // ── Section 16 ─────────────────────────────────────────────────────────
@@ -371,7 +403,10 @@ export interface FormDict {
     form_type_pastor: string
     form_type_amigo: string
     form_type_lideranca_experiencia: string
+    form_type_responsavel: string
     ref_for: string    // "Referência para" — name added by component
+    org_label: string
+    form_title_prefix: string   // "Formulário" — prefixa o tipo (ex.: "Formulário Pastoral")
     // Pastor form
     pastor_intro: string  // {name} placeholder
     pastor_nome: string
@@ -425,6 +460,17 @@ export interface FormDict {
     lideranca_observacoes: string
     lideranca_observacoes_ph: string
     lideranca_decl: string
+    // Autorização de responsável (candidato menor de idade)
+    responsavel_intro: string  // {name} placeholder
+    responsavel_nome_confirma: string
+    responsavel_parentesco: string
+    responsavel_parentesco_mae: string
+    responsavel_parentesco_pai: string
+    responsavel_parentesco_tutor: string
+    responsavel_parentesco_outro: string
+    responsavel_observacoes: string
+    responsavel_observacoes_ph: string
+    responsavel_decl: string  // {name} placeholder
     // Common
     submit: string
     submitting: string
@@ -455,5 +501,73 @@ export interface FormDict {
     success_body: string
     contact_consent: string
     error_fallback: string
+  }
+
+  // ── Chrome da landing da escola (escola/[schoolSlug]/page.tsx) ─────────
+  landingChrome: {
+    nav_about: string
+    nav_programs: string
+    nav_next_class: string
+    nav_cta: string
+    hero_cta_primary: string
+    hero_cta_secondary: string
+    about_eyebrow: string
+    about_fallback_description: string
+    about_target_audience_label: string
+    stat_duration_label: string
+    stat_theory_label: string
+    stat_theory_value: string
+    stat_field_label: string
+    stat_field_value: string
+    stat_type_label: string
+    structure_eyebrow: string
+    structure_title: string
+    phase1_title: string
+    phase1_weeks: string
+    phase1_description: string
+    phase2_title: string
+    phase2_weeks: string
+    phase2_description: string
+    programs_eyebrow: string
+    programs_title: string
+    programs_subtitle: string
+    prerequisites_eyebrow: string
+    prerequisites_title: string
+    next_class_eyebrow: string
+    info_starts: string
+    info_ends: string
+    info_location: string
+    info_investment: string
+    registrations_open_cta: string
+    registrations_soon: string
+    registrations_soon_hint: string
+    registration_eyebrow: string
+    registration_title: string
+    registration_subtitle: string
+    footer_tagline: string
+    footer_home: string
+    footer_other_schools: string
+    footer_rights: string
+  }
+
+  // ── Chrome das páginas curtas de pré-inscrição (standalone/embed) ──────
+  standaloneChrome: {
+    badge: string
+    learn_more: string
+    powered_by: string
+  }
+
+  // ── Chrome do formulário grande pós-aceite (formulario/[token]) ────────
+  bigFormChrome: {
+    org_label: string
+    fallback_title: string
+    link_expired_title: string
+    link_expired_body: string
+    already_sent_title: string
+    already_sent_body: string
+    welcome_title: string
+    welcome_body_print: string
+    welcome_body_online: string
+    footer_contact: string
   }
 }

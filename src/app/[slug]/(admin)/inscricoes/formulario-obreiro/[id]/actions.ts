@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { insertStageAdvance } from '@/lib/pipelineStageAdvance'
 import { getOrRegenerateToken } from '@/lib/inscricoes/resendLink'
+import { getOrCreateReferenceForm } from '@/lib/staff/referenceForms'
 
 async function assertCanManage(organizationId: string) {
   const supabase = await createClient()
@@ -62,6 +63,59 @@ export async function reenviarLinkFormularioObreiro(params: {
   return result
 }
 
+// Reenvia o e-mail com o link (não só copia/gera) — pro caso relatado de
+// "cliquei em enviar mas o e-mail nunca chegou". Reaproveita o mesmo token
+// (ou gera um novo se expirado) e reenvia via Brevo.
+export async function reenviarEmailFormularioObreiro(params: {
+  slug: string
+  organizationId: string
+  applicationId: string
+}) {
+  await assertCanManage(params.organizationId)
+  const sb = createAdminClient()
+
+  const tokenResult = await getOrRegenerateToken(sb, 'staff_applications', params.applicationId, params.organizationId)
+  if ('error' in tokenResult) throw new Error(tokenResult.error)
+
+  const { data: app } = await sb
+    .from('staff_applications')
+    .select('ministry_id, token_expires_at, staff_interest_forms(full_name, email, language)')
+    .eq('id', params.applicationId)
+    .single()
+  const interestForm = app?.staff_interest_forms as unknown as { full_name?: string; email?: string; language?: string | null } | null
+  if (!interestForm?.email) throw new Error('Candidato sem e-mail cadastrado')
+
+  const { resendStaffApplicationEmail } = await import('@/lib/staff/staffApplicationInvite')
+  const result = await resendStaffApplicationEmail({
+    slug: params.slug,
+    token: tokenResult.token,
+    expiresAt: app!.token_expires_at as string,
+    organizationId: params.organizationId,
+    ministryId: app?.ministry_id ?? null,
+    fullName: interestForm.full_name ?? '',
+    email: interestForm.email,
+    language: interestForm.language ?? null,
+  })
+  if (result.emailWarning) throw new Error(result.emailErrorDetail ?? result.emailWarning)
+  return { success: true }
+}
+
+// Editar o e-mail do candidato nesta fase (formulário ainda incompleto) —
+// forma rápida de corrigir um e-mail digitado errado sem precisar voltar
+// pra lista de Inscrições.
+export async function editarEmailInteresseObreiro(params: {
+  organizationId: string
+  interestFormId: string
+  email: string
+}) {
+  await assertCanManage(params.organizationId)
+  const email = params.email.trim()
+  if (!email) throw new Error('E-mail obrigatório')
+  const sb = createAdminClient()
+  await sb.from('staff_interest_forms').update({ email }).eq('id', params.interestFormId)
+  return { success: true, email }
+}
+
 export async function pularReferenciaPastor(params: {
   staffApplicationId: string
   organizationId: string
@@ -76,6 +130,42 @@ export async function pularReferenciaPastor(params: {
     pastor_reference_skipped_by: userId,
     pastor_reference_skipped_at: new Date().toISOString(),
   }).eq('id', params.staffApplicationId)
+  revalidatePath(`/${params.slug}/inscricoes/formulario-obreiro/${params.staffApplicationId}`)
+}
+
+// DH resolve a autorização do responsável (candidato menor de idade) sem
+// depender do e-mail — cobre o caso de ter falado com o responsável por
+// telefone, por exemplo. Reaproveita a mesma linha de reference_forms que o
+// fluxo por e-mail usaria (getOrCreateReferenceForm já cria se não existir),
+// só marcando como resolvida com o que o DH registrar.
+export async function resolverAutorizacaoResponsavelManualmente(params: {
+  staffApplicationId: string
+  organizationId: string
+  slug: string
+  nomeResponsavel: string
+  observacoes: string
+}) {
+  if (!params.nomeResponsavel.trim()) throw new Error('Nome do responsável é obrigatório')
+  const userId = await assertDh(params.organizationId)
+  const sb = createAdminClient()
+
+  const created = await getOrCreateReferenceForm(sb, params.staffApplicationId, 'responsavel')
+  if ('error' in created) throw new Error(created.error)
+
+  await sb.from('reference_forms')
+    .update({
+      status: 'enviado',
+      form_data: {
+        responsavel_nome_confirma: params.nomeResponsavel.trim(),
+        observacoes: params.observacoes.trim() || null,
+        resolvido_manualmente: true,
+        resolvido_por: userId,
+        resolvido_em: new Date().toISOString(),
+      },
+    })
+    .eq('staff_application_id', params.staffApplicationId)
+    .eq('type', 'responsavel')
+
   revalidatePath(`/${params.slug}/inscricoes/formulario-obreiro/${params.staffApplicationId}`)
 }
 
@@ -196,6 +286,24 @@ export async function pularHospedagem(params: {
   revalidatePath(`/${params.slug}/inscricoes/formulario-obreiro/${params.staffApplicationId}`)
 }
 
+// Desfaz a marcação de "não vai se hospedar na base" — volta a liberar a
+// solicitação normal à hospitalidade. A pessoa pode mudar de ideia (ou o DH
+// ter marcado errado) depois de já ter pulado a etapa.
+export async function reverterSkipHospedagem(params: {
+  staffApplicationId: string
+  organizationId: string
+  slug: string
+}) {
+  await assertDh(params.organizationId)
+  const sb = createAdminClient()
+  await sb.from('staff_applications').update({
+    hospedagem_skip_reason: null,
+    hospedagem_skipped_by: null,
+    hospedagem_skipped_at: null,
+  }).eq('id', params.staffApplicationId)
+  revalidatePath(`/${params.slug}/inscricoes/formulario-obreiro/${params.staffApplicationId}`)
+}
+
 export async function criarAlocacaoObreiro(params: {
   slug: string
   organizationId: string
@@ -249,7 +357,11 @@ export async function updateBackgroundCheck(params: {
     reviewed_by: userId,
     reviewed_at: new Date().toISOString(),
   }).eq('id', params.id)
-  revalidatePath(`/${params.slug}/inscricoes/formulario-obreiro/${params.staffApplicationId}`)
+  // Sem revalidatePath aqui de propósito: a página inteira (docs com signed
+  // URL, referências, hospedagem etc.) é pesada pra recarregar a cada campo
+  // salvo, e a linha já reflete o valor salvo via estado local no client. Só
+  // o stepper no topo (que depende do status geral dos checks) fica
+  // potencialmente desatualizado até o client disparar um refresh à parte.
 }
 
 export async function addBackgroundCheck(params: {

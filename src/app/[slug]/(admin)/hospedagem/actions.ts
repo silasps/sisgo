@@ -7,9 +7,13 @@ import { createAdminClient } from '@/lib/supabase/admin'
 export type AvailableRoom = {
   roomId: string
   roomName: string
-  allocationMode: 'cama' | 'quarto'
+  blockName: string | null
+  floorName: string | null
+  defaultMode: 'cama' | 'quarto' // padrão sugerido do quarto — não trava mais a oferta, ver getAvailableRoomsInternal
+  wholeRoomAvailable: boolean // 100% das camas ativas livres na janela — pode coexistir com availableBeds não-vazio
+  availableBeds: { id: string; label: string }[]
+  totalBeds: number // pra decidir se uma família cabe no quarto inteiro
   genderConstraint: string | null
-  availableBeds: { id: string; label: string }[] // vazio quando allocationMode === 'quarto'
 }
 
 // Quartos com vaga real na janela de datas pedida — reaproveita a mesma regra
@@ -45,14 +49,17 @@ async function getAvailableRoomsInternal(params: {
 
   let roomsQuery = sb
     .from('rooms')
-    .select('id, name, capacity, allocation_mode, gender_constraint, destination')
+    .select('id, name, capacity, allocation_mode, gender_constraint, destination, floors(name, blocks(name))')
     .eq('organization_id', params.organizationId)
     .eq('status', 'ativo')
     .order('display_order', { ascending: true })
   if (params.destinations) roomsQuery = roomsQuery.in('destination', params.destinations)
   const { data: rooms } = await roomsQuery
 
-  const roomList = (rooms ?? []) as Array<{ id: string; name: string; capacity: number; allocation_mode: 'cama' | 'quarto'; gender_constraint: string | null }>
+  const roomList = (rooms ?? []) as unknown as Array<{
+    id: string; name: string; capacity: number; allocation_mode: 'cama' | 'quarto'; gender_constraint: string | null
+    floors: { name: string; blocks: { name: string } | null } | null
+  }>
   if (roomList.length === 0) return []
 
   const roomIds = roomList.map(r => r.id)
@@ -73,30 +80,88 @@ async function getAvailableRoomsInternal(params: {
     if (a.bed_id) occupiedBedIds.add(a.bed_id)
   }
 
-  const camaRoomIds = roomList.filter(r => r.allocation_mode === 'cama').map(r => r.id)
-  const { data: beds } = camaRoomIds.length > 0
-    ? await sb.from('beds').select('id, room_id, label').in('room_id', camaRoomIds).eq('status', 'disponivel')
-    : { data: [] }
+  // Busca camas de TODO quarto (não só os de modo "cama") — o modo agora é
+  // só uma sugestão de UI, não trava mais quais quartos podem virar "quarto
+  // inteiro" ou oferecer camas avulsas: isso é decidido pela ocupação real.
+  const { data: beds } = await sb.from('beds')
+    .select('id, room_id, label, status')
+    .in('room_id', roomIds)
+    .neq('status', 'manutencao')
+  const totalBedsByRoom = new Map<string, number>()
   const bedsByRoom = new Map<string, { id: string; label: string }[]>()
-  for (const b of (beds ?? []) as Array<{ id: string; room_id: string; label: string }>) {
-    if (occupiedBedIds.has(b.id)) continue
-    bedsByRoom.set(b.room_id, [...(bedsByRoom.get(b.room_id) ?? []), { id: b.id, label: b.label }])
+  for (const b of (beds ?? []) as Array<{ id: string; room_id: string; label: string; status: string }>) {
+    totalBedsByRoom.set(b.room_id, (totalBedsByRoom.get(b.room_id) ?? 0) + 1)
+    if (b.status === 'disponivel' && !occupiedBedIds.has(b.id)) {
+      bedsByRoom.set(b.room_id, [...(bedsByRoom.get(b.room_id) ?? []), { id: b.id, label: b.label }])
+    }
   }
 
   const result: AvailableRoom[] = []
   for (const r of roomList) {
-    if (r.allocation_mode === 'quarto') {
-      if (!occupiedRoomIds.has(r.id)) {
-        result.push({ roomId: r.id, roomName: r.name, allocationMode: 'quarto', genderConstraint: r.gender_constraint, availableBeds: [] })
-      }
-    } else {
-      const free = bedsByRoom.get(r.id) ?? []
-      if (free.length > 0) {
-        result.push({ roomId: r.id, roomName: r.name, allocationMode: 'cama', genderConstraint: r.gender_constraint, availableBeds: free })
-      }
+    const totalBeds = totalBedsByRoom.get(r.id) ?? 0
+    const availableBeds = bedsByRoom.get(r.id) ?? []
+    const wholeRoomAvailable = totalBeds > 0 && !occupiedRoomIds.has(r.id)
+    if (wholeRoomAvailable || availableBeds.length > 0) {
+      result.push({
+        roomId: r.id, roomName: r.name,
+        blockName: r.floors?.blocks?.name ?? null, floorName: r.floors?.name ?? null,
+        defaultMode: r.allocation_mode,
+        wholeRoomAvailable, availableBeds, totalBeds, genderConstraint: r.gender_constraint,
+      })
     }
   }
   return result
+}
+
+export type HospedagemKpis = {
+  totalRooms: number
+  occupiedBeds: number
+  availableBeds: number
+  arrivalsToday: number
+  departuresToday: number
+}
+
+// Mesmos números do dashboard de Hospedagem (/hospedagem) — reusa a mesma
+// regra ali (só conta cama de quarto em modo "cama" pra disponibilidade,
+// quarto "inteiro" é alocado de uma vez só) pra não mostrar um número
+// diferente aqui na tela de alocação de pendências.
+export async function getHospedagemKpis(organizationId: string): Promise<HospedagemKpis> {
+  const sb = createAdminClient()
+  const today = new Date().toISOString().split('T')[0]
+
+  const [{ data: rooms }, { data: beds }, { data: allocs }] = await Promise.all([
+    sb.from('rooms').select('id, allocation_mode').eq('organization_id', organizationId).neq('status', 'inativo'),
+    sb.from('beds').select('id, room_id, status').eq('organization_id', organizationId),
+    sb.from('room_allocations').select('bed_id, check_in, check_out')
+      .eq('organization_id', organizationId).in('status', ['confirmada', 'checkin']),
+  ])
+
+  const roomList = (rooms ?? []) as Array<{ id: string; allocation_mode: string }>
+  const bedList = (beds ?? []) as Array<{ id: string; room_id: string; status: string }>
+  const allocList = (allocs ?? []) as Array<{ bed_id: string | null; check_in: string; check_out: string }>
+
+  const camaRoomIds = new Set(roomList.filter(r => r.allocation_mode === 'cama').map(r => r.id))
+  const activeBeds = bedList.filter(b => b.status !== 'manutencao' && camaRoomIds.has(b.room_id))
+  const bedsOccupiedToday = new Set(
+    allocList.filter(a => a.bed_id && a.check_in <= today && a.check_out > today).map(a => a.bed_id),
+  )
+
+  return {
+    totalRooms: roomList.length,
+    occupiedBeds: bedsOccupiedToday.size,
+    availableBeds: activeBeds.length - bedsOccupiedToday.size,
+    arrivalsToday: allocList.filter(a => a.check_in === today).length,
+    departuresToday: allocList.filter(a => a.check_out === today).length,
+  }
+}
+
+async function markServiceRequestResolved(requestId: string, reviewedBy: string) {
+  const sb = createAdminClient()
+  await sb.from('service_requests').update({
+    status: 'resolvido',
+    reviewed_by: reviewedBy,
+    reviewed_at: new Date().toISOString(),
+  }).eq('id', requestId)
 }
 
 export async function resolverHospedagemComAlocacao(params: {
@@ -124,48 +189,37 @@ export async function resolverHospedagemComAlocacao(params: {
     notes: null,
     createdBy: params.reviewedBy,
   })
-
-  const sb = createAdminClient()
-  await sb.from('service_requests').update({
-    status: 'resolvido',
-    reviewed_by: params.reviewedBy,
-    reviewed_at: new Date().toISOString(),
-  }).eq('id', params.requestId)
+  await markServiceRequestResolved(params.requestId, params.reviewedBy)
 }
 
-// Confirma que há vaga (desbloqueia a candidatura) sem travar na escolha do
-// quarto específico agora — isso vira uma pendência só da hospitalidade,
-// separada do processo de admissão.
-export async function resolverHospedagemSemAlocacao(params: {
+// Igual a resolverHospedagemComAlocacao, mas pro caso de família: usa
+// allocateWholeRoom (uma linha por cama) em vez do createAllocation(bedId:
+// null) do path de cama avulsa — mantém o mesmo modelo de ocupação por cama
+// usado no resto da tela de Hospedagem (status de cama, check-in/checkout).
+export async function resolverHospedagemComAlocacaoQuarto(params: {
   requestId: string
   organizationId: string
+  roomId: string
   guestName: string
-  staffApplicationId: string | null
-  schoolApplicationId: string | null
-  requestedArrivalDate: string | null
+  guestType: 'obreiro' | 'aluno'
+  checkIn: string
+  checkOut: string
   reviewedBy: string
 }) {
-  const sb = createAdminClient()
-
-  await sb.from('service_requests').update({
-    status: 'resolvido',
-    reviewed_by: params.reviewedBy,
-    reviewed_at: new Date().toISOString(),
-  }).eq('id', params.requestId)
-
-  await sb.from('service_requests').insert({
-    organization_id: params.organizationId,
-    requester_id: params.reviewedBy,
-    requester_role: 'hospitalidade',
-    target_department: 'hospitalidade',
-    request_type: 'alocar_quarto',
-    subject: `Definir quarto — ${params.guestName}`,
-    description: 'Disponibilidade já confirmada — falta escolher o quarto/cama específico.',
-    staff_application_id: params.staffApplicationId,
-    school_application_id: params.schoolApplicationId,
-    requested_arrival_date: params.requestedArrivalDate,
+  await allocateWholeRoom({
+    organizationId: params.organizationId,
+    roomId: params.roomId,
+    guestName: params.guestName,
+    guestType: params.guestType,
+    schoolId: null,
+    checkIn: params.checkIn,
+    checkOut: params.checkOut,
+    notes: null,
+    createdBy: params.reviewedBy,
   })
+  await markServiceRequestResolved(params.requestId, params.reviewedBy)
 }
+
 
 // ── Blocos e Andares ────────────────────────────────────────────────────────
 // Hierarquia real: Bloco > Andar > Quarto > Cama. Andar carrega um público/
@@ -190,10 +244,36 @@ export async function updateBlock(data: { id: string; organizationId: string; na
   if (error) throw new Error(error.message)
 }
 
+// Bloqueia a exclusão em cascata se sobrar hóspede com estadia ativa em
+// algum quarto da área (bloco/andar/quarto) — isso a cascata não deveria
+// levar junto silenciosamente, mesmo com o usuário já tendo confirmado.
+async function assertNoActiveAllocations(sb: ReturnType<typeof createAdminClient>, roomIds: string[]) {
+  if (roomIds.length === 0) return
+  const { count } = await sb.from('room_allocations')
+    .select('id', { count: 'exact', head: true })
+    .in('room_id', roomIds)
+    .in('status', ['confirmada', 'checkin'])
+  if ((count ?? 0) > 0) throw new Error('Tem hóspede alocado em algum quarto dessa área — resolva a alocação antes de apagar.')
+}
+
 export async function deleteBlock(data: { id: string; organizationId: string }) {
   const sb = createAdminClient()
-  const { count } = await sb.from('floors').select('id', { count: 'exact', head: true }).eq('block_id', data.id)
-  if ((count ?? 0) > 0) throw new Error('Esse bloco tem andar dentro — mova ou apague os andares primeiro.')
+
+  const { data: floors } = await sb.from('floors').select('id')
+    .eq('block_id', data.id).eq('organization_id', data.organizationId)
+  const floorIds = (floors ?? []).map(f => f.id)
+
+  if (floorIds.length > 0) {
+    const { data: rooms } = await sb.from('rooms').select('id')
+      .in('floor_id', floorIds).eq('organization_id', data.organizationId)
+    const roomIds = (rooms ?? []).map(r => r.id)
+    await assertNoActiveAllocations(sb, roomIds)
+    // beds e room_allocations têm ON DELETE CASCADE a partir de rooms —
+    // apagar os quartos já leva tudo isso junto.
+    if (roomIds.length > 0) await sb.from('rooms').delete().in('id', roomIds)
+    await sb.from('floors').delete().in('id', floorIds)
+  }
+
   const { error } = await sb.from('blocks').delete().eq('id', data.id).eq('organization_id', data.organizationId)
   if (error) throw new Error(error.message)
 }
@@ -234,8 +314,13 @@ export async function updateFloor(data: {
 
 export async function deleteFloor(data: { id: string; organizationId: string }) {
   const sb = createAdminClient()
-  const { count } = await sb.from('rooms').select('id', { count: 'exact', head: true }).eq('floor_id', data.id)
-  if ((count ?? 0) > 0) throw new Error('Esse andar tem quarto dentro — mova ou apague os quartos primeiro.')
+
+  const { data: rooms } = await sb.from('rooms').select('id')
+    .eq('floor_id', data.id).eq('organization_id', data.organizationId)
+  const roomIds = (rooms ?? []).map(r => r.id)
+  await assertNoActiveAllocations(sb, roomIds)
+  if (roomIds.length > 0) await sb.from('rooms').delete().in('id', roomIds)
+
   const { error } = await sb.from('floors').delete().eq('id', data.id).eq('organization_id', data.organizationId)
   if (error) throw new Error(error.message)
 }
@@ -336,6 +421,15 @@ export async function updateRoom(data: {
     notes:             data.notes,
     updated_at:        new Date().toISOString(),
   }).eq('id', data.id).eq('organization_id', data.organizationId)
+  if (error) throw new Error(error.message)
+}
+
+export async function deleteRoom(data: { id: string; organizationId: string }) {
+  const sb = createAdminClient()
+  await assertNoActiveAllocations(sb, [data.id])
+  // beds tem ON DELETE CASCADE a partir de rooms — apagar o quarto já leva
+  // as camas cadastradas nele junto.
+  const { error } = await sb.from('rooms').delete().eq('id', data.id).eq('organization_id', data.organizationId)
   if (error) throw new Error(error.message)
 }
 
@@ -511,6 +605,23 @@ export async function cancelAllocation(data: {
 
 // ── Whole-room allocation (visitas, alunos/ETED) ─────────────────────────────
 
+// Antes só quartos travados permanentemente em modo "quarto" chegavam aqui
+// (a UI garantia isso). Agora que qualquer quarto 100% livre pode virar
+// "quarto inteiro" sob demanda, essa checagem vira obrigatória — sem ela dá
+// pra sobrepor uma alocação em cima de cama já ocupada.
+async function assertRoomFullyFreeForWindow(
+  sb: ReturnType<typeof createAdminClient>, organizationId: string, roomId: string, checkIn: string, checkOut: string,
+) {
+  const { count } = await sb.from('room_allocations')
+    .select('id', { count: 'exact', head: true })
+    .eq('organization_id', organizationId)
+    .eq('room_id', roomId)
+    .neq('status', 'cancelada')
+    .lt('check_in', checkOut)
+    .gt('check_out', checkIn)
+  if ((count ?? 0) > 0) throw new Error('Quarto já tem hóspede alocado nessa janela de datas — não dá pra alocar como quarto inteiro.')
+}
+
 export async function allocateWholeRoom(data: {
   organizationId: string
   roomId: string
@@ -524,6 +635,8 @@ export async function allocateWholeRoom(data: {
   reservationId?: string | null
 }) {
   const sb = createAdminClient()
+
+  await assertRoomFullyFreeForWindow(sb, data.organizationId, data.roomId, data.checkIn, data.checkOut)
 
   const { data: roomBeds } = await sb.from('beds')
     .select('id')
@@ -629,4 +742,177 @@ export async function toggleBedMaintenance(bedId: string, organizationId: string
     status: enable ? 'manutencao' : 'disponivel',
     updated_at: new Date().toISOString(),
   }).eq('id', bedId).eq('organization_id', organizationId)
+}
+
+// ── Importação em lote (bloco > andar > quarto > cama) ──────────────────────
+// Usado pela tela /quartos/importar — uma linha de planilha por cama, com
+// bloco/andar/quarto repetidos entre linhas. Get-or-create por nome (case-
+// insensitive) em cada nível, pra permitir rodar de novo e só completar o
+// que faltar sem duplicar bloco/andar/quarto já existentes.
+
+export type BulkImportRow = {
+  bloco: string
+  andar: string
+  andarDestino: string | null
+  andarGenero: string | null
+  quarto: string
+  quartoTipo: string
+  quartoGenero: string | null
+  quartoDestino: string
+  quartoModo: string
+  camaRotulo: string | null
+  camaTipo: string
+}
+
+export async function bulkImportHospedagemStructure(params: {
+  organizationId: string
+  createdBy: string
+  rows: BulkImportRow[]
+}): Promise<{ blocksCreated: number; floorsCreated: number; roomsCreated: number; bedsCreated: number; warnings: string[] }> {
+  const sb = createAdminClient()
+  const warnings: string[] = []
+
+  const [{ data: existingBlocks }, { data: existingFloors }, { data: existingRooms }, { data: existingBeds }] = await Promise.all([
+    sb.from('blocks').select('id, name').eq('organization_id', params.organizationId),
+    sb.from('floors').select('id, block_id, name').eq('organization_id', params.organizationId),
+    sb.from('rooms').select('id, floor_id, name').eq('organization_id', params.organizationId),
+    sb.from('beds').select('room_id, label').eq('organization_id', params.organizationId),
+  ])
+
+  const blockByName = new Map<string, string>()
+  for (const b of (existingBlocks ?? []) as Array<{ id: string; name: string }>) blockByName.set(b.name.trim().toLowerCase(), b.id)
+
+  const floorByKey = new Map<string, string>()
+  for (const f of (existingFloors ?? []) as Array<{ id: string; block_id: string; name: string }>) {
+    floorByKey.set(`${f.block_id}::${f.name.trim().toLowerCase()}`, f.id)
+  }
+
+  const roomByKey = new Map<string, string>()
+  for (const r of (existingRooms ?? []) as Array<{ id: string; floor_id: string; name: string }>) {
+    roomByKey.set(`${r.floor_id}::${r.name.trim().toLowerCase()}`, r.id)
+  }
+
+  const bedKeys = new Set<string>()
+  for (const b of (existingBeds ?? []) as Array<{ room_id: string; label: string }>) {
+    bedKeys.add(`${b.room_id}::${b.label.trim().toLowerCase()}`)
+  }
+
+  // Get-or-create em lote por nível (bloco → andar → quarto → cama), em vez
+  // de uma ida ao banco por LINHA da planilha — com 250+ camas isso trocava
+  // ~500 chamadas sequenciais por ~5, cada nível resolvido de uma vez só.
+
+  // ── Blocos ───────────────────────────────────────────────────────────────
+  const newBlockNames = new Map<string, string>() // key (lowercase) → nome original da 1ª ocorrência
+  for (const row of params.rows) {
+    const key = row.bloco.trim().toLowerCase()
+    if (!blockByName.has(key) && !newBlockNames.has(key)) newBlockNames.set(key, row.bloco.trim())
+  }
+  let blocksCreated = 0
+  if (newBlockNames.size > 0) {
+    const { data, error } = await sb.from('blocks')
+      .insert([...newBlockNames.values()].map(name => ({ organization_id: params.organizationId, name, created_by: params.createdBy })))
+      .select('id, name')
+    if (error) throw new Error(`Blocos (${[...newBlockNames.values()].join(', ')}): ${error.message}`)
+    for (const b of data as Array<{ id: string; name: string }>) blockByName.set(b.name.trim().toLowerCase(), b.id)
+    blocksCreated = data.length
+  }
+
+  // ── Andares (dedup por bloco+nome; destino/gênero vêm da 1ª linha que os referencia) ──
+  const newFloors = new Map<string, { blockId: string; name: string; destino: string | null; genero: string | null }>()
+  for (const row of params.rows) {
+    const blockId = blockByName.get(row.bloco.trim().toLowerCase())!
+    const key = `${blockId}::${row.andar.trim().toLowerCase()}`
+    if (!floorByKey.has(key) && !newFloors.has(key)) {
+      newFloors.set(key, { blockId, name: row.andar.trim(), destino: row.andarDestino, genero: row.andarGenero })
+    }
+  }
+  let floorsCreated = 0
+  if (newFloors.size > 0) {
+    const entries = [...newFloors.values()]
+    const { data, error } = await sb.from('floors')
+      .insert(entries.map(f => ({
+        organization_id: params.organizationId, block_id: f.blockId, name: f.name,
+        destination: f.destino, gender_constraint: f.genero, created_by: params.createdBy,
+      })))
+      .select('id, block_id, name')
+    if (error) throw new Error(`Andares (${entries.map(f => f.name).join(', ')}): ${error.message}`)
+    for (const f of data as Array<{ id: string; block_id: string; name: string }>) {
+      floorByKey.set(`${f.block_id}::${f.name.trim().toLowerCase()}`, f.id)
+    }
+    floorsCreated = data.length
+  }
+
+  // ── Quartos (dedup por andar+nome) ──────────────────────────────────────
+  const newRooms = new Map<string, { floorId: string; name: string; tipo: string; genero: string | null; destino: string; modo: string }>()
+  for (const row of params.rows) {
+    const blockId = blockByName.get(row.bloco.trim().toLowerCase())!
+    const floorId = floorByKey.get(`${blockId}::${row.andar.trim().toLowerCase()}`)!
+    const key = `${floorId}::${row.quarto.trim().toLowerCase()}`
+    if (!roomByKey.has(key) && !newRooms.has(key)) {
+      newRooms.set(key, { floorId, name: row.quarto.trim(), tipo: row.quartoTipo, genero: row.quartoGenero, destino: row.quartoDestino, modo: row.quartoModo })
+    }
+  }
+  let roomsCreated = 0
+  if (newRooms.size > 0) {
+    const entries = [...newRooms.values()]
+    const { data, error } = await sb.from('rooms')
+      .insert(entries.map(r => ({
+        organization_id: params.organizationId, floor_id: r.floorId, name: r.name,
+        type: r.tipo, gender_constraint: r.genero, destination: r.destino,
+        allocation_mode: r.modo, capacity: 0, notes: null, created_by: params.createdBy,
+      })))
+      .select('id, floor_id, name')
+    if (error) throw new Error(`Quartos (${entries.map(r => r.name).join(', ')}): ${error.message}`)
+    for (const r of data as Array<{ id: string; floor_id: string; name: string }>) {
+      roomByKey.set(`${r.floor_id}::${r.name.trim().toLowerCase()}`, r.id)
+    }
+    roomsCreated = data.length
+  }
+
+  // ── Camas — já sabendo o roomId de cada linha, monta tudo e insere de uma vez ──
+  const roomsTouched = new Set<string>()
+  const bedsToInsert: Array<{ room_id: string; organization_id: string; label: string; type: string; notes: null }> = []
+  for (const row of params.rows) {
+    const label = row.camaRotulo?.trim()
+    if (!label) continue
+    const blockId = blockByName.get(row.bloco.trim().toLowerCase())!
+    const floorId = floorByKey.get(`${blockId}::${row.andar.trim().toLowerCase()}`)!
+    const roomId = roomByKey.get(`${floorId}::${row.quarto.trim().toLowerCase()}`)!
+    const bedKey = `${roomId}::${label.toLowerCase()}`
+    if (bedKeys.has(bedKey)) {
+      warnings.push(`Cama "${label}" já existia no quarto "${row.quarto}" — não duplicada.`)
+      continue
+    }
+    bedKeys.add(bedKey) // marca na hora — pega duplicata dentro da própria planilha também
+    bedsToInsert.push({ room_id: roomId, organization_id: params.organizationId, label, type: row.camaTipo, notes: null })
+    roomsTouched.add(roomId)
+  }
+  let bedsCreated = 0
+  if (bedsToInsert.length > 0) {
+    const { data, error } = await sb.from('beds').insert(bedsToInsert).select('id')
+    if (error) throw new Error(`Camas: ${error.message}`)
+    bedsCreated = (data ?? []).length
+  }
+
+  // ── Capacidade dos quartos tocados: 1 leitura pra todos + updates em paralelo ──
+  if (roomsTouched.size > 0) {
+    const touchedIds = [...roomsTouched]
+    const { data: bedsForCount } = await sb.from('beds')
+      .select('room_id, status')
+      .eq('organization_id', params.organizationId)
+      .in('room_id', touchedIds)
+    const countByRoom = new Map<string, number>()
+    for (const b of (bedsForCount ?? []) as Array<{ room_id: string; status: string }>) {
+      if (b.status === 'manutencao') continue
+      countByRoom.set(b.room_id, (countByRoom.get(b.room_id) ?? 0) + 1)
+    }
+    await Promise.all(touchedIds.map(roomId =>
+      sb.from('rooms').update({
+        capacity: countByRoom.get(roomId) ?? 0,
+        updated_at: new Date().toISOString(),
+      }).eq('id', roomId).eq('organization_id', params.organizationId)
+    ))
+  }
+
+  return { blocksCreated, floorsCreated, roomsCreated, bedsCreated, warnings }
 }

@@ -1,7 +1,10 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { notFound } from 'next/navigation'
+import { headers } from 'next/headers'
 import { StaffRegistrationForm } from '../StaffRegistrationForm'
 import { IframeResizer } from '@/components/ui/IframeResizer'
+import { getStaffFormDict, normalizeStaffLang } from '@/lib/i18n/staff-forms'
+import { detectLangFromHeader } from '@/lib/i18n/forms'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -11,6 +14,9 @@ type Props = {
 export default async function ServirEmbedPage({ params, searchParams }: Props) {
   const { slug } = await params
   const { lang: langParam } = await searchParams
+  const acceptLanguage = (await headers()).get('accept-language')
+  const lang = normalizeStaffLang(langParam ?? detectLangFromHeader(acceptLanguage))
+  const d = getStaffFormDict(lang)
 
   const sb = createAdminClient()
 
@@ -47,8 +53,8 @@ export default async function ServirEmbedPage({ params, searchParams }: Props) {
       <IframeResizer>
         <div className="px-4 py-8 max-w-2xl mx-auto">
           <div className="mb-6 text-center">
-            <p className="text-xs font-bold uppercase tracking-widest text-amber-600 mb-1">Pré-inscrição</p>
-            <h1 className="text-2xl font-black text-gray-900">Venha servir conosco</h1>
+            <p className="text-xs font-bold uppercase tracking-widest text-amber-600 mb-1">{d.standaloneChrome.badge}</p>
+            <h1 className="text-2xl font-black text-gray-900">{d.servirChrome.hero_title}</h1>
             <p className="text-sm text-gray-500 mt-1">{org.name}</p>
           </div>
 
@@ -57,11 +63,11 @@ export default async function ServirEmbedPage({ params, searchParams }: Props) {
             ministries={ministries}
             schools={schools}
             communicationLanguages={communicationLanguages}
-            initialLang={langParam}
+            initialLang={lang}
           />
 
           <p className="text-center text-xs text-gray-300 mt-8">
-            Powered by <span className="font-semibold">SISGO</span>
+            {d.standaloneChrome.powered_by} <span className="font-semibold">SISGO</span>
           </p>
         </div>
       </IframeResizer>

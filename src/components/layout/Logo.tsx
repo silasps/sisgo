@@ -14,7 +14,7 @@ export function Logo({ variant = 'light', size = 'md' }: LogoProps) {
   return (
     <Image
       src={src}
-      alt="JOCUM Almirante Tamandaré"
+      alt="Sisgo"
       width={w}
       height={Math.round(w * 0.35)}
       priority

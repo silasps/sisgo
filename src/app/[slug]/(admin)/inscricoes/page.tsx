@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { ClipboardList, Mail, MessageCircle } from 'lucide-react'
 import { NovaPreInscricaoButton, NovaPreInscricaoObreiroButton, EditarPreInscricaoButton, EditarPreInscricaoObreiroButton, MarcarRecebidoExternoButton, LinksReferenciaAdminButton } from './InscricoesModals'
 import { EnviarFormularioObreiroDiretoButton } from '@/components/inscricoes/EnviarFormularioObreiroDiretoButton'
@@ -17,7 +17,10 @@ import { ServirLinkCard } from './ServirLinkCard'
 import { InscricaoLinkCard } from './InscricaoLinkCard'
 import { MinistryLinkCard } from './MinistryLinkCard'
 import { InscricoesList } from './InscricoesList'
+import { criarPreInscricaoManual, criarPreInscricaoObreiroManual } from './actions'
 import { SearchBar } from '@/components/ui/SearchBar'
+import { getPeopleFinanceSummaries, type PersonFinanceSummary } from '@/lib/finance/personFinanceStatus'
+import { notifyFinancePendency } from '@/lib/finance/notifyFinancePendency'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -60,6 +63,7 @@ type InscricaoItem = {
   hospedagemArrivalDate?: string | null
   hospedagemDepartureDate?: string | null
   candidateArrivalDate?: string | null
+  financeSummary?: PersonFinanceSummary | null
 }
 
 type BackgroundCheckRow = { id: string; check_type: string; country: string | null; status: string; issued_at: string | null; expires_at: string | null; notes: string | null; flagged_concern: boolean }
@@ -185,6 +189,12 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
   const realRole = superadminRow?.roles?.name ?? currentOrgRow?.roles?.name ?? ''
   const preview = await getRolePreview(realRole)
   const userRole = preview?.role ?? realRole
+
+  // Hospitalidade cuida só de estrutura/hospedagem, não do processo seletivo —
+  // o menu já não mostra este link pra ela, mas a rota em si não tinha bloqueio
+  // (só esconder do menu não impede acesso por URL direta).
+  if (userRole === 'hospitalidade') redirect(`/${slug}/dashboard`)
+
   const isEtedLeader = userRole === 'lider_eted'
   const isLiderMinisterio = userRole === 'lider_ministerio'
   const isManagement = ['superadmin', 'admin_base', 'lider_base', 'dh'].includes(userRole)
@@ -282,9 +292,14 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       ?? ''
     if (!user || !['superadmin', 'admin_base', 'dh'].includes(role)) return
 
+    const { data: current } = await db.from('staff_interest_forms').select('status').eq('id', id).single()
+
     await db.from('staff_interest_forms').update({
       assumed_by: user.id,
       assumed_at: new Date().toISOString(),
+      // Assumir a conversa é o próprio início do contato — evita que a pill
+      // continue mostrando "Aguardando contato" depois que alguém já assumiu.
+      ...(current?.status === 'pendente' ? { status: 'em_contato' } : {}),
     }).eq('id', id)
 
     redir(`/${slug}/inscricoes?tab=obreiro&flash_success=${encodeURIComponent('Conversa assumida pelo DH')}`)
@@ -309,12 +324,14 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     const decisionNoteShared = formData.get('decision_note_shared') === 'on'
     if (!reason) return
     const now = new Date().toISOString()
+    const { data: orgRowForEmail } = await db.from('organizations').select('name').eq('id', orgId).maybeSingle()
+    const organizationName = orgRowForEmail?.name ?? 'Organização'
     if (tipo === 'pre_inscricao') {
       const status = kind === 'exclusao' ? 'excluido' : 'descartado'
       const { data: row, error } = await db.from('school_interest_forms')
         .update({ status, refusal_reason: reason, responded_at: now, reviewed_at: now, reviewed_by: user?.id ?? null, decision_note: decisionNote, decision_note_shared: decisionNoteShared })
         .eq('id', id)
-        .select('email, full_name, school_id, schools(name, contact_email)')
+        .select('email, full_name, school_id, language, schools(name, contact_email)')
         .single()
       if (error?.code === 'PGRST204') {
         await db.from('school_interest_forms')
@@ -325,9 +342,9 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       if (decisionNoteShared && row?.email && escola?.contact_email) {
         const { sendRejectionEmail } = await import('@/lib/email/sendRejectionEmail')
         sendRejectionEmail({
-          to: row.email, candidateName: row.full_name, schoolName: escola.name,
+          to: row.email, candidateName: row.full_name, organizationName, schoolName: escola.name,
           replyTo: escola.contact_email, organizationId: orgId, schoolId: row.school_id ?? '',
-          decisionNote,
+          decisionNote, language: (row as unknown as { language?: string }).language,
         }).catch(() => {})
       }
       // Pessoa saiu do processo de entrada — cancela pendência de hospedagem
@@ -357,12 +374,18 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           .select('value').eq('person_id', row.person_id).eq('type', 'email')
           .order('is_primary', { ascending: false }).limit(1).maybeSingle()
         if (contact?.value) {
+          // student_applications não guarda idioma — melhor esforço via a
+          // pré-inscrição mais recente da mesma pessoa nessa escola.
+          const { data: interestForm } = await db.from('school_interest_forms')
+            .select('language').eq('person_id', row.person_id).eq('school_id', row.school_id ?? '')
+            .order('created_at', { ascending: false }).limit(1).maybeSingle()
           const { sendRejectionEmail } = await import('@/lib/email/sendRejectionEmail')
           sendRejectionEmail({
             to: contact.value,
             candidateName: (row.people as unknown as { full_name: string } | null)?.full_name ?? 'Candidato',
+            organizationName,
             schoolName: escola.name, replyTo: escola.contact_email, organizationId: orgId,
-            schoolId: row.school_id ?? '', decisionNote,
+            schoolId: row.school_id ?? '', decisionNote, language: interestForm?.language,
           }).catch(() => {})
         }
       }
@@ -457,18 +480,51 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     }
     if (personId && classId) {
       await enrollStudent({ organizationId: orgIdForm, personId, classId, acceptedBy: actingUser?.id ?? null })
+
+      const notifyCandidate = formData.get('notify_candidate') === 'on'
+      const notifyLeader = formData.get('notify_leader') === 'on'
+      if (notifyCandidate || notifyLeader) {
+        let leaderEmail: string | null = null
+        if (notifyLeader && approvedClassRow) {
+          const { data: leaderRow } = await db.from('school_leaders').select('user_id').eq('school_id', approvedClassRow.school_id).maybeSingle()
+          if (leaderRow?.user_id) {
+            const { data: leaderUser } = await db.auth.admin.getUserById(leaderRow.user_id)
+            leaderEmail = leaderUser.user?.email ?? null
+          }
+        }
+        const { data: personRowForNotify } = await db.from('people').select('full_name').eq('id', personId).maybeSingle()
+        await notifyFinancePendency({
+          organizationId: orgIdForm,
+          personId,
+          personName: personRowForNotify?.full_name ?? 'Pessoa',
+          notifyCandidate,
+          notifyLeaderEmail: leaderEmail,
+        })
+      }
     }
+    let candidateLanguage: string | null | undefined
     if (tipo === 'pre_inscricao') {
-      const { error } = await db.from('school_interest_forms')
+      const { data: interestForm, error } = await db.from('school_interest_forms')
         .update({ status: 'convertido', responded_at: now, reviewed_at: now, reviewed_by: actingUser?.id ?? null, class_id: classId, decision_note: decisionNote, decision_note_shared: decisionNoteShared })
         .eq('id', id)
+        .select('language')
+        .single()
       if (error?.code === 'PGRST204') {
         await db.from('school_interest_forms').update({ status: 'convertido', responded_at: now, class_id: classId }).eq('id', id)
       }
+      candidateLanguage = interestForm?.language
     } else if (tipo === 'aluno') {
       await db.from('student_applications')
         .update({ status: 'aprovado', reviewed_at: now, reviewed_by: actingUser?.id ?? null, class_id: classId, decision_note: decisionNote, decision_note_shared: decisionNoteShared })
         .eq('id', id)
+      // student_applications não guarda idioma — melhor esforço via a
+      // pré-inscrição mais recente da mesma pessoa nessa escola.
+      if (personId) {
+        const { data: interestForm } = await db.from('school_interest_forms')
+          .select('language').eq('person_id', personId).eq('school_id', approvedClassRow?.school_id ?? '')
+          .order('created_at', { ascending: false }).limit(1).maybeSingle()
+        candidateLanguage = interestForm?.language
+      }
     }
     // Email de aprovação — best-effort, não bloqueia o redirect
     if (personId && approvedClassRow && classId) {
@@ -483,10 +539,12 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         }
         if (recipientEmail) {
           const { data: personRow } = await db.from('people').select('full_name').eq('id', personId).maybeSingle()
+          const { data: orgRowForEmail } = await db.from('organizations').select('name').eq('id', orgIdForm).maybeSingle()
           const { sendApprovalEmail } = await import('@/lib/email/sendApprovalEmail')
           sendApprovalEmail({
             to: recipientEmail,
             candidateName: (personRow as { full_name?: string } | null)?.full_name ?? 'Candidato',
+            organizationName: orgRowForEmail?.name ?? 'Organização',
             schoolName: schoolInfo.name,
             className: approvedClassRow.name,
             startsAt: approvedClassRow.starts_at,
@@ -494,6 +552,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
             organizationId: orgIdForm,
             schoolId: approvedClassRow.school_id,
             decisionNote: decisionNoteShared ? decisionNote : null,
+            language: candidateLanguage,
           }).catch(() => {})
         }
       }
@@ -558,7 +617,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     const { data: pastorRef } = await db.from('reference_forms')
       .select('status').eq('staff_application_id', id).eq('type', 'pastor').maybeSingle()
     const { data: skipRow } = await db.from('staff_applications')
-      .select('pastor_reference_skip_reason, hospedagem_skip_reason, leader_word, leader_word_shared').eq('id', id).maybeSingle()
+      .select('pastor_reference_skip_reason, hospedagem_skip_reason, leader_word, leader_word_shared, interest_form_id, form_data').eq('id', id).maybeSingle()
     if (pastorRef?.status !== 'enviado' && !skipRow?.pastor_reference_skip_reason) {
       redir(`/${slug}/inscricoes?tab=obreiro&flash_error=${encodeURIComponent('Referência do pastor pendente — aguarde a resposta ou registre uma justificativa para pular esta etapa.')}`)
       return
@@ -577,14 +636,29 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     let userId = existingAuthUser?.id
 
     if (!userId) {
+      const fullName = formData.get('name') as string
       const { data: created, error } = await db.auth.admin.createUser({
         email,
         password,
         email_confirm: true,
-        user_metadata: { full_name: formData.get('name') as string },
+        user_metadata: { full_name: fullName },
       })
       if (error || !created.user) return
       userId = created.user.id
+
+      // Reaproveita a foto já enviada no formulário de inscrição (seção 10)
+      // como avatar inicial — só faz sentido pra conta recém-criada, nunca
+      // sobrescrevendo um avatar que a pessoa já tenha escolhido depois.
+      const s10 = (skipRow as unknown as { form_data?: Record<string, unknown> } | null)?.form_data?.s10 as
+        { doc_foto?: { path?: string } } | undefined
+      const photoPath = s10?.doc_foto?.path
+      if (photoPath) {
+        const { copyApplicationPhotoToAvatar } = await import('@/lib/auth/copyApplicationPhotoToAvatar')
+        const avatarUrl = await copyApplicationPhotoToAvatar('staff-application-documents', photoPath, userId)
+        if (avatarUrl) {
+          await db.auth.admin.updateUserById(userId, { user_metadata: { full_name: fullName, avatar_url: avatarUrl } })
+        }
+      }
     }
 
     const { data: ministryRole } = await db.from('roles').select('id').eq('name', 'obreiro_ministerio').single()
@@ -645,6 +719,26 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       created_by: actingUser?.id ?? null,
     })
 
+    const notifyCandidate = formData.get('notify_candidate') === 'on'
+    const notifyLeader = formData.get('notify_leader') === 'on'
+    if (notifyCandidate || notifyLeader) {
+      let leaderEmail: string | null = null
+      if (notifyLeader && ministryId) {
+        const { data: leaderRow } = await db.from('ministry_leaders').select('user_id').eq('ministry_id', ministryId).maybeSingle()
+        if (leaderRow?.user_id) {
+          const { data: leaderUser } = await db.auth.admin.getUserById(leaderRow.user_id)
+          leaderEmail = leaderUser.user?.email ?? null
+        }
+      }
+      await notifyFinancePendency({
+        organizationId: orgIdForm,
+        personId,
+        personName: (formData.get('name') as string | null) || 'Pessoa',
+        notifyCandidate,
+        notifyLeaderEmail: leaderEmail,
+      })
+    }
+
     // E-mail de aprovação — best-effort, não bloqueia o redirect
     const { data: orgRow } = await db.from('organizations').select('name, email').eq('id', orgIdForm).maybeSingle()
     let ministryName: string | null = null
@@ -652,14 +746,21 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       const { data: ministryRow } = await db.from('ministries').select('name').eq('id', ministryId).maybeSingle()
       ministryName = ministryRow?.name ?? null
     }
+    let candidateLanguage: string | null | undefined
+    if (skipRow?.interest_form_id) {
+      const { data: interestForm } = await db.from('staff_interest_forms')
+        .select('language').eq('id', skipRow.interest_form_id).maybeSingle()
+      candidateLanguage = interestForm?.language
+    }
     const { sendStaffApprovalEmail } = await import('@/lib/email/sendStaffApprovalEmail')
     sendStaffApprovalEmail({
       to: email,
       candidateName: (formData.get('name') as string | null) || 'Obreiro',
-      organizationName: orgRow?.name ?? 'JOCUM',
+      organizationName: orgRow?.name ?? 'Organização',
       ministryName,
       replyTo: orgRow?.email || 'noreply@sisgomission.com',
       organizationId: orgIdForm,
+      language: candidateLanguage,
       leaderWord: skipRow?.leader_word_shared ? skipRow.leader_word : null,
     }).catch(() => {})
 
@@ -746,9 +847,12 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       // usuário escolheu "copiar link" — não é falha, não gera aviso
     } else if (escola?.contact_email) {
       const { sendFormEmail } = await import('@/lib/email/sendFormEmail')
+      const { data: orgRowForEmail } = await db.from('organizations')
+        .select('name').eq('id', (form as unknown as { organization_id: string }).organization_id).maybeSingle()
       const emailResult = await sendFormEmail({
         to: form.email,
         candidateName: form.full_name,
+        orgName: orgRowForEmail?.name,
         schoolName: escola.name,
         formUrl: formUrlForEmail,
         expiresAt,
@@ -771,43 +875,6 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
 
     // Sempre retorna o link — e-mail é opcional
     return { url: formUrl, emailWarning, schoolId: escola?.id }
-  }
-
-  async function criarPreInscricaoManual(formData: FormData) {
-    'use server'
-    const { createAdminClient: adm } = await import('@/lib/supabase/admin')
-    const db = adm()
-
-    const classIdVal = (formData.get('class_id') as string | null) || null
-    let schoolIdVal: string | null = null
-
-    if (classIdVal) {
-      const { data: cls } = await db.from('school_classes').select('school_id').eq('id', classIdVal).single()
-      schoolIdVal = cls?.school_id ?? null
-    }
-
-    // Fallback: usar primeira escola disponível da org
-    if (!schoolIdVal) {
-      const { data: school } = await db.from('schools')
-        .select('id').eq('organization_id', orgId).in('school_type', [...SCHOOL_APPLICATION_TYPES]).limit(1).single()
-      schoolIdVal = school?.id ?? null
-    }
-
-    if (!schoolIdVal) return
-
-    await db.from('school_interest_forms').insert({
-      organization_id: orgId,
-      school_id: schoolIdVal,
-      class_id: classIdVal,
-      full_name: (formData.get('full_name') as string).trim(),
-      email: (formData.get('email') as string)?.trim() || null,
-      phone: (formData.get('phone') as string)?.trim() || null,
-      message: (formData.get('message') as string)?.trim() || null,
-      status: 'pendente',
-    })
-
-    const { revalidatePath } = await import('next/cache')
-    revalidatePath(`/${slug}/inscricoes`)
   }
 
   async function editarPreInscricao(formData: FormData) {
@@ -1034,29 +1101,6 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     return result
   }
 
-  async function criarPreInscricaoObreiroManual(formData: FormData) {
-    'use server'
-    const { createAdminClient: adm } = await import('@/lib/supabase/admin')
-    const { revalidatePath } = await import('next/cache')
-    const db = adm()
-
-    const destination = (formData.get('destination') as string) || ''
-    const [destType, destId] = destination.includes(':') ? destination.split(':') : [null, null]
-
-    await db.from('staff_interest_forms').insert({
-      organization_id: orgId,
-      ministry_id: destType === 'ministry' ? destId : null,
-      school_id: destType === 'school' ? destId : null,
-      full_name: (formData.get('full_name') as string).trim(),
-      email: (formData.get('email') as string)?.trim() || '',
-      phone: (formData.get('phone') as string)?.trim() || null,
-      message: (formData.get('message') as string)?.trim() || null,
-      status: 'pendente',
-    })
-
-    revalidatePath(`/${slug}/inscricoes`)
-  }
-
   async function enviarFormularioObreiroDireto(formData: FormData) {
     'use server'
     const { createClient } = await import('@/lib/supabase/server')
@@ -1253,6 +1297,29 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
   const assumedLookups: { item: InscricaoItem; userId: string }[] = []
   const createdByLookups: { item: InscricaoItem; userId: string }[] = []
 
+  // As 3 consultas abaixo (pré-inscrição de aluno, candidatos a aluno,
+  // pré-inscrição de obreiro) são independentes entre si — disparar juntas
+  // evita 3 idas e voltas sequenciais ao banco toda vez que essa página
+  // renderiza (o que acontece a cada ação do admin, já que as server actions
+  // redirecionam de volta pra cá).
+  const [schoolInterestRes, studentAppsRes, staffInterestRes] = await Promise.all([
+    sb
+      .from('school_interest_forms')
+      .select('id, class_id, full_name, email, phone, message, status, created_at, responded_at, refusal_reason, reviewed_by, schools(id, name), school_classes(name), school_applications(id, status, form_data)')
+      .eq('organization_id', orgId)
+      .order('created_at', { ascending: false }),
+    sb
+      .from('student_applications')
+      .select('id, class_id, status, applied_at, reviewed_at, reviewed_by, notes, refusal_reason, people(id, full_name), schools(id, name), school_classes(name)')
+      .eq('organization_id', orgId)
+      .order('applied_at', { ascending: false }),
+    sb
+      .from('staff_interest_forms')
+      .select('id, full_name, email, phone, message, status, created_at, responded_at, refusal_reason, reviewed_by, ministry_id, school_id, person_id, assumed_by, assumed_at, created_by, ministries(name), schools(name), staff_applications(id, status, form_data, token)')
+      .eq('organization_id', orgId)
+      .order('created_at', { ascending: false }),
+  ])
+
   // Pré-inscrições ativas (sempre carrega tudo — filtro de tipo/etapa é feito no cliente, instantâneo)
   {
     type IFRaw = {
@@ -1262,11 +1329,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       schools: { id: string; name: string } | null; school_classes: { name: string } | null
       school_applications: { id: string; status: string; form_data: Record<string, unknown> | null }[] | null
     }
-    const result = await sb
-      .from('school_interest_forms')
-      .select('id, class_id, full_name, email, phone, message, status, created_at, responded_at, refusal_reason, reviewed_by, schools(id, name), school_classes(name), school_applications(id, status, form_data)')
-      .eq('organization_id', orgId)
-      .order('created_at', { ascending: false })
+    const result = schoolInterestRes
 
     let rows: unknown[] = result.data ?? []
 
@@ -1323,11 +1386,14 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       people: { id: string; full_name: string } | null
       schools: { id: string; name: string } | null; school_classes: { name: string } | null
     }
-    const { data } = await sb
-      .from('student_applications')
-      .select('id, class_id, status, applied_at, reviewed_at, reviewed_by, notes, refusal_reason, people(id, full_name), schools(id, name), school_classes(name)')
-      .eq('organization_id', orgId)
-      .order('applied_at', { ascending: false })
+    const { data } = studentAppsRes
+
+    const studentPersonIds = [...new Set(
+      ((data ?? []) as unknown as SAraw[])
+        .map(r => (r.people as { id: string } | null)?.id)
+        .filter((pid): pid is string => Boolean(pid))
+    )]
+    const studentFinanceMap = await getPeopleFinanceSummaries(orgId, studentPersonIds)
 
     for (const r of ((data ?? []) as unknown as SAraw[])) {
       const pessoa = r.people as { id: string; full_name: string } | null
@@ -1357,6 +1423,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           criadoEm: r.applied_at, diasAberto: daysAgo(r.applied_at),
           diasNaEtapaAtual: daysAgo(r.reviewed_at ?? r.applied_at),
           personId: pessoa?.id ?? null,
+          financeSummary: pessoa?.id ? studentFinanceMap.get(pessoa.id) ?? null : null,
         })
       }
     }
@@ -1376,11 +1443,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       schools: { name: string } | null
       staff_applications: { id: string; status: string; form_data: Record<string, unknown> | null; token: string | null }[] | null
     }
-    const sifResult = await sb
-      .from('staff_interest_forms')
-      .select('id, full_name, email, phone, message, status, created_at, responded_at, refusal_reason, reviewed_by, ministry_id, school_id, person_id, assumed_by, assumed_at, created_by, ministries(name), schools(name), staff_applications(id, status, form_data, token)')
-      .eq('organization_id', orgId)
-      .order('created_at', { ascending: false })
+    const sifResult = staffInterestRes
 
     for (const r of ((sifResult.data ?? []) as unknown as SIFRaw[])) {
       const ministry = r.ministries as { name: string } | null
@@ -1456,6 +1519,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       .filter((id): id is string => Boolean(id))
     const staffEmailsByPerson = new Map<string, string>()
     const staffLoginByPerson = new Set<string>()
+    const staffFinanceMap = await getPeopleFinanceSummaries(orgId, staffPersonIds)
 
     if (staffPersonIds.length > 0) {
       const [{ data: contacts }, { data: profiles }] = await Promise.all([
@@ -1517,6 +1581,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           pastorSkipped: !!r.pastor_reference_skip_reason,
           hospedagemSkipped: !!r.hospedagem_skip_reason,
           candidateArrivalDate: (r.form_data as Record<string, Record<string, string>> | null)?.s6?.data_chegada || null,
+          financeSummary: pessoa?.id ? staffFinanceMap.get(pessoa.id) ?? null : null,
         })
       }
     }
@@ -1687,39 +1752,32 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       })
     : historico
 
+  // As 3 listas de ids abaixo (reviewer/assumed/createdBy) costumavam ser
+  // resolvidas em 3 chamadas Promise.all sequenciais — cada uma batendo na
+  // API de admin do Supabase Auth (uma requisição por usuário). Como toda
+  // ação nessa página recarrega o Server Component inteiro, isso multiplicava
+  // o tempo de resposta a cada clique. Uma única leva, deduplicada, resolve
+  // todos os nomes de uma vez.
   const reviewerIds = [...new Set(historicoRoleFiltered.map(item => item.recusadoPorId).filter((id): id is string => Boolean(id)))]
-  const reviewerNames = new Map<string, string>()
+  const assumedIds = [...new Set(assumedLookups.map(a => a.userId))]
+  const createdByIds = [...new Set(createdByLookups.map(a => a.userId))]
+  const allUserIds = [...new Set([...reviewerIds, ...assumedIds, ...createdByIds])]
+  const userDisplayNames = new Map<string, string>()
 
-  await Promise.all(reviewerIds.map(async (id) => {
+  await Promise.all(allUserIds.map(async (id) => {
     const { data } = await sb.auth.admin.getUserById(id)
     const displayName = getUserDisplayName(data.user)
-    if (displayName) reviewerNames.set(id, displayName)
+    if (displayName) userDisplayNames.set(id, displayName)
   }))
 
   for (const item of historicoRoleFiltered) {
-    item.recusadoPor = item.recusadoPorId ? reviewerNames.get(item.recusadoPorId) ?? null : null
+    item.recusadoPor = item.recusadoPorId ? userDisplayNames.get(item.recusadoPorId) ?? null : null
   }
-
-  const assumedIds = [...new Set(assumedLookups.map(a => a.userId))]
-  const assumedNames = new Map<string, string>()
-  await Promise.all(assumedIds.map(async (id) => {
-    const { data } = await sb.auth.admin.getUserById(id)
-    const displayName = getUserDisplayName(data.user)
-    if (displayName) assumedNames.set(id, displayName)
-  }))
   for (const { item, userId } of assumedLookups) {
-    item.assumedByName = assumedNames.get(userId) ?? null
+    item.assumedByName = userDisplayNames.get(userId) ?? null
   }
-
-  const createdByIds = [...new Set(createdByLookups.map(a => a.userId))]
-  const createdByNames = new Map<string, string>()
-  await Promise.all(createdByIds.map(async (id) => {
-    const { data } = await sb.auth.admin.getUserById(id)
-    const displayName = getUserDisplayName(data.user)
-    if (displayName) createdByNames.set(id, displayName)
-  }))
   for (const { item, userId } of createdByLookups) {
-    item.createdByName = createdByNames.get(userId) ?? null
+    item.createdByName = userDisplayNames.get(userId) ?? null
   }
 
   // Histórico: max 30, mais recentes primeiro
@@ -1736,7 +1794,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
             {(canWrite || canWriteEted) && (
               <NovaPreInscricaoButton
                 slug={slug}
-                criarAction={criarPreInscricaoManual}
+                criarAction={criarPreInscricaoManual.bind(null, orgId, slug)}
                 openClasses={openClasses.map(c => ({
                   id: c.id,
                   school_id: c.school_id,
@@ -1749,7 +1807,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
             {canWriteObreiro && (
               <NovaPreInscricaoObreiroButton
                 slug={slug}
-                criarAction={criarPreInscricaoObreiroManual}
+                criarAction={criarPreInscricaoObreiroManual.bind(null, orgId, slug)}
                 ministries={allMinistries}
                 schools={allSchools}
               />

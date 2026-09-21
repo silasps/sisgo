@@ -165,3 +165,11 @@ export async function updateStudentCommunicationLanguages(orgId: string, slug: s
   await admin.from('organizations').update({ student_communication_languages: languages }).eq('id', orgId)
   revalidatePath(`/${slug}/configuracoes`)
 }
+
+export async function updateInstitutionRulesText(orgId: string, slug: string, formData: FormData) {
+  const admin = await verifyAccess(orgId)
+  if (!admin) return
+  const text = (formData.get('institution_rules_text') as string | null)?.trim() || null
+  await admin.from('organizations').update({ institution_rules_text: text }).eq('id', orgId)
+  revalidatePath(`/${slug}/configuracoes`)
+}

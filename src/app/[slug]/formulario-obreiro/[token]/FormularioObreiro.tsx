@@ -1,18 +1,23 @@
 'use client'
 
 import { useRef, useState, useContext, createContext } from 'react'
-import { HeartHandshake } from 'lucide-react'
-import { salvarSecaoObreiro, salvarSecaoObreiroComArquivos, enviarFormularioObreiro, gerarLinkReferenciaObreiro } from './actions'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
+import { HeartHandshake, Camera, IdCard, FileText } from 'lucide-react'
+import { salvarSecaoObreiro, salvarSecaoObreiroComArquivos, enviarFormularioObreiro, gerarLinkReferenciaObreiro, enviarRegrasInstituicaoEmail } from './actions'
 
-const SECTIONS_COM_ARQUIVO = new Set([3, 10])
+const SECTIONS_COM_ARQUIVO = new Set([3, 7, 10])
 import { InternationalPhoneField } from '@/components/ui/InternationalPhoneField'
 import { MaskedInput, useMask } from '@/components/ui/MaskedInput'
+import { FileInputField } from '@/components/ui/FileInputField'
+import { PhotoFramingGuide } from '@/components/ui/PhotoFramingGuide'
+import { useBodyScrollLock } from '@/lib/useBodyScrollLock'
 import { LangSwitcher } from '@/components/ui/LangSwitcher'
+import { getStaffFormDict, normalizeStaffLang, tStaff, ptDict } from '@/lib/i18n/staff-forms'
+import type { StaffFormDict, StaffLang } from '@/lib/i18n/staff-forms'
+import { orgShortName } from '@/lib/orgShortName'
 
-// ── i18n stub — will use staff-forms dict when ready, fallback to inline PT ──
-
-type Lang = 'pt' | 'en' | 'es'
-const LangCtx = createContext<Lang>('pt')
+// ── Dictionary context — avoids prop drilling through all 10 sections ──────
+const DictCtx = createContext<StaffFormDict>(ptDict)
 
 type Prefill = {
   nome?: string
@@ -22,6 +27,7 @@ type Prefill = {
 }
 
 type MinistryOption = { id: string; name: string }
+type DocumentUrls = Record<string, { url: string; name: string; type: string; size?: number }>
 
 type Props = {
   slug: string
@@ -36,13 +42,20 @@ type Props = {
   initialData?: Record<string, unknown>
   initialLang?: string
   printMode?: boolean
+  institutionRulesText?: string | null
+  documentUrls?: DocumentUrls
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function Field({ label, name, defaultValue, placeholder, required, type = 'text', maxLength }: {
+// Sem min/max o <input type="date"> deixa digitar qualquer quantidade de
+// dígitos no ano (ex.: "969999") — trava o valor entre 1900 e hoje.
+const DATE_MIN = '1900-01-01'
+const DATE_MAX = new Date().toISOString().slice(0, 10)
+
+function Field({ label, name, defaultValue, placeholder, required, type = 'text', maxLength, min, max }: {
   label: string; name: string; defaultValue?: string; placeholder?: string
-  required?: boolean; type?: string; maxLength?: number
+  required?: boolean; type?: string; maxLength?: number; min?: string; max?: string
 }) {
   return (
     <div data-field={name}>
@@ -51,6 +64,8 @@ function Field({ label, name, defaultValue, placeholder, required, type = 'text'
       </label>
       <input name={name} type={type} defaultValue={defaultValue} placeholder={placeholder}
         required={required} maxLength={maxLength}
+        min={type === 'date' ? (min ?? DATE_MIN) : undefined}
+        max={type === 'date' ? (max ?? DATE_MAX) : undefined}
         className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-gray-50" />
     </div>
   )
@@ -75,6 +90,7 @@ function Select({ label, name, defaultValue, required, options, onChange }: {
   options: { value: string; label: string }[]
   onChange?: (e: React.ChangeEvent<HTMLSelectElement>) => void
 }) {
+  const d = useContext(DictCtx)
   return (
     <div data-field={name}>
       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -82,7 +98,7 @@ function Select({ label, name, defaultValue, required, options, onChange }: {
       </label>
       <select name={name} defaultValue={defaultValue ?? ''} required={required} onChange={onChange}
         className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-gray-50">
-        <option value="" disabled>Selecione…</option>
+        <option value="" disabled>{d.nav.select_placeholder}</option>
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
     </div>
@@ -106,6 +122,7 @@ function SubSection({ title }: { title: string }) {
 // ── CEP auto-fill ────────────────────────────────────────────────────────────
 
 function CepAddressFields({ data }: { data?: Record<string, string> }) {
+  const d = useContext(DictCtx)
   const { value: cep, onChange: setCepRaw } = useMask('cep', data?.cep ?? '')
   const [endereco, setEndereco] = useState(data?.endereco ?? '')
   const [bairro, setBairro] = useState(data?.bairro ?? '')
@@ -132,31 +149,31 @@ function CepAddressFields({ data }: { data?: Record<string, string> }) {
 
   return (
     <>
-      <SubSection title="Endereço" />
+      <SubSection title={d.s2.endereco_section} />
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">CEP</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{d.s2.cep}</label>
         <input name="cep" value={cep} onChange={e => setCepRaw(e.target.value)} onBlur={handleCepBlur}
           placeholder="00000-000" maxLength={9} inputMode="numeric"
           className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-gray-50" />
-        {loadingCep && <p className="text-xs text-amber-500 mt-1">Buscando endereço…</p>}
+        {loadingCep && <p className="text-xs text-amber-500 mt-1">{d.nav.loading_cep}</p>}
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Bairro</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{d.s2.bairro}</label>
         <input name="bairro" value={bairro} onChange={e => setBairro(e.target.value)}
           className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-gray-50" />
       </div>
       <div className="sm:col-span-2">
-        <label className="block text-sm font-medium text-gray-700 mb-1">Rua / Endereço</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{d.s2.endereco_rua}</label>
         <input name="endereco" value={endereco} onChange={e => setEndereco(e.target.value)}
           className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-gray-50" />
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Cidade <span className="text-red-500">*</span></label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{d.s2.cidade} <span className="text-red-500">*</span></label>
         <input name="cidade" value={cidade} onChange={e => setCidade(e.target.value)} required
           className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-gray-50" />
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Estado <span className="text-red-500">*</span></label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{d.s2.estado} <span className="text-red-500">*</span></label>
         <input name="estado" value={estado} onChange={e => setEstado(e.target.value)} required
           className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-gray-50" />
       </div>
@@ -165,36 +182,217 @@ function CepAddressFields({ data }: { data?: Record<string, string> }) {
 }
 
 function ZipAddressFields({ data }: { data?: Record<string, string> }) {
+  const d = useContext(DictCtx)
   return (
     <>
-      <SubSection title="Address" />
-      <Field label="ZIP / Postal code" name="cep" defaultValue={data?.cep} placeholder="e.g. 12345" />
-      <Field label="District" name="bairro" defaultValue={data?.bairro} />
+      <SubSection title={d.s2.endereco_section} />
+      <Field label={d.s2.cep} name="cep" defaultValue={data?.cep} placeholder={d.s2.zip_ph} />
+      <Field label={d.s2.bairro} name="bairro" defaultValue={data?.bairro} />
       <div className="sm:col-span-2">
-        <Field label="Street / Address" name="endereco" defaultValue={data?.endereco} />
+        <Field label={d.s2.endereco_rua} name="endereco" defaultValue={data?.endereco} />
       </div>
-      <Field label="City" name="cidade" defaultValue={data?.cidade} required />
-      <Field label="State / Province" name="estado" defaultValue={data?.estado} required />
+      <Field label={d.s2.cidade} name="cidade" defaultValue={data?.cidade} required />
+      <Field label={d.s2.estado} name="estado" defaultValue={data?.estado} required />
     </>
+  )
+}
+
+// ── Escolas/especializações — lista dinâmica (nome + mês/ano de conclusão) ──
+
+type JocumSchoolEntry = { escola: string; base: string; pais: string; mesAno: string }
+
+// Formata como MM/AAAA enquanto digita (só números, barra automática) —
+// guarda direto nesse formato, sem depender do datepicker nativo de
+// <input type="month"> (que ignora placeholder na maioria dos navegadores).
+function formatMesAnoInput(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 6)
+  return digits.length <= 2 ? digits : `${digits.slice(0, 2)}/${digits.slice(2)}`
+}
+
+// Aceita o novo formato (JSON array), o mês/ano salvo no formato antigo
+// AAAA-MM (quando o campo ainda era <input type="month">) e texto livre de
+// antes dessa mudança toda — sem isso, reabrir uma inscrição antiga perderia
+// o dado.
+function normalizeMesAno(mesAno?: string): string {
+  const m = mesAno?.match(/^(\d{4})-(\d{2})$/)
+  return m ? `${m[2]}/${m[1]}` : (mesAno ?? '')
+}
+
+function parseJocumSchools(raw?: string): JocumSchoolEntry[] {
+  const empty = { escola: '', base: '', pais: '', mesAno: '' }
+  if (!raw) return [empty]
+  try {
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed) && parsed.length) {
+      return parsed.map((r: unknown) => {
+        const row = (r ?? {}) as Partial<JocumSchoolEntry>
+        return { escola: row.escola ?? '', base: row.base ?? '', pais: row.pais ?? '', mesAno: normalizeMesAno(row.mesAno) }
+      })
+    }
+  } catch { /* valor legado em texto livre, cai no fallback abaixo */ }
+  return raw.trim() ? [{ ...empty, escola: raw }] : [empty]
+}
+
+type LanguageEntry = { idioma: string; fluencia: string }
+
+// Aceita o novo formato (JSON array) e, se ainda não existir, tenta
+// aproveitar os campos fixos antigos (idioma_portugues/ingles/espanhol/
+// outro_idioma) — evita perder o que já tinha sido preenchido antes dessa
+// mudança pra lista dinâmica.
+function parseLanguages(raw: string | undefined, legacy: Record<string, string> | undefined): LanguageEntry[] {
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed) && parsed.length) {
+        return parsed.map((r: unknown) => {
+          const row = (r ?? {}) as Partial<LanguageEntry>
+          return { idioma: row.idioma ?? '', fluencia: row.fluencia ?? '' }
+        })
+      }
+    } catch { /* segue pro fallback legado abaixo */ }
+  }
+  const legacyEntries: LanguageEntry[] = []
+  if (legacy?.idioma_portugues) legacyEntries.push({ idioma: 'Português', fluencia: legacy.idioma_portugues })
+  if (legacy?.idioma_ingles) legacyEntries.push({ idioma: 'Inglês', fluencia: legacy.idioma_ingles })
+  if (legacy?.idioma_espanhol) legacyEntries.push({ idioma: 'Espanhol', fluencia: legacy.idioma_espanhol })
+  if (legacy?.outro_idioma) legacyEntries.push({ idioma: legacy.outro_idioma, fluencia: '' })
+  return legacyEntries.length ? legacyEntries : [{ idioma: '', fluencia: 'nativo' }]
+}
+
+function LanguagesField({ data }: { data?: Record<string, string> }) {
+  const d = useContext(DictCtx)
+  const [rows, setRows] = useState<LanguageEntry[]>(() => parseLanguages(data?.idiomas, data))
+
+  function updateRow(i: number, patch: Partial<LanguageEntry>) {
+    setRows(prev => prev.map((r, idx) => idx === i ? { ...r, ...patch } : r))
+  }
+  function addRow() {
+    setRows(prev => [...prev, { idioma: '', fluencia: 'basico' }])
+  }
+  function removeRow(i: number) {
+    setRows(prev => prev.filter((_, idx) => idx !== i))
+  }
+
+  const serialized = JSON.stringify(rows.filter((r, i) => i === 0 || r.idioma.trim()))
+  const inputClass = "w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-gray-50"
+
+  return (
+    <div className="sm:col-span-2 space-y-2">
+      {rows.map((row, i) => (
+        <div key={i} className="flex gap-2 items-end">
+          <div className="flex-1">
+            <label className="block text-xs text-gray-500 mb-0.5">
+              {i === 0 ? d.s2.idioma_nativo : d.s2.idioma_outro_label}
+            </label>
+            <input type="text" value={row.idioma} onChange={e => updateRow(i, { idioma: e.target.value })}
+              placeholder={d.s2.idioma_nativo_ph} required={i === 0} className={inputClass} />
+          </div>
+          {i > 0 && (
+            <div className="w-40">
+              <label className="block text-xs text-gray-500 mb-0.5">{d.s2.idioma_fluencia}</label>
+              <select value={row.fluencia} onChange={e => updateRow(i, { fluencia: e.target.value })} className={inputClass}>
+                <option value="basico">{d.opts.basic}</option>
+                <option value="intermediario">{d.opts.intermediate}</option>
+                <option value="avancado">{d.opts.advanced}</option>
+                <option value="fluente">{d.opts.fluent}</option>
+              </select>
+            </div>
+          )}
+          {i > 0 && (
+            <button type="button" onClick={() => removeRow(i)} aria-label={d.s2.escolas_jocum_remove}
+              className="px-3 py-2.5 text-gray-400 hover:text-red-500 text-sm">✕</button>
+          )}
+        </div>
+      ))}
+      <button type="button" onClick={addRow}
+        className="text-xs font-semibold text-amber-600 hover:text-amber-800">
+        {d.s2.idioma_add}
+      </button>
+      <input type="hidden" name="idiomas" value={serialized} readOnly />
+    </div>
+  )
+}
+
+function JocumSchoolsField({ label, placeholder, data }: { label: string; placeholder: string; data?: string }) {
+  const d = useContext(DictCtx)
+  const [rows, setRows] = useState<JocumSchoolEntry[]>(() => parseJocumSchools(data))
+
+  function updateRow(i: number, patch: Partial<JocumSchoolEntry>) {
+    setRows(prev => prev.map((r, idx) => idx === i ? { ...r, ...patch } : r))
+  }
+  function addRow() {
+    setRows(prev => [...prev, { escola: '', base: '', pais: '', mesAno: '' }])
+  }
+  function removeRow(i: number) {
+    setRows(prev => prev.filter((_, idx) => idx !== i))
+  }
+
+  // Só serializa linhas com algum conteúdo — evita salvar um array cheio de
+  // linhas vazias quando a pessoa clicou em "+" mas não preencheu.
+  const serialized = JSON.stringify(rows.filter(r => r.escola.trim() || r.base.trim() || r.pais.trim() || r.mesAno.trim()))
+  const inputClass = "w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-gray-50"
+
+  return (
+    <div className="sm:col-span-2 space-y-2">
+      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      {rows.map((row, i) => (
+        <div key={i} className="relative rounded-xl border border-gray-200 bg-white p-3 space-y-2">
+          {rows.length > 1 && (
+            <button type="button" onClick={() => removeRow(i)} aria-label={d.s2.escolas_jocum_remove}
+              className="absolute top-2 right-2 text-gray-400 hover:text-red-500 text-sm">✕</button>
+          )}
+          <input type="text" value={row.escola} onChange={e => updateRow(i, { escola: e.target.value })}
+            placeholder={placeholder} className={`${inputClass} pr-8`} />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div>
+              <label className="block text-xs text-gray-500 mb-0.5">{d.s2.escolas_jocum_local}</label>
+              <input type="text" value={row.base} onChange={e => updateRow(i, { base: e.target.value })}
+                placeholder={d.s2.escolas_jocum_local_ph} className={inputClass} />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-0.5">{d.s2.escolas_jocum_pais}</label>
+              <input type="text" value={row.pais} onChange={e => updateRow(i, { pais: e.target.value })}
+                placeholder={d.s2.escolas_jocum_pais_ph} className={inputClass} />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-0.5">{d.s2.escolas_jocum_mes_ano}</label>
+              <input type="text" inputMode="numeric" value={row.mesAno}
+                onChange={e => updateRow(i, { mesAno: formatMesAnoInput(e.target.value) })}
+                placeholder="10/2026" maxLength={7} className={inputClass} />
+            </div>
+          </div>
+        </div>
+      ))}
+      <button type="button" onClick={addRow}
+        className="text-xs font-semibold text-amber-600 hover:text-amber-800">
+        {d.s2.escolas_jocum_add}
+      </button>
+      {/* Campo de verdade enviado no submit — mesmo `name` de sempre, só que
+          agora carregando um JSON array em vez de texto livre. */}
+      <input type="hidden" name="escolas_jocum" value={serialized} readOnly />
+    </div>
   )
 }
 
 // ── Sections ─────────────────────────────────────────────────────────────────
 
 function S1Email({ prefill, data }: { prefill?: Prefill; data?: Record<string, string> }) {
+  const d = useContext(DictCtx)
   return (
     <div className="space-y-4">
-      <SectionTitle number="Seção 01" title="E-mail" />
-      <Field label="E-mail" name="email" type="email"
+      <SectionTitle number={d.s1.section} title={d.s1.title} />
+      <Field label={d.s1.email} name="email" type="email"
         defaultValue={data?.email ?? prefill?.email} required />
     </div>
   )
 }
 
-function S2Dados({ prefill, data, onNationalityChange }: {
+function S2Dados({ prefill, data, onNationalityChange, orgName }: {
   prefill?: Prefill; data?: Record<string, string>
   onNationalityChange?: (isBrazilian: boolean) => void
+  orgName: string
 }) {
+  const d = useContext(DictCtx)
   const [estrangeiro, setEstrangeiro] = useState(data?.is_brasileiro === 'nao')
 
   function handleNationality(e: React.ChangeEvent<HTMLSelectElement>) {
@@ -205,98 +403,87 @@ function S2Dados({ prefill, data, onNationalityChange }: {
 
   return (
     <div className="space-y-4">
-      <SectionTitle number="Seção 02" title="Dados Pessoais" />
+      <SectionTitle number={d.s2.section} title={d.s2.title} />
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
-          <Field label="Nome completo" name="nome" defaultValue={data?.nome ?? prefill?.nome} required />
+          <Field label={d.s2.nome} name="nome" defaultValue={data?.nome ?? prefill?.nome} required />
         </div>
-        <Select label="Sexo" name="sexo" required defaultValue={data?.sexo} options={[
-          { value: 'M', label: 'Masculino' },
-          { value: 'F', label: 'Feminino' },
+        <Select label={d.s2.sexo} name="sexo" required defaultValue={data?.sexo} options={[
+          { value: 'M', label: d.opts.gender_m },
+          { value: 'F', label: d.opts.gender_f },
         ]} />
-        <Field label="Data de nascimento" name="data_nascimento" type="date"
+        <Field label={d.s2.data_nascimento} name="data_nascimento" type="date"
           defaultValue={data?.data_nascimento} required />
-        <Select label="Estado civil" name="estado_civil" required defaultValue={data?.estado_civil} options={[
-          { value: 'solteiro', label: 'Solteiro(a)' },
-          { value: 'casado', label: 'Casado(a)' },
-          { value: 'divorciado', label: 'Divorciado(a)' },
-          { value: 'viuvo', label: 'Viúvo(a)' },
+        <Select label={d.s2.estado_civil} name="estado_civil" required defaultValue={data?.estado_civil} options={[
+          { value: 'solteiro', label: d.s3.solteiro },
+          { value: 'casado', label: d.s3.casado },
+          { value: 'divorciado', label: d.s3.divorciado },
+          { value: 'viuvo', label: d.s3.viuvo },
         ]} />
-        <Select label="É brasileiro(a)?" name="is_brasileiro" required
+        <Select label={d.s2.is_brasileiro} name="is_brasileiro" required
           defaultValue={data?.is_brasileiro}
           options={[
-            { value: 'sim', label: 'Sim' },
-            { value: 'nao', label: 'Não' },
+            { value: 'sim', label: d.s2.is_brasileiro_sim },
+            { value: 'nao', label: d.s2.is_brasileiro_nao },
           ]} onChange={handleNationality} />
         {estrangeiro && <>
-          <Field label="Nacionalidade" name="nacionalidade" defaultValue={data?.nacionalidade} required />
-          <Select label="Fluência em português" name="fluencia_portugues"
+          <Field label={d.s2.nacionalidade} name="nacionalidade" defaultValue={data?.nacionalidade} required />
+          <Select label={d.s2.fluencia_portugues} name="fluencia_portugues"
             defaultValue={data?.fluencia_portugues}
             options={[
-              { value: 'basico', label: 'Básico' },
-              { value: 'intermediario', label: 'Intermediário' },
-              { value: 'avancado', label: 'Avançado' },
-              { value: 'fluente', label: 'Fluente' },
+              { value: 'basico', label: d.opts.basic },
+              { value: 'intermediario', label: d.opts.intermediate },
+              { value: 'avancado', label: d.opts.advanced },
+              { value: 'fluente', label: d.opts.fluent },
+            ]} />
+          <Select label={d.s2.idioma_preferencia} name="idioma_preferencia_comunicacao"
+            defaultValue={data?.idioma_preferencia_comunicacao}
+            options={[
+              { value: 'portugues', label: d.s2.idioma_portugues },
+              { value: 'ingles', label: d.s2.idioma_ingles },
+              { value: 'espanhol', label: d.s2.idioma_espanhol },
+              { value: 'outro', label: d.opts.other },
             ]} />
         </>}
 
-        <SubSection title="Formação e Habilidades" />
-        <Select label="Grau de escolaridade" name="escolaridade" required defaultValue={data?.escolaridade} options={[
-          { value: 'fundamental', label: 'Ensino Fundamental' },
-          { value: 'medio', label: 'Ensino Médio' },
-          { value: 'tecnico', label: 'Técnico' },
-          { value: 'superior_incompleto', label: 'Superior Incompleto' },
-          { value: 'superior', label: 'Superior Completo' },
-          { value: 'pos_graduacao', label: 'Pós-graduação' },
-          { value: 'mestrado', label: 'Mestrado' },
-          { value: 'doutorado', label: 'Doutorado' },
+        <SubSection title={d.s2.formacao_section} />
+        <Select label={d.s2.escolaridade} name="escolaridade" required defaultValue={data?.escolaridade} options={[
+          { value: 'fundamental', label: d.s2.fundamental },
+          { value: 'medio', label: d.s2.medio },
+          { value: 'tecnico', label: d.s2.tecnico },
+          { value: 'superior_incompleto', label: d.s2.superior_incompleto },
+          { value: 'superior', label: d.s2.superior },
+          { value: 'pos_graduacao', label: d.s2.pos_graduacao },
+          { value: 'mestrado', label: d.s2.mestrado },
+          { value: 'doutorado', label: d.s2.doutorado },
         ]} />
-        <Field label="Profissão" name="profissao" defaultValue={data?.profissao} />
+        <Field label={d.s2.profissao} name="profissao" defaultValue={data?.profissao} />
         <div className="sm:col-span-2">
-          <TextArea label="Habilidades" name="habilidades" defaultValue={data?.habilidades} rows={3}
-            placeholder="Ex: culinária, música, ensino, liderança, manutenção…" />
+          <TextArea label={d.s2.habilidades} name="habilidades" defaultValue={data?.habilidades} rows={3}
+            placeholder={d.s2.habilidades_ph} />
         </div>
         <div className="sm:col-span-2">
-          <Field label="Curso de especialização profissional" name="especializacao_profissional"
+          <Field label={d.s2.especializacao_profissional} name="especializacao_profissional"
             defaultValue={data?.especializacao_profissional}
-            placeholder="Ex: técnico em enfermagem, mecânica…" />
+            placeholder={d.s2.especializacao_profissional_ph} />
         </div>
-        <div className="sm:col-span-2">
-          <Field label="Escolas ou especializações da JOCUM" name="escolas_jocum"
-            defaultValue={data?.escolas_jocum}
-            placeholder="Ex: ETED, EDE, EMAP…" />
-        </div>
+        <JocumSchoolsField
+          label={tStaff(d.s2.escolas_jocum, { orgName: orgShortName(orgName) })}
+          placeholder={d.s2.escolas_jocum_ph}
+          data={data?.escolas_jocum}
+        />
 
-        <SubSection title="Idiomas" />
-        {([
-          { label: 'Português', name: 'idioma_portugues', defaultNativo: true },
-          { label: 'Inglês', name: 'idioma_ingles' },
-          { label: 'Espanhol', name: 'idioma_espanhol' },
-        ] as { label: string; name: string; defaultNativo?: boolean }[]).map(({ label, name, defaultNativo }) => (
-          <div key={name}>
-            <Select label={label} name={name}
-              defaultValue={data?.[name] ?? (defaultNativo ? 'nativo' : '')}
-              options={[
-                { value: 'nativo', label: 'Nativo' },
-                { value: 'basico', label: 'Básico' },
-                { value: 'intermediario', label: 'Intermediário' },
-                { value: 'avancado', label: 'Avançado' },
-                { value: 'fluente', label: 'Fluente' },
-                { value: 'nao_falo', label: 'Não falo' },
-              ]} />
-          </div>
-        ))}
-        <Field label="Outro idioma" name="outro_idioma" defaultValue={data?.outro_idioma}
-          placeholder="Ex: Francês (intermediário)" />
+        <SubSection title={d.s2.idiomas_section} />
+        <LanguagesField data={data} />
 
-        <SubSection title="Documentos" />
+        <SubSection title={d.s2.documentos_section} />
         {!estrangeiro ? (<>
-          <MaskedInput mask="rg" name="rg" label="RG" defaultValue={data?.rg} required />
-          <MaskedInput mask="cpf" name="cpf" label="CPF" defaultValue={data?.cpf} required />
-          <Field label="Passaporte (opcional)" name="passaporte" defaultValue={data?.passaporte} maxLength={20} />
+          <MaskedInput mask="rg" name="rg" label={d.s2.rg} defaultValue={data?.rg} />
+          <MaskedInput mask="cpf" name="cpf" label={d.s2.cpf} defaultValue={data?.cpf} required />
+          <Field label={d.s2.passaporte_opcional} name="passaporte" defaultValue={data?.passaporte} maxLength={20} />
         </>) : (<>
           <div className="sm:col-span-2">
-            <Field label="Passaporte (obrigatório)" name="passaporte" defaultValue={data?.passaporte}
+            <Field label={d.s2.passaporte_obrigatorio} name="passaporte" defaultValue={data?.passaporte}
               required maxLength={20} placeholder="Ex: AB123456" />
           </div>
         </>)}
@@ -305,79 +492,217 @@ function S2Dados({ prefill, data, onNationalityChange }: {
           ? <CepAddressFields data={data} />
           : <ZipAddressFields data={data} />
         }
-        <Field label="País" name="pais" defaultValue={data?.pais ?? (estrangeiro ? '' : 'Brasil')} required />
-        <InternationalPhoneField phoneName="celular" countryName="celular_country"
-          label="Celular / WhatsApp" defaultCountryIso="BR" defaultPhone={data?.celular ?? prefill?.telefone} />
-        <Field label="E-mail de contato" name="email_contato" type="email"
-          defaultValue={data?.email_contato} required />
+        <Field label={d.s2.pais} name="pais" defaultValue={data?.pais ?? (estrangeiro ? '' : 'Brasil')} required />
 
-        <SubSection title="Redes sociais" />
-        <Field label="Instagram" name="instagram" defaultValue={data?.instagram} placeholder="@usuario" />
-        <Field label="Facebook" name="facebook" defaultValue={data?.facebook} />
-        <Field label="TikTok" name="tiktok" defaultValue={data?.tiktok} />
-        <Field label="LinkedIn" name="linkedin" defaultValue={data?.linkedin} />
+        <SubSection title={d.s2.redes_section} />
+        <Field label={d.s2.instagram} name="instagram" defaultValue={data?.instagram} placeholder="@usuario" />
+        <Field label={d.s2.facebook} name="facebook" defaultValue={data?.facebook} />
+        <Field label={d.s2.tiktok} name="tiktok" defaultValue={data?.tiktok} />
+        <Field label={d.s2.linkedin} name="linkedin" defaultValue={data?.linkedin} />
 
-        <SubSection title="Contato de emergência" />
-        <Field label="Nome" name="emergencia_nome" defaultValue={data?.emergencia_nome} required />
-        <Field label="Grau de parentesco" name="emergencia_parentesco" defaultValue={data?.emergencia_parentesco} required />
+        <SubSection title={d.s2.emergencia_section} />
+        <p className="sm:col-span-2 -mt-1 text-xs text-gray-500">{d.s2.emergencia_hint}</p>
+        <Field label={d.s2.emergencia_nome} name="emergencia_nome" defaultValue={data?.emergencia_nome} required />
+        <Field label={d.s2.emergencia_parentesco} name="emergencia_parentesco" defaultValue={data?.emergencia_parentesco} required />
         <InternationalPhoneField phoneName="emergencia_telefone" countryName="emergencia_telefone_country"
-          label="Telefone" defaultCountryIso="BR"
+          label={d.s2.emergencia_telefone} defaultCountryIso="BR"
           defaultPhone={data?.emergencia_telefone} required />
-        <Field label="E-mail" name="emergencia_email" type="email" defaultValue={data?.emergencia_email} />
+        <Field label={d.s2.emergencia_email} name="emergencia_email" type="email" defaultValue={data?.emergencia_email} />
+
+        <InternationalPhoneField phoneName="celular" countryName="celular_country"
+          label={d.s2.celular} defaultCountryIso="BR" defaultPhone={data?.celular ?? prefill?.telefone} />
       </div>
     </div>
   )
 }
 
-function S3Familia({ data, estadoCivilS2 }: { data?: Record<string, string>; estadoCivilS2?: string }) {
+function anosDesde(dateStr: string): number | null {
+  if (!dateStr) return null
+  const then = new Date(dateStr + 'T00:00:00')
+  if (Number.isNaN(then.getTime())) return null
+  const now = new Date()
+  let years = now.getFullYear() - then.getFullYear()
+  const beforeAnniversary = now.getMonth() < then.getMonth() ||
+    (now.getMonth() === then.getMonth() && now.getDate() < then.getDate())
+  if (beforeAnniversary) years -= 1
+  return years >= 0 ? years : null
+}
+
+function idadeCrianca(dateStr: string, d: StaffFormDict): string | null {
+  if (!dateStr) return null
+  const then = new Date(dateStr + 'T00:00:00')
+  if (Number.isNaN(then.getTime())) return null
+  const now = new Date()
+  if (then > now) return null
+  let years = now.getFullYear() - then.getFullYear()
+  let months = now.getMonth() - then.getMonth()
+  if (now.getDate() < then.getDate()) months -= 1
+  if (months < 0) { years -= 1; months += 12 }
+  if (years < 0) return null
+  if (years >= 5) return tStaff(d.s3.filhos_idade_anos, { anos: String(years) })
+  if (years === 0) return tStaff(d.s3.filhos_idade_meses, { meses: String(months) })
+  if (months === 0) return tStaff(d.s3.filhos_idade_anos, { anos: String(years) })
+  return tStaff(d.s3.filhos_idade_anos_meses, { anos: String(years), meses: String(months) })
+}
+
+type ChildEntry = { nome: string; sexo: string; data_nascimento: string }
+
+function parseChildren(raw?: string): ChildEntry[] {
+  if (!raw) return [{ nome: '', sexo: '', data_nascimento: '' }]
+  try {
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed) && parsed.length) {
+      return parsed.map((r: unknown) => {
+        const row = (r ?? {}) as Partial<ChildEntry>
+        return { nome: row.nome ?? '', sexo: row.sexo ?? '', data_nascimento: row.data_nascimento ?? '' }
+      })
+    }
+  } catch { /* valor legado em texto livre, cai no fallback abaixo */ }
+  return raw.trim() ? [{ nome: raw, sexo: '', data_nascimento: '' }] : [{ nome: '', sexo: '', data_nascimento: '' }]
+}
+
+function ChildrenField({ data }: { data?: string }) {
+  const d = useContext(DictCtx)
+  const [rows, setRows] = useState<ChildEntry[]>(() => parseChildren(data))
+
+  function updateRow(i: number, patch: Partial<ChildEntry>) {
+    setRows(prev => prev.map((r, idx) => idx === i ? { ...r, ...patch } : r))
+  }
+  function addRow() {
+    setRows(prev => [...prev, { nome: '', sexo: '', data_nascimento: '' }])
+  }
+  function removeRow(i: number) {
+    setRows(prev => prev.filter((_, idx) => idx !== i))
+  }
+
+  const filled = rows.filter(r => r.nome.trim())
+  const serialized = JSON.stringify(filled)
+  const inputClass = "w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-gray-50"
+
+  return (
+    <div className="sm:col-span-2 space-y-2">
+      <div className="flex items-center justify-between">
+        <label className="block text-sm font-medium text-gray-700">{d.s3.filhos_dados}</label>
+        <span className="text-xs font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
+          {tStaff(d.s3.filhos_contagem, { count: String(filled.length) })}
+        </span>
+      </div>
+      {rows.map((row, i) => (
+        <div key={i} className="relative rounded-xl border border-gray-200 bg-white p-3 space-y-2">
+          {rows.length > 1 && (
+            <button type="button" onClick={() => removeRow(i)} aria-label={d.s3.filhos_remove}
+              className="absolute top-2 right-2 text-gray-400 hover:text-red-500 text-sm">✕</button>
+          )}
+          <input type="text" value={row.nome} onChange={e => updateRow(i, { nome: e.target.value })}
+            placeholder={d.s3.filhos_nome_ph} required className={`${inputClass} pr-8`} />
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs text-gray-500 mb-0.5">{d.s3.filhos_sexo}</label>
+              <select value={row.sexo} onChange={e => updateRow(i, { sexo: e.target.value })} className={inputClass}>
+                <option value="" disabled>{d.nav.select_placeholder}</option>
+                <option value="M">{d.opts.gender_m}</option>
+                <option value="F">{d.opts.gender_f}</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-0.5">{d.s3.filhos_nascimento}</label>
+              <input type="date" value={row.data_nascimento} max={new Date().toISOString().slice(0, 10)}
+                onChange={e => updateRow(i, { data_nascimento: e.target.value })} className={inputClass} />
+              {row.data_nascimento && (
+                <p className="text-xs text-amber-700 mt-1">{idadeCrianca(row.data_nascimento, d)}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      ))}
+      <button type="button" onClick={addRow}
+        className="text-xs font-semibold text-amber-600 hover:text-amber-800">
+        {d.s3.filhos_add}
+      </button>
+      <input type="hidden" name="filhos_dados" value={serialized} readOnly />
+    </div>
+  )
+}
+
+function S3Familia({ data, estadoCivilS2, documentUrls }: { data?: Record<string, string>; estadoCivilS2?: string; documentUrls?: DocumentUrls }) {
+  const d = useContext(DictCtx)
   const estadoCivil = data?.estado_civil_atual ?? estadoCivilS2 ?? ''
   const [temFilhos, setTemFilhos] = useState(data?.tem_filhos === 'sim')
+  const [certidaoSkipped, setCertidaoSkipped] = useState(!!data?.certidao_casamento_skip_reason)
+  const [dataCasamento, setDataCasamento] = useState(data?.data_casamento ?? '')
+  const anosCasados = anosDesde(dataCasamento)
+
+  const civilMap: Record<string, string> = {
+    solteiro: d.s3.solteiro,
+    casado: d.s3.casado,
+    divorciado: d.s3.divorciado,
+    viuvo: d.s3.viuvo,
+  }
 
   return (
     <div className="space-y-4">
-      <SectionTitle number="Seção 03" title="Família" />
+      <SectionTitle number={d.s3.section} title={d.s3.title} />
       <div className="grid sm:grid-cols-2 gap-4">
         <input type="hidden" name="estado_civil_atual" value={estadoCivil} />
         {estadoCivil && (
           <div className="sm:col-span-2 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm text-gray-600">
-            Estado civil: <strong>
-              {{ solteiro: 'Solteiro(a)', casado: 'Casado(a)', divorciado: 'Divorciado(a)', viuvo: 'Viúvo(a)' }[estadoCivil] ?? estadoCivil}
-            </strong>
-            <span className="text-xs text-gray-400 ml-2">(informado na seção anterior)</span>
+            {d.s3.civil_label} <strong>{civilMap[estadoCivil] ?? estadoCivil}</strong>
+            <span className="text-xs text-gray-400 ml-2">{d.s3.civil_from_s2}</span>
           </div>
         )}
 
         {estadoCivil === 'casado' && <>
-          <SubSection title="Dados do cônjuge" />
-          <Field label="Nome completo do cônjuge" name="conjuge_nome" defaultValue={data?.conjuge_nome} required />
-          <Field label="Data de nascimento do cônjuge" name="conjuge_nascimento" type="date" defaultValue={data?.conjuge_nascimento} />
-          <Field label="Tempo casados" name="tempo_casados" defaultValue={data?.tempo_casados} />
-          <Select label="Cônjuge virá para a base?" name="conjuge_vira" defaultValue={data?.conjuge_vira} options={[
-            { value: 'sim', label: 'Sim' }, { value: 'nao', label: 'Não' },
+          <SubSection title={d.s3.conjuge_section} />
+          <Field label={d.s3.conjuge_nome} name="conjuge_nome" defaultValue={data?.conjuge_nome} required />
+          <Field label={d.s3.conjuge_data_nascimento} name="conjuge_nascimento" type="date" defaultValue={data?.conjuge_nascimento} />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{d.s3.data_casamento}</label>
+            <input type="date" name="data_casamento" value={dataCasamento} max={new Date().toISOString().slice(0, 10)}
+              onChange={e => setDataCasamento(e.target.value)}
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-gray-50" />
+            {anosCasados !== null && (
+              <p className="text-xs text-amber-700 mt-1">{tStaff(d.s3.data_casamento_anos, { anos: String(anosCasados) })}</p>
+            )}
+          </div>
+          <Select label={d.s3.conjuge_vira} name="conjuge_vira" defaultValue={data?.conjuge_vira} options={[
+            { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
           ]} />
           <div className="sm:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Certidão de casamento <span className="text-red-500">*</span>
+            {!certidaoSkipped && (
+              <FileInputField name="doc_certidao_casamento" accept="image/jpeg,image/png,image/webp,application/pdf"
+                required tone="amber" icon={<IdCard size={16} aria-hidden />}
+                title={d.s3.certidao_casamento} badgeLabel={d.nav.doc_required} readyLabel={d.nav.doc_ready}
+                dropLabel={d.nav.doc_drop_generic} dropHint={d.nav.doc_drop_hint} attachedLabel={d.nav.doc_attached}
+                changeLabel={d.nav.change_file} removeLabel={d.nav.remove_file}
+                existingFileUrl={documentUrls?.doc_certidao_casamento?.url}
+                existingFileName={documentUrls?.doc_certidao_casamento?.name}
+                existingFileType={documentUrls?.doc_certidao_casamento?.type}
+                existingFileSize={documentUrls?.doc_certidao_casamento?.size} />
+            )}
+            <label className="flex items-start gap-2 mt-2 text-xs text-gray-600">
+              <input type="checkbox" className="mt-0.5" checked={certidaoSkipped}
+                onChange={e => setCertidaoSkipped(e.target.checked)} />
+              {d.s3.certidao_casamento_skip_label}
             </label>
-            <input type="file" name="doc_certidao_casamento" accept="image/jpeg,image/png,image/webp,application/pdf"
-              required
-              className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 cursor-pointer" />
+            {certidaoSkipped && (
+              <div className="mt-2">
+                <TextArea label={d.s3.certidao_casamento_skip_reason} name="certidao_casamento_skip_reason"
+                  defaultValue={data?.certidao_casamento_skip_reason} required rows={2}
+                  placeholder={d.s3.certidao_casamento_skip_reason_ph} />
+              </div>
+            )}
           </div>
         </>}
 
         <div className="sm:col-span-2 mt-2">
-          <Select label="Tem filhos?" name="tem_filhos" defaultValue={data?.tem_filhos} options={[
-            { value: 'sim', label: 'Sim' }, { value: 'nao', label: 'Não' },
+          <Select label={d.s3.tem_filhos} name="tem_filhos" defaultValue={data?.tem_filhos} options={[
+            { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
           ]} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setTemFilhos(e.target.value === 'sim')} />
         </div>
         {temFilhos && <>
-          <div className="sm:col-span-2">
-            <TextArea label="Dados dos filhos (nome e ano de nascimento)" name="filhos_dados"
-              defaultValue={data?.filhos_dados} rows={3} required
-              placeholder="Ex: João (2018), Maria (2020)" />
-          </div>
-          <Select label="Os filhos virão para a base?" name="filhos_virao" defaultValue={data?.filhos_virao} options={[
-            { value: 'sim', label: 'Sim' }, { value: 'nao', label: 'Não' },
+          <ChildrenField data={data?.filhos_dados} />
+          <Select label={d.s3.filhos_virao} name="filhos_virao" defaultValue={data?.filhos_virao} options={[
+            { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
           ]} />
         </>}
       </div>
@@ -386,66 +711,69 @@ function S3Familia({ data, estadoCivilS2 }: { data?: Record<string, string>; est
 }
 
 function S4Igreja({ data }: { data?: Record<string, string> }) {
+  const d = useContext(DictCtx)
   const [conversou, setConversou] = useState(data?.conversou_pastor === 'sim')
   const [participa, setParticipa] = useState(data?.tem_ministerio === 'sim')
   const [lideranca, setLideranca] = useState(data?.tem_lideranca === 'sim')
   return (
     <div className="space-y-4">
-      <SectionTitle number="Seção 04" title="Igreja e Vida Espiritual" />
+      <SectionTitle number={d.s4.section} title={d.s4.title} />
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
-          <Field label="Nome da igreja" name="igreja_nome" defaultValue={data?.igreja_nome} required />
+          <Field label={d.s4.igreja_nome} name="igreja_nome" defaultValue={data?.igreja_nome} required />
         </div>
-        <Field label="Cidade da igreja" name="igreja_cidade" defaultValue={data?.igreja_cidade} required />
-        <Field label="Há quanto tempo congrega?" name="tempo_igreja" defaultValue={data?.tempo_igreja} required />
-        <Select label="É membro oficial?" name="membro_oficial" defaultValue={data?.membro_oficial} options={[
-          { value: 'sim', label: 'Sim' }, { value: 'nao', label: 'Não' },
+        <Field label={d.s4.igreja_cidade} name="igreja_cidade" defaultValue={data?.igreja_cidade} required />
+        <Field label={d.s4.tempo_igreja} name="tempo_igreja" defaultValue={data?.tempo_igreja} required />
+        <Select label={d.s4.membro} name="membro_oficial" defaultValue={data?.membro_oficial} options={[
+          { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
         ]} />
-        <Select label="Participa de algum ministério?" name="tem_ministerio" defaultValue={data?.tem_ministerio} options={[
-          { value: 'sim', label: 'Sim' }, { value: 'nao', label: 'Não' },
+        <Select label={d.s4.tem_ministerio} name="tem_ministerio" defaultValue={data?.tem_ministerio} options={[
+          { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
         ]} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setParticipa(e.target.value === 'sim')} />
         {participa && <>
-          <Field label="Qual ministério?" name="ministerio_qual" defaultValue={data?.ministerio_qual} />
-          <Select label="Tem cargo de liderança?" name="tem_lideranca" defaultValue={data?.tem_lideranca} options={[
-            { value: 'sim', label: 'Sim' }, { value: 'nao', label: 'Não' },
+          <Field label={d.s4.ministerio_qual} name="ministerio_qual" defaultValue={data?.ministerio_qual} />
+          <Select label={d.s4.tem_lideranca} name="tem_lideranca" defaultValue={data?.tem_lideranca} options={[
+            { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
           ]} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setLideranca(e.target.value === 'sim')} />
-          {lideranca && <Field label="Qual cargo?" name="lideranca_cargo" defaultValue={data?.lideranca_cargo} />}
+          {lideranca && <Field label={d.s4.lideranca_qual} name="lideranca_cargo" defaultValue={data?.lideranca_cargo} />}
         </>}
 
-        <SubSection title="Dados do pastor / líder" />
-        <Field label="Nome do pastor/líder" name="pastor_nome" defaultValue={data?.pastor_nome} required />
-        <Field label="Cargo" name="pastor_cargo" defaultValue={data?.pastor_cargo} />
-        <Field label="E-mail do pastor" name="pastor_email" type="email" defaultValue={data?.pastor_email} />
+        <SubSection title={d.s4.pastor_section} />
+        <Field label={d.s4.pastor_nome} name="pastor_nome" defaultValue={data?.pastor_nome} required />
+        <Field label={d.s4.pastor_cargo} name="pastor_cargo" defaultValue={data?.pastor_cargo} />
+        <Field label={d.s4.pastor_email} name="pastor_email" type="email" defaultValue={data?.pastor_email} />
         <InternationalPhoneField phoneName="pastor_telefone" countryName="pastor_telefone_country"
-          label="Telefone do pastor" defaultCountryIso="BR"
+          label={d.s4.pastor_telefone} defaultCountryIso="BR"
           defaultPhone={data?.pastor_telefone} />
 
         <div className="sm:col-span-2">
-          <Select label="Conversou com o pastor sobre vir servir na base?" name="conversou_pastor" required
+          <Select label={d.s4.conversou_pastor} name="conversou_pastor" required
             defaultValue={data?.conversou_pastor}
             options={[
-              { value: 'sim', label: 'Sim' }, { value: 'nao', label: 'Não' },
+              { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
             ]} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setConversou(e.target.value === 'sim')} />
         </div>
         {conversou && (
-          <Select label="O pastor concorda?" name="pastor_concorda"
-            defaultValue={data?.pastor_concorda}
-            options={[
-              { value: 'sim', label: 'Sim, totalmente' },
-              { value: 'parcialmente', label: 'Parcialmente' },
-              { value: 'nao', label: 'Não' },
-            ]} />
+          <div className="sm:col-span-2">
+            <Select label={d.s4.pastor_concorda} name="pastor_concorda"
+              defaultValue={data?.pastor_concorda}
+              options={[
+                { value: 'sim', label: d.opts.yes },
+                { value: 'parcialmente', label: d.opts.partially },
+                { value: 'nao', label: d.opts.no },
+              ]} />
+          </div>
         )}
         <div className="sm:col-span-2">
-          <Select label="A igreja está ciente da sua decisão?" name="igreja_ciente" required
+          <Select label={d.s4.igreja_ciente} name="igreja_ciente" required
             defaultValue={data?.igreja_ciente}
             options={[
-              { value: 'sim', label: 'Sim' }, { value: 'nao', label: 'Não' }, { value: 'parcialmente', label: 'Parcialmente' },
+              { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no }, { value: 'parcialmente', label: d.opts.partially },
             ]} />
         </div>
         <div className="sm:col-span-2">
           <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-            Precisaremos de uma referência do seu pastor/líder. O formulário de referência será enviado separadamente.
+            {d.s4.pastor_hint}
           </p>
         </div>
       </div>
@@ -454,62 +782,63 @@ function S4Igreja({ data }: { data?: Record<string, string> }) {
 }
 
 function S5Experiencia({ data }: { data?: Record<string, string> }) {
+  const d = useContext(DictCtx)
   const [tipo, setTipo] = useState(data?.experiencia_recente_tipo ?? '')
   const [conhece, setConhece] = useState(data?.conhece_alguem === 'sim')
   return (
     <div className="space-y-4">
-      <SectionTitle number="Seção 05" title="Experiência Recente" />
+      <SectionTitle number={d.s5.section} title={d.s5.title} />
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
-          <Select label="Qual foi sua experiência mais recente?" name="experiencia_recente_tipo" required
+          <Select label={d.s5.tipo_label} name="experiencia_recente_tipo" required
             defaultValue={data?.experiencia_recente_tipo}
             options={[
-              { value: 'escola', label: 'Fiz uma escola desta instituição' },
-              { value: 'missao', label: 'Servi em um projeto missionário' },
-              { value: 'nenhuma', label: 'Nenhuma das duas' },
+              { value: 'escola', label: d.s5.tipo_escola },
+              { value: 'missao', label: d.s5.tipo_missao },
+              { value: 'nenhuma', label: d.s5.tipo_nenhuma },
             ]} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setTipo(e.target.value)} />
         </div>
 
         {tipo === 'escola' && <>
-          <Field label="Nome da escola" name="escola_nome" defaultValue={data?.escola_nome} required />
-          <Field label="Período / Turma" name="escola_periodo" defaultValue={data?.escola_periodo} />
-          <SubSection title="Contato da liderança da escola" />
-          <Field label="Nome do líder" name="escola_lider_nome" defaultValue={data?.escola_lider_nome} required />
-          <Field label="E-mail do líder" name="escola_lider_email" type="email" defaultValue={data?.escola_lider_email} />
+          <Field label={d.s5.escola_nome} name="escola_nome" defaultValue={data?.escola_nome} required />
+          <Field label={d.s5.escola_periodo} name="escola_periodo" defaultValue={data?.escola_periodo} />
+          <SubSection title={d.s5.escola_lideranca_section} />
+          <Field label={d.s5.escola_lider_nome} name="escola_lider_nome" defaultValue={data?.escola_lider_nome} required />
+          <Field label={d.s5.escola_lider_email} name="escola_lider_email" type="email" defaultValue={data?.escola_lider_email} />
           <InternationalPhoneField phoneName="escola_lider_tel" countryName="escola_lider_tel_country"
-            label="Telefone do líder" defaultCountryIso="BR" defaultPhone={data?.escola_lider_tel} required />
+            label={d.s5.escola_lider_tel} defaultCountryIso="BR" defaultPhone={data?.escola_lider_tel} required />
         </>}
 
         {tipo === 'missao' && <>
           <div className="sm:col-span-2">
-            <TextArea label="Qual projeto? Descreva sua experiência" name="missao_descricao"
+            <TextArea label={d.s5.missao_descricao} name="missao_descricao"
               defaultValue={data?.missao_descricao} required rows={4} />
           </div>
-          <Field label="Organização / Base onde serviu" name="missao_organizacao"
+          <Field label={d.s5.missao_organizacao} name="missao_organizacao"
             defaultValue={data?.missao_organizacao} required />
-          <Field label="Período / Duração" name="missao_duracao" defaultValue={data?.missao_duracao} />
-          <SubSection title="Contato da liderança anterior" />
-          <Field label="Nome do líder" name="missao_lider_nome" defaultValue={data?.missao_lider_nome} required />
-          <Field label="E-mail do líder" name="missao_lider_email" type="email" defaultValue={data?.missao_lider_email} />
+          <Field label={d.s5.missao_duracao} name="missao_duracao" defaultValue={data?.missao_duracao} />
+          <SubSection title={d.s5.missao_lideranca_section} />
+          <Field label={d.s5.missao_lider_nome} name="missao_lider_nome" defaultValue={data?.missao_lider_nome} required />
+          <Field label={d.s5.missao_lider_email} name="missao_lider_email" type="email" defaultValue={data?.missao_lider_email} />
           <InternationalPhoneField phoneName="missao_lider_tel" countryName="missao_lider_tel_country"
-            label="Telefone do líder" defaultCountryIso="BR" defaultPhone={data?.missao_lider_tel} required />
+            label={d.s5.missao_lider_tel} defaultCountryIso="BR" defaultPhone={data?.missao_lider_tel} required />
         </>}
 
-        <SubSection title="Conexão com a base" />
+        <SubSection title={d.s5.conexao_section} />
         <div className="sm:col-span-2">
-          <Select label="Conhece algum parente ou conhecido desta base?" name="conhece_alguem"
+          <Select label={d.s5.conhece_parente} name="conhece_alguem"
             defaultValue={data?.conhece_alguem}
             options={[
-              { value: 'sim', label: 'Sim' }, { value: 'nao', label: 'Não' },
+              { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
             ]} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setConhece(e.target.value === 'sim')} />
         </div>
         {conhece && <>
-          <Select label="Qual o vínculo?" name="vinculo_tipo" defaultValue={data?.vinculo_tipo} options={[
-            { value: 'parente', label: 'Parente' }, { value: 'conhecido', label: 'Conhecido(a)' },
+          <Select label={d.s5.vinculo_tipo} name="vinculo_tipo" defaultValue={data?.vinculo_tipo} options={[
+            { value: 'parente', label: d.s5.parentesco }, { value: 'conhecido', label: d.s5.conhecido },
           ]} />
-          <Field label="Nome da pessoa" name="vinculo_nome" defaultValue={data?.vinculo_nome} />
+          <Field label={d.s5.vinculo_nome} name="vinculo_nome" defaultValue={data?.vinculo_nome} />
           <div className="sm:col-span-2">
-            <TextArea label="Descreva o vínculo" name="vinculo_descricao"
+            <TextArea label={d.s5.vinculo_descricao} name="vinculo_descricao"
               defaultValue={data?.vinculo_descricao} rows={2} />
           </div>
         </>}
@@ -521,152 +850,301 @@ function S5Experiencia({ data }: { data?: Record<string, string> }) {
 function S6ServirBase({ data, ministries, ministryId }: {
   data?: Record<string, string>; ministries: MinistryOption[]; ministryId?: string | null
 }) {
+  const d = useContext(DictCtx)
+  const [modalidade, setModalidade] = useState(data?.modalidade_servico ?? '')
+  const [semProjeto, setSemProjeto] = useState(data?.sem_projeto === 'sim')
+  const [dataInicio, setDataInicio] = useState(data?.data_inicio ?? data?.data_chegada ?? '')
+  const temporario = modalidade === 'temporario'
   return (
     <div className="space-y-4">
-      <SectionTitle number="Seção 06" title="Servir na Base" />
+      <SectionTitle number={d.s6.section} title={d.s6.title} />
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
-          <Select label="Como pretende servir?" name="modalidade_servico" required
+          <Select label={d.s6.como_servir} name="modalidade_servico" required
             defaultValue={data?.modalidade_servico}
             options={[
-              { value: 'integral', label: 'Integral (tempo integral)' },
-              { value: 'parcial', label: 'Parcial (meio período)' },
-              { value: 'temporario', label: 'Temporário (período específico)' },
-            ]} />
+              { value: 'integral', label: d.s6.integral },
+              { value: 'parcial', label: d.s6.parcial },
+              { value: 'temporario', label: d.s6.temporario },
+            ]} onChange={e => setModalidade(e.target.value)} />
         </div>
-        <Field label="Quanto tempo pretende servir?" name="tempo_servico"
-          defaultValue={data?.tempo_servico} required
-          placeholder="Ex: 1 ano, 6 meses, indeterminado" />
-        <Field label="Data prevista de chegada" name="data_chegada" type="date"
-          defaultValue={data?.data_chegada} />
+        {temporario ? (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {d.s6.data_inicio}<span className="text-red-500 ml-0.5">*</span>
+              </label>
+              <input type="date" name="data_inicio" value={dataInicio} required
+                min={DATE_MAX} max="2100-12-31"
+                onChange={e => setDataInicio(e.target.value)}
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-gray-50" />
+            </div>
+            <Field label={d.s6.data_fim} name="data_fim" type="date"
+              defaultValue={data?.data_fim} required
+              min={dataInicio || DATE_MAX} max="2100-12-31" />
+          </>
+        ) : (
+          <>
+            <Field label={d.s6.quanto_tempo} name="tempo_servico"
+              defaultValue={data?.tempo_servico} required
+              placeholder={d.s6.quanto_tempo_ph} />
+            <Field label={d.s6.data_chegada} name="data_chegada" type="date"
+              defaultValue={data?.data_chegada} min={DATE_MAX} max="2100-12-31" />
+          </>
+        )}
         {ministries.length > 0 && (
           <div className="sm:col-span-2">
-            <Select label="Qual ministério deseja servir?" name="ministerio_escolhido"
+            <Select label={d.s6.qual_ministerio} name="ministerio_escolhido"
               defaultValue={data?.ministerio_escolhido ?? ministryId ?? ''}
               options={ministries.map(m => ({ value: m.id, label: m.name }))} />
           </div>
         )}
         <div className="sm:col-span-2">
-          <TextArea label="Motivação para servir na base" name="motivacao"
+          <TextArea label={d.s6.motivacao} name="motivacao"
             defaultValue={data?.motivacao} required rows={4}
-            placeholder="Conte-nos por que deseja servir conosco e o que te motiva…" />
+            placeholder={d.s6.motivacao_ph} />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            {d.s6.projeto}{!semProjeto && <span className="text-red-500 ml-0.5">*</span>}
+          </label>
+          {!semProjeto && (
+            <textarea name="projeto_comunidade" defaultValue={data?.projeto_comunidade} required rows={4}
+              placeholder={d.s6.projeto_ph}
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-gray-50 resize-none" />
+          )}
+          <label className="flex items-start gap-2 mt-2 text-xs text-gray-600">
+            <input type="checkbox" className="mt-0.5" checked={semProjeto}
+              onChange={e => setSemProjeto(e.target.checked)} />
+            {d.s6.sem_projeto_label}
+          </label>
+          <input type="hidden" name="sem_projeto" value={semProjeto ? 'sim' : 'nao'} />
         </div>
       </div>
     </div>
   )
 }
 
-function S7Saude({ data }: { data?: Record<string, string> }) {
+function DocUpload({ label, name, documentUrls }: { label: string; name: string; documentUrls?: DocumentUrls }) {
+  const d = useContext(DictCtx)
+  return (
+    <FileInputField name={name} accept="image/jpeg,image/png,image/webp,application/pdf"
+      tone="amber" icon={<FileText size={16} aria-hidden />}
+      title={label} badgeLabel={d.nav.doc_optional} readyLabel={d.nav.doc_ready}
+      dropLabel={d.nav.doc_drop_generic} dropHint={d.nav.doc_drop_hint} attachedLabel={d.nav.doc_attached}
+      changeLabel={d.nav.change_file} removeLabel={d.nav.remove_file}
+      existingFileUrl={documentUrls?.[name]?.url}
+      existingFileName={documentUrls?.[name]?.name}
+      existingFileType={documentUrls?.[name]?.type}
+      existingFileSize={documentUrls?.[name]?.size} />
+  )
+}
+
+function S7Saude({ data, documentUrls }: { data?: Record<string, string>; documentUrls?: DocumentUrls }) {
+  const d = useContext(DictCtx)
   const [problema, setProblema] = useState(data?.problema_saude === 'sim')
   const [limitacao, setLimitacao] = useState(data?.limitacao_fisica === 'sim')
   const [remedio, setRemedio] = useState(data?.remedio_controlado === 'sim')
   const [alergia, setAlergia] = useState(data?.tem_alergia === 'sim')
+  const algumaDoenca = problema || limitacao || remedio || alergia
   return (
     <div className="space-y-4">
-      <SectionTitle number="Seção 07" title="Saúde" />
-      <div className="grid gap-4">
-        <Select label="Possui algum problema de saúde?" name="problema_saude" required
+      <SectionTitle number={d.s7.section} title={d.s7.title} />
+      <div className="grid grid-cols-1 gap-4">
+        <Select label={d.s7.problema_saude} name="problema_saude" required
           defaultValue={data?.problema_saude}
-          options={[{ value: 'sim', label: 'Sim' }, { value: 'nao', label: 'Não' }]}
+          options={[{ value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no }]}
           onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setProblema(e.target.value === 'sim')} />
-        {problema && (
-          <TextArea label="Descreva o problema de saúde" name="problema_saude_descricao"
+        {problema && (<>
+          <TextArea label={d.s7.problema_saude_desc} name="problema_saude_descricao"
             defaultValue={data?.problema_saude_descricao} required rows={3} />
-        )}
+          <DocUpload label={d.s7.problema_saude_doc} name="doc_problema_saude" documentUrls={documentUrls} />
+        </>)}
 
-        <Select label="Possui alguma limitação física?" name="limitacao_fisica" required
+        <Select label={d.s7.limitacao_fisica} name="limitacao_fisica" required
           defaultValue={data?.limitacao_fisica}
-          options={[{ value: 'sim', label: 'Sim' }, { value: 'nao', label: 'Não' }]}
+          options={[{ value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no }]}
           onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setLimitacao(e.target.value === 'sim')} />
-        {limitacao && (
-          <TextArea label="Descreva a limitação" name="limitacao_fisica_descricao"
+        {limitacao && (<>
+          <TextArea label={d.s7.limitacao_fisica_desc} name="limitacao_fisica_descricao"
             defaultValue={data?.limitacao_fisica_descricao} required rows={3} />
-        )}
+          <DocUpload label={d.s7.limitacao_fisica_doc} name="doc_limitacao_fisica" documentUrls={documentUrls} />
+        </>)}
 
-        <Select label="Toma algum remédio controlado?" name="remedio_controlado" required
+        <Select label={d.s7.medicamento_controlado} name="remedio_controlado" required
           defaultValue={data?.remedio_controlado}
-          options={[{ value: 'sim', label: 'Sim' }, { value: 'nao', label: 'Não' }]}
+          options={[{ value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no }]}
           onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setRemedio(e.target.value === 'sim')} />
-        {remedio && (
-          <TextArea label="Descreva o medicamento, dosagem e motivo" name="remedio_controlado_descricao"
+        {remedio && (<>
+          <TextArea label={d.s7.medicamento_controlado_desc} name="remedio_controlado_descricao"
             defaultValue={data?.remedio_controlado_descricao} required rows={3} />
-        )}
+          <DocUpload label={d.s7.medicamento_controlado_doc} name="doc_remedio_controlado" documentUrls={documentUrls} />
+        </>)}
 
-        <Select label="Tem alguma alergia?" name="tem_alergia" required
+        <Select label={d.s7.alergia} name="tem_alergia" required
           defaultValue={data?.tem_alergia}
-          options={[{ value: 'sim', label: 'Sim' }, { value: 'nao', label: 'Não' }]}
+          options={[{ value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no }]}
           onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setAlergia(e.target.value === 'sim')} />
-        {alergia && (
-          <TextArea label="Descreva a alergia" name="alergia_descricao"
+        {alergia && (<>
+          <TextArea label={d.s7.alergia_desc} name="alergia_descricao"
             defaultValue={data?.alergia_descricao} required rows={3} />
+          <DocUpload label={d.s7.alergia_doc} name="doc_alergia" documentUrls={documentUrls} />
+        </>)}
+
+        {algumaDoenca && (
+          <p className="text-xs text-gray-500 -mt-1">{d.s7.doc_hint}</p>
         )}
       </div>
     </div>
   )
 }
 
-function S8Legal({ data }: { data?: Record<string, string> }) {
+function InstitutionRulesModal({ text, onClose, slug, token, lang, candidateEmail }: {
+  text: string; onClose: () => void; slug: string; token: string; lang: string; candidateEmail?: string
+}) {
+  const d = useContext(DictCtx)
+  const [email, setEmail] = useState(candidateEmail ?? '')
+  const [sending, setSending] = useState(false)
+  const [result, setResult] = useState<'ok' | 'erro' | null>(null)
+
+  useBodyScrollLock()
+
+  function handleDownload() {
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'regras-e-valores.txt'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function handleSendEmail() {
+    if (!email.trim()) return
+    setSending(true)
+    setResult(null)
+    const res = await enviarRegrasInstituicaoEmail(slug, token, email.trim(), lang)
+    setSending(false)
+    setResult('error' in res ? 'erro' : 'ok')
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 overflow-y-auto flex items-start justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))]" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[85dvh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
+          <h3 className="font-semibold text-gray-900">{d.s8.regras_modal_title}</h3>
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none px-1">×</button>
+        </div>
+        <div className="px-5 py-4 overflow-y-auto text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+          {text}
+        </div>
+        <div className="px-5 py-4 border-t border-gray-100 shrink-0 space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={handleDownload}
+              className="text-sm font-semibold px-4 py-2 rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors">
+              {d.s8.regras_baixar}
+            </button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+              placeholder={d.s8.regras_email_ph}
+              className="flex-1 min-w-[180px] px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-gray-50" />
+            <button type="button" onClick={handleSendEmail} disabled={sending || !email.trim()}
+              className="text-sm font-semibold px-4 py-2 rounded-xl bg-amber-600 text-white hover:bg-amber-700 transition-colors disabled:opacity-60">
+              {sending ? d.s8.regras_email_enviando : d.s8.regras_enviar_email}
+            </button>
+          </div>
+          {result === 'ok' && <p className="text-xs text-green-600">{d.s8.regras_email_sucesso}</p>}
+          {result === 'erro' && <p className="text-xs text-red-600">{d.s8.regras_email_erro}</p>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function S8Legal({ data, institutionRulesText, candidateEmail, slug, token, lang }: {
+  data?: Record<string, string>
+  institutionRulesText?: string | null
+  candidateEmail?: string
+  slug: string; token: string; lang: string
+}) {
+  const d = useContext(DictCtx)
   const [pendencia, setPendencia] = useState(data?.pendencia_judicial === 'sim')
+  const [showRules, setShowRules] = useState(false)
+  const decls = [
+    { name: 'decl_verdadeiro', text: d.s8.decl_verdadeiro },
+    { name: 'decl_compromisso', text: d.s8.decl_respeito },
+    { name: 'decl_sem_condenacao_menor', text: d.s8.decl_sem_condenacao_menor },
+  ]
   return (
     <div className="space-y-4">
-      <SectionTitle number="Seção 08" title="Questões Jurídicas" />
-      <div className="grid gap-4">
-        <Select label="Possui alguma pendência judicial?" name="pendencia_judicial" required
+      <SectionTitle number={d.s8.section} title={d.s8.title} />
+      <div className="grid grid-cols-1 gap-4">
+        <Select label={d.s8.pendencia_judicial} name="pendencia_judicial" required
           defaultValue={data?.pendencia_judicial}
-          options={[{ value: 'sim', label: 'Sim' }, { value: 'nao', label: 'Não' }]}
+          options={[{ value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no }]}
           onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setPendencia(e.target.value === 'sim')} />
         {pendencia && (
-          <TextArea label="Descreva a pendência" name="pendencia_judicial_descricao"
+          <TextArea label={d.s8.pendencia_judicial_desc} name="pendencia_judicial_descricao"
             defaultValue={data?.pendencia_judicial_descricao} required rows={3} />
         )}
 
         <div className="space-y-2 mt-2">
-          {[
-            { name: 'decl_verdadeiro', text: 'Declaro que todas as informações prestadas neste formulário são verdadeiras.' },
-            { name: 'decl_compromisso', text: 'Comprometo-me a respeitar as regras e valores da base durante o período de serviço.' },
-            { name: 'decl_sem_condenacao_menor', text: 'Declaro não possuir condenação, processo em andamento ou histórico de conduta inadequada envolvendo crianças ou adolescentes.' },
-          ].map(decl => (
-            <label key={decl.name} className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 cursor-pointer hover:border-amber-200">
-              <input type="checkbox" name={decl.name} value="sim"
-                defaultChecked={data?.[decl.name] === 'sim'}
-                required className="mt-0.5 accent-amber-600 flex-shrink-0" />
-              <span className="text-sm text-gray-700">{decl.text}</span>
-            </label>
+          {decls.map(decl => (
+            <div key={decl.name} className="rounded-xl border border-gray-100 hover:border-amber-200">
+              <label className="flex items-start gap-3 p-3 cursor-pointer">
+                <input type="checkbox" name={decl.name} value="sim"
+                  defaultChecked={data?.[decl.name] === 'sim'}
+                  required className="mt-0.5 accent-amber-600 flex-shrink-0" />
+                <span className="text-sm text-gray-700">{decl.text}</span>
+              </label>
+              {decl.name === 'decl_compromisso' && institutionRulesText?.trim() && (
+                <button type="button" onClick={() => setShowRules(true)}
+                  className="print:hidden text-xs font-semibold text-amber-600 hover:text-amber-800 px-3 pb-3 -mt-1">
+                  {d.s8.ver_regras_link}
+                </button>
+              )}
+            </div>
           ))}
         </div>
       </div>
+      {showRules && institutionRulesText?.trim() && (
+        <InstitutionRulesModal text={institutionRulesText} onClose={() => setShowRules(false)}
+          slug={slug} token={token} lang={lang} candidateEmail={candidateEmail} />
+      )}
     </div>
   )
 }
 
 function S9Financeiro({ data }: { data?: Record<string, string> }) {
+  const d = useContext(DictCtx)
   const [temApoio, setTemApoio] = useState(data?.tem_apoio_financeiro === 'sim')
   return (
     <div className="space-y-4">
-      <SectionTitle number="Seção 09" title="Finanças" />
+      <SectionTitle number={d.s9.section} title={d.s9.title} />
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
-          <Select label="Possui apoio financeiro para se manter na base?" name="tem_apoio_financeiro" required
+          <Select label={d.s9.apoio_financeiro} name="tem_apoio_financeiro" required
             defaultValue={data?.tem_apoio_financeiro}
             options={[
-              { value: 'sim', label: 'Sim' }, { value: 'parcialmente', label: 'Parcialmente' }, { value: 'nao', label: 'Não' },
+              { value: 'sim', label: d.opts.yes }, { value: 'parcialmente', label: d.opts.partially }, { value: 'nao', label: d.opts.no },
             ]} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setTemApoio(e.target.value === 'sim' || e.target.value === 'parcialmente')} />
         </div>
         {temApoio && (
           <div className="sm:col-span-2">
-            <TextArea label="Descreva seus apoios financeiros" name="apoio_financeiro_descricao"
+            <TextArea label={d.s9.apoio_qual} name="apoio_financeiro_descricao"
               defaultValue={data?.apoio_financeiro_descricao} required rows={3}
-              placeholder="Ex: igreja, família, mantenedores, recursos próprios…" />
+              placeholder={d.s9.apoio_qual_ph} />
           </div>
         )}
         <div className="sm:col-span-2">
-          <TextArea label="Descreva sua situação financeira atual" name="situacao_financeira"
+          <TextArea label={d.s9.situacao_financeira} name="situacao_financeira"
             defaultValue={data?.situacao_financeira} required rows={4}
-            placeholder="Como você planeja se sustentar durante o período na base?" />
+            placeholder={d.s9.situacao_financeira_ph} />
         </div>
         <div className="sm:col-span-2">
-          <Select label="Possui dívidas?" name="tem_dividas" defaultValue={data?.tem_dividas} options={[
-            { value: 'sim', label: 'Sim' }, { value: 'nao', label: 'Não' },
+          <Select label={d.s9.tem_dividas} name="tem_dividas" defaultValue={data?.tem_dividas} options={[
+            { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
           ]} />
         </div>
       </div>
@@ -674,69 +1152,165 @@ function S9Financeiro({ data }: { data?: Record<string, string> }) {
   )
 }
 
-function S10DocumentosAceite({ isBrazilian, estadoCivil }: { isBrazilian: boolean; estadoCivil: string }) {
+function S10DocumentosAceite({ data, isBrazilian, estadoCivil, temPassaporte, sexo, isMinor, documentUrls }: {
+  data?: Record<string, string>; isBrazilian: boolean; estadoCivil: string; temPassaporte: boolean; sexo?: string
+  isMinor: boolean; documentUrls?: DocumentUrls
+}) {
+  const d = useContext(DictCtx)
+  // RG e CNH ficam os dois visíveis (não é mais uma escolha por botão) — o
+  // que importa é ter pelo menos um completo. Assim que um dos dois estiver
+  // anexado, o outro vira opcional (o badge e a validação do "Próximo"
+  // reagem em tempo real via esse estado local; a validação de fato — pra
+  // cobrir também o que já veio salvo de uma visita anterior — mora no
+  // handleNext do componente pai, que já tem acesso a documentUrls).
+  const [hasRgFrente, setHasRgFrente] = useState(!!documentUrls?.doc_rg_frente)
+  const [hasRgVerso, setHasRgVerso] = useState(!!documentUrls?.doc_rg_verso)
+  const [hasCnh, setHasCnh] = useState(!!documentUrls?.doc_cnh)
+  const rgCompleta = hasRgFrente && hasRgVerso
+  const rgObrigatoria = !hasCnh
+  const cnhObrigatoria = !rgCompleta
+
+  type DocDef = {
+    name: string; label: string; required: boolean; icon: 'foto' | 'id'; hint?: string
+    onFileChange?: (f: File | null) => void
+    // RG e CNH têm required "OU" entre si (satisfazer um dos dois basta) —
+    // o atributo required nativo do <input> não sabe expressar isso (ele
+    // bloquearia o envio exigindo AMBOS ao mesmo tempo). Por isso esses dois
+    // grupos não usam o required nativo; a validação de fato roda no
+    // handleNext do componente pai. O badge "Obrigatório/Opcional" continua
+    // refletindo `required` normalmente, só a checagem do navegador que fica
+    // de fora pra esses casos.
+    noNativeRequired?: boolean
+  }
+  // A página se ajusta ao que a pessoa já respondeu nas seções anteriores:
+  // passaporte só entra aqui (e, se entrar, é obrigatório) se ela já tiver
+  // informado o número dele na seção 2 — não faz sentido pedir upload de um
+  // documento que ela disse não ter. Estrangeiro sempre precisa do
+  // passaporte. Certidão de casamento só aparece pra quem se declarou
+  // casado(a), e aí é obrigatória (não "se aplicável" — já filtramos por
+  // quem realmente precisa dela).
+  const docsRg: DocDef[] = isBrazilian ? [
+    { name: 'doc_rg_frente', label: d.s10.doc_rg_frente, required: rgObrigatoria, icon: 'id', noNativeRequired: true, onFileChange: f => setHasRgFrente(!!f) },
+    { name: 'doc_rg_verso', label: d.s10.doc_rg_verso, required: rgObrigatoria, icon: 'id', noNativeRequired: true, onFileChange: f => setHasRgVerso(!!f) },
+  ] : []
+  const docsCnh: DocDef[] = isBrazilian ? [
+    { name: 'doc_cnh', label: d.s10.doc_cnh, required: cnhObrigatoria, icon: 'id', noNativeRequired: true, onFileChange: f => setHasCnh(!!f) },
+  ] : []
+  const docsOutros: DocDef[] = [
+    ...(isBrazilian && temPassaporte ? [{ name: 'doc_passaporte', label: d.s10.doc_passaporte, required: true, icon: 'id' as const }] : []),
+    ...(!isBrazilian ? [
+      { name: 'doc_passaporte', label: d.s10.doc_passaporte, required: true, icon: 'id' as const },
+      { name: 'doc_id_outro', label: d.s10.doc_id_outro, required: false, icon: 'id' as const, hint: d.s10.doc_id_outro_hint },
+    ] : []),
+    ...(estadoCivil === 'casado' ? [
+      { name: 'doc_certidao_casamento_s10', label: d.s3.certidao_casamento, required: true, icon: 'id' as const },
+    ] : []),
+    ...(isMinor ? [
+      { name: 'doc_autorizacao_responsavel', label: d.s10.doc_autorizacao_responsavel, required: false, icon: 'id' as const, hint: d.s10.doc_autorizacao_responsavel_hint },
+    ] : []),
+  ]
+
+  function renderDoc(doc: DocDef) {
+    return (
+      <div key={doc.name} className="min-w-0">
+        {doc.hint && <p className="text-xs text-gray-400 mb-1.5 px-1">{doc.hint}</p>}
+        <FileInputField name={doc.name} accept="image/jpeg,image/png,image/webp,application/pdf"
+          required={doc.noNativeRequired ? false : doc.required} tone="amber" onFileChange={doc.onFileChange}
+          icon={doc.icon === 'foto' ? <Camera size={16} aria-hidden /> : <IdCard size={16} aria-hidden />}
+          title={doc.label}
+          badgeLabel={doc.required ? d.nav.doc_required : d.nav.doc_optional}
+          readyLabel={d.nav.doc_ready}
+          dropLabel={doc.icon === 'foto' ? d.s10.foto_drop_label : d.nav.doc_drop_generic}
+          dropHint={d.nav.doc_drop_hint} attachedLabel={d.nav.doc_attached}
+          changeLabel={d.nav.change_file} removeLabel={d.nav.remove_file}
+          modelGraphic={doc.icon === 'foto' ? <PhotoFramingGuide sexo={sexo} caption={d.nav.photo_model_caption} /> : undefined}
+          crop={doc.icon === 'foto' ? {
+            aspect: 3 / 4, title: d.nav.crop_title, zoomLabel: d.nav.crop_zoom_label,
+            confirmLabel: d.nav.crop_confirm_label, cancelLabel: d.nav.crop_cancel_label,
+            errorLabel: d.nav.crop_error_label, editLabel: d.nav.crop_edit_label,
+          } : undefined}
+          existingFileUrl={documentUrls?.[doc.name]?.url}
+          existingFileName={documentUrls?.[doc.name]?.name}
+          existingFileType={documentUrls?.[doc.name]?.type}
+          existingFileSize={documentUrls?.[doc.name]?.size} />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
-      <SectionTitle number="Seção 10" title="Documentos e Aceite Final" />
+      <SectionTitle number={d.s10.section} title={d.s10.title} />
 
       <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 text-sm text-amber-800 leading-relaxed">
-        Envie os documentos solicitados abaixo. Todas as imagens serão convertidas automaticamente para o formato correto.
-        <strong className="block mt-2">Instruções para a foto:</strong>
-        Tire uma foto de rosto (tipo 3x4), com fundo claro, rosto centralizado e boa iluminação. Evite selfies com filtros.
+        {d.s10.docs_intro}
       </div>
 
-      <div className="grid gap-4">
-        {[
-          { name: 'doc_foto', label: 'Foto pessoal (tipo 3x4)', required: true },
-          ...(isBrazilian ? [
-            { name: 'doc_rg_frente', label: 'RG — Frente', required: true },
-            { name: 'doc_rg_verso', label: 'RG — Verso', required: true },
-          ] : [
-            { name: 'doc_passaporte', label: 'Passaporte (com foto)', required: true },
-          ]),
-          ...(estadoCivil === 'casado' ? [
-            { name: 'doc_certidao_casamento_s10', label: 'Certidão de casamento', required: false },
-          ] : []),
-        ].map(doc => (
-          <div key={doc.name}>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {doc.label}{doc.required && <span className="text-red-500 ml-0.5"> *</span>}
-            </label>
-            <input type="file" name={doc.name} accept="image/jpeg,image/png,image/webp,application/pdf"
-              required={doc.required}
-              className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 cursor-pointer" />
+      {isMinor && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-3">
+          <div>
+            <p className="text-sm font-bold text-red-800">{d.s10.menor_aviso_titulo}</p>
+            <p className="text-sm text-red-700 leading-relaxed mt-0.5">{d.s10.menor_aviso_texto}</p>
           </div>
-        ))}
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Field label={d.s10.responsavel_nome} name="responsavel_nome" defaultValue={data?.responsavel_nome} required />
+            <Field label={d.s10.responsavel_email} name="responsavel_email" type="email" defaultValue={data?.responsavel_email} required />
+            <InternationalPhoneField phoneName="responsavel_telefone" countryName="responsavel_telefone_country"
+              label={d.s10.responsavel_telefone} defaultCountryIso="BR"
+              defaultPhone={data?.responsavel_telefone} required />
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-4">
+        {renderDoc({ name: 'doc_foto', label: d.s10.doc_foto, required: true, icon: 'foto' })}
+
+        {docsRg.length > 0 && (
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">{d.s10.doc_tipo_rg}</p>
+            <div className="grid grid-cols-1 gap-4">{docsRg.map(renderDoc)}</div>
+          </div>
+        )}
+        {docsCnh.length > 0 && (
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">{d.s10.doc_tipo_cnh}</p>
+            <div className="grid grid-cols-1 gap-4">{docsCnh.map(renderDoc)}</div>
+          </div>
+        )}
+        {docsOutros.map(renderDoc)}
+        {renderDoc({ name: 'doc_outro_extra', label: d.s10.doc_outro_extra, required: false, icon: 'id' })}
+
+        <p className="text-xs text-gray-400 -mt-1">{d.s10.doc_hint_generic}</p>
       </div>
 
       <div className="mt-6 space-y-3">
         <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-          <h3 className="font-semibold text-gray-900 text-sm mb-2">Lei Geral de Proteção de Dados (LGPD)</h3>
+          <h3 className="font-semibold text-gray-900 text-sm mb-2">{d.s10.lgpd_heading}</h3>
           <p className="text-xs text-gray-600 leading-relaxed">
-            Ao enviar este formulário, você autoriza o tratamento dos seus dados pessoais para fins exclusivos
-            do processo de seleção de obreiros desta organização missionária, conforme a Lei nº 13.709/2018 (LGPD).
-            Seus dados serão armazenados de forma segura e não serão compartilhados com terceiros.
+            {d.s10.lgpd_text}
           </p>
         </div>
         <label className="flex items-start gap-3 p-4 rounded-xl border border-amber-200 bg-amber-50 cursor-pointer">
           <input type="checkbox" name="aceite_lgpd" value="sim" required
+            defaultChecked={data?.aceite_lgpd === 'sim'}
             className="mt-0.5 accent-amber-600 flex-shrink-0" />
           <span className="text-sm font-semibold text-amber-800">
-            Li e concordo com os termos de tratamento de dados acima.
+            {d.s10.lgpd_checkbox}
           </span>
         </label>
-        <label className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 cursor-pointer hover:border-amber-200">
-          <input type="checkbox" name="maior_18" value="sim" required
-            className="mt-0.5 accent-amber-600 flex-shrink-0" />
-          <span className="text-sm text-gray-700">Declaro que sou maior de 18 anos.</span>
-        </label>
+        {!isMinor && (
+          <label className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 cursor-pointer hover:border-amber-200">
+            <input type="checkbox" name="maior_18" value="sim" required
+              defaultChecked={data?.maior_18 === 'sim'}
+              className="mt-0.5 accent-amber-600 flex-shrink-0" />
+            <span className="text-sm text-gray-700">{d.s10.maior_18}</span>
+          </label>
+        )}
         <label className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 cursor-pointer hover:border-amber-200">
           <input type="checkbox" name="decl_ciencia_verificacao" value="sim" required
+            defaultChecked={data?.decl_ciencia_verificacao === 'sim'}
             className="mt-0.5 accent-amber-600 flex-shrink-0" />
           <span className="text-sm text-gray-700">
-            Estou ciente de que meus dados poderão ser objeto de verificação de antecedentes,
-            incluindo consulta a certidões e referências, como parte do processo de proteção
-            de crianças e adolescentes da organização.
+            {d.s10.decl_ciencia_verificacao}
           </span>
         </label>
       </div>
@@ -746,8 +1320,8 @@ function S10DocumentosAceite({ isBrazilian, estadoCivil }: { isBrazilian: boolea
 
 // ── Tela de sucesso ──────────────────────────────────────────────────────────
 
-function SubmittedScreen({ slug, applicationId, orgName }: {
-  slug: string; applicationId: string; orgName: string
+function SubmittedScreen({ slug, applicationId, orgName, d }: {
+  slug: string; applicationId: string; orgName: string; d: StaffFormDict
 }) {
   const [pastorLink, setPastorLink] = useState<string | null>(null)
   const [amigoLink, setAmigoLink] = useState<string | null>(null)
@@ -783,24 +1357,22 @@ function SubmittedScreen({ slug, applicationId, orgName }: {
     <div className="text-center py-12 px-4 space-y-8">
       <div>
         <HeartHandshake className="size-14 mx-auto mb-4 text-amber-500" />
-        <h2 className="text-3xl font-black text-gray-900 mb-3">Formulário enviado!</h2>
+        <h2 className="text-3xl font-black text-gray-900 mb-3">{d.submitted.title}</h2>
         <p className="text-gray-600 max-w-md mx-auto text-base leading-relaxed">
-          Obrigado pelo seu interesse em servir na {orgName}. Sua inscrição será analisada pela equipe e entraremos em contato em breve.
+          {tStaff(d.submitted.body, { org: orgName })}
         </p>
       </div>
 
       <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-left max-w-md mx-auto space-y-4">
-        <h3 className="font-bold text-gray-900 text-center">Próximos passos: Referências</h3>
+        <h3 className="font-bold text-gray-900 text-center">{d.submitted.next_title}</h3>
         <p className="text-sm text-gray-600 text-center">
-          Já enviamos por e-mail o pedido de recomendação ao seu pastor (e à liderança da sua
-          experiência recente, se informada). Se preferir agilizar por WhatsApp ou outro meio,
-          gere o link abaixo e envie você mesmo.
+          {d.submitted.next_body}
         </p>
 
         <div className="space-y-2">
           <button onClick={() => gerarLink('pastor')} disabled={loadingPastor}
             className="w-full py-3 px-4 bg-amber-600 hover:bg-amber-700 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors text-sm">
-            {loadingPastor ? 'Gerando…' : pastorLink ? 'Gerar novo link (Pastor)' : 'Copiar link — Referência do Pastor'}
+            {loadingPastor ? d.submitted.generating : pastorLink ? d.submitted.new_pastor : d.submitted.gen_pastor}
           </button>
           {pastorLink && (
             <div className="flex items-center gap-2 bg-white border border-amber-200 rounded-xl px-3 py-2">
@@ -808,7 +1380,7 @@ function SubmittedScreen({ slug, applicationId, orgName }: {
                 className="flex-1 text-xs text-gray-600 bg-transparent outline-none truncate" />
               <button onClick={() => copyLink(pastorLink, 'pastor')}
                 className="text-xs font-semibold text-amber-600 hover:text-amber-800 whitespace-nowrap">
-                {copied === 'pastor' ? 'Copiado!' : 'Copiar'}
+                {copied === 'pastor' ? d.submitted.copied : d.submitted.copy}
               </button>
             </div>
           )}
@@ -817,7 +1389,7 @@ function SubmittedScreen({ slug, applicationId, orgName }: {
         <div className="space-y-2">
           <button onClick={() => gerarLink('amigo')} disabled={loadingAmigo}
             className="w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors text-sm">
-            {loadingAmigo ? 'Gerando…' : amigoLink ? 'Gerar novo link (Amigo)' : 'Gerar link — Referência do Amigo'}
+            {loadingAmigo ? d.submitted.generating : amigoLink ? d.submitted.new_friend : d.submitted.gen_friend}
           </button>
           {amigoLink && (
             <div className="flex items-center gap-2 bg-white border border-purple-200 rounded-xl px-3 py-2">
@@ -825,13 +1397,13 @@ function SubmittedScreen({ slug, applicationId, orgName }: {
                 className="flex-1 text-xs text-gray-600 bg-transparent outline-none truncate" />
               <button onClick={() => copyLink(amigoLink, 'amigo')}
                 className="text-xs font-semibold text-purple-600 hover:text-purple-800 whitespace-nowrap">
-                {copied === 'amigo' ? 'Copiado!' : 'Copiar'}
+                {copied === 'amigo' ? d.submitted.copied : d.submitted.copy}
               </button>
             </div>
           )}
         </div>
 
-        <p className="text-xs text-gray-400 text-center">Cada link é único e expira em 30 dias.</p>
+        <p className="text-xs text-gray-400 text-center">{d.submitted.link_hint}</p>
       </div>
     </div>
   )
@@ -842,10 +1414,22 @@ function SubmittedScreen({ slug, applicationId, orgName }: {
 type SectionDef = { id: number; component: React.ReactNode }
 
 export function FormularioObreiro({
-  slug, token, applicationId, orgName, ministryName, ministryId, ministries,
-  prefill, initialSection = 1, initialData, initialLang, printMode
+  slug, token, applicationId, orgName, ministryId, ministries,
+  prefill, initialSection = 1, initialData, initialLang, printMode, institutionRulesText, documentUrls
 }: Props) {
-  const [lang, setLang] = useState<Lang>((initialLang as Lang) ?? 'pt')
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const [lang, setLangState] = useState<StaffLang>(normalizeStaffLang(initialLang ?? prefill?.idioma))
+  const d = getStaffFormDict(lang)
+
+  function setLang(l: StaffLang) {
+    setLangState(l)
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('lang', l)
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }
+
   const [current, setCurrent] = useState(initialSection)
   const [saving, setSaving] = useState(false)
   const [submitted, setSubmitted] = useState(false)
@@ -862,20 +1446,33 @@ export function FormularioObreiro({
 
   const sections: SectionDef[] = [
     { id: 1, component: <S1Email prefill={prefill} data={localData.s1} /> },
-    { id: 2, component: <S2Dados prefill={prefill} data={localData.s2} onNationalityChange={setIsBrazilian} /> },
-    { id: 3, component: <S3Familia data={localData.s3} estadoCivilS2={localData.s2?.estado_civil} /> },
+    { id: 2, component: <S2Dados prefill={prefill} data={localData.s2} onNationalityChange={setIsBrazilian} orgName={orgName} /> },
+    { id: 3, component: <S3Familia data={localData.s3} estadoCivilS2={localData.s2?.estado_civil} documentUrls={documentUrls} /> },
     { id: 4, component: <S4Igreja data={localData.s4} /> },
     { id: 5, component: <S5Experiencia data={localData.s5} /> },
     { id: 6, component: <S6ServirBase data={localData.s6} ministries={ministries} ministryId={ministryId} /> },
-    { id: 7, component: <S7Saude data={localData.s7} /> },
-    { id: 8, component: <S8Legal data={localData.s8} /> },
+    { id: 7, component: <S7Saude data={localData.s7} documentUrls={documentUrls} /> },
+    {
+      id: 8, component: <S8Legal data={localData.s8}
+        institutionRulesText={institutionRulesText}
+        candidateEmail={localData.s1?.email ?? prefill?.email}
+        slug={slug} token={token} lang={lang} />,
+    },
     { id: 9, component: <S9Financeiro data={localData.s9} /> },
-    { id: 10, component: <S10DocumentosAceite isBrazilian={isBrazilian} estadoCivil={localData.s2?.estado_civil ?? localData.s3?.estado_civil_atual ?? ''} /> },
+    {
+      id: 10, component: <S10DocumentosAceite data={localData.s10}
+        isBrazilian={isBrazilian}
+        estadoCivil={localData.s2?.estado_civil ?? localData.s3?.estado_civil_atual ?? ''}
+        temPassaporte={!!localData.s2?.passaporte?.trim()}
+        sexo={localData.s2?.sexo}
+        isMinor={(anosDesde(localData.s2?.data_nascimento ?? '') ?? 99) < 18}
+        documentUrls={documentUrls} />,
+    },
   ]
 
   if (printMode) {
     return (
-      <LangCtx.Provider value={lang}>
+      <DictCtx.Provider value={d}>
       <div>
         <div className="print:hidden mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
           <p className="text-sm text-amber-800">
@@ -894,7 +1491,7 @@ export function FormularioObreiro({
           ))}
         </div>
       </div>
-      </LangCtx.Provider>
+      </DictCtx.Provider>
     )
   }
 
@@ -904,18 +1501,19 @@ export function FormularioObreiro({
 
   async function handleBack() {
     if (currentIndex === 0) return
+    const target = sections[currentIndex - 1].id
     if (formRef.current) {
       const fd = new FormData(formRef.current)
       const dataRecord: Record<string, string> = {}
       fd.forEach((v, k) => { if (typeof v === 'string') dataRecord[k] = v })
       setLocalData(prev => ({ ...prev, [`s${sections[currentIndex].id}`]: dataRecord }))
       if (SECTIONS_COM_ARQUIVO.has(sections[currentIndex].id)) {
-        await salvarSecaoObreiroComArquivos(slug, token, sections[currentIndex].id, fd).catch(() => {})
+        await salvarSecaoObreiroComArquivos(slug, token, sections[currentIndex].id, fd, target).catch(() => {})
       } else {
-        await salvarSecaoObreiro(slug, token, sections[currentIndex].id, dataRecord).catch(() => {})
+        await salvarSecaoObreiro(slug, token, sections[currentIndex].id, dataRecord, target).catch(() => {})
       }
     }
-    setCurrent(sections[currentIndex - 1].id)
+    setCurrent(target)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -934,7 +1532,26 @@ export function FormularioObreiro({
         const email = (fd.get('pastor_email') as string)?.trim()
         const tel = (fd.get('pastor_telefone') as string)?.trim()
         if (!email && (!tel || tel === '+55')) {
-          setError('Informe o e-mail ou telefone do pastor.')
+          setError(d.s4.pastor_hint)
+          setSaving(false)
+          return
+        }
+      }
+
+      if (sections[currentIndex].id === 10 && isBrazilian) {
+        // RG (frente + verso) OU CNH — pelo menos um dos dois completo,
+        // seja porque veio nesse envio (fd) ou já estava salvo de uma
+        // visita anterior (documentUrls) e não foi marcado pra remoção.
+        const hasDoc = (key: string) => {
+          const file = fd.get(key)
+          if (file instanceof File && file.size > 0) return true
+          if (fd.get(`remove_${key}`) === '1') return false
+          return !!documentUrls?.[key]
+        }
+        const rgOk = hasDoc('doc_rg_frente') && hasDoc('doc_rg_verso')
+        const cnhOk = hasDoc('doc_cnh')
+        if (!rgOk && !cnhOk) {
+          setError(d.s10.doc_id_required_error)
           setSaving(false)
           return
         }
@@ -942,9 +1559,10 @@ export function FormularioObreiro({
 
       const dataRecord: Record<string, string> = {}
       fd.forEach((v, k) => { if (typeof v === 'string') dataRecord[k] = v })
+      const target = isLast ? sections[currentIndex].id : sections[currentIndex + 1].id
       const saveResult = SECTIONS_COM_ARQUIVO.has(sections[currentIndex].id)
-        ? await salvarSecaoObreiroComArquivos(slug, token, sections[currentIndex].id, fd)
-        : await salvarSecaoObreiro(slug, token, sections[currentIndex].id, dataRecord)
+        ? await salvarSecaoObreiroComArquivos(slug, token, sections[currentIndex].id, fd, target)
+        : await salvarSecaoObreiro(slug, token, sections[currentIndex].id, dataRecord, target)
       if (!('error' in saveResult)) {
         setLocalData(prev => ({ ...prev, [`s${sections[currentIndex].id}`]: dataRecord }))
       }
@@ -959,37 +1577,40 @@ export function FormularioObreiro({
         window.scrollTo({ top: 0, behavior: 'smooth' })
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao salvar. Tente novamente.')
+      setError(err instanceof Error ? err.message : d.nav.error_save)
     } finally {
       setSaving(false)
     }
   }
 
   if (submitted) {
-    return <SubmittedScreen slug={slug} applicationId={applicationId} orgName={orgName} />
+    return <SubmittedScreen slug={slug} applicationId={applicationId} orgName={orgName} d={d} />
   }
 
   return (
-    <LangCtx.Provider value={lang}>
+    <DictCtx.Provider value={d}>
     <div>
-      <div className="flex justify-end mb-4">
-        <LangSwitcher lang={lang} onChange={l => setLang(l as Lang)} uiLabel="Idioma" />
-      </div>
-
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-semibold text-gray-500">
-            Seção {currentIndex + 1} de {sections.length}
+      <div className="sticky top-0 z-20 -mx-4 sm:-mx-6 md:-mx-8 -mt-4 sm:-mt-6 md:-mt-8 px-4 sm:px-6 md:px-8 pt-4 sm:pt-6 md:pt-8 pb-3 bg-white/95 backdrop-blur-sm rounded-t-2xl border-b border-gray-100 mb-6">
+        <div className="flex items-center justify-between gap-2 mb-2.5">
+          <span className="inline-flex items-center gap-2 text-xs font-semibold text-gray-500">
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-50 text-amber-600 font-bold text-[11px]">
+              {currentIndex + 1}
+            </span>
+            {tStaff(d.nav.section_of, { n: String(currentIndex + 1), total: String(sections.length) })}
           </span>
-          <span className="text-xs font-semibold text-amber-600">{progress}%</span>
+          <LangSwitcher lang={lang} onChange={l => setLang(l as StaffLang)} tone="amber" />
         </div>
-        <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-[11px] text-gray-400">{d.langSwitcher.label}</span>
+          <span className="text-xs font-bold text-amber-600">{progress}%</span>
+        </div>
+        <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
           <div className="h-full bg-amber-500 rounded-full transition-all duration-500"
             style={{ width: `${progress}%` }} />
         </div>
       </div>
 
-      <form ref={formRef} onSubmit={handleNext} className="space-y-6">
+      <form ref={formRef} onSubmit={handleNext} className="space-y-6 pb-24">
         {sections[currentIndex].component}
 
         {error && (
@@ -997,22 +1618,28 @@ export function FormularioObreiro({
             {error}
           </div>
         )}
+        {/* Mantém o Enter dentro de um campo submetendo a seção — o botão
+            visível fica fora do form (barra fixa), então sem isso o form
+            perderia o envio implícito por teclado. */}
+        <button type="submit" className="sr-only" aria-hidden="true" tabIndex={-1} />
+      </form>
 
-        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 pt-6 border-t border-gray-100">
+      <div className="fixed inset-x-0 bottom-0 z-30 bg-white/95 backdrop-blur-sm border-t border-gray-100">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           {currentIndex > 0 ? (
             <button type="button" onClick={handleBack}
-              className="w-full sm:w-auto px-6 py-3 sm:py-2.5 text-sm font-semibold text-gray-600 hover:text-gray-900 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-center">
-              Voltar
+              className="px-5 py-2.5 text-sm font-semibold text-gray-600 hover:text-gray-900 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-center shrink-0">
+              {d.nav.back}
             </button>
           ) : <div className="hidden sm:block" />}
 
-          <button type="submit" disabled={saving}
-            className="w-full sm:w-auto px-8 py-3 sm:py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-60 text-white text-sm font-bold rounded-xl transition-colors text-center">
-            {saving ? 'Salvando…' : isLast ? 'Enviar formulário' : 'Próxima seção →'}
+          <button type="button" onClick={() => formRef.current?.requestSubmit()} disabled={saving}
+            className="flex-1 px-8 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-60 text-white text-sm font-bold rounded-xl transition-colors text-center">
+            {saving ? d.nav.saving : isLast ? d.nav.submit : d.nav.next}
           </button>
         </div>
-      </form>
+      </div>
     </div>
-    </LangCtx.Provider>
+    </DictCtx.Provider>
   )
 }

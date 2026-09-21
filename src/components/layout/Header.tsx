@@ -1,9 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { useEffect } from 'react'
+import { ArrowLeft, Menu } from 'lucide-react'
 import { AccountMenu } from './AccountMenu'
-import { AllAppsMenu } from './AllAppsMenu'
+import { useAllApps } from './all-apps-context'
+import { useMobileNav } from './nav-context'
 import { SisgoLogo } from './Logo'
 import { useBrand } from './account-context'
 
@@ -14,34 +16,29 @@ type HeaderProps = {
 }
 
 export function Header({ title, backHref, actions }: HeaderProps) {
-  const { logoUrl, sisgoLogo, collapsed } = useBrand()
+  const { logoUrl } = useBrand()
+
+  // O <title> da aba/PWA ficava sempre fixo em "SISGO" — sem pista de onde
+  // a pessoa está ao alternar entre telas ou trocar de app. Esse Header é
+  // renderizado por quase toda página do admin com o título certo da seção,
+  // então é o lugar mais barato de refletir isso no documento também.
+  useEffect(() => {
+    document.title = title ? `${title} · SISGO` : 'SISGO'
+  }, [title])
 
   return (
     <header className="h-16 shrink-0 border-b border-dark-800 bg-dark-950 flex items-center justify-between px-4 md:px-6 sticky top-0 z-10">
       <div className="flex items-center gap-3 min-w-0">
+        <MenuButton />
         <span className="flex shrink-0 items-center h-8">
           {logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element -- logo tem proporção variável por organização; largura livre preserva o aspecto
             <img src={logoUrl} alt="Logo" className="h-full w-auto max-w-[140px] object-contain" />
-          ) : sisgoLogo ? (
-            <SisgoLogo size={26} />
           ) : (
-            // Marca padrão do sisgo. No mobile é sempre o ícone compacto (o
-            // espaço ali é do título da página, igual Instagram/Slack/Notion
-            // no topo mobile). No desktop (md+), troca pra wordmark quando a
-            // sidebar colapsa e sobra espaço no header.
-            <>
-              <img
-                src="/images/logo-at-icon-white.png"
-                alt="JOCUM Almirante Tamandaré"
-                className={`h-full w-8 object-contain ${collapsed ? 'md:hidden' : ''}`}
-              />
-              <img
-                src="/images/logo-at-full-white.png"
-                alt="JOCUM Almirante Tamandaré"
-                className={`hidden h-full w-auto object-contain ${collapsed ? 'md:block' : ''}`}
-              />
-            </>
+            // Marca padrão do sisgo — usada até a organização configurar seu
+            // próprio logo em Configurações. Não deve ser específica de
+            // nenhuma organização (o sistema é multi-tenant).
+            <SisgoLogo size={26} />
           )}
         </span>
         {backHref && (
@@ -62,11 +59,30 @@ export function Header({ title, backHref, actions }: HeaderProps) {
           </div>
         )}
         <div className="flex items-center gap-2 shrink-0">
-          <AllAppsMenu />
           <AccountMenu />
         </div>
       </div>
     </header>
+  )
+}
+
+/** Botão de navegação, antes da logo — só em telas pequenas (sem a barra
+ * lateral fixa), pra abrir o menu deslizante. Em telas grandes a barra
+ * lateral já fica visível e tem seu próprio gatilho ("Pesquisar menus…"). */
+function MenuButton() {
+  const { items } = useAllApps()
+  const { openNav } = useMobileNav()
+
+  if (items.length === 0) return null
+
+  return (
+    <button
+      onClick={openNav}
+      className="md:hidden w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-white/10 hover:text-white transition-colors shrink-0"
+      aria-label="Menu"
+    >
+      <Menu size={18} />
+    </button>
   )
 }
 

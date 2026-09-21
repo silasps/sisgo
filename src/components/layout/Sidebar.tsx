@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -8,9 +9,10 @@ import {
   ChefHat, Package, Boxes, DollarSign, Receipt, Settings, LogOut,
   UserCheck, CalendarDays, Wrench, Building2, Eye, Code2, Inbox, CookingPot,
   Hotel, DoorOpen, WashingMachine, Shirt, IdCard, Megaphone,
-  ChevronsLeft, ChevronsRight,
+  Menu, Search,
   type LucideIcon,
 } from 'lucide-react'
+import { useAllApps } from './all-apps-context'
 
 type NavItem = { href: string; label: string; icon: string; alert?: boolean } | { divider: true; label: string }
 type SidebarProps = {
@@ -62,29 +64,50 @@ function NavIcon({ name, className, size = 16 }: { name: string; className?: str
   return <Icon size={size} className={className} aria-hidden />
 }
 
-export function Sidebar({ items, isOpen = false, onClose, user, collapsed = false, onToggleCollapsed }: SidebarProps) {
+export function Sidebar({ items, isOpen = false, onClose, user, collapsed = false }: SidebarProps) {
   const pathname = usePathname()
+  const [hovering, setHovering] = useState(false)
+  const { openAllApps } = useAllApps()
+
+  // `collapsed` é a preferência fixada (persistida) pelo usuário. Em telas
+  // grandes, passar o mouse por cima expande temporariamente por cima do
+  // conteúdo (overlay — não empurra o layout, que continua calculado a
+  // partir de `collapsed`) só pra dar uma espiada nos rótulos; ao tirar o
+  // mouse, volta a recolher — a menos que o usuário tenha fixado aberto.
+  const expanded = !collapsed || hovering
+
+  // Sem isso, rolar até o fim da lista da gaveta (mobile) "vaza" o gesto de
+  // scroll pra página por baixo — trava o body enquanto ela está aberta, só
+  // a lista de navegação rola.
+  useEffect(() => {
+    if (!isOpen) return
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = '' }
+  }, [isOpen])
 
   return (
     <aside
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
       className={[
         'fixed inset-y-0 z-30 w-64 bg-dark-950 flex flex-col',
-        'right-0 border-l border-dark-800',
-        'md:left-0 md:right-auto md:border-l-0 md:border-r md:border-dark-800',
+        'left-0 border-r border-dark-800',
+        'pt-[env(safe-area-inset-top)] pb-20 md:pb-0',
         'transition-[transform,width] duration-200 ease-in-out',
-        collapsed ? 'md:w-16' : 'md:w-60',
+        expanded ? 'md:w-60' : 'md:w-16',
+        collapsed && hovering ? 'md:shadow-2xl md:shadow-black/50' : '',
         'md:translate-x-0',
-        isOpen ? 'translate-x-0' : 'translate-x-full',
+        isOpen ? 'translate-x-0' : '-translate-x-full',
       ].join(' ')}
     >
       <div className="flex items-center border-b border-dark-800 shrink-0">
         <button
-          onClick={onToggleCollapsed}
-          className="hidden md:flex flex-1 items-center justify-center py-4 text-gray-500 hover:text-white transition-colors"
-          aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
-          title={collapsed ? 'Expandir menu' : 'Recolher menu'}
+          onClick={openAllApps}
+          className="flex flex-1 items-center justify-center py-4 text-gray-500 hover:text-white transition-colors"
+          aria-label="Pesquisar"
+          title="Pesquisar"
         >
-          {collapsed ? <ChevronsRight size={18} aria-hidden /> : <ChevronsLeft size={18} aria-hidden />}
+          {(expanded || isOpen) ? <Search size={18} aria-hidden /> : <Menu size={18} aria-hidden />}
         </button>
         <button
           onClick={onClose}
@@ -97,17 +120,15 @@ export function Sidebar({ items, isOpen = false, onClose, user, collapsed = fals
         </button>
       </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto overflow-x-hidden">
+      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto overflow-x-hidden overscroll-contain">
         {items.map((item, idx) => {
           if ('divider' in item) {
             return (
               <div key={`div-${idx}`} className="pt-3 pb-1 mx-1">
                 <div className="border-t border-dark-800 mb-2" />
-                {!collapsed && (
-                  <span className="px-2 text-[10px] font-semibold uppercase tracking-widest text-gray-600 select-none">
-                    {item.label}
-                  </span>
-                )}
+                <span className={`px-2 text-[10px] font-semibold uppercase tracking-widest text-gray-600 select-none ${!expanded ? 'md:hidden' : ''}`}>
+                  {item.label}
+                </span>
               </div>
             )
           }
@@ -117,9 +138,9 @@ export function Sidebar({ items, isOpen = false, onClose, user, collapsed = fals
               key={item.href}
               href={item.href}
               onClick={onClose}
-              title={collapsed ? item.label : undefined}
+              title={!expanded ? item.label : undefined}
               className={`relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
-                collapsed ? 'md:justify-center md:px-0' : ''
+                !expanded ? 'md:justify-center md:px-0' : ''
               } ${
                 active
                   ? 'bg-brand-500 text-white font-medium'
@@ -130,9 +151,9 @@ export function Sidebar({ items, isOpen = false, onClose, user, collapsed = fals
                 <span className="absolute inset-0 rounded-lg bg-red-500/30 animate-pulse" />
               )}
               <NavIcon name={item.icon} className="relative shrink-0" size={20} />
-              <span className={`relative ${collapsed ? 'md:hidden' : ''}`}>{item.label}</span>
+              <span className={`relative ${!expanded ? 'md:hidden' : ''}`}>{item.label}</span>
               {item.alert && !active && (
-                <span className={`relative ml-auto w-2 h-2 rounded-full bg-red-500 animate-pulse ${collapsed ? 'md:hidden' : ''}`} />
+                <span className={`relative ml-auto w-2 h-2 rounded-full bg-red-500 ring-2 ring-dark-950 animate-pulse ${!expanded ? 'md:hidden' : ''}`} />
               )}
             </Link>
           )
@@ -141,26 +162,26 @@ export function Sidebar({ items, isOpen = false, onClose, user, collapsed = fals
 
       {user && (
         <div className="px-3 pt-3 pb-1 border-t border-dark-800">
-          <div className={`flex items-center gap-2.5 px-3 py-2 rounded-lg bg-dark-800/50 ${collapsed ? 'md:justify-center md:px-0' : ''}`}>
+          <div className={`flex items-center gap-2.5 px-3 py-2 rounded-lg bg-dark-800/50 ${!expanded ? 'md:justify-center md:px-0' : ''}`}>
             <div className="w-7 h-7 rounded-full bg-brand-500/20 border border-brand-500/30 flex items-center justify-center text-brand-400 text-xs font-bold flex-shrink-0 uppercase">
               {(user.name ?? user.email).charAt(0)}
             </div>
-            <div className={`min-w-0 flex-1 ${collapsed ? 'md:hidden' : ''}`}>
+            <div className={`min-w-0 flex-1 ${!expanded ? 'md:hidden' : ''}`}>
               {user.name && <p className="text-xs font-medium text-gray-200 truncate">{user.name}</p>}
               <p className="text-[11px] text-gray-500 truncate">{user.email}</p>
             </div>
           </div>
-          {user.badge && !collapsed && (
+          {user.badge && expanded && (
             <p className="mt-1.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-brand-400">{user.badge}</p>
           )}
         </div>
       )}
-      {user && <LogoutButton collapsed={collapsed} />}
+      {user && <LogoutButton expanded={expanded} />}
     </aside>
   )
 }
 
-function LogoutButton({ collapsed }: { collapsed?: boolean }) {
+function LogoutButton({ expanded }: { expanded?: boolean }) {
   async function logout() {
     const { createClient } = await import('@/lib/supabase/client')
     const supabase = createClient()
@@ -172,11 +193,11 @@ function LogoutButton({ collapsed }: { collapsed?: boolean }) {
     <div className="px-3 py-4 border-t border-dark-800">
       <button
         onClick={logout}
-        title={collapsed ? 'Sair' : undefined}
-        className={`flex items-center gap-3 px-3 py-2.5 w-full rounded-lg text-sm text-gray-500 hover:bg-dark-800 hover:text-white transition-colors ${collapsed ? 'md:justify-center md:px-0' : ''}`}
+        title={!expanded ? 'Sair' : undefined}
+        className={`flex items-center gap-3 px-3 py-2.5 w-full rounded-lg text-sm text-gray-500 hover:bg-dark-800 hover:text-white transition-colors ${!expanded ? 'md:justify-center md:px-0' : ''}`}
       >
         <LogOut size={16} aria-hidden className="shrink-0" />
-        <span className={collapsed ? 'md:hidden' : ''}>Sair</span>
+        <span className={!expanded ? 'md:hidden' : ''}>Sair</span>
       </button>
     </div>
   )

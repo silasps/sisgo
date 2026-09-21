@@ -59,7 +59,7 @@ export function RolePreviewForm({ action, preview, schools, ministries, redirect
         name="role"
         value={role}
         onChange={(event) => setRole(event.target.value as RolePreviewValue)}
-        className="h-7 rounded-md border border-white/10 bg-gray-800 px-2 text-xs text-white outline-none"
+        className="h-7 max-w-36 rounded-md border border-white/10 bg-gray-800 px-2 text-xs text-white outline-none"
       >
         {ROLE_OPTIONS.map(option => (
           <option key={option.value} value={option.value}>{option.label}</option>

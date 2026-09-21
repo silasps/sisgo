@@ -10,9 +10,11 @@ type Props = {
   id: string
   tipo: 'pre_inscricao' | 'aluno' | 'obreiro' | 'pre_inscricao_obreiro'
   action: (formData: FormData) => Promise<void>
+  onOptimisticRemove?: (id: string) => void
+  onOptimisticRestore?: (id: string) => void
 }
 
-export function RecusarModal({ id, tipo, action }: Props) {
+export function RecusarModal({ id, tipo, action, onOptimisticRemove, onOptimisticRestore }: Props) {
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
@@ -28,10 +30,18 @@ export function RecusarModal({ id, tipo, action }: Props) {
   function handleSubmit(formData: FormData) {
     const reason = (formData.get('reason') as string)?.trim()
     if (!reason) return
+    // Some da lista imediatamente — o registro real (e a reconciliação
+    // com o servidor) acontece em segundo plano, sem travar a tela.
+    setOpen(false)
+    onOptimisticRemove?.(id)
+    toast.success('Recusa registrada')
     startTransition(async () => {
-      await action(formData)
-      setOpen(false)
-      toast.success('Recusa registrada')
+      try {
+        await action(formData)
+      } catch {
+        onOptimisticRestore?.(id)
+        toast.error('Não foi possível registrar a recusa — tente novamente')
+      }
       router.refresh()
     })
   }

@@ -68,5 +68,5 @@ async function getPostLoginDest(supabase: any, userId: string): Promise<string> 
     .eq('id', orgId)
     .single()
 
-  return org?.slug ? `/${org.slug}/pessoas` : '/bases'
+  return org?.slug ? `/${org.slug}/dashboard` : '/bases'
 }

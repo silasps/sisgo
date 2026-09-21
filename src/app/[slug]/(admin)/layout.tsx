@@ -5,10 +5,9 @@ import { SuperAdminContextBar } from '@/components/layout/SuperAdminContextBar'
 import { notFound, redirect } from 'next/navigation'
 import { accentCssVars } from '@/lib/accent-colors'
 import { getRolePreview } from '@/lib/role-preview'
-import { getNavMode } from '@/lib/nav-mode'
 import { asLooseClient } from '@/lib/supabase/loose-client'
 import { FeedbackButton } from '@/components/layout/FeedbackButton'
-import { isManagementRole, isGeneralFinanceRole, MANUTENCAO_ROLES, HOSPEDAGEM_ROLES, userHasAnyRole } from '@/lib/auth/permissions'
+import { isManagementRole, isGeneralFinanceRole, MANUTENCAO_ROLES, HOSPEDAGEM_ROLES, KITCHEN_ROLES, userHasAnyRole } from '@/lib/auth/permissions'
 import { Toaster } from 'sonner'
 import { Suspense } from 'react'
 import { FlashToast } from '@/components/ui/FlashToast'
@@ -101,6 +100,7 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
   const canSeeGeneralFinance = isGeneralFinanceRole(role) || accumulatedRoles.some(r => isGeneralFinanceRole(r))
   const canSeeManutencao    = userHasAnyRole(allRoles, MANUTENCAO_ROLES)
   const canSeeHospedagem    = userHasAnyRole(allRoles, HOSPEDAGEM_ROLES)
+  const canSeeCozinha       = userHasAnyRole(allRoles, KITCHEN_ROLES)
   const canBuyMeals         = true
   const canSeeReservas      = isManagement || isHospitalidade || is('lider_eted') || isObreiroEted || isAluno || isAssociado || isLiderMinisterio || isObreiroMinisterio
 
@@ -124,15 +124,15 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
     { href: `/${slug}/hospedagem/quartos`, label: 'Quartos',    icon: 'quartos',       show: canSeeHospedagem },
     { href: `/${slug}/hospedagem/lavanderia`, label: 'Lavanderia', icon: 'lavanderia', show: canSeeHospedagem && laundryEnabled },
     { href: `/${slug}/refeicoes`,    label: 'Minhas refeições', icon: 'refeicoes',     show: canBuyMeals },
-    { href: `/${slug}/cozinha`,      label: 'Cozinha',          icon: 'cozinha',       show: isManagement || is('secretaria') || isCozinha },
-    { href: `/${slug}/cozinha/estoque`, label: 'Estoque',       icon: 'estoque',       show: isManagement || is('secretaria') || isCozinha },
-    { href: `/${slug}/cozinha/receitas`, label: 'Receitas',     icon: 'receitas',      show: isManagement || is('secretaria') || isCozinha },
+    { href: `/${slug}/cozinha`,      label: 'Cozinha',          icon: 'cozinha',       show: canSeeCozinha },
+    { href: `/${slug}/cozinha/estoque`, label: 'Estoque',       icon: 'estoque',       show: canSeeCozinha },
+    { href: `/${slug}/cozinha/receitas`, label: 'Receitas',     icon: 'receitas',      show: canSeeCozinha },
     { href: `/${slug}/manutencao`,   label: 'Solicitações',     icon: 'solicitacoes',  show: true },
     { href: `/${slug}/manutencao/estoque`, label: 'Est. Manutenção', icon: 'estoque-manutencao', show: canSeeManutencao },
     { href: `/${slug}/financeiro`,   label: 'Financeiro',       icon: 'financeiro',    show: canSeeGeneralFinance },
     { href: `/${slug}/caixa`,        label: 'Caixa da área',    icon: 'caixa',         show: hasOwnCashScope },
     { href: `/${slug}/minhas-contas`, label: 'Minhas Contas',   icon: 'contas',        show: true },
-    { href: `/${slug}/minha-lavanderia`, label: 'Lavanderia',   icon: 'minha-lavanderia', show: laundryEnabled },
+    { href: `/${slug}/minha-lavanderia`, label: 'Minha Lavanderia', icon: 'minha-lavanderia', show: laundryEnabled },
     { href: `/${slug}/minha-carteirinha`, label: 'Minha Carteirinha', icon: 'carteirinha', show: idCardEnabled },
     { href: `/${slug}/configuracoes`, label: 'Configurações',   icon: 'configuracoes', show: isManagement },
   ]
@@ -569,27 +569,20 @@ export default async function SlugLayout({ children, params }: Props) {
   const navItems = buildNav(slug, role, [...accumulatedRoles, ...extraRoles, ...linkedRoles], hasPending, reservationsPending > 0, hasOwnCashScope, laundryEnabled, hasMinistryMessages, hasSchoolMessages, idCardEnabled)
   const bottomItems = pickBottomBarItems(navItems, role)
 
-  // ── Menu de conta: modo Pessoal x Administração + troca de base ──────────
+  // ── Menu de conta: tudo somado, sem alternância entre Pessoal/Administração ──
+  // Chegou a existir um toggle de modo (cookie) que trocava o que aparecia na
+  // sidebar — mas ele só filtrava a LISTA, não a navegação em si (dava pra
+  // acabar numa tela de admin com a sidebar ainda em modo Pessoal, e
+  // vice-versa, sem nada de fato "alternando"). Agora a sidebar sempre soma
+  // tudo que o papel (+ funções acumuladas) libera, igual o "Ver tudo" já
+  // fazia — só a organização em seções muda.
   const { universal, admin: adminNavItems, personal: personalNavItems } = splitNavByMode(navItems)
-  const canSwitchMode = adminNavItems.length > 0
-  const navMode = canSwitchMode ? await getNavMode() : 'pessoal'
-  const sidebarItems: NavItem[] = navMode === 'administracao'
-    ? [...universal, ...sectionize(adminNavItems)]
-    : [...universal, ...personalNavItems]
-  // A GRADE do "Ver tudo" mostra só o complemento do que já está na sidebar
-  // do modo atual (ex.: itens do outro modo Pessoal/Administração) — não
-  // repete atalho que já é visível. Mas a CAIXA DE BUSCA dentro do mesmo
-  // painel promete "buscar em tudo que o sisgo oferece" — se a busca usasse
-  // só o complemento, um atalho que já está fixo na sidebar (ex. Lavanderia
-  // em modo Pessoal) ficaria invisível pra busca, o que é o oposto do que a
-  // caixa promete. Por isso existe também a lista completa (sem o filtro de
-  // complemento), só pra alimentar a busca — a grade de navegação continua
-  // usando a versão filtrada.
-  const sidebarIcons = new Set(sidebarItems.filter((i): i is RegularNavItem => !('divider' in i)).map(i => i.icon))
+  const sidebarItems: NavItem[] = [
+    ...universal,
+    ...sectionize(adminNavItems),
+    ...(personalNavItems.length ? [PESSOAL_DIVIDER, ...personalNavItems] : []),
+  ]
   const allNavItemsFull = dropEmptySections(buildAllAppsItems(universal, adminNavItems, personalNavItems))
-  const allNavItems = dropEmptySections(
-    allNavItemsFull.filter(i => 'divider' in i || !sidebarIcons.has(i.icon)),
-  )
 
   const myOrgs = userOrgRows
     .map(r => r.organizations)
@@ -622,7 +615,7 @@ export default async function SlugLayout({ children, params }: Props) {
         subtitle={org.name}
         logoUrl={(org as { logo_url?: string | null }).logo_url ?? undefined}
         className="flex flex-1 min-h-0 overflow-hidden"
-        allNavItems={allNavItems}
+        allNavItems={allNavItemsFull}
         searchNavItems={allNavItemsFull}
         account={{
           name: displayName,
@@ -631,14 +624,12 @@ export default async function SlugLayout({ children, params }: Props) {
           orgSlug: slug,
           orgName: org.name,
           orgs: myOrgs,
-          canSwitchMode,
-          mode: navMode,
         }}
       >
         {children}
       </AppShell>
       <FeedbackButton />
-      <Toaster position="top-right" richColors closeButton />
+      <Toaster position="top-right" richColors closeButton style={{ zIndex: 9999 }} />
       <Suspense>
         <FlashToast />
       </Suspense>

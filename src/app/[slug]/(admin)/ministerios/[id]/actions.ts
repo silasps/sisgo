@@ -84,6 +84,8 @@ export async function updateMinistry(
   data: {
     name?: string; description?: string | null; active?: boolean
     slug?: string | null; subtitle?: string | null; hero_image_url?: string | null; is_public?: boolean
+    description_translations?: Partial<Record<'en' | 'es', string>>
+    subtitle_translations?: Partial<Record<'en' | 'es', string>>
   }
 ) {
   const sb = createAdminClient()
@@ -240,12 +242,13 @@ export async function createServiceRequest(
 }
 
 // ── Hospitalidade / gestão: atualiza status de serviço ───────────────────────
-export async function updateServiceStatus(requestId: string, status: string, reviewedBy: string) {
+export async function updateServiceStatus(requestId: string, status: string, reviewedBy: string, resolutionNotes?: string | null) {
   const sb = createAdminClient()
   await sb.from('service_requests').update({
     status: status as 'pendente' | 'em_analise' | 'em_andamento' | 'resolvido' | 'rejeitado',
     reviewed_by: reviewedBy,
     reviewed_at: new Date().toISOString(),
+    ...(resolutionNotes !== undefined ? { resolution_notes: resolutionNotes } : {}),
   }).eq('id', requestId)
 }
 

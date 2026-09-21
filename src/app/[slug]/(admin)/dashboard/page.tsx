@@ -13,11 +13,13 @@ import type { LucideIcon } from 'lucide-react'
 import {
   Users, Briefcase, GraduationCap, BookOpen, Music, Home,
   CalendarDays, AlertTriangle, ClipboardList, CheckCircle2,
-  User, Wallet, LayoutDashboard, MessageSquare, Wrench, UtensilsCrossed, BedDouble,
-  Megaphone, Pin, BookMarked,
+  Wallet, LayoutDashboard, MessageSquare, Wrench, UtensilsCrossed, BedDouble,
+  Megaphone, Pin, BookMarked, Shirt, IdCard,
 } from 'lucide-react'
 
 type Props = { params: Promise<{ slug: string }> }
+
+const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
 const PERSON_STATUSES = [
   { key: 'visitante',   label: 'Visitante',   color: '#67E8F9' },
@@ -36,13 +38,14 @@ export default async function BaseDashboard({ params }: Props) {
 
   const { data: org } = await supabase
     .from('organizations')
-    .select('id, name, department_assignments')
+    .select('id, name, department_assignments, laundry_enabled')
     .eq('slug', slug)
     .single()
 
   const orgId = org?.id ?? ''
   const deptAssignments = (org?.department_assignments as Record<string, string> | null)
     ?? { hospitalidade: 'hospitalidade', secretaria: 'secretaria' }
+  const laundryEnabled = (org as { laundry_enabled?: boolean } | null)?.laundry_enabled ?? false
   const today = new Date().toISOString()
 
   // ── Discover current user role ──────────────────────────────
@@ -136,6 +139,8 @@ export default async function BaseDashboard({ params }: Props) {
         <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
           <VerseOfDayCard verse={verse} />
 
+          <PersonalAccountCard slug={slug} orgId={orgId} userId={user?.id ?? ''} laundryEnabled={laundryEnabled} />
+
           <SectionCard title="Anúncios">
             {announcements.length === 0 ? (
               <EmptyState icon={Megaphone} label="Nenhum anúncio no momento" />
@@ -195,9 +200,7 @@ export default async function BaseDashboard({ params }: Props) {
             <StatCard label="Reservas" value={myReservations ?? 0} icon={Home} href={`/${slug}/reservas`} color="orange" />
           </div>
 
-          <SectionCard title="Minha visão" href={`/${slug}/reservas`} linkLabel="Ver reservas">
-            <EmptyState icon={User} label="Acesso restrito às suas próprias solicitações" />
-          </SectionCard>
+          <PersonalAccountCard slug={slug} orgId={orgId} userId={user?.id ?? ''} laundryEnabled={laundryEnabled} />
         </main>
       </>
     )
@@ -222,7 +225,8 @@ export default async function BaseDashboard({ params }: Props) {
 
   if (isHospitalidade) {
     const hospitalityDepts = myDepts.length > 0 ? myDepts : ['hospitalidade']
-    const [{ count: pendingRooms }, { count: approvedRooms }, { count: serviceRequests }, { data: latestRooms }] = await Promise.all([
+    const todayDate = today.slice(0, 10)
+    const [{ count: pendingRooms }, { count: approvedRooms }, { count: serviceRequests }, { data: allocationsRaw }] = await Promise.all([
       supabase.from('reservations')
         .select('*', { count: 'exact', head: true })
         .eq('organization_id', orgId)
@@ -239,13 +243,21 @@ export default async function BaseDashboard({ params }: Props) {
         .eq('organization_id', orgId)
         .in('target_department', hospitalityDepts)
         .in('status', ['pendente', 'em_analise']),
-      supabase.from('reservations')
-        .select('id, title, starts_at, ends_at, guests_count, status')
+      // Mesma definição de "hospedado hoje" usada em hospedagem/page.tsx: alocação
+      // confirmada/com check-in feito, cuja janela [check_in, check_out) cobre hoje.
+      supabase.from('room_allocations')
+        .select('guest_type, check_in, check_out')
         .eq('organization_id', orgId)
-        .eq('type', 'quarto')
-        .order('created_at', { ascending: false })
-        .limit(5),
+        .in('status', ['confirmada', 'checkin']),
     ])
+
+    const GUEST_TYPE_LABELS: Record<string, string> = {
+      obreiro: 'Obreiros', aluno: 'Alunos', visitante: 'Visitantes', missionario: 'Missionários', convidado: 'Convidados',
+    }
+    const activeAllocs = (allocationsRaw ?? []).filter(a => a.check_in <= todayDate && a.check_out > todayDate)
+    const byGuestType = new Map<string, number>()
+    for (const a of activeAllocs) byGuestType.set(a.guest_type, (byGuestType.get(a.guest_type) ?? 0) + 1)
+    const guestTypeRows = [...byGuestType.entries()].sort((a, b) => b[1] - a[1])
 
     return (
       <>
@@ -257,26 +269,22 @@ export default async function BaseDashboard({ params }: Props) {
             <StatCard label="Solicitações" value={serviceRequests ?? 0} icon={AlertTriangle} href={`/${slug}/pendentes`} color="pink" />
           </div>
 
-          <SectionCard title="Reservas de quarto recentes" href={`/${slug}/reservas`} linkLabel="Ver reservas">
-            {!latestRooms || latestRooms.length === 0 ? (
-              <EmptyState icon={Home} label="Nenhuma reserva de quarto encontrada" />
+          <SectionCard title="Hospedados agora" badge={activeAllocs.length} href={`/${slug}/hospedagem`} linkLabel="Ver hospedagem">
+            {activeAllocs.length === 0 ? (
+              <EmptyState icon={Home} label="Ninguém hospedado no momento" />
             ) : (
-              <div className="divide-y divide-gray-100">
-                {latestRooms.map(room => (
-                  <div key={room.id} className="flex items-start justify-between gap-3 py-2.5">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">{room.title}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        {fmt(room.starts_at)} → {fmt(room.ends_at)}
-                        {room.guests_count ? ` · ${room.guests_count} pessoa${room.guests_count > 1 ? 's' : ''}` : ''}
-                      </p>
-                    </div>
-                    <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">{room.status}</span>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {guestTypeRows.map(([type, count]) => (
+                  <div key={type} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2">
+                    <span className="text-sm text-gray-600">{GUEST_TYPE_LABELS[type] ?? type}</span>
+                    <span className="text-sm font-bold text-gray-900">{count}</span>
                   </div>
                 ))}
               </div>
             )}
           </SectionCard>
+
+          <PersonalAccountCard slug={slug} orgId={orgId} userId={user?.id ?? ''} laundryEnabled={laundryEnabled} />
         </main>
       </>
     )
@@ -356,6 +364,8 @@ export default async function BaseDashboard({ params }: Props) {
               <p className="text-xs text-gray-500 mt-0.5">Reuniões e devocionais</p>
             </Link>
           </div>
+
+          <PersonalAccountCard slug={slug} orgId={orgId} userId={user?.id ?? ''} laundryEnabled={laundryEnabled} />
         </main>
       </>
     )
@@ -394,6 +404,8 @@ export default async function BaseDashboard({ params }: Props) {
                 : `Escopo: ${scopedDepartments.join(', ')}`}
             />
           </SectionCard>
+
+          <PersonalAccountCard slug={slug} orgId={orgId} userId={user?.id ?? ''} laundryEnabled={laundryEnabled} />
         </main>
       </>
     )
@@ -507,6 +519,8 @@ export default async function BaseDashboard({ params }: Props) {
               <p className="text-xs font-semibold text-gray-700 group-hover:text-brand-600">Presença</p>
             </Link>
           </div>
+
+          <PersonalAccountCard slug={slug} orgId={orgId} userId={user?.id ?? ''} laundryEnabled={laundryEnabled} />
         </main>
       </>
     )
@@ -579,6 +593,8 @@ export default async function BaseDashboard({ params }: Props) {
               </div>
             )}
           </SectionCard>
+
+          <PersonalAccountCard slug={slug} orgId={orgId} userId={user?.id ?? ''} laundryEnabled={laundryEnabled} />
         </main>
       </>
     )
@@ -589,9 +605,7 @@ export default async function BaseDashboard({ params }: Props) {
       <>
         <Header title="Início" />
         <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
-          <SectionCard title="Minha área">
-            <EmptyState icon={LayoutDashboard} label="Nenhum painel específico configurado para este perfil" />
-          </SectionCard>
+          <PersonalAccountCard slug={slug} orgId={orgId} userId={user?.id ?? ''} laundryEnabled={laundryEnabled} />
         </main>
       </>
     )
@@ -807,7 +821,6 @@ export default async function BaseDashboard({ params }: Props) {
   const despesas = curMonthLanc.filter(l => l.type === 'expense').reduce((s, l) => s + (l.amount ?? 0), 0)
   const saldo = receitas - despesas
   const temFinanceiro = lancamentos.length > 0
-  const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
   // Dados mensais para o gráfico de barras (últimos 6 meses)
   const MONTH_NAMES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
@@ -1032,6 +1045,8 @@ export default async function BaseDashboard({ params }: Props) {
           </SectionCard>
         </div>
 
+        <PersonalAccountCard slug={slug} orgId={orgId} userId={user?.id ?? ''} laundryEnabled={laundryEnabled} />
+
       </main>
     </>
   )
@@ -1053,10 +1068,16 @@ function StatCard({ label, value, icon: Icon, href, color }: {
 }) {
   const c = colorMap[color]
   return (
-    <Link href={href} className={`${c.bg} rounded-xl p-4 flex flex-col gap-2 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm`}>
-      <Icon className={`size-6 ${c.icon}`} />
-      <p className={`text-3xl font-bold leading-none ${c.num}`}><AnimatedNumber value={value} /></p>
-      <p className={`text-xs font-semibold uppercase tracking-wide ${c.label}`}>{label}</p>
+    <Link
+      href={href}
+      title={label}
+      className={`${c.bg} rounded-xl p-2.5 flex items-center gap-2.5 min-w-0 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm`}
+    >
+      <Icon className={`size-5 shrink-0 ${c.icon}`} />
+      <div className="min-w-0">
+        <p className={`text-xl font-bold leading-none ${c.num}`}><AnimatedNumber value={value} /></p>
+        <p className={`text-[11px] font-semibold uppercase tracking-wide truncate ${c.label}`}>{label}</p>
+      </div>
     </Link>
   )
 }
@@ -1096,6 +1117,86 @@ function SectionCard({ title, children, badge, href, linkLabel }: {
       </div>
       <div className="p-4 flex-1">{children}</div>
     </div>
+  )
+}
+
+// Resumo de acesso pessoal (refeições, contas, lavanderia, carteirinha) — todo
+// usuário com login tem essas 4 páginas, então esse card aparece em todos os
+// papéis, sem gate de permissão. Cada mini-item leva direto pra sua própria
+// página; não existe "ver tudo" porque não há uma página que agregue as 4.
+async function PersonalAccountCard({ slug, orgId, userId, laundryEnabled }: {
+  slug: string; orgId: string; userId: string; laundryEnabled: boolean
+}) {
+  const sbAdmin = createAdminClient()
+
+  const [{ data: staffProfile }, { data: studentProfile }, { data: associadoProfile }] = await Promise.all([
+    sbAdmin.from('staff_profiles').select('person_id').eq('user_id', userId).eq('organization_id', orgId).maybeSingle(),
+    sbAdmin.from('student_profiles').select('person_id').eq('user_id', userId).eq('organization_id', orgId).maybeSingle(),
+    sbAdmin.from('associado_profiles').select('person_id').eq('user_id', userId).eq('organization_id', orgId).maybeSingle(),
+  ])
+  const personId = staffProfile?.person_id ?? studentProfile?.person_id ?? associadoProfile?.person_id ?? null
+
+  const [{ count: pendingMeals }, chargesResult, tokenResult] = await Promise.all([
+    sbAdmin.from('kitchen_meal_consumers')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', orgId)
+      .eq('requested_by', userId)
+      .eq('payment_status', 'pending'),
+    personId
+      ? sbAdmin.from('finance_charges').select('amount').eq('organization_id', orgId).eq('person_id', personId).in('status', ['pending', 'overdue'])
+      : Promise.resolve({ data: [] as Array<{ amount: number }> }),
+    personId
+      ? sbAdmin.from('person_public_tokens').select('token').eq('person_id', personId).is('revoked_at', null).maybeSingle()
+      : Promise.resolve({ data: null as { token: string } | null }),
+  ])
+
+  const pendingBalance = (chargesResult.data ?? []).reduce((s, c) => s + Number(c.amount), 0)
+
+  return (
+    <SectionCard title="Minha conta">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        <PersonalTile
+          icon={UtensilsCrossed}
+          label="Refeições"
+          href={`/${slug}/refeicoes`}
+          status={(pendingMeals ?? 0) > 0 ? `${pendingMeals} pendente${(pendingMeals ?? 0) > 1 ? 's' : ''}` : 'Em dia'}
+          alert={(pendingMeals ?? 0) > 0}
+        />
+        <PersonalTile
+          icon={Wallet}
+          label="Minhas Contas"
+          href={`/${slug}/minhas-contas`}
+          status={pendingBalance > 0 ? `${fmt(pendingBalance)} pendente` : 'Sem pendências'}
+          alert={pendingBalance > 0}
+        />
+        {laundryEnabled && (
+          <PersonalTile icon={Shirt} label="Lavanderia" href={`/${slug}/minha-lavanderia`} status="Reservar máquina" />
+        )}
+        <PersonalTile
+          icon={IdCard}
+          label="Carteirinha"
+          href={`/${slug}/minha-carteirinha`}
+          status={tokenResult.data ? 'Ativa' : 'Gerar'}
+        />
+      </div>
+    </SectionCard>
+  )
+}
+
+function PersonalTile({ icon: Icon, label, status, href, alert }: {
+  icon: LucideIcon; label: string; status: string; href: string; alert?: boolean
+}) {
+  return (
+    <Link
+      href={href}
+      className="group flex items-center gap-2.5 rounded-lg border border-gray-100 p-3 transition-colors hover:bg-brand-50 hover:border-brand-100"
+    >
+      <Icon size={18} className="text-brand-500 shrink-0" />
+      <div className="min-w-0">
+        <p className="text-xs font-semibold text-gray-700 group-hover:text-brand-700 truncate">{label}</p>
+        <p className={`text-[11px] mt-0.5 truncate ${alert ? 'text-amber-600 font-medium' : 'text-gray-400'}`}>{status}</p>
+      </div>
+    </Link>
   )
 }
 

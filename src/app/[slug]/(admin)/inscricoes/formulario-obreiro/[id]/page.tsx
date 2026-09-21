@@ -4,21 +4,28 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getRolePreview } from '@/lib/role-preview'
 import { Pencil } from 'lucide-react'
-import { PipelineStepper, stagesFromFlags } from '@/components/inscricoes/PipelineStepper'
+import { PipelineStepper } from '@/components/inscricoes/PipelineStepper'
+import { stagesFromFlags } from '@/components/inscricoes/pipelineStages'
 import { AvancarEtapaControl, AdvanceHistoryList } from '@/components/inscricoes/AvancarEtapaControl'
 import { DocumentPreviewGrid } from '@/components/inscricoes/DocumentPreviewGrid'
 import { IncompleteFormLinkCard } from '@/components/inscricoes/IncompleteFormLinkCard'
 import { getStageAdvances, resolveAdvancerNames } from '@/lib/pipelineStageAdvance'
 import BackgroundChecksSection from './BackgroundChecksSection'
 import { PastorReferenceGate } from './PastorReferenceGate'
+import { ResponsavelReferenceGate } from './ResponsavelReferenceGate'
 import { HospedagemHandoffCard } from './HospedagemHandoffCard'
 import { HospedagemSolicitacaoCard } from './HospedagemSolicitacaoCard'
 import { HospedagemGate } from './HospedagemGate'
-import { avancarEtapaObreiro, reenviarLinkFormularioObreiro } from './actions'
+import { avancarEtapaObreiro, reenviarLinkFormularioObreiro, reenviarEmailFormularioObreiro, editarEmailInteresseObreiro } from './actions'
+import { RefreshOnFocus } from '@/components/ui/RefreshOnFocus'
+import { StickyPageHeader } from '@/components/inscricoes/StickyPageHeader'
+import { SectionCard } from '@/components/inscricoes/SectionCard'
+import { getPersonFinanceSummary, type PersonFinanceSummary } from '@/lib/finance/personFinanceStatus'
+import { PersonFinanceBadge } from '@/components/finance/PersonFinanceBadge'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
-type FormSection = { title: string; fields: { label: string; key: string; type?: 'textarea' }[] }
+type FormSection = { title: string; fields: { label: string; key: string; type?: 'textarea' | 'jocum_schools' | 'languages' | 'warning' | 'date_anos' | 'children' }[] }
 
 const SECTIONS: FormSection[] = [
   {
@@ -39,11 +46,8 @@ const SECTIONS: FormSection[] = [
       { label: 'Profissão', key: 'profissao' },
       { label: 'Habilidades', key: 'habilidades', type: 'textarea' },
       { label: 'Especialização profissional', key: 'especializacao_profissional' },
-      { label: 'Escolas/especializações JOCUM', key: 'escolas_jocum' },
-      { label: 'Português', key: 'idioma_portugues' },
-      { label: 'Inglês', key: 'idioma_ingles' },
-      { label: 'Espanhol', key: 'idioma_espanhol' },
-      { label: 'Outro idioma', key: 'outro_idioma' },
+      { label: 'Cursos e formações concluídos', key: 'escolas_jocum', type: 'jocum_schools' },
+      { label: 'Idiomas', key: 'idiomas', type: 'languages' },
       { label: 'RG', key: 'rg' },
       { label: 'CPF', key: 'cpf' },
       { label: 'Passaporte', key: 'passaporte' },
@@ -54,7 +58,6 @@ const SECTIONS: FormSection[] = [
       { label: 'Estado', key: 'estado' },
       { label: 'País', key: 'pais' },
       { label: 'Celular', key: 'celular' },
-      { label: 'E-mail de contato', key: 'email_contato' },
       { label: 'Instagram', key: 'instagram' },
       { label: 'Facebook', key: 'facebook' },
       { label: 'TikTok', key: 'tiktok' },
@@ -71,10 +74,11 @@ const SECTIONS: FormSection[] = [
       { label: 'Estado civil', key: 'estado_civil_atual' },
       { label: 'Nome do cônjuge', key: 'conjuge_nome' },
       { label: 'Nascimento do cônjuge', key: 'conjuge_nascimento' },
-      { label: 'Tempo casados', key: 'tempo_casados' },
+      { label: 'Data do casamento', key: 'data_casamento', type: 'date_anos' },
+      { label: 'Não enviou a certidão de casamento — motivo', key: 'certidao_casamento_skip_reason', type: 'warning' },
       { label: 'Cônjuge virá para a base?', key: 'conjuge_vira' },
       { label: 'Tem filhos?', key: 'tem_filhos' },
-      { label: 'Dados dos filhos', key: 'filhos_dados', type: 'textarea' },
+      { label: 'Filhos', key: 'filhos_dados', type: 'children' },
       { label: 'Filhos virão?', key: 'filhos_virao' },
     ],
   },
@@ -160,21 +164,229 @@ const SECTIONS: FormSection[] = [
   },
 ]
 
-function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <details className="group bg-white rounded-xl border border-gray-200 overflow-hidden" open>
-      <summary className="flex items-center justify-between px-5 py-4 cursor-pointer select-none list-none hover:bg-gray-50">
-        <h3 className="font-semibold text-gray-900 text-sm">{title}</h3>
-        <span className="text-gray-400 text-xs transition-transform group-open:rotate-180">▼</span>
-      </summary>
-      <div className="px-5 pb-5 border-t border-gray-100">
-        {children}
-      </div>
-    </details>
-  )
+// "Escolas/especializações JOCUM" passou a ser uma lista (nome + mês/ano de
+// conclusão) serializada como JSON dentro do mesmo campo de texto — aceita
+// também o formato antigo (texto livre) salvo antes dessa mudança.
+type JocumSchoolRow = { escola: string; base: string; pais: string; mesAno: string }
+
+function parseJocumSchools(value: unknown): JocumSchoolRow[] {
+  if (typeof value !== 'string' || !value.trim()) return []
+  try {
+    const parsed = JSON.parse(value)
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((r: unknown) => {
+          const row = (r ?? {}) as Partial<JocumSchoolRow>
+          return { escola: row.escola ?? '', base: row.base ?? '', pais: row.pais ?? '', mesAno: row.mesAno ?? '' }
+        })
+        .filter(r => r.escola.trim())
+    }
+  } catch { /* valor legado em texto livre */ }
+  return [{ escola: value, base: '', pais: '', mesAno: '' }]
 }
 
-function FieldRow({ label, value, type }: { label: string; value: unknown; type?: 'textarea' }) {
+function formatMesAno(mesAno: string): string {
+  const legacy = mesAno.match(/^(\d{4})-(\d{2})$/)
+  return legacy ? `${legacy[2]}/${legacy[1]}` : mesAno
+}
+
+type LanguageRow = { idioma: string; fluencia: string }
+
+const FLUENCY_LABELS: Record<string, string> = {
+  nativo: 'nativo', basico: 'básico', intermediario: 'intermediário', avancado: 'avançado', fluente: 'fluente',
+}
+
+function parseLanguages(value: unknown): LanguageRow[] {
+  if (typeof value !== 'string' || !value.trim()) return []
+  try {
+    const parsed = JSON.parse(value)
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((r: unknown, i: number) => {
+          const row = (r ?? {}) as Partial<LanguageRow>
+          return { idioma: row.idioma ?? '', fluencia: row.fluencia || (i === 0 ? 'nativo' : '') }
+        })
+        .filter(r => r.idioma.trim())
+    }
+  } catch { /* nada a exibir */ }
+  return []
+}
+
+function anosDesde(dateStr: string): number | null {
+  const then = new Date(dateStr + 'T00:00:00')
+  if (Number.isNaN(then.getTime())) return null
+  const now = new Date()
+  let years = now.getFullYear() - then.getFullYear()
+  const beforeAnniversary = now.getMonth() < then.getMonth() ||
+    (now.getMonth() === then.getMonth() && now.getDate() < then.getDate())
+  if (beforeAnniversary) years -= 1
+  return years >= 0 ? years : null
+}
+
+type ChildRow = { nome: string; sexo: string; data_nascimento: string }
+
+function parseChildren(value: unknown): ChildRow[] {
+  if (typeof value !== 'string' || !value.trim()) return []
+  try {
+    const parsed = JSON.parse(value)
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((r: unknown) => {
+          const row = (r ?? {}) as Partial<ChildRow>
+          return { nome: row.nome ?? '', sexo: row.sexo ?? '', data_nascimento: row.data_nascimento ?? '' }
+        })
+        .filter(r => r.nome.trim())
+    }
+  } catch { /* valor legado em texto livre */ }
+  return [{ nome: value, sexo: '', data_nascimento: '' }]
+}
+
+function capitalizeFirst(s: string): string {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s
+}
+
+// As respostas de referência (pastor/liderança/amigo/responsável) são
+// despejadas direto das chaves do form_data — sem prefixo do tipo de
+// referência nem maiúscula inicial fica ilegível ("pastor nome", "carater").
+// Pra chaves cujo nome bruto não deixa claro o que a pergunta pedia (ex.:
+// "autoridade"), um título mais descritivo é usado em vez de só capitalizar.
+const REF_FIELD_PREFIXES = ['pastor_', 'lideranca_', 'amigo_', 'responsavel_']
+
+const REF_FIELD_LABELS: Record<string, string> = {
+  nome: 'Nome',
+  cargo: 'Cargo / função',
+  igreja: 'Igreja / ministério / base',
+  cidade: 'Cidade da igreja / ministério / base',
+  email: 'E-mail',
+  ref_nome: 'Nome',
+  ref_email: 'E-mail',
+  nome_confirma: 'Nome do responsável',
+  funcao: 'Cargo/função durante o período',
+  periodo: 'Período em que acompanhou',
+  tempo_conhece: 'Há quanto tempo conhece o(a) candidato(a)',
+  como_conheceu: 'Como se conheceram',
+  crista: 'É cristão(ã)?',
+  parentesco: 'Parentesco',
+  carater: 'Caráter e maturidade',
+  responsabilidade: 'Responsabilidade e comprometimento',
+  autoridade: 'Resposta a autoridade e correção',
+  pontos_fortes: 'Pontos fortes',
+  areas_crescimento: 'Áreas de crescimento',
+  areas_atencao: 'Dificuldade relacional, emocional ou de conduta',
+  sob_pressao: 'Comportamento sob pressão ou conflito',
+  relacionamentos: 'Relacionamento com outras pessoas',
+  dificuldades: 'Conhece alguma dificuldade relacional, emocional ou de caráter?',
+  dificuldades_detalhe: 'Descrição da dificuldade',
+  conduta_menores: 'Conhece alguma conduta inadequada envolvendo crianças/adolescentes?',
+  conduta_menores_detalhe: 'Detalhes da preocupação',
+  recomenda: 'Recomenda o(a) candidato(a)?',
+  apoia: 'Libera e dá a bênção para participar?',
+  observacoes: 'Observações adicionais',
+}
+
+function formatRefFieldLabel(key: string): string {
+  const prefix = REF_FIELD_PREFIXES.find(p => key.startsWith(p))
+  const stripped = prefix ? key.slice(prefix.length) : key
+  return REF_FIELD_LABELS[stripped] ?? capitalizeFirst(stripped.replace(/_/g, ' '))
+}
+
+// Ordem das perguntas tal como aparecem no formulário de referência
+// (FormularioReferencia.tsx) — Object.entries(form_data) segue a ordem de
+// inserção do JSON salvo, que não bate com a ordem visual do formulário.
+const REF_FIELD_ORDER = {
+  pastor: ['pastor_nome', 'pastor_cargo', 'pastor_igreja', 'pastor_cidade', 'tempo_conhece', 'pastor_email', 'pastor_telefone', 'carater', 'responsabilidade', 'autoridade', 'dificuldades', 'dificuldades_detalhe', 'recomenda', 'observacoes', 'apoia', 'conduta_menores', 'conduta_menores_detalhe'],
+  lideranca: ['lideranca_funcao', 'lideranca_periodo', 'carater', 'pontos_fortes', 'areas_atencao', 'recomenda', 'observacoes', 'conduta_menores', 'conduta_menores_detalhe'],
+  amigo: ['ref_nome', 'como_conheceu', 'tempo_conhece', 'crista', 'ref_email', 'ref_telefone', 'carater', 'pontos_fortes', 'areas_crescimento', 'sob_pressao', 'relacionamentos', 'recomenda', 'observacoes', 'conduta_menores', 'conduta_menores_detalhe'],
+  responsavel: ['responsavel_nome_confirma', 'parentesco', 'observacoes'],
+} as const
+
+const REF_FIELD_SKIP = new Set(['decl_verdadeiro', 'decl_autorizacao', 'pastor_telefone_country', 'ref_telefone_country', 'resolvido_manualmente', 'resolvido_por', 'resolvido_em'])
+
+function orderedRefEntries(data: Record<string, unknown>, order: readonly string[]): [string, unknown][] {
+  const seen = new Set<string>()
+  const ordered: [string, unknown][] = []
+  for (const key of order) {
+    if (key in data) { ordered.push([key, data[key]]); seen.add(key) }
+  }
+  for (const [key, value] of Object.entries(data)) {
+    if (!seen.has(key) && !REF_FIELD_SKIP.has(key)) ordered.push([key, value])
+  }
+  return ordered
+}
+
+function formatRefFieldValue(value: string): string {
+  return capitalizeFirst(value)
+}
+
+function FieldRow({ label, value, type }: { label: string; value: unknown; type?: 'textarea' | 'jocum_schools' | 'languages' | 'warning' | 'date_anos' | 'children' }) {
+  if (type === 'date_anos') {
+    const str = typeof value === 'string' ? value.trim() : ''
+    if (!str) return null
+    const anos = anosDesde(str)
+    const formatted = new Date(str + 'T00:00:00').toLocaleDateString('pt-BR')
+    return (
+      <div className="py-2.5 border-b border-gray-50 last:border-0">
+        <p className="text-xs font-medium text-gray-400 mb-0.5">{label}</p>
+        <p className="text-sm text-gray-800">{formatted}{anos !== null ? ` — ${anos} ano(s) de casados` : ''}</p>
+      </div>
+    )
+  }
+  if (type === 'children') {
+    const rows = parseChildren(value)
+    if (!rows.length) return null
+    return (
+      <div className="py-2.5 border-b border-gray-50 last:border-0">
+        <p className="text-xs font-medium text-gray-400 mb-0.5">{label} <span className="text-amber-700 font-semibold">({rows.length})</span></p>
+        <div className="text-sm text-gray-800 space-y-0.5">
+          {rows.map((r, i) => {
+            const sexoLabel = r.sexo === 'M' ? 'Masculino' : r.sexo === 'F' ? 'Feminino' : ''
+            const nascimento = r.data_nascimento ? new Date(r.data_nascimento + 'T00:00:00').toLocaleDateString('pt-BR') : ''
+            const details = [sexoLabel, nascimento].filter(Boolean).join(' · ')
+            return <p key={i}>{r.nome}{details ? ` — ${details}` : ''}</p>
+          })}
+        </div>
+      </div>
+    )
+  }
+  if (type === 'warning') {
+    const str = typeof value === 'string' ? value.trim() : ''
+    if (!str) return null
+    return (
+      <div className="my-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5">
+        <p className="text-xs font-semibold text-amber-800">⚠ {label}</p>
+        <p className="text-sm text-amber-900 mt-0.5 whitespace-pre-wrap leading-relaxed">{str}</p>
+      </div>
+    )
+  }
+  if (type === 'languages') {
+    const rows = parseLanguages(value)
+    if (!rows.length) return null
+    return (
+      <div className="py-2.5 border-b border-gray-50 last:border-0">
+        <p className="text-xs font-medium text-gray-400 mb-0.5">{label}</p>
+        <div className="text-sm text-gray-800 space-y-0.5">
+          {rows.map((r, i) => (
+            <p key={i}>{r.idioma}{r.fluencia ? ` — ${FLUENCY_LABELS[r.fluencia] ?? r.fluencia}` : ''}</p>
+          ))}
+        </div>
+      </div>
+    )
+  }
+  if (type === 'jocum_schools') {
+    const rows = parseJocumSchools(value)
+    if (!rows.length) return null
+    return (
+      <div className="py-2.5 border-b border-gray-50 last:border-0">
+        <p className="text-xs font-medium text-gray-400 mb-0.5">{label}</p>
+        <div className="text-sm text-gray-800 space-y-0.5">
+          {rows.map((r, i) => {
+            const details = [r.base, r.pais, r.mesAno ? formatMesAno(r.mesAno) : ''].filter(Boolean).join(' · ')
+            return <p key={i}>{r.escola}{details ? ` — ${details}` : ''}</p>
+          })}
+        </div>
+      </div>
+    )
+  }
   const str = typeof value === 'string' ? value.trim() : ''
   if (!str) return null
   return (
@@ -237,19 +449,30 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
     .from('staff_applications')
     .select(`
       id, status, form_data, applied_at,
-      organization_id, ministry_id, person_id,
+      organization_id, ministry_id, person_id, interest_form_id,
       pastor_reference_skip_reason, pastor_reference_skipped_by, pastor_reference_skipped_at,
       hospedagem_skip_reason, hospedagem_skipped_by, hospedagem_skipped_at,
       edited_by, edited_at,
       people(full_name),
       ministries(name),
-      staff_interest_forms(full_name, email, phone)
+      staff_interest_forms(id, full_name, email, phone, language)
     `)
     .eq('id', id)
     .eq('organization_id', org.id)
     .single()
 
   if (!app) notFound()
+
+  let wasStudentBefore = false
+  let exAlunoFinanceSummary: PersonFinanceSummary | null = null
+  if (canManageChecks && app.person_id) {
+    const [{ data: priorStudentProfile }, summary] = await Promise.all([
+      sb.from('student_profiles').select('id').eq('person_id', app.person_id).limit(1).maybeSingle(),
+      getPersonFinanceSummary(app.organization_id, app.person_id),
+    ])
+    wasStudentBefore = !!priorStudentProfile
+    exAlunoFinanceSummary = summary
+  }
 
   let skippedByName: string | null = null
   if (app.pastor_reference_skipped_by) {
@@ -271,7 +494,7 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
 
   const formData = (app.form_data as Record<string, unknown>) ?? {}
   const ministry = app.ministries as unknown as { name: string } | null
-  const preform = app.staff_interest_forms as unknown as { full_name?: string; email?: string; phone?: string } | null
+  const preform = app.staff_interest_forms as unknown as { id?: string; full_name?: string; email?: string; phone?: string; language?: string | null } | null
   const pessoa = app.people as unknown as { full_name: string } | null
   const nomeCandidato = (formData.s2 as Record<string, string> | undefined)?.nome ?? preform?.full_name ?? pessoa?.full_name ?? '—'
 
@@ -303,6 +526,20 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
   const pastorRef = refs?.find(r => r.type === 'pastor')
   const amigoRef = refs?.find(r => r.type === 'amigo')
   const liderancaRef = refs?.find(r => r.type === 'lideranca_experiencia')
+  const responsavelRef = refs?.find(r => r.type === 'responsavel')
+  const s2ForIdade = (formData.s2 as Record<string, string> | undefined) ?? {}
+  const isMinorCandidate = (() => {
+    const dateStr = s2ForIdade.data_nascimento
+    if (!dateStr) return false
+    const then = new Date(dateStr + 'T00:00:00')
+    if (Number.isNaN(then.getTime())) return false
+    const now = new Date()
+    let years = now.getFullYear() - then.getFullYear()
+    const beforeAnniversary = now.getMonth() < then.getMonth() ||
+      (now.getMonth() === then.getMonth() && now.getDate() < then.getDate())
+    if (beforeAnniversary) years -= 1
+    return years >= 0 && years < 18
+  })()
 
   const isLiderMinisterio = userRole === 'lider_ministerio'
   let leaderMinistryId: string | null = null
@@ -314,7 +551,7 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
 
   const { data: hospRequest } = await sb
     .from('service_requests')
-    .select('status, requested_arrival_date, description')
+    .select('status, requested_arrival_date, requested_departure_date, description, resolution_notes')
     .eq('staff_application_id', id)
     .eq('request_type', 'hospedagem_obreiro')
     .order('created_at', { ascending: false })
@@ -325,6 +562,7 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
   const canHandoffHospedagem = canRequestHospedagem && hospedagemResolved
 
   let rooms: { id: string; name: string; floor: string | null; allocation_mode: string; beds: { id: string; label: string; status: string }[] }[] = []
+  let existingAllocation: { roomName: string; bedLabel: string | null; checkIn: string; checkOut: string } | null = null
   if (canHandoffHospedagem) {
     const { data: roomRows } = await sb
       .from('rooms')
@@ -334,6 +572,26 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
       .order('display_order', { ascending: true })
     rooms = ((roomRows ?? []) as unknown as Array<{ id: string; name: string; allocation_mode: string; beds: { id: string; label: string; status: string }[]; floors: { name: string } | null }>)
       .map(r => ({ id: r.id, name: r.name, floor: r.floors?.name ?? null, allocation_mode: r.allocation_mode, beds: r.beds }))
+
+    // O status "resolvido" da solicitação só diz que a hospitalidade
+    // confirmou ter vaga — não garante que um quarto/cama já foi de fato
+    // registrado (dado antigo, criado antes de existir a alocação
+    // obrigatória, por exemplo). Checa se já existe alocação de verdade
+    // antes de repetir o formulário de criação.
+    if (app.person_id) {
+      const { data: allocRow } = await sb
+        .from('room_allocations')
+        .select('check_in, check_out, rooms(name), beds(label)')
+        .eq('person_id', app.person_id)
+        .neq('status', 'cancelada')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      const alloc = allocRow as unknown as { check_in: string; check_out: string; rooms: { name: string } | null; beds: { label: string } | null } | null
+      if (alloc) {
+        existingAllocation = { roomName: alloc.rooms?.name ?? '—', bedLabel: alloc.beds?.label ?? null, checkIn: alloc.check_in, checkOut: alloc.check_out }
+      }
+    }
   }
 
   const { data: backgroundChecks } = await sb
@@ -350,6 +608,14 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
     }, {})
 
   const allFields = Object.values(sectionData).reduce<Record<string, string>>((acc, sec) => ({ ...acc, ...sec }), {})
+
+  // Encadeia as fontes de data de chegada: o que a hospitalidade/líder já
+  // confirmou na solicitação tem prioridade; na ausência disso, usa o que o
+  // próprio candidato informou no formulário — evita pedir de novo uma
+  // informação que já existe.
+  const candidateArrivalDate = allFields.data_chegada || null
+  const defaultArrivalDate = hospRequest?.requested_arrival_date ?? candidateArrivalDate
+  const defaultDepartureDate = hospRequest?.requested_departure_date ?? null
 
   const stageAdvances = await getStageAdvances(sb, 'obreiro', id)
   const advancerNames = await resolveAdvancerNames(sb, stageAdvances)
@@ -368,7 +634,9 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
 
   return (
     <>
-      <header className="bg-white border-b border-gray-100 px-4 sm:px-6 py-4 sticky top-0 z-10">
+      <RefreshOnFocus />
+      <StickyPageHeader header={
+      <header className="bg-white border-b border-gray-100 px-4 sm:px-6 py-4">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <div>
             <Link href={`/${slug}/inscricoes?tab=obreiro`} className="text-xs text-gray-400 hover:text-gray-600">
@@ -409,15 +677,38 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
           </p>
         )}
       </header>
+      }>
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-4">
-        {app.status === 'rascunho' && (
-          <IncompleteFormLinkCard
-            reason="O formulário ainda não foi enviado — a pessoa parou em algum ponto do preenchimento."
-            formPathPrefix={`/${slug}/formulario-obreiro`}
-            onGenerateLink={reenviarLinkFormularioObreiro.bind(null, { slug, organizationId: app.organization_id, applicationId: id })}
-          />
+        {wasStudentBefore && exAlunoFinanceSummary && (
+          <SectionCard title="Situação financeira (ex-aluno)">
+            <p className="text-xs text-gray-500 mb-2">
+              Este candidato já foi aluno da instituição — situação financeira para sua avaliação. Não bloqueia a aprovação.
+            </p>
+            <PersonFinanceBadge summary={exAlunoFinanceSummary} />
+          </SectionCard>
         )}
+        {app.status === 'rascunho' && (() => {
+          const organizationId = app.organization_id
+          async function handleResendEmail() {
+            'use server'
+            await reenviarEmailFormularioObreiro({ slug, organizationId, applicationId: id })
+          }
+          async function handleEditEmail(email: string) {
+            'use server'
+            await editarEmailInteresseObreiro({ organizationId, interestFormId: preform!.id!, email })
+          }
+          return (
+            <IncompleteFormLinkCard
+              reason="O formulário ainda não foi enviado — a pessoa parou em algum ponto do preenchimento."
+              formPathPrefix={`/${slug}/formulario-obreiro`}
+              onGenerateLink={reenviarLinkFormularioObreiro.bind(null, { slug, organizationId, applicationId: id })}
+              email={preform?.email}
+              onResendEmail={preform?.email ? handleResendEmail : undefined}
+              onEditEmail={preform?.id ? handleEditEmail : undefined}
+            />
+          )
+        })()}
 
         {SECTIONS.map((section, sIdx) => {
           const sKey = `s${sIdx + 1}`
@@ -431,7 +722,9 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
           return (
             <SectionCard key={sKey} title={section.title}>
               {section.fields.map(f => (
-                <FieldRow key={f.key} label={f.label} value={sData[f.key] ?? allFields[f.key]} type={f.type} />
+                <FieldRow key={f.key} label={f.label}
+                  value={f.key === 'ministerio_escolhido' ? (ministry?.name ?? sData[f.key]) : (sData[f.key] ?? allFields[f.key])}
+                  type={f.type} />
               ))}
             </SectionCard>
           )
@@ -450,8 +743,8 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
         )}
 
         {/* Referências */}
-        {(pastorRef || amigoRef || liderancaRef || app.pastor_reference_skip_reason) && (
-          <SectionCard title="Referências">
+        {(pastorRef || amigoRef || liderancaRef || app.pastor_reference_skip_reason || responsavelRef || isMinorCandidate) && (
+          <SectionCard id="referencias" title="Referências">
             <div className="py-2">
               <p className="text-xs font-semibold text-gray-500 mb-1">Pastor / Líder (obrigatória)</p>
               <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${pastorRef?.status === 'enviado' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
@@ -464,8 +757,8 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
                       ⚠ Referência sinalizou preocupação sobre conduta com menores
                     </p>
                   )}
-                  {Object.entries(pastorRef.form_data as Record<string, string>).map(([k, v]) => (
-                    <FieldRow key={k} label={k.replace(/_/g, ' ')} value={v} />
+                  {orderedRefEntries(pastorRef.form_data as Record<string, unknown>, REF_FIELD_ORDER.pastor).map(([k, v]) => (
+                    <FieldRow key={k} label={formatRefFieldLabel(k)} value={formatRefFieldValue(String(v ?? ''))} />
                   ))}
                 </div>
               )}
@@ -493,8 +786,8 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
                         ⚠ Referência sinalizou preocupação sobre conduta com menores
                       </p>
                     )}
-                    {Object.entries(liderancaRef.form_data as Record<string, string>).map(([k, v]) => (
-                      <FieldRow key={k} label={k.replace(/_/g, ' ')} value={v} />
+                    {orderedRefEntries(liderancaRef.form_data as Record<string, unknown>, REF_FIELD_ORDER.lideranca).map(([k, v]) => (
+                      <FieldRow key={k} label={formatRefFieldLabel(k)} value={formatRefFieldValue(String(v ?? ''))} />
                     ))}
                   </div>
                 )}
@@ -513,18 +806,43 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
                         ⚠ Referência sinalizou preocupação sobre conduta com menores
                       </p>
                     )}
-                    {Object.entries(amigoRef.form_data as Record<string, string>).map(([k, v]) => (
-                      <FieldRow key={k} label={k.replace(/_/g, ' ')} value={v} />
+                    {orderedRefEntries(amigoRef.form_data as Record<string, unknown>, REF_FIELD_ORDER.amigo).map(([k, v]) => (
+                      <FieldRow key={k} label={formatRefFieldLabel(k)} value={formatRefFieldValue(String(v ?? ''))} />
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+            {(responsavelRef || isMinorCandidate) && (
+              <div className="py-2 border-t border-gray-50">
+                <p className="text-xs font-semibold text-gray-500 mb-1">Autorização do responsável (candidato menor de idade)</p>
+                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${responsavelRef?.status === 'enviado' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                  {responsavelRef?.status === 'enviado' ? 'Enviado' : 'Pendente'}
+                </span>
+                {responsavelRef?.status === 'enviado' && responsavelRef.form_data && (
+                  <div className="mt-2 space-y-1">
+                    {(responsavelRef.form_data as Record<string, unknown>).resolvido_manualmente === true && (
+                      <p className="text-xs font-medium text-gray-500">Resolvido manualmente pelo DH</p>
+                    )}
+                    {orderedRefEntries(responsavelRef.form_data as Record<string, unknown>, REF_FIELD_ORDER.responsavel).map(([k, v]) => (
+                      <FieldRow key={k} label={formatRefFieldLabel(k)} value={formatRefFieldValue(String(v ?? ''))} />
+                    ))}
+                  </div>
+                )}
+                <ResponsavelReferenceGate
+                  staffApplicationId={id}
+                  organizationId={app.organization_id}
+                  slug={slug}
+                  status={responsavelRef?.status === 'enviado' ? 'enviado' : 'pendente'}
+                  readOnly={!canManagePastorSkip}
+                />
               </div>
             )}
           </SectionCard>
         )}
 
         {/* Verificação de antecedentes */}
-        <SectionCard title="Verificação de Antecedentes">
+        <SectionCard id="antecedentes" title="Verificação de Antecedentes">
           <BackgroundChecksSection
             checks={backgroundChecks ?? []}
             organizationId={app.organization_id}
@@ -537,7 +855,7 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
 
         {/* Hospitalidade — solicitação pode ser feita a qualquer momento, bloqueia a aprovação final */}
         {(canRequestHospedagem || app.hospedagem_skip_reason) && (
-          <SectionCard title="Hospitalidade">
+          <SectionCard id="hospitalidade" title="Hospitalidade">
             <div className="space-y-3">
               {canRequestHospedagem && (
                 <HospedagemSolicitacaoCard
@@ -547,8 +865,10 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
                   staffApplicationId={id}
                   guestName={nomeCandidato}
                   status={hospRequest?.status ?? null}
-                  requestedArrivalDate={hospRequest?.requested_arrival_date ?? null}
+                  requestedArrivalDate={defaultArrivalDate}
+                  requestedDepartureDate={defaultDepartureDate}
                   requestNotes={hospRequest?.description ?? null}
+                  resolutionNotes={hospRequest?.resolution_notes ?? null}
                 />
               )}
               <HospedagemGate
@@ -561,21 +881,41 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
                 skippedAt={app.hospedagem_skipped_at}
                 readOnly={!canManagePastorSkip}
               />
-              {canHandoffHospedagem && (
-                <HospedagemHandoffCard
-                  slug={slug}
-                  organizationId={app.organization_id}
-                  ministryId={app.ministry_id}
-                  staffApplicationId={id}
-                  personId={app.person_id}
-                  guestName={nomeCandidato}
-                  rooms={rooms}
-                />
-              )}
+              {canHandoffHospedagem && (existingAllocation ? (
+                <div className="rounded-lg bg-green-50 border border-green-200 px-3 py-2 text-sm text-green-800">
+                  <p className="font-semibold">
+                    Quarto já registrado: {existingAllocation.roomName}
+                    {existingAllocation.bedLabel ? ` — ${existingAllocation.bedLabel}` : ''}
+                  </p>
+                  <p className="text-xs text-green-700 mt-0.5">
+                    {new Date(existingAllocation.checkIn + 'T00:00:00').toLocaleDateString('pt-BR')} até{' '}
+                    {new Date(existingAllocation.checkOut + 'T00:00:00').toLocaleDateString('pt-BR')}
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    A hospitalidade confirmou que há vaga, mas nenhum quarto/cama foi registrado no
+                    sistema ainda — preencha abaixo para completar a alocação.
+                  </p>
+                  <HospedagemHandoffCard
+                    slug={slug}
+                    organizationId={app.organization_id}
+                    ministryId={app.ministry_id}
+                    staffApplicationId={id}
+                    personId={app.person_id}
+                    guestName={nomeCandidato}
+                    rooms={rooms}
+                    defaultCheckIn={defaultArrivalDate}
+                    defaultCheckOut={defaultDepartureDate}
+                  />
+                </>
+              ))}
             </div>
           </SectionCard>
         )}
       </main>
+      </StickyPageHeader>
     </>
   )
 }

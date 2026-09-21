@@ -20,7 +20,7 @@ const SECTION_FIELDS: { key: string; title: string; fields: { label: string; nam
       { label: 'Escola', name: 'escola' },
       { label: 'Turma', name: 'turma' },
       { label: 'Como conheceu', name: 'como_conheceu' },
-      { label: 'Como conheceu a JOCUM', name: 'como_conheceu_jocum' },
+      { label: 'Como conheceu a organização', name: 'como_conheceu_jocum' },
       { label: 'Conversou com alguém da escola?', name: 'conversou_equipe', type: 'select', options: ['sim', 'nao'] },
       { label: 'Com quem conversou', name: 'conversou_com_quem' },
       { label: 'Motivação', name: 'motivacao', type: 'textarea' },

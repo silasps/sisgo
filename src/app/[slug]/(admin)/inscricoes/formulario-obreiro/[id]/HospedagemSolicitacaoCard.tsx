@@ -11,7 +11,9 @@ type Props = {
   guestName: string
   status: string | null
   requestedArrivalDate: string | null
+  requestedDepartureDate: string | null
   requestNotes: string | null
+  resolutionNotes?: string | null
 }
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -19,13 +21,14 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   em_analise: { label: 'Em análise pela hospitalidade',        color: 'bg-blue-100 text-blue-700' },
   em_andamento: { label: 'Em andamento',                       color: 'bg-blue-100 text-blue-700' },
   resolvido:  { label: 'Hospedagem confirmada',                color: 'bg-green-100 text-green-700' },
-  rejeitado:  { label: 'Recusada pela hospitalidade',          color: 'bg-red-100 text-red-700' },
+  rejeitado:  { label: 'Sem quarto disponível — decidir com o líder', color: 'bg-red-100 text-red-700' },
 }
 
 export function HospedagemSolicitacaoCard({
-  slug, organizationId, ministryId, staffApplicationId, guestName, status, requestedArrivalDate, requestNotes,
+  slug, organizationId, ministryId, staffApplicationId, guestName, status, requestedArrivalDate, requestedDepartureDate, requestNotes, resolutionNotes,
 }: Props) {
   const [arrivalDate, setArrivalDate] = useState(requestedArrivalDate ?? '')
+  const [departureDate, setDepartureDate] = useState(requestedDepartureDate ?? '')
   const [notes, setNotes] = useState(requestNotes ?? '')
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
@@ -44,7 +47,7 @@ export function HospedagemSolicitacaoCard({
       try {
         await solicitarHospedagemObreiro({
           slug, organizationId, ministryId, staffApplicationId, guestName,
-          arrivalDate, notes: notes || null,
+          arrivalDate, departureDate: departureDate || null, notes: notes || null,
         })
         setDone(true)
       } catch (err) {
@@ -60,6 +63,11 @@ export function HospedagemSolicitacaoCard({
           {statusInfo.label}
         </span>
       )}
+      {status === 'rejeitado' && resolutionNotes && (
+        <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          <span className="font-semibold">Motivo da hospitalidade:</span> {resolutionNotes}
+        </p>
+      )}
       {done && <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">Solicitação enviada à hospitalidade.</p>}
 
       {canEdit && (
@@ -73,6 +81,12 @@ export function HospedagemSolicitacaoCard({
               <label className="block text-xs font-medium text-gray-600 mb-1">Data prevista de chegada</label>
               <input type="date" value={arrivalDate} onChange={e => setArrivalDate(e.target.value)}
                 className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Data prevista de saída</label>
+              <input type="date" value={departureDate} onChange={e => setDepartureDate(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm" />
+              <p className="text-[11px] text-gray-400 mt-0.5">Deixe em branco se for permanente.</p>
             </div>
             <div className="sm:col-span-2">
               <label className="block text-xs font-medium text-gray-600 mb-1">Observações para a hospitalidade</label>

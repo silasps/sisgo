@@ -1,11 +1,14 @@
 'use client'
 
 import { useRef, useState, useContext, createContext, useMemo } from 'react'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { getFormDict, normalizeLang, t } from '@/lib/i18n/forms'
 import type { FormDict, Lang } from '@/lib/i18n/forms'
-import { HeartHandshake } from 'lucide-react'
+import { HeartHandshake, Camera, IdCard, FileText } from 'lucide-react'
 import { ptDict } from '@/lib/i18n/forms'
+import { orgShortName } from '@/lib/orgShortName'
 import { LangSwitcher } from '@/components/ui/LangSwitcher'
+import { PhotoFramingGuide } from '@/components/ui/PhotoFramingGuide'
 
 // ── Contexts ────────────────────────────────────────────────────────────────
 
@@ -30,9 +33,10 @@ function HiddenStyles() {
   }).join(',')
   return <style>{`${selectors}{display:none!important}`}</style>
 }
-import { salvarSecao, enviarFormulario, gerarLinkReferencia, anexarComprovante, anexarDocumentos } from './actions'
+import { salvarSecao, enviarFormulario, gerarLinkReferencia, anexarComprovante, anexarDocumentos, atualizarSecaoAtual } from './actions'
 import { InternationalPhoneField } from '@/components/ui/InternationalPhoneField'
 import { MaskedInput, useMask } from '@/components/ui/MaskedInput'
+import { FileInputField } from '@/components/ui/FileInputField'
 
 type Prefill = {
   nome?: string
@@ -41,11 +45,14 @@ type Prefill = {
   idioma?: string
 }
 
+type DocumentUrls = Record<string, { url: string; name: string; type: string; size?: number }>
+
 type Props = {
   slug: string
   token: string
   applicationId: string
   schoolName: string
+  orgName: string
   className?: string
   prefill?: Prefill
   initialSection?: number
@@ -54,14 +61,21 @@ type Props = {
   paymentInfo?: string | null
   initialLang?: string
   printMode?: boolean
+  documentUrls?: DocumentUrls
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function Field({ label, name, defaultValue, placeholder, required, type = 'text', maxLength }: {
+// Sem min/max o <input type="date"> deixa digitar qualquer quantidade de
+// dígitos no ano — trava nascimento entre 1900/hoje e chegada/saída até 2100.
+const DATE_MIN = '1900-01-01'
+const DATE_MAX = new Date().toISOString().slice(0, 10)
+
+function Field({ label, name, defaultValue, placeholder, required, type = 'text', maxLength, min, max }: {
   label: string; name: string; defaultValue?: string; placeholder?: string
-  required?: boolean; type?: string; maxLength?: number
+  required?: boolean; type?: string; maxLength?: number; min?: string; max?: string
 }) {
+  const isBirthDate = name === 'data_nascimento'
   return (
     <div data-field={name}>
       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -69,6 +83,8 @@ function Field({ label, name, defaultValue, placeholder, required, type = 'text'
       </label>
       <input name={name} type={type} defaultValue={defaultValue} placeholder={placeholder}
         required={required} maxLength={maxLength}
+        min={type === 'date' ? (min ?? DATE_MIN) : undefined}
+        max={type === 'date' ? (max ?? (isBirthDate ? DATE_MAX : '2100-12-31')) : undefined}
         className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-gray-50" />
     </div>
   )
@@ -174,7 +190,7 @@ function S3Termo({ data }: { data?: Record<string, string> }) {
   )
 }
 
-function S4Escola({ schoolName, className, data }: { schoolName: string; className?: string; data?: Record<string, string> }) {
+function S4Escola({ schoolName, className, data, orgName }: { schoolName: string; className?: string; data?: Record<string, string>; orgName: string }) {
   const d = useContext(DictCtx)
   return (
     <div className="space-y-4">
@@ -195,7 +211,7 @@ function S4Escola({ schoolName, className, data }: { schoolName: string; classNa
             ]} />
         </div></H>
         <H id="s4.como_conheceu_jocum"><div className="sm:col-span-2">
-          <Field label={d.s4.como_conheceu_jocum} name="como_conheceu_jocum" defaultValue={data?.como_conheceu_jocum} />
+          <Field label={t(d.s4.como_conheceu_jocum, { orgName: orgShortName(orgName) })} name="como_conheceu_jocum" defaultValue={data?.como_conheceu_jocum} />
         </div></H>
         <H id="s4.conversou_equipe"><Select label={d.s4.conversou_equipe}
           name="conversou_equipe" required defaultValue={data?.conversou_equipe}
@@ -210,10 +226,10 @@ function S4Escola({ schoolName, className, data }: { schoolName: string; classNa
             defaultValue={data?.motivacao} required rows={4} />
         </div></H>
         <H id="s4.data_chegada">
-          <Field label={d.s4.data_chegada} name="data_chegada" type="date" defaultValue={data?.data_chegada} />
+          <Field label={d.s4.data_chegada} name="data_chegada" type="date" defaultValue={data?.data_chegada} required />
         </H>
         <H id="s4.horario_chegada">
-          <Field label={d.s4.horario_chegada} name="horario_chegada" type="time" defaultValue={data?.horario_chegada} />
+          <Field label={d.s4.horario_chegada} name="horario_chegada" type="time" defaultValue={data?.horario_chegada} required />
         </H>
         <H id="s4.data_chegada">
           <p className="sm:col-span-2 text-xs text-gray-400 -mt-2">{d.s4.data_chegada_hint}</p>
@@ -327,12 +343,16 @@ function S5Dados({ prefill, data, onNationalityChange }: {
   // o aviso "preencha ao menos um" sem nenhum campo embaixo.
   const showDocumentos = estrangeiro
     ? !hidden.has('s5.passaporte')
-    : !hidden.has('s5.rg') || !hidden.has('s5.cpf') || !hidden.has('s5.passaporte')
+    : !hidden.has('s5.rg') || !hidden.has('s5.cnh') || !hidden.has('s5.cpf') || !hidden.has('s5.passaporte')
 
   return (
     <div className="space-y-4">
       <SectionTitle number={d.s5.section} title={d.s5.title} />
       <div className="grid sm:grid-cols-2 gap-4">
+        <Field label={d.s5.email} name="email" type="email"
+          defaultValue={data?.email ?? prefill?.email} required />
+        <InternationalPhoneField phoneName="celular" countryName="celular_country"
+          label={d.s5.celular} defaultCountryIso="BR" defaultPhone={data?.celular ?? prefill?.telefone} />
         <Select label={d.s5.sexo} name="sexo" required defaultValue={data?.sexo} options={[
           { value: 'M', label: d.opts.gender_m },
           { value: 'F', label: d.opts.gender_f },
@@ -428,7 +448,11 @@ function S5Dados({ prefill, data, onNationalityChange }: {
             {!estrangeiro && <p className="text-xs text-gray-400 mt-1">{d.s5.documentos_hint}</p>}
           </div>
           {!estrangeiro ? (<>
-            <H id="s5.rg"><MaskedInput mask="rg" name="rg" label={d.s5.rg} defaultValue={data?.rg} /></H>
+            {/* RG sem máscara — alguns estados emitem números fora do padrão
+                00.000.000-0 (mais dígitos, sem dígito verificador etc.) e a
+                máscara truncava/rejeitava esses casos. */}
+            <H id="s5.rg"><Field label={d.s5.rg} name="rg" defaultValue={data?.rg} maxLength={20} /></H>
+            <H id="s5.cnh"><Field label={d.s5.cnh} name="cnh" defaultValue={data?.cnh} maxLength={20} /></H>
             <H id="s5.cpf"><MaskedInput mask="cpf" name="cpf" label={d.s5.cpf} defaultValue={data?.cpf} /></H>
             <H id="s5.passaporte"><Field label={d.s5.passaporte_opcional} name="passaporte" defaultValue={data?.passaporte} maxLength={20} /></H>
           </>) : (<>
@@ -456,10 +480,6 @@ function S5Dados({ prefill, data, onNationalityChange }: {
           }
           <Field label={d.s5.pais} name="pais" defaultValue={data?.pais ?? (estrangeiro ? '' : 'Brasil')} required />
         </></H>
-        <InternationalPhoneField phoneName="celular" countryName="celular_country"
-          label={d.s5.celular} defaultCountryIso="BR" defaultPhone={data?.celular ?? prefill?.telefone} />
-        <Field label={d.s5.email} name="email" type="email"
-          defaultValue={data?.email ?? prefill?.email} required />
 
         {/* Redes sociais */}
         <H id="s5.redes_bloco"><>
@@ -475,6 +495,7 @@ function S5Dados({ prefill, data, onNationalityChange }: {
 
         {/* Emergência */}
         <div className="sm:col-span-2 mt-2"><p className="text-sm font-semibold text-gray-700 border-t pt-3">{d.s5.emergencia_section}</p></div>
+        <p className="sm:col-span-2 text-xs text-gray-500">{d.s5.emergencia_hint}</p>
         <Field label={d.s5.emergencia_nome} name="emergencia_nome" defaultValue={data?.emergencia_nome} required />
         <Field label={d.s5.emergencia_parentesco} name="emergencia_parentesco" defaultValue={data?.emergencia_parentesco} required />
         <InternationalPhoneField phoneName="emergencia_telefone" countryName="emergencia_telefone_country"
@@ -487,12 +508,120 @@ function S5Dados({ prefill, data, onNationalityChange }: {
   )
 }
 
+function anosDesde(dateStr: string): number | null {
+  if (!dateStr) return null
+  const then = new Date(dateStr + 'T00:00:00')
+  if (Number.isNaN(then.getTime())) return null
+  const now = new Date()
+  let years = now.getFullYear() - then.getFullYear()
+  const beforeAnniversary = now.getMonth() < then.getMonth() ||
+    (now.getMonth() === then.getMonth() && now.getDate() < then.getDate())
+  if (beforeAnniversary) years -= 1
+  return years >= 0 ? years : null
+}
+
+function idadeCrianca(dateStr: string, d: FormDict): string | null {
+  if (!dateStr) return null
+  const then = new Date(dateStr + 'T00:00:00')
+  if (Number.isNaN(then.getTime())) return null
+  const now = new Date()
+  if (then > now) return null
+  let years = now.getFullYear() - then.getFullYear()
+  let months = now.getMonth() - then.getMonth()
+  if (now.getDate() < then.getDate()) months -= 1
+  if (months < 0) { years -= 1; months += 12 }
+  if (years < 0) return null
+  if (years >= 5) return t(d.s7.filhos_idade_anos, { anos: String(years) })
+  if (years === 0) return t(d.s7.filhos_idade_meses, { meses: String(months) })
+  if (months === 0) return t(d.s7.filhos_idade_anos, { anos: String(years) })
+  return t(d.s7.filhos_idade_anos_meses, { anos: String(years), meses: String(months) })
+}
+
+type ChildEntry = { nome: string; sexo: string; data_nascimento: string }
+
+function parseChildren(raw?: string): ChildEntry[] {
+  if (!raw) return [{ nome: '', sexo: '', data_nascimento: '' }]
+  try {
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed) && parsed.length) {
+      return parsed.map((r: unknown) => {
+        const row = (r ?? {}) as Partial<ChildEntry>
+        return { nome: row.nome ?? '', sexo: row.sexo ?? '', data_nascimento: row.data_nascimento ?? '' }
+      })
+    }
+  } catch { /* valor legado em texto livre, cai no fallback abaixo */ }
+  return raw.trim() ? [{ nome: raw, sexo: '', data_nascimento: '' }] : [{ nome: '', sexo: '', data_nascimento: '' }]
+}
+
+function ChildrenField({ data }: { data?: string }) {
+  const d = useContext(DictCtx)
+  const [rows, setRows] = useState<ChildEntry[]>(() => parseChildren(data))
+
+  function updateRow(i: number, patch: Partial<ChildEntry>) {
+    setRows(prev => prev.map((r, idx) => idx === i ? { ...r, ...patch } : r))
+  }
+  function addRow() {
+    setRows(prev => [...prev, { nome: '', sexo: '', data_nascimento: '' }])
+  }
+  function removeRow(i: number) {
+    setRows(prev => prev.filter((_, idx) => idx !== i))
+  }
+
+  const filled = rows.filter(r => r.nome.trim())
+  const serialized = JSON.stringify(filled)
+  const inputClass = "w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-gray-50"
+
+  return (
+    <div className="sm:col-span-2 space-y-2">
+      <div className="flex items-center justify-between">
+        <label className="block text-sm font-medium text-gray-700">{d.s7.filhos_dados}</label>
+        <span className="text-xs font-medium text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">
+          {t(d.s7.filhos_contagem, { count: String(filled.length) })}
+        </span>
+      </div>
+      {rows.map((row, i) => (
+        <div key={i} className="relative rounded-xl border border-gray-200 bg-white p-3 space-y-2">
+          {rows.length > 1 && (
+            <button type="button" onClick={() => removeRow(i)} aria-label={d.s7.filhos_remove}
+              className="absolute top-2 right-2 text-gray-400 hover:text-red-500 text-sm">✕</button>
+          )}
+          <input type="text" value={row.nome} onChange={e => updateRow(i, { nome: e.target.value })}
+            placeholder={d.s7.filhos_nome_ph} required className={`${inputClass} pr-8`} />
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs text-gray-500 mb-0.5">{d.s7.filhos_sexo}</label>
+              <select value={row.sexo} onChange={e => updateRow(i, { sexo: e.target.value })} className={inputClass}>
+                <option value="" disabled>{d.nav.select_placeholder}</option>
+                <option value="M">{d.opts.gender_m}</option>
+                <option value="F">{d.opts.gender_f}</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-0.5">{d.s7.filhos_nascimento}</label>
+              <input type="date" value={row.data_nascimento} max={new Date().toISOString().slice(0, 10)}
+                onChange={e => updateRow(i, { data_nascimento: e.target.value })} className={inputClass} />
+              {row.data_nascimento && (
+                <p className="text-xs text-indigo-700 mt-1">{idadeCrianca(row.data_nascimento, d)}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      ))}
+      <button type="button" onClick={addRow}
+        className="text-xs font-semibold text-indigo-600 hover:text-indigo-800">
+        {d.s7.filhos_add}
+      </button>
+      <input type="hidden" name="filhos_dados" value={serialized} readOnly />
+    </div>
+  )
+}
+
 function S6Historia({ data }: { data?: Record<string, string> }) {
   const d = useContext(DictCtx)
   return (
     <div className="space-y-4">
       <SectionTitle number={d.s6.section} title={d.s6.title} />
-      <div className="grid gap-4">
+      <div className="grid grid-cols-1 gap-4">
         <TextArea label={d.s6.sobre_voce} name="sobre_voce" defaultValue={data?.sobre_voce} required rows={5} />
         <TextArea label={d.s6.processo_decisao} name="processo_decisao"
           defaultValue={data?.processo_decisao} required rows={4} />
@@ -513,6 +642,8 @@ function S7Familia({ data, estadoCivilS5 }: { data?: Record<string, string>; est
   const estadoCivil = initialCivil
   const [temFilhos, setTemFilhos] = useState(data?.tem_filhos === 'sim')
   const [filhosVirao, setFilhosVirao] = useState(data?.filhos_virao ?? '')
+  const [dataCasamento, setDataCasamento] = useState(data?.data_casamento ?? '')
+  const anosCasados = anosDesde(dataCasamento)
 
   const civilMap: Record<string, string> = {
     solteiro: d.s5.solteiro,
@@ -556,7 +687,15 @@ function S7Familia({ data, estadoCivilS5 }: { data?: Record<string, string>; est
 
         {(estadoCivil === 'casado' || initialCivil === 'casado') && <>
           <Field label={d.s7.conjuge_nome_idade} name="conjuge_nome_idade" defaultValue={data?.conjuge_nome_idade} />
-          <Field label={d.s7.tempo_casados} name="tempo_casados" defaultValue={data?.tempo_casados} />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{d.s7.data_casamento}</label>
+            <input type="date" name="data_casamento" value={dataCasamento} max={new Date().toISOString().slice(0, 10)}
+              onChange={e => setDataCasamento(e.target.value)}
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-gray-50" />
+            {anosCasados !== null && (
+              <p className="text-xs text-indigo-700 mt-1">{t(d.s7.data_casamento_anos, { anos: String(anosCasados) })}</p>
+            )}
+          </div>
           <Select label={d.s7.conjuge_apoia} name="conjuge_apoia" defaultValue={data?.conjuge_apoia} options={[
             { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
           ]} />
@@ -585,9 +724,7 @@ function S7Familia({ data, estadoCivilS5 }: { data?: Record<string, string>; est
           }} />
         </div>
         {temFilhos && <>
-          <div className="sm:col-span-2">
-            <TextArea label={d.s7.filhos_dados} name="filhos_dados" defaultValue={data?.filhos_dados} rows={2} />
-          </div>
+          <ChildrenField data={data?.filhos_dados} />
           <Select label={d.s7.filhos_virao} name="filhos_virao" defaultValue={data?.filhos_virao} options={[
             { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
           ]} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilhosVirao(e.target.value)} />
@@ -780,7 +917,7 @@ function S11Espiritual({ data }: { data?: Record<string, string> }) {
         </div>
       </div>
 
-      <div className="grid gap-4">
+      <div className="grid grid-cols-1 gap-4">
         <div className="mt-2 border-t pt-3"><p className="text-sm font-semibold text-gray-700">{d.s11.vida_section}</p></div>
         <Field label={d.s11.tempo_convertido} name="tempo_convertido"
           defaultValue={data?.tempo_convertido} required />
@@ -995,35 +1132,63 @@ function S14Financeiro({ data }: { data?: Record<string, string> }) {
   )
 }
 
-function S15Documentos({ hasRg, hasCpf, hasPassaporte }: { hasRg: boolean; hasCpf: boolean; hasPassaporte: boolean }) {
+function S15Documentos({ hasRg, hasCnh, hasCpf, hasPassaporte, sexo, documentUrls }: {
+  hasRg: boolean; hasCnh: boolean; hasCpf: boolean; hasPassaporte: boolean; sexo?: string; documentUrls?: DocumentUrls
+}) {
   const d = useContext(DictCtx)
-  // Só pede upload do(s) documento(s) que a pessoa de fato preencheu na seção 5
-  // (lá é exigido pelo menos um entre RG/CPF/Passaporte) — se por algum motivo
-  // nenhum dos três estiver disponível (ex: todos escondidos pela escola),
-  // não força upload de documento nenhum.
-  const docs = [
-    { name: 'doc_foto', label: d.s15.doc_foto, required: true },
+  // RG e CNH servem igualmente como documento de identificação — se a pessoa
+  // preencheu os dois números na seção 5, não faz sentido exigir foto dos
+  // dois aqui, só de um. Os badges/validação reagem em tempo real conforme
+  // os arquivos vão sendo anexados (a validação de fato, cobrindo também o
+  // que já veio salvo de uma visita anterior, mora no handleNext do
+  // componente pai). Passaporte nunca exige foto — o número já informado na
+  // seção 5 basta.
+  const [hasRgFrenteFile, setHasRgFrenteFile] = useState(!!documentUrls?.doc_rg_frente)
+  const [hasRgVersoFile, setHasRgVersoFile] = useState(!!documentUrls?.doc_rg_verso)
+  const [hasCnhFile, setHasCnhFile] = useState(!!documentUrls?.doc_cnh)
+  const rgCompleta = hasRgFrenteFile && hasRgVersoFile
+  const rgObrigatoria = hasRg && !hasCnhFile
+  const cnhObrigatoria = hasCnh && !rgCompleta
+
+  const docs: Array<{
+    name: string; label: string; required: boolean; icon: 'foto' | 'id'
+    noNativeRequired?: boolean; onFileChange?: (f: File | null) => void
+  }> = [
+    { name: 'doc_foto', label: d.s15.doc_foto, required: true, icon: 'foto' },
     ...(hasRg ? [
-      { name: 'doc_rg_frente', label: d.s15.doc_rg_frente_br, required: true },
-      { name: 'doc_rg_verso', label: d.s15.doc_rg_verso_br, required: true },
+      { name: 'doc_rg_frente', label: d.s15.doc_rg_frente_br, required: rgObrigatoria, icon: 'id' as const, noNativeRequired: true, onFileChange: (f: File | null) => setHasRgFrenteFile(!!f) },
+      { name: 'doc_rg_verso', label: d.s15.doc_rg_verso_br, required: rgObrigatoria, icon: 'id' as const, noNativeRequired: true, onFileChange: (f: File | null) => setHasRgVersoFile(!!f) },
     ] : []),
-    ...(hasCpf ? [{ name: 'doc_cpf', label: d.s15.doc_cpf, required: true }] : []),
-    ...(hasPassaporte ? [{ name: 'doc_passaporte', label: d.s15.doc_passaporte_estrangeiro, required: true }] : []),
+    ...(hasCnh ? [
+      { name: 'doc_cnh', label: d.s15.doc_cnh, required: cnhObrigatoria, icon: 'id' as const, noNativeRequired: true, onFileChange: (f: File | null) => setHasCnhFile(!!f) },
+    ] : []),
+    ...(hasCpf ? [{ name: 'doc_cpf', label: d.s15.doc_cpf, required: true, icon: 'id' as const }] : []),
+    ...(hasPassaporte ? [{ name: 'doc_passaporte', label: d.s15.doc_passaporte_estrangeiro, required: false, icon: 'id' as const }] : []),
   ]
   return (
     <div className="space-y-4">
       <SectionTitle number={d.s15.section} title={d.s15.title} />
       <InfoBox>{d.s15.infobox}</InfoBox>
-      <div className="grid gap-4">
+      <div className="grid grid-cols-1 gap-4">
         {docs.map(doc => (
-          <div key={doc.name}>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {doc.label}{doc.required && <span className="text-red-500 ml-0.5"> *</span>}
-            </label>
-            <input type="file" name={doc.name} accept="image/jpeg,image/png,image/webp,application/pdf"
-              required={doc.required}
-              className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
-          </div>
+          <FileInputField key={doc.name} name={doc.name} accept="image/jpeg,image/png,image/webp,application/pdf"
+            required={doc.noNativeRequired ? false : doc.required} tone="indigo" onFileChange={doc.onFileChange}
+            icon={doc.icon === 'foto' ? <Camera size={16} aria-hidden /> : <IdCard size={16} aria-hidden />}
+            title={doc.label}
+            badgeLabel={doc.required ? d.nav.doc_required : d.nav.doc_optional} readyLabel={d.nav.doc_ready}
+            dropLabel={doc.icon === 'foto' ? d.nav.doc_drop_generic : d.nav.doc_drop_generic}
+            dropHint={d.nav.doc_drop_hint} attachedLabel={d.nav.doc_attached}
+            changeLabel={d.nav.change_file} removeLabel={d.nav.remove_file}
+            modelGraphic={doc.icon === 'foto' ? <PhotoFramingGuide sexo={sexo} caption={d.nav.photo_model_caption} /> : undefined}
+            crop={doc.icon === 'foto' ? {
+              aspect: 3 / 4, title: d.nav.crop_title, zoomLabel: d.nav.crop_zoom_label,
+              confirmLabel: d.nav.crop_confirm_label, cancelLabel: d.nav.crop_cancel_label,
+              errorLabel: d.nav.crop_error_label, editLabel: d.nav.crop_edit_label,
+            } : undefined}
+            existingFileUrl={documentUrls?.[doc.name]?.url}
+            existingFileName={documentUrls?.[doc.name]?.name}
+            existingFileType={documentUrls?.[doc.name]?.type}
+            existingFileSize={documentUrls?.[doc.name]?.size} />
         ))}
       </div>
     </div>
@@ -1096,13 +1261,13 @@ function PaymentGateScreen({ slug, token, paymentInfo, onComplete, d }: {
         <p className="text-sm text-gray-700 whitespace-pre-wrap">{paymentInfo}</p>
         <form onSubmit={handleSubmit} className="space-y-3 border-t border-green-200 pt-4">
           <div>
-            <label htmlFor="comprovante" className="block text-sm font-semibold text-gray-800 mb-1">
-              {d.submitted.receipt_label} <span className="text-red-500">*</span>
-            </label>
-            <input id="comprovante" name="comprovante" type="file" required
+            <FileInputField name="comprovante" required
               accept="application/pdf,image/jpeg,image/png,image/webp"
-              className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-green-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-green-800 hover:file:bg-green-200" />
-            <p className="mt-1 text-xs text-gray-500">{d.submitted.receipt_hint}</p>
+              tone="green" icon={<FileText size={16} aria-hidden />}
+              title={d.submitted.receipt_label} subtitle={d.submitted.receipt_hint}
+              badgeLabel={d.nav.doc_required} readyLabel={d.nav.doc_ready}
+              dropLabel={d.nav.doc_drop_generic} dropHint={d.nav.doc_drop_hint} attachedLabel={d.nav.doc_attached}
+              changeLabel={d.nav.change_file} removeLabel={d.nav.remove_file} />
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <button type="submit" disabled={status === 'sending'}
@@ -1220,11 +1385,21 @@ function SubmittedScreen({ slug, applicationId, schoolName, hiddenSet, d }: {
 type SectionDef = { id: number; component: React.ReactNode }
 
 export function FormularioInscricao({
-  slug, token, applicationId, schoolName, className, prefill, initialSection = 1, initialData, hiddenFields, paymentInfo, initialLang, printMode
+  slug, token, applicationId, schoolName, orgName, className, prefill, initialSection = 1, initialData, hiddenFields, paymentInfo, initialLang, printMode, documentUrls
 }: Props) {
   const hiddenSet = useMemo(() => new Set(hiddenFields ?? []), [hiddenFields])
-  const [lang, setLang] = useState<Lang>(normalizeLang(initialLang ?? prefill?.idioma))
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const [lang, setLangState] = useState<Lang>(normalizeLang(initialLang ?? prefill?.idioma))
   const d = getFormDict(lang)
+
+  function setLang(l: Lang) {
+    setLangState(l)
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('lang', l)
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }
 
   const [current, setCurrent] = useState(initialSection)
   const [saving, setSaving] = useState(false)
@@ -1243,7 +1418,7 @@ export function FormularioInscricao({
   const sections: SectionDef[] = [
     { id: 1,  component: <S1Nome prefill={prefill} data={localData.s1} /> },
     { id: 3,  component: <S3Termo data={localData.s3} /> },
-    { id: 4,  component: <S4Escola schoolName={schoolName} className={className} data={localData.s4} /> },
+    { id: 4,  component: <S4Escola schoolName={schoolName} orgName={orgName} className={className} data={localData.s4} /> },
     { id: 5,  component: <S5Dados prefill={prefill} data={localData.s5} onNationalityChange={setIsBrazilian} /> },
     { id: 6,  component: <S6Historia data={localData.s6} /> },
     { id: 7,  component: <S7Familia data={localData.s7} estadoCivilS5={localData.s5?.estado_civil} /> },
@@ -1256,8 +1431,11 @@ export function FormularioInscricao({
     { id: 14, component: <S14Financeiro data={localData.s14} /> },
     { id: 15, component: <S15Documentos
         hasRg={!!localData.s5?.rg?.trim()}
+        hasCnh={!!localData.s5?.cnh?.trim()}
         hasCpf={!!localData.s5?.cpf?.trim()}
         hasPassaporte={!!localData.s5?.passaporte?.trim()}
+        sexo={localData.s5?.sexo}
+        documentUrls={documentUrls}
       /> },
     { id: 16, component: <S16Aceite data={localData.s16} /> },
   ]
@@ -1308,13 +1486,13 @@ export function FormularioInscricao({
             <p className="text-sm text-gray-700 whitespace-pre-wrap">{paymentInfo}</p>
             <div className="border-t border-green-200 mt-4 pt-4 space-y-3 print:hidden">
               <div>
-                <label className="block text-sm font-semibold text-gray-800 mb-1">
-                  {d.submitted.receipt_label} <span className="text-red-500">*</span>
-                </label>
-                <input type="file"
+                <FileInputField name="comprovante_preview"
                   accept="application/pdf,image/jpeg,image/png,image/webp"
-                  className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-green-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-green-800 hover:file:bg-green-200 cursor-pointer" />
-                <p className="mt-1 text-xs text-gray-500">{d.submitted.receipt_hint}</p>
+                  tone="green" icon={<FileText size={16} aria-hidden />}
+                  title={d.submitted.receipt_label} subtitle={d.submitted.receipt_hint}
+                  badgeLabel={d.nav.doc_required} readyLabel={d.nav.doc_ready}
+                  dropLabel={d.nav.doc_drop_generic} dropHint={d.nav.doc_drop_hint} attachedLabel={d.nav.doc_attached}
+                  changeLabel={d.nav.change_file} removeLabel={d.nav.remove_file} />
               </div>
               <button type="button" disabled
                 className="w-full rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white opacity-60 cursor-not-allowed">
@@ -1339,18 +1517,28 @@ export function FormularioInscricao({
 
   async function handleBack() {
     if (currentIndex === 0) return
-    // Seção 15 é só arquivo — não tem texto pra guardar em dataRecord (viraria
-    // {} e apagaria os documentos já enviados via anexarDocumentos). Os
-    // arquivos já ficam salvos assim que a pessoa avança por lá; nada a
-    // fazer aqui além de navegar.
-    if (formRef.current && visibleSections[currentIndex].id !== 15) {
+    const target = visibleSections[currentIndex - 1].id
+    // Seção 15 é só arquivo — salvarSecao apagaria os documentos já enviados
+    // (viraria {} no jsonb). Usa a mesma action de upload do "Avançar" pra
+    // não perder arquivos escolhidos nessa visita mas ainda não enviados —
+    // sem isso, quem escolhia os arquivos e clicava em "Voltar" (em vez de
+    // avançar) via-los sumirem ao retornar pra seção 15, já que eles nunca
+    // tinham de fato subido pro Storage.
+    if (visibleSections[currentIndex].id === 15) {
+      if (formRef.current) {
+        const fd = new FormData(formRef.current)
+        await anexarDocumentos(slug, token, fd, target).catch(() => {})
+      } else {
+        await atualizarSecaoAtual(slug, token, target).catch(() => {})
+      }
+    } else if (formRef.current) {
       const fd = new FormData(formRef.current)
       const dataRecord: Record<string, string> = {}
       fd.forEach((v, k) => { if (typeof v === 'string') dataRecord[k] = v })
       setLocalData(prev => ({ ...prev, [`s${visibleSections[currentIndex].id}`]: dataRecord }))
-      await salvarSecao(slug, token, visibleSections[currentIndex].id, dataRecord).catch(() => {})
+      await salvarSecao(slug, token, visibleSections[currentIndex].id, dataRecord, target).catch(() => {})
     }
-    setCurrent(visibleSections[currentIndex - 1].id)
+    setCurrent(target)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -1361,19 +1549,21 @@ export function FormularioInscricao({
     try {
       const fd = new FormData(e.currentTarget)
 
-      // Validação customizada: seção 5 — ao menos um documento (RG, CPF ou
-      // Passaporte) obrigatório entre os que a escola não escondeu; estrangeiro
-      // só tem o campo de passaporte, que já é required no próprio input.
-      // Se a escola escondeu os três, não há nada pra exigir aqui.
+      // Validação customizada: seção 5 — ao menos um documento (RG, CNH, CPF
+      // ou Passaporte) obrigatório entre os que a escola não escondeu;
+      // estrangeiro só tem o campo de passaporte, que já é required no
+      // próprio input. Se a escola escondeu todos, não há nada pra exigir aqui.
       if (visibleSections[currentIndex].id === 5 && fd.get('is_brasileiro') !== 'nao') {
         const rgVisible = !hiddenSet.has('s5.rg')
+        const cnhVisible = !hiddenSet.has('s5.cnh')
         const cpfVisible = !hiddenSet.has('s5.cpf')
         const passaporteVisible = !hiddenSet.has('s5.passaporte')
-        if (rgVisible || cpfVisible || passaporteVisible) {
+        if (rgVisible || cnhVisible || cpfVisible || passaporteVisible) {
           const rg = rgVisible ? (fd.get('rg') as string)?.trim() : ''
+          const cnh = cnhVisible ? (fd.get('cnh') as string)?.trim() : ''
           const cpf = cpfVisible ? (fd.get('cpf') as string)?.trim() : ''
           const passaporte = passaporteVisible ? (fd.get('passaporte') as string)?.trim() : ''
-          if (!rg && !cpf && !passaporte) {
+          if (!rg && !cnh && !cpf && !passaporte) {
             setError(d.s5.documentos_hint)
             setSaving(false)
             return
@@ -1398,19 +1588,46 @@ export function FormularioInscricao({
         setIsBrazilian(fd.get('is_brasileiro') !== 'nao')
       }
 
+      // Validação customizada: seção 15 — RG (frente + verso) OU CNH, pelo
+      // menos um completo, quando a pessoa informou algum dos dois números
+      // na seção 5. O atributo required nativo não dá pra usar aqui (exigiria
+      // os dois ao mesmo tempo), então a checagem roda aqui, olhando tanto o
+      // que veio nesse envio (fd) quanto o que já estava salvo de uma visita
+      // anterior (documentUrls).
+      if (visibleSections[currentIndex].id === 15) {
+        const hasRg = !!localData.s5?.rg?.trim()
+        const hasCnh = !!localData.s5?.cnh?.trim()
+        if (hasRg || hasCnh) {
+          const hasDoc = (key: string) => {
+            const file = fd.get(key)
+            if (file instanceof File && file.size > 0) return true
+            if (fd.get(`remove_${key}`) === '1') return false
+            return !!documentUrls?.[key]
+          }
+          const rgOk = hasDoc('doc_rg_frente') && hasDoc('doc_rg_verso')
+          const cnhOk = hasDoc('doc_cnh')
+          if (!rgOk && !cnhOk) {
+            setError(d.s15.doc_id_required_error)
+            setSaving(false)
+            return
+          }
+        }
+      }
+
       const dataRecord: Record<string, string> = {}
       fd.forEach((v, k) => { if (typeof v === 'string') dataRecord[k] = v })
+      const target = isLast ? visibleSections[currentIndex].id : visibleSections[currentIndex + 1].id
 
       // Seção 15 é só upload de arquivo — salvarSecao não serve pra isso (o
       // File nunca vira nada útil dentro de um jsonb); usa a action dedicada
       // que sobe os arquivos pro Storage de verdade.
       if (visibleSections[currentIndex].id === 15) {
-        const uploadResult = await anexarDocumentos(slug, token, fd)
+        const uploadResult = await anexarDocumentos(slug, token, fd, target)
         if ('error' in uploadResult) throw new Error(uploadResult.error)
       } else {
         const data: Record<string, unknown> = {}
         fd.forEach((v, k) => { data[k] = v })
-        const saveResult = await salvarSecao(slug, token, visibleSections[currentIndex].id, data)
+        const saveResult = await salvarSecao(slug, token, visibleSections[currentIndex].id, data, target)
         if (!('error' in saveResult)) {
           setLocalData(prev => ({ ...prev, [`s${visibleSections[currentIndex].id}`]: dataRecord }))
         }
@@ -1461,26 +1678,27 @@ export function FormularioInscricao({
     <HiddenCtx.Provider value={hiddenSet}>
     <HiddenStyles />
     <div>
-      {/* Lang switcher */}
-      <div className="flex justify-end mb-4">
-        <LangSwitcher lang={lang} onChange={setLang} uiLabel={d.langSwitcher.label} />
-      </div>
-
-      {/* Progress bar */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-semibold text-gray-500">
+      <div className="sticky top-0 z-20 -mx-4 sm:-mx-6 md:-mx-8 -mt-4 sm:-mt-6 md:-mt-8 px-4 sm:px-6 md:px-8 pt-4 sm:pt-6 md:pt-8 pb-3 bg-white/95 backdrop-blur-sm rounded-t-2xl border-b border-gray-100 mb-6">
+        <div className="flex items-center justify-between gap-2 mb-2.5">
+          <span className="inline-flex items-center gap-2 text-xs font-semibold text-gray-500">
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-indigo-50 text-indigo-600 font-bold text-[11px]">
+              {currentIndex + 1}
+            </span>
             {t(d.nav.section_of, { n: String(currentIndex + 1), total: String(visibleSections.length) })}
           </span>
-          <span className="text-xs font-semibold text-indigo-600">{progress}%</span>
+          <LangSwitcher lang={lang} onChange={setLang} tone="indigo" />
         </div>
-        <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-[11px] text-gray-400">{d.langSwitcher.label}</span>
+          <span className="text-xs font-bold text-indigo-600">{progress}%</span>
+        </div>
+        <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
           <div className="h-full bg-indigo-500 rounded-full transition-all duration-500"
             style={{ width: `${progress}%` }} />
         </div>
       </div>
 
-      <form ref={formRef} onSubmit={handleNext} className="space-y-6">
+      <form ref={formRef} onSubmit={handleNext} className="space-y-6 pb-24">
         {visibleSections[currentIndex].component}
 
         {error && (
@@ -1488,21 +1706,27 @@ export function FormularioInscricao({
             {error}
           </div>
         )}
+        {/* Mantém o Enter dentro de um campo submetendo a seção — o botão
+            visível fica fora do form (barra fixa), então sem isso o form
+            perderia o envio implícito por teclado. */}
+        <button type="submit" className="sr-only" aria-hidden="true" tabIndex={-1} />
+      </form>
 
-        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 pt-6 border-t border-gray-100">
+      <div className="fixed inset-x-0 bottom-0 z-30 bg-white/95 backdrop-blur-sm border-t border-gray-100">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           {currentIndex > 0 ? (
             <button type="button" onClick={handleBack}
-              className="w-full sm:w-auto px-6 py-3 sm:py-2.5 text-sm font-semibold text-gray-600 hover:text-gray-900 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-center">
+              className="px-5 py-2.5 text-sm font-semibold text-gray-600 hover:text-gray-900 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-center shrink-0">
               {d.nav.back}
             </button>
           ) : <div className="hidden sm:block" />}
 
-          <button type="submit" disabled={saving}
-            className="w-full sm:w-auto px-8 py-3 sm:py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-bold rounded-xl transition-colors text-center">
+          <button type="button" onClick={() => formRef.current?.requestSubmit()} disabled={saving}
+            className="flex-1 px-8 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-bold rounded-xl transition-colors text-center">
             {saving ? d.nav.saving : isLast ? d.nav.submit : d.nav.next}
           </button>
         </div>
-      </form>
+      </div>
     </div>
     </HiddenCtx.Provider>
     </DictCtx.Provider>

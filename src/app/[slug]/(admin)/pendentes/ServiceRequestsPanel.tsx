@@ -1,9 +1,14 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import { getAvailableRooms, type AvailableRoom } from '../hospedagem/actions'
-import { INDEFINITE_CHECKOUT, isIndefiniteCheckout } from '@/lib/hospedagem'
+import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { usePendingAction } from '@/hooks/usePendingAction'
+import { getAvailableRooms, getHospedagemKpis, type AvailableRoom, type HospedagemKpis } from '../hospedagem/actions'
+import { INDEFINITE_CHECKOUT, isIndefiniteCheckout, HOSPEDAGEM_TYPES, guestTypeForServiceRequest, type FamilyInfo } from '@/lib/hospedagem'
 import { useSidebarLeftClass } from '@/components/layout/account-context'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type ServiceReq = {
   id: string
@@ -24,9 +29,9 @@ type ServiceReq = {
   requesterEmail: string
   requesterPhone: string | null
   diasAberto: number
+  familyInfo: FamilyInfo | null
+  guestGender: 'masculino' | 'feminino' | null
 }
-
-const HOSPEDAGEM_TYPES = ['hospedagem_obreiro', 'hospedagem_aluno']
 
 const SERVICE_STATUS_LABELS: Record<string, { label: string; color: string }> = {
   pendente:   { label: 'Pendente',   color: 'bg-yellow-100 text-yellow-700' },
@@ -57,8 +62,10 @@ type ResolverComAlocacaoParams = {
   requestId: string; roomId: string; bedId: string | null; personId: string | null
   guestName: string; guestType: 'obreiro' | 'aluno'; checkIn: string; checkOut: string
 }
-type ResolverSemAlocacaoParams = {
-  requestId: string; guestName: string; staffApplicationId: string | null; schoolApplicationId: string | null; requestedArrivalDate: string | null
+
+type ResolverComAlocacaoQuartoParams = {
+  requestId: string; roomId: string
+  guestName: string; guestType: 'obreiro' | 'aluno'; checkIn: string; checkOut: string
 }
 
 type Props = {
@@ -66,65 +73,63 @@ type Props = {
   title: string
   handleStatusUpdate: (fd: FormData) => Promise<void>
   resolverComAlocacao?: (params: ResolverComAlocacaoParams) => Promise<void>
-  resolverSemAlocacao?: (params: ResolverSemAlocacaoParams) => Promise<void>
+  resolverComAlocacaoQuarto?: (params: ResolverComAlocacaoQuartoParams) => Promise<void>
+  markEmAnalise?: (requestId: string) => Promise<void>
   organizationId?: string
+  slug?: string
 }
 
-function HospedagemResolver({ req, organizationId, resolverComAlocacao, resolverSemAlocacao, onDone }: {
+function HospedagemResolver({ req, organizationId, resolverComAlocacao, resolverComAlocacaoQuarto, markEmAnalise, handleStatusUpdate, onDone, slug }: {
   req: ServiceReq
   organizationId: string
   resolverComAlocacao: (params: ResolverComAlocacaoParams) => Promise<void>
-  resolverSemAlocacao: (params: ResolverSemAlocacaoParams) => Promise<void>
+  resolverComAlocacaoQuarto?: (params: ResolverComAlocacaoQuartoParams) => Promise<void>
+  markEmAnalise?: (requestId: string) => Promise<void>
+  handleStatusUpdate: (fd: FormData) => Promise<void>
   onDone: () => void
+  slug?: string
 }) {
-  const guestType: 'obreiro' | 'aluno' = req.request_type === 'hospedagem_aluno' ? 'aluno' : 'obreiro'
-  const guestName = req.subject.replace(/^Hospedagem\s*—\s*/, '')
+  const guestType = guestTypeForServiceRequest(req.request_type, req.school_application_id)
+  const guestName = req.subject.replace(/^(Hospedagem|Definir quarto)\s*—\s*/, '')
   const departureAlreadyIndefinite = isIndefiniteCheckout(req.requested_departure_date)
   const [checkOut, setCheckOut] = useState(departureAlreadyIndefinite ? '' : req.requested_departure_date ?? '')
-  const [indefinite, setIndefinite] = useState(departureAlreadyIndefinite)
-  const [rooms, setRooms] = useState<AvailableRoom[] | null>(null)
-  const [chosenRoom, setChosenRoom] = useState<AvailableRoom | null>(null)
-  const [chosenBed, setChosenBed] = useState('')
-  const [pending, startTransition] = useTransition()
-  const [error, setError] = useState('')
+  const [showAllocation, setShowAllocation] = useState(false)
+  const [showNoRoomForm, setShowNoRoomForm] = useState(false)
+  const [noRoomReason, setNoRoomReason] = useState('')
+  const { isPending: pending, run } = usePendingAction()
+
+  // Cônjuge/filhos vindo junto (dado que já existe na candidatura) — quando
+  // é família de verdade (mais de 1 pessoa), a tela de alocação só mostra
+  // quarto inteiro do tamanho certo, não cama avulsa.
+  const familySize = 1 + (req.familyInfo?.spouseComing ? 1 : 0) + (req.familyInfo?.childrenComing ?? 0)
+  const isFamily = familySize > 1
 
   const checkIn = req.requested_arrival_date ?? ''
-  const effectiveCheckOut = indefinite ? INDEFINITE_CHECKOUT : checkOut
+  // Sem data de saída = permanente — quem define isso é o DH/líder ao abrir
+  // a solicitação (ou fica em aberto pra hospitalidade ajustar aqui mesmo);
+  // não é uma escolha própria da hospitalidade, então não tem checkbox.
+  const effectiveCheckOut = checkOut || INDEFINITE_CHECKOUT
 
-  function buscar() {
-    setError('')
-    if (!effectiveCheckOut) { setError('Informe a saída prevista, ou marque "sem data de saída definida".'); return }
-    startTransition(async () => {
-      const available = await getAvailableRooms({ organizationId, guestType, checkIn, checkOut: effectiveCheckOut })
-      setRooms(available)
-    })
-  }
+  const actionLabel = isFamily ? 'Alocar família' : guestType === 'aluno' ? 'Alocar aluno' : 'Alocar obreiro'
 
-  function confirmarComQuarto() {
-    if (!chosenRoom) return
-    if (chosenRoom.allocationMode === 'cama' && !chosenBed) { setError('Selecione uma cama.'); return }
-    startTransition(async () => {
-      await resolverComAlocacao({
-        requestId: req.id, roomId: chosenRoom.roomId, bedId: chosenRoom.allocationMode === 'cama' ? chosenBed : null,
-        personId: null, guestName, guestType, checkIn, checkOut: effectiveCheckOut,
-      })
-      onDone()
-    })
-  }
-
-  function confirmarSemQuarto() {
-    startTransition(async () => {
-      await resolverSemAlocacao({
-        requestId: req.id, guestName,
-        staffApplicationId: req.staff_application_id, schoolApplicationId: req.school_application_id,
-        requestedArrivalDate: req.requested_arrival_date,
-      })
+  // A hospitalidade só diz se tem quarto ou não — se não tem, a decisão de
+  // como resolver (esperar vaga, buscar fora, etc.) é do líder, não dela.
+  // Exige justificativa: ela é o que aparece de volta no fluxo de aprovação
+  // pro líder/DH entenderem o motivo, em vez de um "rejeitado" seco.
+  function confirmarSemDisponibilidade() {
+    if (!noRoomReason.trim()) return
+    run(true, async () => {
+      const fd = new FormData()
+      fd.set('request_id', req.id)
+      fd.set('status', 'rejeitado')
+      fd.set('resolution_notes', noRoomReason.trim())
+      await handleStatusUpdate(fd)
       onDone()
     })
   }
 
   return (
-    <div className="space-y-3 border-t border-gray-100 pt-4">
+    <div className="space-y-3">
       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Resolver hospedagem</p>
       <div className="flex items-center gap-2">
         <div className="flex-1">
@@ -133,69 +138,277 @@ function HospedagemResolver({ req, organizationId, resolverComAlocacao, resolver
         </div>
         <div className="flex-1">
           <label className="block text-xs text-gray-500 mb-1">Saída prevista</label>
-          <input type="date" value={checkOut} disabled={indefinite}
-            onChange={e => { setCheckOut(e.target.value); setRooms(null) }}
-            className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-700 disabled:bg-gray-50 disabled:text-gray-400" />
+          <input type="date" value={checkOut}
+            onChange={e => setCheckOut(e.target.value)}
+            placeholder="Em branco = permanente"
+            className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-700" />
         </div>
       </div>
-      <label className="flex items-center gap-2 text-xs text-gray-600">
-        <input type="checkbox" checked={indefinite}
-          onChange={e => { setIndefinite(e.target.checked); if (e.target.checked) setCheckOut(''); setRooms(null) }} />
-        Sem data de saída definida {guestType === 'obreiro' ? '(obreiro permanente)' : '(ajustar depois)'}
-      </label>
-      <button type="button" onClick={buscar} disabled={pending || !effectiveCheckOut}
-        className="w-full px-4 py-2 bg-gray-900 text-white text-xs font-semibold rounded-xl hover:bg-gray-800 disabled:opacity-50">
-        {pending ? 'Buscando…' : 'Buscar quartos disponíveis'}
-      </button>
-
-      {rooms && (
-        rooms.length === 0 ? (
-          <p className="text-xs text-red-600">Nenhum quarto disponível nessa janela de datas.</p>
-        ) : (
-          <div className="space-y-1.5">
-            <p className="text-xs text-gray-500">Escolha um quarto{rooms.some(r => r.allocationMode === 'cama') ? ' (e cama, se for o caso)' : ''} pra habilitar "Confirmar e alocar agora":</p>
-            {rooms.map(r => (
-              <label key={r.roomId} className={`block rounded-lg border px-3 py-2 text-xs cursor-pointer ${chosenRoom?.roomId === r.roomId ? 'border-brand-400 bg-brand-50' : 'border-gray-200'}`}>
-                <div className="flex items-center gap-2">
-                  <input type="radio" name="room" checked={chosenRoom?.roomId === r.roomId}
-                    onChange={() => { setChosenRoom(r); setChosenBed('') }} />
-                  <span className="font-semibold text-gray-800">{r.roomName}</span>
-                  {r.genderConstraint && <span className="text-gray-400">({r.genderConstraint})</span>}
-                </div>
-                {chosenRoom?.roomId === r.roomId && r.allocationMode === 'cama' && (
-                  <select value={chosenBed} onChange={e => setChosenBed(e.target.value)}
-                    className="mt-2 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs"
-                    onClick={e => e.stopPropagation()}>
-                    <option value="">Selecione a cama…</option>
-                    {r.availableBeds.map(b => <option key={b.id} value={b.id}>{b.label}</option>)}
-                  </select>
-                )}
-              </label>
-            ))}
+      {!checkOut && (
+        <p className="text-xs text-gray-400">
+          Sem data de saída informada — entendido como {guestType === 'obreiro' ? 'obreiro permanente' : 'hospedagem sem data definida'}.
+        </p>
+      )}
+      {isFamily && (
+        <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+          <p className="font-semibold">Vem com família — {familySize} pessoas ao todo</p>
+          <p className="text-amber-700 mt-0.5">
+            {[
+              req.familyInfo?.spouseComing ? 'cônjuge' : null,
+              (req.familyInfo?.childrenComing ?? 0) > 0 ? `${req.familyInfo?.childrenComing} filho(s)` : null,
+            ].filter(Boolean).join(' + ')} vindo junto — a alocação vai priorizar quarto inteiro.
+          </p>
+        </div>
+      )}
+      {!showNoRoomForm ? (
+        <div className="flex gap-2">
+          <button type="button" onClick={() => setShowAllocation(true)} disabled={pending}
+            className="flex-1 px-4 py-2 bg-gray-900 text-white text-xs font-semibold rounded-xl hover:bg-gray-800 disabled:opacity-50">
+            {actionLabel}
+          </button>
+          <button type="button" onClick={() => setShowNoRoomForm(true)} disabled={pending}
+            className="flex-1 px-4 py-2 bg-red-50 text-red-700 text-xs font-semibold rounded-xl hover:bg-red-100 disabled:opacity-50">
+            Não há disponibilidade
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-2 rounded-lg border border-red-200 bg-red-50 p-3">
+          <label className="block text-xs font-semibold text-red-800">
+            Explique o motivo — o líder/DH vai ver essa justificativa
+          </label>
+          <textarea value={noRoomReason} onChange={e => setNoRoomReason(e.target.value)} rows={2} autoFocus
+            placeholder="Ex.: sem cama disponível pro gênero na data pedida, só a partir de 10/10…"
+            className="w-full rounded-lg border border-red-200 px-2 py-1.5 text-xs text-gray-700" />
+          <div className="flex gap-2">
+            <button type="button" onClick={confirmarSemDisponibilidade} disabled={pending || !noRoomReason.trim()}
+              className="flex-1 px-4 py-2 bg-red-600 text-white text-xs font-semibold rounded-xl hover:bg-red-700 disabled:opacity-50">
+              {pending ? 'Registrando…' : 'Confirmar sem disponibilidade'}
+            </button>
+            <button type="button" onClick={() => setShowNoRoomForm(false)} disabled={pending}
+              className="px-4 py-2 bg-white border border-gray-200 text-gray-600 text-xs font-semibold rounded-xl hover:bg-gray-50 disabled:opacity-50">
+              Cancelar
+            </button>
           </div>
-        )
+        </div>
       )}
-
-      {error && <p className="text-xs text-red-600">{error}</p>}
-
-      {rooms && rooms.length > 0 && (
-        <button type="button" onClick={confirmarComQuarto} disabled={pending || !chosenRoom}
-          className="w-full px-4 py-2.5 bg-green-500 text-white hover:bg-green-600 disabled:opacity-50 rounded-xl text-sm font-semibold transition-colors">
-          ✓ Confirmar e alocar agora
-        </button>
-      )}
-      <button type="button" onClick={confirmarSemQuarto} disabled={pending}
-        className="w-full px-4 py-2.5 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50 rounded-xl text-sm font-semibold transition-colors">
-        Confirmar disponibilidade, definir quarto depois
-      </button>
       <p className="text-xs text-gray-400">
-        "Definir depois" já libera a candidatura (não fica mais pendente do líder/DH) — a escolha do quarto vira uma tarefa só da hospitalidade.
+        Sem vaga, a decisão de como resolver com a pessoa fica com o líder — a hospitalidade só confirma se há espaço.
       </p>
+
+      {showAllocation && (
+        <AllocationScreen
+          req={req}
+          organizationId={organizationId}
+          guestType={guestType}
+          guestName={guestName}
+          checkIn={checkIn}
+          checkOut={effectiveCheckOut}
+          isFamily={isFamily}
+          familySize={familySize}
+          guestGender={req.guestGender}
+          resolverComAlocacao={resolverComAlocacao}
+          resolverComAlocacaoQuarto={resolverComAlocacaoQuarto}
+          markEmAnalise={req.status === 'pendente' ? markEmAnalise : undefined}
+          onClose={() => setShowAllocation(false)}
+          onDone={onDone}
+          slug={slug}
+        />
+      )}
     </div>
   )
 }
 
-export function ServiceRequestsPanel({ requests, title, handleStatusUpdate, resolverComAlocacao, resolverSemAlocacao, organizationId }: Props) {
+// Tela cheia (portal, acima do modal de detalhe) — abre ao clicar em
+// "Alocar X". Busca disponibilidade + KPIs da hospitalidade juntos, e já
+// filtra a lista pelo caso concreto (família → só quarto inteiro do
+// tamanho certo; indivíduo → só cama avulsa compatível com o gênero) em vez
+// de despejar tudo pra hospitalidade filtrar na mão.
+function AllocationScreen({
+  req, organizationId, guestType, guestName, checkIn, checkOut, isFamily, familySize, guestGender,
+  resolverComAlocacao, resolverComAlocacaoQuarto, markEmAnalise, onClose, onDone, slug,
+}: {
+  req: ServiceReq
+  organizationId: string
+  guestType: 'obreiro' | 'aluno'
+  guestName: string
+  checkIn: string
+  checkOut: string
+  isFamily: boolean
+  familySize: number
+  guestGender: 'masculino' | 'feminino' | null
+  resolverComAlocacao: (params: ResolverComAlocacaoParams) => Promise<void>
+  resolverComAlocacaoQuarto?: (params: ResolverComAlocacaoQuartoParams) => Promise<void>
+  markEmAnalise?: (requestId: string) => Promise<void>
+  onClose: () => void
+  onDone: () => void
+  slug?: string
+}) {
+  const sidebarLeftClass = useSidebarLeftClass()
+  const router = useRouter()
+  const [rooms, setRooms] = useState<AvailableRoom[] | null>(null)
+  const [kpis, setKpis] = useState<HospedagemKpis | null>(null)
+  const [chosenRoom, setChosenRoom] = useState<AvailableRoom | null>(null)
+  const [chosenBed, setChosenBed] = useState('')
+  const { isPending: pending, run } = usePendingAction()
+  const [error, setError] = useState('')
+
+  // Duas buscas independentes, não uma esperando a outra — cada seção da
+  // tela (KPIs, lista de quartos) libera assim que a sua própria consulta
+  // volta, em vez de travar tudo atrás da mais lenta das duas.
+  useEffect(() => {
+    let cancelled = false
+    if (markEmAnalise) markEmAnalise(req.id).catch(() => {})
+    getAvailableRooms({ organizationId, guestType, checkIn, checkOut }).then(available => {
+      if (cancelled) return
+      setRooms(available)
+      router.refresh()
+    })
+    getHospedagemKpis(organizationId).then(kpisResult => {
+      if (!cancelled) setKpis(kpisResult)
+    })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const genderOk = (r: AvailableRoom) =>
+    !guestGender || !r.genderConstraint || r.genderConstraint === 'misto' || r.genderConstraint === guestGender
+
+  const filteredRooms = (rooms ?? []).filter(r =>
+    genderOk(r) && (isFamily ? (r.wholeRoomAvailable && r.totalBeds >= familySize) : r.availableBeds.length > 0))
+
+  function confirmar() {
+    if (!chosenRoom) return
+    if (!isFamily && !chosenBed) { setError('Selecione uma cama.'); return }
+    if (isFamily && !resolverComAlocacaoQuarto) { setError('Ação indisponível.'); return }
+    run(true, async () => {
+      if (isFamily) {
+        await resolverComAlocacaoQuarto!({ requestId: req.id, roomId: chosenRoom.roomId, guestName, guestType, checkIn, checkOut })
+      } else {
+        await resolverComAlocacao({ requestId: req.id, roomId: chosenRoom.roomId, bedId: chosenBed, personId: null, guestName, guestType, checkIn, checkOut })
+      }
+      onDone()
+    })
+  }
+
+  const kpiTiles = kpis ? [
+    { label: 'Quartos', value: kpis.totalRooms },
+    { label: 'Camas ocupadas', value: kpis.occupiedBeds },
+    { label: 'Camas disponíveis', value: kpis.availableBeds },
+    { label: 'Chegadas hoje', value: kpis.arrivalsToday },
+    { label: 'Saídas hoje', value: kpis.departuresToday },
+  ] : []
+
+  return createPortal(
+    <div className={`fixed inset-0 ${sidebarLeftClass} z-[60] flex items-center justify-center bg-black/50 p-4`} onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-gray-100 sticky top-0 bg-white">
+          <div>
+            <p className="text-xs font-semibold text-brand-500 uppercase tracking-wide">Alocação</p>
+            <h2 className="text-base font-bold text-gray-900 mt-0.5">{guestName}</h2>
+          </div>
+          <div className="flex items-center gap-3 flex-shrink-0">
+            {slug && (
+              <Link
+                href={`/${slug}/hospedagem/quartos`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-semibold text-gray-500 hover:text-gray-800 transition-colors whitespace-nowrap"
+              >
+                Gerenciar hospedagem →
+              </Link>
+            )}
+            <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+          </div>
+        </div>
+
+        <div className="px-5 py-4 space-y-4">
+          {isFamily && (
+            <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+              <p className="font-semibold">Família — {familySize} pessoas ao todo</p>
+              <p className="text-amber-700 mt-0.5">Mostrando só quartos inteiros com espaço pra todo mundo.</p>
+            </div>
+          )}
+
+          {kpis && (
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+              {kpiTiles.map(k => (
+                <div key={k.label} className="bg-gray-50 rounded-lg border border-gray-200 px-2 py-2 text-center">
+                  <p className="text-sm font-bold text-gray-900">{k.value}</p>
+                  <p className="text-[9px] text-gray-500 font-medium leading-tight">{k.label}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {rooms === null ? (
+            <p className="text-xs text-gray-400 text-center py-6">Buscando disponibilidade…</p>
+          ) : filteredRooms.length === 0 ? (
+            <div className="text-center py-4 space-y-3">
+              <p className="text-xs text-red-600">
+                Nenhum quarto {isFamily ? 'com espaço pra família toda' : guestGender ? `compatível (${guestGender})` : ''} disponível nessa janela de datas.
+              </p>
+              {slug && (
+                <Link
+                  href={`/${slug}/hospedagem/quartos`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex px-4 py-2 bg-gray-900 text-white text-xs font-semibold rounded-xl hover:bg-gray-800 transition-colors"
+                >
+                  Gerenciar hospedagem →
+                </Link>
+              )}
+              <p className="text-[10px] text-gray-400">
+                Lá dá pra ver tudo que está ocupado, mover gente de quarto ou cadastrar um quarto novo.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <p className="text-xs text-gray-500">Escolha onde alocar:</p>
+              {filteredRooms.map(r => {
+                const isChosen = chosenRoom?.roomId === r.roomId
+                const location = [r.blockName, r.floorName, r.roomName].filter(Boolean).join(' — ')
+                return (
+                  <label key={r.roomId} className={`block rounded-lg border px-3 py-2 text-xs cursor-pointer ${isChosen ? 'border-brand-400 bg-brand-50' : 'border-gray-200'}`}>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <input type="radio" name="alloc-room" checked={isChosen} onChange={() => { setChosenRoom(r); setChosenBed('') }} />
+                      <span className="font-semibold text-gray-800">{location}</span>
+                      {r.genderConstraint && <span className="text-gray-400">({r.genderConstraint})</span>}
+                    </div>
+                    {isChosen && isFamily && (
+                      <p className="mt-1.5 text-[10px] text-gray-500 pl-5">
+                        Aloca o quarto inteiro ({r.totalBeds} cama{r.totalBeds !== 1 ? 's' : ''}) — sem escolher cama específica.
+                      </p>
+                    )}
+                    {isChosen && !isFamily && (
+                      <select value={chosenBed} onChange={e => setChosenBed(e.target.value)}
+                        className="mt-2 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs"
+                        onClick={e => e.stopPropagation()}>
+                        <option value="">Selecione a cama…</option>
+                        {r.availableBeds.map(b => <option key={b.id} value={b.id}>{b.label}</option>)}
+                      </select>
+                    )}
+                  </label>
+                )
+              })}
+            </div>
+          )}
+
+          {error && <p className="text-xs text-red-600">{error}</p>}
+
+          {filteredRooms.length > 0 && (
+            <button type="button" onClick={confirmar} disabled={pending || !chosenRoom}
+              className="w-full px-4 py-2.5 bg-green-500 text-white hover:bg-green-600 disabled:opacity-50 rounded-xl text-sm font-semibold transition-colors">
+              {pending ? 'Alocando…' : '✓ Confirmar e alocar agora'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+export function ServiceRequestsPanel({ requests, title, handleStatusUpdate, resolverComAlocacao, resolverComAlocacaoQuarto, markEmAnalise, organizationId, slug }: Props) {
   const [selected, setSelected] = useState<ServiceReq | null>(null)
   const sidebarLeftClass = useSidebarLeftClass()
 
@@ -326,35 +539,50 @@ export function ServiceRequestsPanel({ requests, title, handleStatusUpdate, reso
 
               {/* Ações */}
               <div className="border-t border-gray-100 pt-4 flex flex-col gap-2">
-                {selected.status === 'pendente' && (
-                  <form action={handleStatusUpdate} onSubmit={() => setSelected(null)}>
+                {selected.status === 'pendente' && !HOSPEDAGEM_TYPES.includes(selected.request_type) && (
+                  <form action={handleStatusUpdate}>
                     <input type="hidden" name="request_id" value={selected.id} />
-                    <button
-                      name="status" value="em_analise" type="submit"
-                      className="w-full px-4 py-2.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-xl text-sm font-semibold transition-colors"
+                    <SubmitButton
+                      name="status" value="em_analise"
+                      className="w-full px-4 py-2.5 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50 rounded-xl text-sm font-semibold transition-colors"
                     >
                       Marcar como Em análise
-                    </button>
+                    </SubmitButton>
                   </form>
                 )}
-                {selected.status !== 'resolvido' && HOSPEDAGEM_TYPES.includes(selected.request_type) && resolverComAlocacao && resolverSemAlocacao && organizationId ? (
-                  <HospedagemResolver
-                    req={selected}
-                    organizationId={organizationId}
-                    resolverComAlocacao={resolverComAlocacao}
-                    resolverSemAlocacao={resolverSemAlocacao}
-                    onDone={() => setSelected(null)}
-                  />
-                ) : selected.status !== 'resolvido' && (
-                  <form action={handleStatusUpdate} onSubmit={() => setSelected(null)}>
-                    <input type="hidden" name="request_id" value={selected.id} />
-                    <button
-                      name="status" value="resolvido" type="submit"
-                      className="w-full px-4 py-2.5 bg-green-500 text-white hover:bg-green-600 rounded-xl text-sm font-semibold transition-colors"
-                    >
-                      ✓ Marcar como Resolvido
-                    </button>
-                  </form>
+                {selected.status !== 'resolvido' && (
+                  HOSPEDAGEM_TYPES.includes(selected.request_type) ? (
+                    resolverComAlocacao && organizationId ? (
+                      <HospedagemResolver
+                        req={selected}
+                        organizationId={organizationId}
+                        resolverComAlocacao={resolverComAlocacao}
+                        resolverComAlocacaoQuarto={resolverComAlocacaoQuarto}
+                        markEmAnalise={markEmAnalise}
+                        handleStatusUpdate={handleStatusUpdate}
+                        onDone={() => setSelected(null)}
+                        slug={slug}
+                      />
+                    ) : (
+                      // Pedido de hospedagem sem os handlers de alocação disponíveis
+                      // nesta tela — nunca deixa "resolver" sem quarto/justificativa
+                      // pelo atalho genérico abaixo.
+                      <p className="text-xs text-gray-400 text-center py-2">
+                        Abra esta solicitação pelo módulo de Hospedagem para alocar ou justificar indisponibilidade.
+                      </p>
+                    )
+                  ) : (
+                    <form action={handleStatusUpdate}>
+                      <input type="hidden" name="request_id" value={selected.id} />
+                      <SubmitButton
+                        name="status" value="resolvido"
+                        className="w-full px-4 py-2.5 bg-green-500 text-white hover:bg-green-600 disabled:opacity-50 rounded-xl text-sm font-semibold transition-colors"
+                        pendingText="Salvando…"
+                      >
+                        ✓ Marcar como Resolvido
+                      </SubmitButton>
+                    </form>
+                  )
                 )}
                 <button
                   type="button"

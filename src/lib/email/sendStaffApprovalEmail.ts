@@ -1,4 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { normalizeLang } from '@/lib/i18n/forms'
+import { getStaffApprovalDict, type EmailLang } from '@/lib/i18n/emails'
 
 type Params = {
   to: string
@@ -8,15 +10,18 @@ type Params = {
   replyTo: string
   organizationId: string
   leaderWord?: string | null
+  language?: string | null
 }
 
 function buildHtml(p: Params): string {
-  const areaLine = p.ministryName
-    ? `no ministério <strong style="color:#111827;">${p.ministryName}</strong>`
-    : `na equipe da <strong style="color:#111827;">${p.organizationName}</strong>`
+  const lang = normalizeLang(p.language) as EmailLang
+  const d = getStaffApprovalDict(lang)
+  const body = p.ministryName
+    ? d.bodyMinistry.replace('{ministry}', p.ministryName)
+    : d.bodyTeam.replace('{org}', p.organizationName)
 
   return `<!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="${lang}">
 <head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1.0" /></head>
 <body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 16px;">
@@ -25,16 +30,14 @@ function buildHtml(p: Params): string {
         <tr>
           <td style="background:linear-gradient(135deg,#16a34a 0%,#15803d 100%);padding:40px 40px 32px;text-align:center;">
             <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:0.1em;">${p.organizationName}</p>
-            <h1 style="margin:0;font-size:26px;font-weight:800;color:#fff;line-height:1.2;">Parabéns, você foi aceito!</h1>
+            <h1 style="margin:0;font-size:26px;font-weight:800;color:#fff;line-height:1.2;">${d.title}</h1>
           </td>
         </tr>
         <tr>
           <td style="padding:40px;">
-            <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:#111827;">Olá, ${p.candidateName}! 🎉</p>
+            <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:#111827;">${d.greeting.replace('{name}', p.candidateName)}</p>
             <p style="margin:0;font-size:15px;color:#6b7280;line-height:1.6;">
-              Temos uma ótima notícia: sua inscrição como obreiro foi analisada e você foi
-              <strong style="color:#16a34a;">aceito(a)</strong> ${areaLine}.
-              Em breve você receberá mais informações sobre os próximos passos.
+              ${body}
             </p>
           </td>
         </tr>
@@ -43,7 +46,7 @@ function buildHtml(p: Params): string {
             <table width="100%" cellpadding="0" cellspacing="0" style="background:#fefce8;border-radius:10px;border:1px solid #fde68a;">
               <tr>
                 <td style="padding:20px 24px;">
-                  <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#92400e;text-transform:uppercase;letter-spacing:0.05em;">Uma palavra da liderança</p>
+                  <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#92400e;text-transform:uppercase;letter-spacing:0.05em;">${d.leaderWordTitle}</p>
                   <p style="margin:0;font-size:14px;color:#78350f;line-height:1.6;white-space:pre-wrap;">${p.leaderWord}</p>
                 </td>
               </tr>
@@ -53,9 +56,9 @@ function buildHtml(p: Params): string {
         <tr>
           <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:24px 40px;text-align:center;">
             <p style="margin:0 0 4px;font-size:13px;color:#6b7280;">
-              Dúvidas? Entre em contato: <a href="mailto:${p.replyTo}" style="color:#16a34a;">${p.replyTo}</a>
+              ${d.contact} <a href="mailto:${p.replyTo}" style="color:#16a34a;">${p.replyTo}</a>
             </p>
-            <p style="margin:0;font-size:12px;color:#9ca3af;">Este e-mail foi enviado automaticamente após sua aprovação.</p>
+            <p style="margin:0;font-size:12px;color:#9ca3af;">${d.disclaimer}</p>
           </td>
         </tr>
       </table>
@@ -70,6 +73,9 @@ export async function sendStaffApprovalEmail(params: Params): Promise<void> {
   const fromEmail = process.env.BREVO_FROM_EMAIL ?? 'noreply@sisgomission.com'
   if (!apiKey) return
 
+  const lang = normalizeLang(params.language) as EmailLang
+  const subject = getStaffApprovalDict(lang).subject.replace('{org}', params.organizationName)
+
   let status: 'sent' | 'failed' = 'sent'
   let errorMsg: string | undefined
 
@@ -81,7 +87,7 @@ export async function sendStaffApprovalEmail(params: Params): Promise<void> {
         sender: { name: params.organizationName, email: fromEmail },
         to: [{ email: params.to, name: params.candidateName }],
         replyTo: { email: params.replyTo },
-        subject: `Você foi aceito(a) como obreiro — ${params.organizationName}`,
+        subject,
         htmlContent: buildHtml(params),
       }),
     })

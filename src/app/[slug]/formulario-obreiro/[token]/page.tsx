@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { notFound } from 'next/navigation'
 import { FormularioObreiro } from './FormularioObreiro'
 import { CheckCircle2 } from 'lucide-react'
+import { getStaffFormDict, normalizeStaffLang } from '@/lib/i18n/staff-forms'
 
 type Props = {
   params: Promise<{ slug: string; token: string }>
@@ -29,21 +30,64 @@ export default async function FormularioObreiroPage({ params, searchParams }: Pr
 
   const { data: org } = await sb
     .from('organizations')
-    .select('slug, active, name')
+    .select('slug, active, name, org_type, staff_communication_languages, institution_rules_text')
     .eq('id', app.organization_id)
     .single()
 
   if (!org?.active || org.slug !== slug) notFound()
+
+  // Sem `?lang=` na URL e sem idioma salvo no formulário, o padrão segue os
+  // idiomas de comunicação configurados pela organização (pt se disponível,
+  // senão o primeiro da lista) em vez de cair direto para 'pt' fixo.
+  const orgStaffLanguages = (org.staff_communication_languages as string[] | null) ?? []
+  const orgDefaultLang = orgStaffLanguages.includes('pt') ? 'pt' : (orgStaffLanguages[0] ?? 'pt')
+
+  const preform = app.staff_interest_forms as unknown as {
+    full_name?: string; email?: string; phone?: string; language?: string
+  } | null
+  const formData = (app.form_data as Record<string, unknown>) ?? {}
+  const prefillFromForm = (formData.prefill as Record<string, string | undefined>) ?? {}
+
+  // Documentos já enviados em visitas anteriores ficam salvos como
+  // `{path, name, type, size, uploaded_at}` dentro de cada seção do
+  // form_data — o bucket é privado, então pra mostrar a miniatura de volta
+  // no formulário (em vez de só "nenhum arquivo escolhido" de novo) cada um
+  // precisa de uma URL assinada, gerada aqui no server component.
+  const documentUrls: Record<string, { url: string; name: string; type: string; size?: number }> = {}
+  const docEntries: Array<[string, { path: string; name: string; type: string; size?: number }]> = []
+  for (const section of Object.values(formData)) {
+    if (!section || typeof section !== 'object') continue
+    for (const [key, value] of Object.entries(section as Record<string, unknown>)) {
+      const doc = value as { path?: string; name?: string; type?: string; size?: number } | undefined
+      if (doc?.path && doc.name && doc.type) docEntries.push([key, doc as { path: string; name: string; type: string; size?: number }])
+    }
+  }
+  if (docEntries.length) {
+    const signedUrls = await Promise.all(
+      docEntries.map(([, doc]) => sb.storage.from('staff-application-documents').createSignedUrl(doc.path, 3600))
+    )
+    docEntries.forEach(([key, doc], i) => {
+      const url = signedUrls[i].data?.signedUrl
+      if (url) documentUrls[key] = { url, name: doc.name, type: doc.type, size: doc.size }
+    })
+  }
+  const prefill = {
+    nome: preform?.full_name ?? prefillFromForm.nome,
+    email: preform?.email ?? prefillFromForm.email,
+    telefone: preform?.phone ?? prefillFromForm.telefone,
+    idioma: preform?.language ?? prefillFromForm.idioma,
+  }
+
+  const pageLang = normalizeStaffLang(lang ?? prefill.idioma ?? orgDefaultLang)
+  const d = getStaffFormDict(pageLang).bigFormChrome
 
   if (new Date(app.token_expires_at!) < new Date()) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
         <div className="bg-white rounded-2xl shadow p-10 max-w-md text-center">
           <p className="text-4xl mb-4">⏰</p>
-          <h1 className="text-xl font-bold text-gray-900 mb-2">Link expirado</h1>
-          <p className="text-gray-500 text-sm">
-            Este link de formulário expirou. Entre em contato com a equipe da base para solicitar um novo link.
-          </p>
+          <h1 className="text-xl font-bold text-gray-900 mb-2">{d.link_expired_title}</h1>
+          <p className="text-gray-500 text-sm">{d.link_expired_body}</p>
         </div>
       </div>
     )
@@ -54,29 +98,14 @@ export default async function FormularioObreiroPage({ params, searchParams }: Pr
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
         <div className="bg-white rounded-2xl shadow p-10 max-w-md text-center">
           <CheckCircle2 className="size-12 mx-auto mb-4 text-green-500" />
-          <h1 className="text-xl font-bold text-gray-900 mb-2">Formulário já enviado</h1>
-          <p className="text-gray-500 text-sm">
-            Seu formulário já foi enviado e está em análise. A equipe entrará em contato em breve.
-          </p>
+          <h1 className="text-xl font-bold text-gray-900 mb-2">{d.already_sent_title}</h1>
+          <p className="text-gray-500 text-sm">{d.already_sent_body}</p>
         </div>
       </div>
     )
   }
 
   const ministry = app.ministries as unknown as { name: string } | null
-  const preform = app.staff_interest_forms as unknown as {
-    full_name?: string; email?: string; phone?: string; language?: string
-  } | null
-
-  const formData = (app.form_data as Record<string, unknown>) ?? {}
-  const prefillFromForm = (formData.prefill as Record<string, string | undefined>) ?? {}
-
-  const prefill = {
-    nome: preform?.full_name ?? prefillFromForm.nome,
-    email: preform?.email ?? prefillFromForm.email,
-    telefone: preform?.phone ?? prefillFromForm.telefone,
-    idioma: preform?.language ?? prefillFromForm.idioma,
-  }
 
   const { data: ministriesRaw } = await sb
     .from('ministries')
@@ -96,7 +125,7 @@ export default async function FormularioObreiroPage({ params, searchParams }: Pr
             {org.name}
           </p>
           <h1 className="text-lg font-bold text-gray-900 mt-0.5">
-            Inscrição de Obreiro
+            {d.title}
           </h1>
           {ministry && <p className="text-sm text-gray-400">{ministry.name}</p>}
         </div>
@@ -104,18 +133,14 @@ export default async function FormularioObreiroPage({ params, searchParams }: Pr
 
       <div className="print:hidden max-w-2xl mx-auto px-4 sm:px-6 pt-5 sm:pt-6">
         <div className="bg-amber-600 text-white rounded-2xl p-5 mb-6">
-          <h2 className="font-bold text-base mb-1">Bem-vindo(a) ao formulário de inscrição!</h2>
+          <h2 className="font-bold text-base mb-1">{d.welcome_title}</h2>
           <p className="text-sm text-amber-100 leading-relaxed">
-            {printMode
-              ? 'Esta é a versão em branco para preenchimento à mão, caso não seja possível preencher pela internet.'
-              : <>Este formulário faz parte do processo de avaliação para servir na base.
-                Responda com atenção e sinceridade.
-                Seu progresso é salvo automaticamente a cada seção. Tempo estimado: <strong>20 a 30 minutos</strong>.</>}
+            {printMode ? d.welcome_body_print : d.welcome_body_online}
           </p>
         </div>
       </div>
 
-      <main className="max-w-2xl mx-auto px-4 sm:px-6 pb-16 sm:pb-20">
+      <main className="max-w-2xl mx-auto px-4 sm:px-6 pb-28 sm:pb-24">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6 md:p-8">
           <FormularioObreiro
             slug={slug}
@@ -128,13 +153,15 @@ export default async function FormularioObreiroPage({ params, searchParams }: Pr
             prefill={prefill}
             initialSection={app.current_section ?? 1}
             initialData={formData}
-            initialLang={lang ?? prefill.idioma}
+            initialLang={pageLang}
             printMode={printMode}
+            institutionRulesText={(org as { institution_rules_text?: string | null }).institution_rules_text ?? null}
+            documentUrls={documentUrls}
           />
         </div>
 
         <p className="text-center text-xs text-gray-400 mt-6">
-          Dúvidas? Entre em contato com a equipe responsável pela base.
+          {d.footer_contact}
         </p>
       </main>
     </div>

@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { headers } from 'next/headers'
 
-export type ReferenceType = 'pastor' | 'amigo' | 'lideranca_experiencia'
+export type ReferenceType = 'pastor' | 'amigo' | 'lideranca_experiencia' | 'responsavel'
 
 export async function getOrCreateReferenceForm(
   sb: SupabaseClient,

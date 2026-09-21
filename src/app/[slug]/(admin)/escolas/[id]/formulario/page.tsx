@@ -14,7 +14,7 @@ const CONFIGURAVEL: { secao: string; key: string; titulo: string; campos: { name
     { name: 'termo_1', label: '1. Responsabilidade financeira' },
     { name: 'termo_2', label: '2. Concordância com pagamento dos valores' },
     { name: 'termo_3', label: '3. Sem estorno em caso de desistência/desligamento' },
-    { name: 'termo_4', label: '4. Isenção de responsabilidade da JOCUM por danos' },
+    { name: 'termo_4', label: '4. Isenção de responsabilidade da organização por danos' },
     { name: 'termo_5', label: '5. Submissão aos padrões e rotina da missão' },
     { name: 'termo_6', label: '6. Consentimento para atendimento médico de emergência' },
     { name: 'termo_7', label: '7. Proibição de tabaco, álcool e drogas' },
@@ -24,7 +24,7 @@ const CONFIGURAVEL: { secao: string; key: string; titulo: string; campos: { name
   ]},
   { secao: 's4', key: 'escola_interesse', titulo: 'Escola de interesse', campos: [
     { name: 'como_conheceu', label: 'Como conheceu a escola' },
-    { name: 'como_conheceu_jocum', label: 'Como conheceu a JOCUM' },
+    { name: 'como_conheceu_jocum', label: 'Como conheceu a organização' },
     { name: 'conversou_equipe', label: 'Conversou com alguém da escola?' },
     { name: 'conversou_com_quem', label: 'Com quem conversou' },
     { name: 'motivacao', label: 'Motivação' },

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 import { AlertTriangle, BedDouble, Building2, GraduationCap, LogIn, LogOut, UserPlus, Users, Wrench } from 'lucide-react'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -91,6 +92,18 @@ function daysRemaining(checkOut: string, today: string): number {
 
 function fmtDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('pt-BR')
+}
+
+// Distingue "alocado como quarto inteiro de verdade" (allocateWholeRoom cria
+// uma linha por cama, todas com o mesmo hóspede/datas) de "por acaso todas
+// as camas foram preenchidas uma a uma" — só o primeiro caso deve continuar
+// aparecendo como card único de quarto independente do toggle.
+function detectWholeRoomGroup(roomAllocs: AllocData[], activeBedsCount: number): boolean {
+  if (roomAllocs.length === 0 || activeBedsCount === 0) return false
+  const bedIds = new Set(roomAllocs.filter(a => a.bedId).map(a => a.bedId))
+  if (bedIds.size < activeBedsCount) return false
+  const first = roomAllocs[0]
+  return roomAllocs.every(a => a.guestName === first.guestName && a.checkIn === first.checkIn && a.checkOut === first.checkOut)
 }
 
 // ── RoomCard (modo quarto inteiro) ───────────────────────────────────────────
@@ -253,6 +266,23 @@ function MaintenanceToggle({ action, id, fieldName, isInMaintenance }: {
   )
 }
 
+// ── ModeToggle (quarto 100% livre — escolhe cama a cama ou quarto inteiro) ──
+
+function ModeToggle({ mode, onChange }: { mode: 'cama' | 'quarto'; onChange: (m: 'cama' | 'quarto') => void }) {
+  return (
+    <div className="flex gap-1">
+      <button type="button" onClick={() => onChange('quarto')}
+        className={`flex-1 px-2 py-1 rounded-md text-[10px] font-semibold transition-colors ${mode === 'quarto' ? 'bg-brand-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+        Quarto inteiro
+      </button>
+      <button type="button" onClick={() => onChange('cama')}
+        className={`flex-1 px-2 py-1 rounded-md text-[10px] font-semibold transition-colors ${mode === 'cama' ? 'bg-brand-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+        Camas
+      </button>
+    </div>
+  )
+}
+
 // ── Main Component ───────────────────────────────────────────────────────────
 
 export function BedGrid({
@@ -264,6 +294,7 @@ export function BedGrid({
 }: Props) {
   const [selectedBed, setSelectedBed] = useState<BedData | null>(null)
   const [selectedRoom, setSelectedRoom] = useState<RoomData | null>(null)
+  const [modeOverride, setModeOverride] = useState<Record<string, 'cama' | 'quarto'>>({})
 
   const now = new Date()
   const cutoff = new Date(now.getTime() + advanceHours * 3_600_000)
@@ -376,10 +407,26 @@ export function BedGrid({
                   {floorRooms.map(room => {
                     const roomBeds = bedsByRoom.get(room.id) ?? []
                     const roomAllocs = allocsByRoom.get(room.id) ?? []
+                    const activeBeds = roomBeds.filter(b => b.status !== 'manutencao')
+                    const occupiedBedIds = new Set(roomAllocs.filter(a => a.bedId).map(a => a.bedId))
+                    // Quarto 100% livre pode ser oferecido tanto como quarto inteiro
+                    // quanto cama a cama — o modo salvo no cadastro é só a sugestão
+                    // inicial do toggle, não trava mais nada.
+                    const isFullyFree = room.status !== 'manutencao' && activeBeds.length > 0 && occupiedBedIds.size === 0
+                    const isWholeRoomGroup = detectWholeRoomGroup(roomAllocs, activeBeds.length)
+                    const effectiveMode: 'cama' | 'quarto' =
+                      room.status === 'manutencao' || isWholeRoomGroup ? 'quarto'
+                      : isFullyFree ? (modeOverride[room.id] ?? (room.allocationMode === 'quarto' ? 'quarto' : 'cama'))
+                      : 'cama'
 
-                    if (room.allocationMode === 'quarto') {
+                    if (effectiveMode === 'quarto') {
                       return (
-                        <div key={room.id}>
+                        <div key={room.id} className="space-y-2">
+                          {isFullyFree && (
+                            <div className="max-w-xs">
+                              <ModeToggle mode={effectiveMode} onChange={m => setModeOverride(prev => ({ ...prev, [room.id]: m }))} />
+                            </div>
+                          )}
                           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
                             <RoomCard
                               room={room}
@@ -408,6 +455,11 @@ export function BedGrid({
                           <span className={`text-[10px] font-medium ${DEST_CLS[room.destination]}`}>{DEST_LABEL[room.destination]}</span>
                           {room.status === 'manutencao' && <span className="text-[10px] font-medium text-yellow-600">Manutenção</span>}
                         </div>
+                        {isFullyFree && (
+                          <div className="max-w-xs">
+                            <ModeToggle mode={effectiveMode} onChange={m => setModeOverride(prev => ({ ...prev, [room.id]: m }))} />
+                          </div>
+                        )}
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
                           {roomBeds.map(bed => (
                             <BedCard
@@ -470,26 +522,26 @@ export function BedGrid({
                   return <p className="text-sm text-blue-600 text-center font-medium">{d} dia(s) restante(s)</p>
                 })()}
                 {selectedBedAlloc.allocStatus === 'confirmada' && (
-                  <form action={checkinAction} onSubmit={() => setSelectedBed(null)}>
+                  <form action={checkinAction}>
                     <input type="hidden" name="id" value={selectedBedAlloc.id} />
                     <input type="hidden" name="bed_id" value={selectedBed.id} />
-                    <button type="submit" className="w-full py-3 rounded-lg bg-green-500 hover:bg-green-600 text-white font-semibold transition-colors flex items-center justify-center gap-2">
+                    <SubmitButton className="w-full py-3 rounded-lg bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white font-semibold transition-colors flex items-center justify-center gap-2">
                       <LogIn size={18} /> Fazer Check-in
-                    </button>
+                    </SubmitButton>
                   </form>
                 )}
                 {selectedBedAlloc.allocStatus === 'checkin' && (
-                  <form action={checkoutAction} onSubmit={() => setSelectedBed(null)}>
+                  <form action={checkoutAction}>
                     <input type="hidden" name="id" value={selectedBedAlloc.id} />
                     <input type="hidden" name="bed_id" value={selectedBed.id} />
-                    <button type="submit" className="w-full py-3 rounded-lg bg-gray-700 hover:bg-gray-800 text-white font-semibold transition-colors flex items-center justify-center gap-2">
+                    <SubmitButton className="w-full py-3 rounded-lg bg-gray-700 hover:bg-gray-800 disabled:opacity-50 text-white font-semibold transition-colors flex items-center justify-center gap-2">
                       <LogOut size={18} /> Fazer Check-out
-                    </button>
+                    </SubmitButton>
                   </form>
                 )}
               </>
             ) : (
-              <form action={allocateAction} onSubmit={() => setSelectedBed(null)} className="space-y-4">
+              <form action={allocateAction} className="space-y-4">
                 <div className="flex items-center gap-2 text-green-600">
                   <UserPlus size={20} />
                   <p className="text-sm font-semibold">Alocar hóspede</p>
@@ -520,9 +572,9 @@ export function BedGrid({
                   <label className="block text-xs font-medium text-gray-600 mb-1">Check-out *</label>
                   <input name="check_out" type="date" required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
                 </div>
-                <button type="submit" className="w-full py-3 rounded-lg bg-brand-500 hover:bg-brand-600 text-white font-semibold transition-colors flex items-center justify-center gap-2">
+                <SubmitButton className="w-full py-3 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold transition-colors flex items-center justify-center gap-2">
                   <BedDouble size={18} /> Alocar
-                </button>
+                </SubmitButton>
               </form>
             )}
 
@@ -581,24 +633,24 @@ export function BedGrid({
                   return <p className="text-sm text-blue-600 text-center font-medium">{d} dia(s) restante(s)</p>
                 })()}
                 {selectedRoomFirstAlloc.allocStatus === 'confirmada' && (
-                  <form action={checkinRoomAction} onSubmit={() => setSelectedRoom(null)}>
+                  <form action={checkinRoomAction}>
                     <input type="hidden" name="room_id" value={selectedRoom.id} />
-                    <button type="submit" className="w-full py-3 rounded-lg bg-green-500 hover:bg-green-600 text-white font-semibold transition-colors flex items-center justify-center gap-2">
+                    <SubmitButton className="w-full py-3 rounded-lg bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white font-semibold transition-colors flex items-center justify-center gap-2">
                       <LogIn size={18} /> Check-in do Quarto
-                    </button>
+                    </SubmitButton>
                   </form>
                 )}
                 {selectedRoomFirstAlloc.allocStatus === 'checkin' && (
-                  <form action={checkoutRoomAction} onSubmit={() => setSelectedRoom(null)}>
+                  <form action={checkoutRoomAction}>
                     <input type="hidden" name="room_id" value={selectedRoom.id} />
-                    <button type="submit" className="w-full py-3 rounded-lg bg-gray-700 hover:bg-gray-800 text-white font-semibold transition-colors flex items-center justify-center gap-2">
+                    <SubmitButton className="w-full py-3 rounded-lg bg-gray-700 hover:bg-gray-800 disabled:opacity-50 text-white font-semibold transition-colors flex items-center justify-center gap-2">
                       <LogOut size={18} /> Check-out do Quarto
-                    </button>
+                    </SubmitButton>
                   </form>
                 )}
               </>
             ) : (
-              <form action={allocateRoomAction} onSubmit={() => setSelectedRoom(null)} className="space-y-4">
+              <form action={allocateRoomAction} className="space-y-4">
                 <div className="flex items-center gap-2 text-green-600">
                   <UserPlus size={20} />
                   <p className="text-sm font-semibold">
@@ -650,9 +702,9 @@ export function BedGrid({
                     <input name="check_out" type="date" required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
                   </div>
                 </div>
-                <button type="submit" className="w-full py-3 rounded-lg bg-brand-500 hover:bg-brand-600 text-white font-semibold transition-colors flex items-center justify-center gap-2">
+                <SubmitButton className="w-full py-3 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold transition-colors flex items-center justify-center gap-2">
                   <BedDouble size={18} /> Alocar Quarto Inteiro
-                </button>
+                </SubmitButton>
               </form>
             )}
 

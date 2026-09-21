@@ -559,7 +559,7 @@ export function CreateObreiroModal({
 
       {open && (
         <div
-          className={`fixed inset-0 ${sidebarLeftClass} z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-16`}
+          className={`fixed inset-0 ${sidebarLeftClass} z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-[max(4rem,env(safe-area-inset-top))]`}
           onClick={() => setOpen(false)}
         >
           <div

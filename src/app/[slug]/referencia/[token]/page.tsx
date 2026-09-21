@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { FormularioReferencia } from './FormularioReferencia'
 import { CheckCircle2 } from 'lucide-react'
 import { normalizeLang, getFormDict } from '@/lib/i18n/forms'
+import { orgShortName } from '@/lib/orgShortName'
 
 type Props = {
   params: Promise<{ slug: string; token: string }>
@@ -69,8 +70,8 @@ export default async function ReferenciaPage({ params, searchParams }: Props) {
       ? s5?.missao_organizacao
       : undefined
   const escolaNome = isStaff
-    ? (ref.type === 'lideranca_experiencia' ? (experienciaNome ?? org.name ?? 'JOCUM') : (org.name ?? 'JOCUM'))
-    : ((schoolApp?.schools?.name) ?? 'JOCUM')
+    ? (ref.type === 'lideranca_experiencia' ? (experienciaNome ?? org.name ?? 'Organização') : (org.name ?? 'Organização'))
+    : ((schoolApp?.schools?.name) ?? 'Organização')
   const candidatoNome = isStaff
     ? (staffApp?.staff_interest_forms?.full_name ?? 'o(a) candidato(a)')
     : (schoolApp?.school_interest_forms?.full_name ?? 'o(a) candidato(a)')
@@ -78,7 +79,9 @@ export default async function ReferenciaPage({ params, searchParams }: Props) {
     ? d.ref.form_type_pastor
     : ref.type === 'amigo'
       ? d.ref.form_type_amigo
-      : d.ref.form_type_lideranca_experiencia
+      : ref.type === 'responsavel'
+        ? d.ref.form_type_responsavel
+        : d.ref.form_type_lideranca_experiencia
 
   if (new Date(ref.token_expires_at) < new Date()) {
     return (
@@ -109,10 +112,10 @@ export default async function ReferenciaPage({ params, searchParams }: Props) {
       <header className="bg-white border-b border-gray-100 px-4 sm:px-6 py-4">
         <div className="max-w-2xl mx-auto">
           <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest">
-            Jovens Com Uma Missão
+            {orgShortName(org.name, d.ref.org_label)}
           </p>
           <h1 className="text-lg font-bold text-gray-900 mt-0.5">
-            Formulário {tipoLabel}
+            {d.ref.form_title_prefix} {tipoLabel}
           </h1>
           <p className="text-sm text-gray-400">{escolaNome}</p>
         </div>
@@ -130,7 +133,7 @@ export default async function ReferenciaPage({ params, searchParams }: Props) {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6 md:p-8">
           <FormularioReferencia
             token={token}
-            tipo={ref.type as 'pastor' | 'amigo' | 'lideranca_experiencia'}
+            tipo={ref.type as 'pastor' | 'amigo' | 'lideranca_experiencia' | 'responsavel'}
             candidatoNome={candidatoNome}
             escolaNome={escolaNome}
             initialLang={langParam}

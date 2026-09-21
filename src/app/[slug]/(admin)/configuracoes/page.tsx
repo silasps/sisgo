@@ -3,7 +3,7 @@ import { Header } from '@/components/layout/Header'
 import { notFound, redirect } from 'next/navigation'
 import { BrandingForm } from './BrandingForm'
 import { ConfigForm } from './ConfigForm'
-import { updateAreaCashScopes, updateRoleAccumulations, updateIdCardEnabled, updateStaffCommunicationLanguages, updateStudentCommunicationLanguages } from './actions'
+import { updateAreaCashScopes, updateRoleAccumulations, updateIdCardEnabled, updateStaffCommunicationLanguages, updateStudentCommunicationLanguages, updateInstitutionRulesText } from './actions'
 import { asLooseClient } from '@/lib/supabase/loose-client'
 import { schoolTypeShortLabel } from '@/lib/schools'
 import { LANGUAGES } from '@/lib/i18n/phoneCountries'
@@ -36,7 +36,7 @@ export default async function ConfiguracoesPage({ params }: Props) {
 
   const { data: org } = await supabase
     .from('organizations')
-    .select('id, name, slug, email, city, state, logo_url, accent_color, role_accumulations, id_card_enabled, staff_communication_languages, student_communication_languages')
+    .select('id, name, slug, email, city, state, logo_url, accent_color, role_accumulations, id_card_enabled, staff_communication_languages, student_communication_languages, institution_rules_text')
     .eq('slug', slug)
     .single()
 
@@ -106,6 +106,26 @@ export default async function ConfiguracoesPage({ params }: Props) {
           <div className="rounded-xl border border-dark-800 bg-dark-900 p-6 opacity-60">
             <p className="text-sm font-semibold text-white uppercase tracking-widest mb-1">Identidade Visual</p>
             <p className="text-xs text-gray-500">Apenas o líder da base pode personalizar a logo e a cor de destaque.</p>
+          </div>
+        )}
+
+        {canBrand && (
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <h2 className="font-semibold text-gray-900 mb-1">Regras e valores da instituição</h2>
+            <p className="text-sm text-gray-500 mb-5">
+              Esse texto fica disponível para o candidato consultar, baixar ou receber por e-mail
+              na etapa de aceite final do formulário de inscrição de obreiro, junto ao compromisso
+              de respeitar as regras e valores da instituição. Deixe em branco pra não mostrar nada.
+            </p>
+            <ConfigForm action={updateInstitutionRulesText.bind(null, org.id, slug)} buttonLabel="Salvar regras e valores" className="space-y-4">
+              <textarea
+                name="institution_rules_text"
+                defaultValue={(org as { institution_rules_text?: string | null }).institution_rules_text ?? ''}
+                rows={10}
+                placeholder="Ex.: regras de convivência, valores da instituição, expectativas de conduta durante o período de serviço…"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 bg-gray-50 resize-y"
+              />
+            </ConfigForm>
           </div>
         )}
 

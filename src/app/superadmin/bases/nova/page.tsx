@@ -5,12 +5,8 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Header } from '@/components/layout/Header'
 import { InternationalPhoneField } from '@/components/ui/InternationalPhoneField'
+import { slugify } from '@/lib/slugify'
 import Link from 'next/link'
-
-function slugify(str: string) {
-  return str.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '')
-}
 
 export default function NovaBasePage() {
   const router = useRouter()

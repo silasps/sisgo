@@ -7,14 +7,16 @@ import { ReferenceModal } from './ReferenceModal'
 import { IncompleteFormLinkCard } from '@/components/inscricoes/IncompleteFormLinkCard'
 import { DocumentPreviewGrid } from '@/components/inscricoes/DocumentPreviewGrid'
 import { Pencil, FileText, ReceiptText } from 'lucide-react'
-import { PipelineStepper, stagesFromFlags } from '@/components/inscricoes/PipelineStepper'
+import { PipelineStepper } from '@/components/inscricoes/PipelineStepper'
+import { stagesFromFlags } from '@/components/inscricoes/pipelineStages'
 import { AvancarEtapaControl, AdvanceHistoryList } from '@/components/inscricoes/AvancarEtapaControl'
 import { getStageAdvances, resolveAdvancerNames } from '@/lib/pipelineStageAdvance'
 import { avancarEtapaAluno, reenviarLinkFormulario } from './actions'
+import { RefreshOnFocus } from '@/components/ui/RefreshOnFocus'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
-type FormSection = { title: string; fields: { label: string; key: string; type?: 'textarea' | 'radio' }[] }
+type FormSection = { title: string; fields: { label: string; key: string; type?: 'textarea' | 'radio' | 'date_anos' | 'children' }[] }
 
 const SECTIONS: FormSection[] = [
   {
@@ -27,10 +29,14 @@ const SECTIONS: FormSection[] = [
       { label: 'Escola', key: 'escola' },
       { label: 'Turma', key: 'turma' },
       { label: 'Como conheceu', key: 'como_conheceu' },
-      { label: 'Como conheceu a JOCUM', key: 'como_conheceu_jocum' },
+      { label: 'Como conheceu a organização', key: 'como_conheceu_jocum' },
       { label: 'Conversou com alguém da escola?', key: 'conversou_equipe' },
       { label: 'Com quem conversou', key: 'conversou_com_quem' },
       { label: 'Motivação', key: 'motivacao', type: 'textarea' },
+      { label: 'Data de chegada', key: 'data_chegada' },
+      { label: 'Horário de chegada', key: 'horario_chegada' },
+      { label: 'Data de saída', key: 'data_saida' },
+      { label: 'Horário de saída', key: 'horario_saida' },
     ],
   },
   {
@@ -96,14 +102,14 @@ const SECTIONS: FormSection[] = [
       { label: 'Situação familiar', key: 'situacao_familiar', type: 'textarea' },
       { label: 'Estado civil atual', key: 'estado_civil_atual' },
       { label: 'Nome/idade do cônjuge', key: 'conjuge_nome_idade' },
-      { label: 'Tempo casados', key: 'tempo_casados' },
+      { label: 'Data do casamento', key: 'data_casamento', type: 'date_anos' },
       { label: 'Cônjuge apoia?', key: 'conjuge_apoia' },
       { label: 'Cônjuge participará?', key: 'conjuge_participa' },
       { label: 'Tempo comprometido(a)', key: 'tempo_compromisso' },
       { label: 'Parceiro(a) apoia?', key: 'compromisso_apoia' },
       { label: 'Situação relacional', key: 'situacao_relacional', type: 'textarea' },
       { label: 'Tem filhos?', key: 'tem_filhos' },
-      { label: 'Dados dos filhos', key: 'filhos_dados', type: 'textarea' },
+      { label: 'Filhos', key: 'filhos_dados', type: 'children' },
       { label: 'Filhos virão?', key: 'filhos_virao' },
       { label: 'Com quem os filhos ficarão', key: 'filhos_ficam_com' },
     ],
@@ -231,28 +237,95 @@ const AVAL_LABELS: Record<string, string> = {
 
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <details className="group bg-white rounded-xl border border-gray-200 overflow-hidden" open>
-      <summary className="flex items-center justify-between px-5 py-4 cursor-pointer select-none list-none hover:bg-gray-50">
+    <details className="group bg-white rounded-xl border border-gray-200" open>
+      <summary className="flex items-center justify-between px-5 py-4 cursor-pointer select-none list-none hover:bg-gray-50 sticky top-16 z-[5] bg-white rounded-t-xl group-open:border-b group-open:border-gray-100">
         <h3 className="font-semibold text-gray-900 text-sm">{title}</h3>
         <span className="text-gray-400 text-xs transition-transform group-open:rotate-180">▼</span>
       </summary>
-      <div className="px-5 pb-5 border-t border-gray-100">
+      <div className="px-5 pb-5">
         {children}
       </div>
     </details>
   )
 }
 
-function FieldRow({ label, value, type }: { label: string; value: unknown; type?: 'textarea' | 'radio' }) {
+function anosDesde(dateStr: string): number | null {
+  const then = new Date(dateStr + 'T00:00:00')
+  if (Number.isNaN(then.getTime())) return null
+  const now = new Date()
+  let years = now.getFullYear() - then.getFullYear()
+  const beforeAnniversary = now.getMonth() < then.getMonth() ||
+    (now.getMonth() === then.getMonth() && now.getDate() < then.getDate())
+  if (beforeAnniversary) years -= 1
+  return years >= 0 ? years : null
+}
+
+type ChildRow = { nome: string; sexo: string; data_nascimento: string }
+
+function parseChildren(value: unknown): ChildRow[] {
+  if (typeof value !== 'string' || !value.trim()) return []
+  try {
+    const parsed = JSON.parse(value)
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((r: unknown) => {
+          const row = (r ?? {}) as Partial<ChildRow>
+          return { nome: row.nome ?? '', sexo: row.sexo ?? '', data_nascimento: row.data_nascimento ?? '' }
+        })
+        .filter(r => r.nome.trim())
+    }
+  } catch { /* valor legado em texto livre */ }
+  return [{ nome: value, sexo: '', data_nascimento: '' }]
+}
+
+function FieldRow({ label, value, type }: { label: string; value: unknown; type?: 'textarea' | 'radio' | 'date_anos' | 'children' }) {
+  if (type === 'date_anos') {
+    const str = typeof value === 'string' ? value.trim() : ''
+    if (!str) return <EmptyFieldRow label={label} />
+    const anos = anosDesde(str)
+    const formatted = new Date(str + 'T00:00:00').toLocaleDateString('pt-BR')
+    return (
+      <div className="py-2.5 border-b border-gray-50 last:border-0">
+        <p className="text-xs font-medium text-gray-400 mb-0.5">{label}</p>
+        <p className="text-sm text-gray-800">{formatted}{anos !== null ? ` — ${anos} ano(s) de casados` : ''}</p>
+      </div>
+    )
+  }
+  if (type === 'children') {
+    const rows = parseChildren(value)
+    if (!rows.length) return <EmptyFieldRow label={label} />
+    return (
+      <div className="col-span-full py-2.5 border-b border-gray-50 last:border-0">
+        <p className="text-xs font-medium text-gray-400 mb-0.5">{label} <span className="text-indigo-700 font-semibold">({rows.length})</span></p>
+        <div className="text-sm text-gray-800 space-y-0.5">
+          {rows.map((r, i) => {
+            const sexoLabel = r.sexo === 'M' ? 'Masculino' : r.sexo === 'F' ? 'Feminino' : ''
+            const nascimento = r.data_nascimento ? new Date(r.data_nascimento + 'T00:00:00').toLocaleDateString('pt-BR') : ''
+            const details = [sexoLabel, nascimento].filter(Boolean).join(' · ')
+            return <p key={i}>{r.nome}{details ? ` — ${details}` : ''}</p>
+          })}
+        </div>
+      </div>
+    )
+  }
   const str = typeof value === 'string' ? value.trim() : ''
-  if (!str) return null
+  if (!str) return <EmptyFieldRow label={label} />
   return (
-    <div className="py-2.5 border-b border-gray-50 last:border-0">
+    <div className={`py-2.5 border-b border-gray-50 last:border-0 ${type === 'textarea' ? 'col-span-full' : ''}`}>
       <p className="text-xs font-medium text-gray-400 mb-0.5">{label}</p>
       {type === 'textarea'
         ? <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{str}</p>
         : <p className="text-sm text-gray-800">{str}</p>
       }
+    </div>
+  )
+}
+
+function EmptyFieldRow({ label }: { label: string }) {
+  return (
+    <div className="py-2.5 border-b border-gray-50 last:border-0">
+      <p className="text-xs font-medium text-gray-400 mb-0.5">{label}</p>
+      <p className="text-sm text-gray-400">— não informado —</p>
     </div>
   )
 }
@@ -343,6 +416,7 @@ export default async function FormularioViewerPage({ params }: Props) {
     doc_foto: 'Foto do rosto',
     doc_rg_frente: 'RG (frente)',
     doc_rg_verso: 'RG (verso)',
+    doc_cnh: 'CNH',
     doc_cpf: 'CPF',
     doc_passaporte: 'Passaporte',
   }
@@ -395,6 +469,7 @@ export default async function FormularioViewerPage({ params }: Props) {
 
   return (
     <>
+      <RefreshOnFocus />
       {/* Header */}
       <div className="h-16 shrink-0 sticky top-0 z-10 bg-white border-b border-gray-200 px-4 md:px-6 flex items-center">
         <div className="flex items-center gap-3 flex-wrap">
@@ -426,7 +501,7 @@ export default async function FormularioViewerPage({ params }: Props) {
         )}
       </div>
 
-      <main className="p-4 md:p-6 space-y-5 max-w-4xl mx-auto">
+      <main className="p-4 md:p-6 space-y-5 max-w-4xl xl:max-w-6xl mx-auto">
 
         {/* Info do candidato */}
         <div className="bg-indigo-600 text-white rounded-2xl p-5">
@@ -502,19 +577,22 @@ export default async function FormularioViewerPage({ params }: Props) {
             )}
 
             {/* Autoavaliação */}
-            {!!formData.s11 && (
+            {(
               <SectionCard title="Autoavaliação">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
                   {AUTOAVAL_AREAS.map(area => {
                     const key = `autoaval_${area.toLowerCase().replace(/\s/g, '_')}`
                     const val = (formData.s11 as Record<string, string>)?.[key]
-                    if (!val) return null
                     return (
                       <div key={area} className="flex items-center justify-between gap-2 bg-gray-50 rounded-lg px-3 py-2">
                         <span className="text-xs text-gray-700">{area}</span>
-                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${AVAL_COLORS[val] ?? 'bg-gray-100 text-gray-500'}`}>
-                          {AVAL_LABELS[val] ?? val}
-                        </span>
+                        {val ? (
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${AVAL_COLORS[val] ?? 'bg-gray-100 text-gray-500'}`}>
+                            {AVAL_LABELS[val] ?? val}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-400">— não informado —</span>
+                        )}
                       </div>
                     )
                   })}
@@ -526,19 +604,12 @@ export default async function FormularioViewerPage({ params }: Props) {
             {SECTIONS.map((section, i) => {
               const sectionKeys = ['s1', 's4', 's5', 's6', 's7', 's8', 's9', 's10', 's11', 's12', 's13', 's14']
               const sectionKey = sectionKeys[i] as keyof typeof formData
-              const data = formData[sectionKey] as Record<string, string> | undefined
-              if (!data) return null
-
-              const visibleFields = section.fields.filter(f => {
-                const val = data[f.key]
-                return typeof val === 'string' && val.trim()
-              })
-              if (!visibleFields.length) return null
+              const data = (formData[sectionKey] as Record<string, string> | undefined) ?? {}
 
               return (
                 <SectionCard key={section.title} title={section.title}>
-                  <div className="mt-1">
-                    {visibleFields.map(f => (
+                  <div className="mt-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6">
+                    {section.fields.map(f => (
                       <FieldRow key={f.key} label={f.label} value={data[f.key]} type={f.type} />
                     ))}
                   </div>

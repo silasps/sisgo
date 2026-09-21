@@ -138,7 +138,7 @@ export async function login(formData: FormData) {
 
   if (!org?.slug) return { redirectTo: '/bases' }
 
-  return { redirectTo: `/${org.slug}/pessoas` }
+  return { redirectTo: `/${org.slug}/dashboard` }
 }
 
 export async function getLoginRedirect() {
@@ -174,7 +174,7 @@ export async function getLoginRedirect() {
 
   if (!org?.slug) return { redirectTo: '/bases' }
 
-  return { redirectTo: `/${org.slug}/pessoas` }
+  return { redirectTo: `/${org.slug}/dashboard` }
 }
 
 export async function loginWithGoogle() {

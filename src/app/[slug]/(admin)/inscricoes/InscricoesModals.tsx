@@ -51,14 +51,19 @@ function DestinationSelect({ ministries, schools, defaultValue, className }: {
 // ── Nova pré-inscrição manual ──────────────────────────────────────────────
 
 export function NovaPreInscricaoButton({
-  openClasses, criarAction, slug,
+  openClasses, criarAction, slug, open: openProp, onOpenChange, hideTrigger,
 }: {
   openClasses: ClassOption[]
   criarAction: CriarAction
   slug: string
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  hideTrigger?: boolean
 }) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
+  const [openState, setOpenState] = useState(false)
+  const open = openProp ?? openState
+  const setOpen = onOpenChange ?? setOpenState
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -74,11 +79,13 @@ export function NovaPreInscricaoButton({
 
   return (
     <>
-      <button onClick={() => setOpen(true)} aria-label="Nova pré-inscrição de aluno"
-        className="p-2 sm:px-3 sm:py-2 text-xs font-semibold text-white bg-brand-500 hover:bg-brand-600 rounded-lg transition-colors whitespace-nowrap">
-        <GraduationCap className="size-4 sm:hidden" />
-        <span className="hidden sm:inline">+ Aluno</span>
-      </button>
+      {!hideTrigger && (
+        <button onClick={() => setOpen(true)} aria-label="Nova pré-inscrição de aluno"
+          className="p-2 sm:px-3 sm:py-2 text-xs font-semibold text-white bg-brand-500 hover:bg-brand-600 rounded-lg transition-colors whitespace-nowrap">
+          <GraduationCap className="size-4 sm:hidden" />
+          <span className="hidden sm:inline">+ Aluno</span>
+        </button>
+      )}
 
       <Modal open={open} onClose={() => setOpen(false)} title="Nova pré-inscrição manual"
         subtitle="Somente nome obrigatório — restante é opcional">
@@ -140,15 +147,20 @@ export function NovaPreInscricaoButton({
 // ── Nova pré-inscrição de obreiro ─────────────────────────────────────────
 
 export function NovaPreInscricaoObreiroButton({
-  ministries, schools, criarAction, slug,
+  ministries, schools, criarAction, slug, open: openProp, onOpenChange, hideTrigger,
 }: {
   ministries: MinistryOption[]
   schools: SchoolOption[]
   criarAction: CriarAction
   slug: string
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  hideTrigger?: boolean
 }) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
+  const [openState, setOpenState] = useState(false)
+  const open = openProp ?? openState
+  const setOpen = onOpenChange ?? setOpenState
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -164,11 +176,13 @@ export function NovaPreInscricaoObreiroButton({
 
   return (
     <>
-      <button onClick={() => setOpen(true)} aria-label="Nova pré-inscrição de obreiro"
-        className="p-2 sm:px-3 sm:py-2 text-xs font-semibold text-white bg-violet-500 hover:bg-violet-600 rounded-lg transition-colors whitespace-nowrap">
-        <Briefcase className="size-4 sm:hidden" />
-        <span className="hidden sm:inline">+ Obreiro</span>
-      </button>
+      {!hideTrigger && (
+        <button onClick={() => setOpen(true)} aria-label="Nova pré-inscrição de obreiro"
+          className="p-2 sm:px-3 sm:py-2 text-xs font-semibold text-white bg-violet-500 hover:bg-violet-600 rounded-lg transition-colors whitespace-nowrap">
+          <Briefcase className="size-4 sm:hidden" />
+          <span className="hidden sm:inline">+ Obreiro</span>
+        </button>
+      )}
 
       <Modal open={open} onClose={() => setOpen(false)} title="Nova pré-inscrição de obreiro"
         subtitle="Somente nome obrigatório — restante é opcional">

@@ -73,7 +73,13 @@ async function getEditableApplication(token: string, slug: string) {
   return { app, sb }
 }
 
-export async function salvarSecao(slug: string, token: string, section: number, data: Record<string, unknown>) {
+// `nextSection` é a seção pra onde o usuário está indo AGORA (a seguinte, se
+// avançou; a anterior, se voltou) — current_section grava exatamente isso,
+// sem "Math.max". Um max ali parecia seguro (não perder progresso), mas
+// quebrava o caso de voltar pra revisar uma seção anterior: ao recarregar, a
+// pessoa caía de volta no ponto mais avançado já alcançado, não na seção
+// onde estava de fato revisando.
+export async function salvarSecao(slug: string, token: string, section: number, data: Record<string, unknown>, nextSection: number) {
   if (!EDITABLE_SECTIONS.has(section)) return { error: 'Seção inválida.' }
 
   const result = await getEditableApplication(token, slug)
@@ -89,9 +95,21 @@ export async function salvarSecao(slug: string, token: string, section: number, 
 
   await sb.from('school_applications').update({
     form_data: updated,
-    current_section: Math.max(app.current_section ?? 1, section),
+    current_section: nextSection,
   }).eq('id', app.id)
 
+  return { success: true }
+}
+
+// Só pra navegar pra trás saindo da seção 15 (só arquivo — salvarSecao
+// sobrescreveria os documentos já enviados com {} se fosse usada aqui).
+// Sem isso, current_section ficava parado na 15/16 e o reload não voltava
+// pra seção certa.
+export async function atualizarSecaoAtual(slug: string, token: string, nextSection: number) {
+  const result = await getEditableApplication(token, slug)
+  if ('error' in result) return { error: result.error }
+  const { app, sb } = result
+  await sb.from('school_applications').update({ current_section: nextSection }).eq('id', app.id)
   return { success: true }
 }
 
@@ -205,11 +223,12 @@ export async function anexarComprovante(slug: string, token: string, formData: F
   return { success: true, fileName: file.name }
 }
 
-const DOCUMENT_KEYS = ['doc_foto', 'doc_rg_frente', 'doc_rg_verso', 'doc_cpf', 'doc_passaporte'] as const
+const DOCUMENT_KEYS = ['doc_foto', 'doc_rg_frente', 'doc_rg_verso', 'doc_cnh', 'doc_cpf', 'doc_passaporte'] as const
 const DOCUMENT_KIND_BY_KEY: Record<typeof DOCUMENT_KEYS[number], DocumentKind> = {
   doc_foto: 'foto',
   doc_rg_frente: 'rg_frente',
   doc_rg_verso: 'rg_verso',
+  doc_cnh: 'cnh',
   doc_cpf: 'cpf',
   doc_passaporte: 'passaporte',
 }
@@ -226,7 +245,7 @@ const DOCUMENT_TYPES: Record<string, string> = {
 // cada arquivo presente no formData e grava só os metadados
 // (path/name/type/size) em form_data.s15, igual ao padrão de
 // anexarComprovante.
-export async function anexarDocumentos(slug: string, token: string, formData: FormData) {
+export async function anexarDocumentos(slug: string, token: string, formData: FormData, nextSection: number) {
   const result = await getEditableApplication(token, slug)
   if ('error' in result) return { error: result.error }
   const { app, sb } = result
@@ -238,7 +257,17 @@ export async function anexarDocumentos(slug: string, token: string, formData: Fo
 
   for (const key of DOCUMENT_KEYS) {
     const file = formData.get(key)
-    if (!(file instanceof File) || file.size === 0) continue
+    if (!(file instanceof File) || file.size === 0) {
+      // Nenhum arquivo novo pra essa chave — se o botão "excluir" marcou o
+      // campo oculto de remoção (ver FileInputField), apaga o que já
+      // estava salvo em vez de manter o antigo.
+      if (formData.get(`remove_${key}`) === '1') {
+        const previous = existingS15[key]
+        if (previous?.path) toRemove.push(previous.path)
+        delete updatedS15[key]
+      }
+      continue
+    }
     if (!DOCUMENT_TYPES[file.type]) return { error: 'Envie imagens (JPG, PNG ou WebP) ou PDF nos documentos.' }
     if (file.size > 10 * 1024 * 1024) return { error: 'Cada arquivo deve ter no máximo 10 MB.' }
 
@@ -262,7 +291,7 @@ export async function anexarDocumentos(slug: string, token: string, formData: Fo
 
   await sb.from('school_applications').update({
     form_data: { ...existing, s15: updatedS15 },
-    current_section: Math.max(app.current_section ?? 1, 15),
+    current_section: nextSection,
   }).eq('id', app.id)
 
   if (toRemove.length) await sb.storage.from('application-documents').remove(toRemove)

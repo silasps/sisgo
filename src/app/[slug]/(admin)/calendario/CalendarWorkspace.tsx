@@ -836,7 +836,7 @@ function SchoolDayModal({
   }
 
   return (
-    <div className={`fixed inset-0 ${sidebarLeftClass} z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-12`} onClick={onClose}>
+    <div className={`fixed inset-0 ${sidebarLeftClass} z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-[max(3rem,env(safe-area-inset-top))]`} onClick={onClose}>
       <div className="w-full max-w-md rounded-xl bg-white shadow-xl" onClick={e => e.stopPropagation()}>
 
         {/* Header with day nav */}
@@ -1188,7 +1188,7 @@ function EventModal({
   ]
 
   return (
-    <div className={`fixed inset-0 ${sidebarLeftClass} z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-16`} onClick={onClose}>
+    <div className={`fixed inset-0 ${sidebarLeftClass} z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-[max(4rem,env(safe-area-inset-top))]`} onClick={onClose}>
       <div className="w-full max-w-md rounded-xl bg-white shadow-xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
           <div>

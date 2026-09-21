@@ -8,6 +8,10 @@ import {
   inviteStaffMemberDirect,
 } from '../actions'
 import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
+import { getPeopleFinanceSummaries } from '@/lib/finance/personFinanceStatus'
+import { notifyFinancePendency } from '@/lib/finance/notifyFinancePendency'
+import { PersonFinanceBadge } from '@/components/finance/PersonFinanceBadge'
+import { FinancePendingConfirmButton } from '@/components/finance/FinancePendingConfirmButton'
 import { Suspense } from 'react'
 import { ScrollHighlight } from '@/components/ui/ScrollHighlight'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
@@ -96,6 +100,9 @@ export default async function EquipePage({ params, searchParams }: Props) {
     const { data: mData } = await sbAdmin.from('ministries').select('id, name').in('id', transferMinistryIds)
     transferMinistryMap = new Map((mData ?? []).map(m => [m.id, m.name]))
   }
+
+  const dhTransferPersonIds = [...new Set(transfers.filter(t => t.status === 'aceito_destino').map(t => t.person_id))]
+  const transferFinanceMap = await getPeopleFinanceSummaries(orgId, dhTransferPersonIds)
 
   let otherMinistries: Array<{ id: string; name: string }> = []
   if (isLiderMinisterio || isManagement) {
@@ -218,6 +225,32 @@ export default async function EquipePage({ params, searchParams }: Props) {
     const confirm = formData.get('confirm') === 'true'
     const notes = (formData.get('notes') as string)?.trim() || null
     await confirmTransferAsDH(transferId, user.id, confirm, notes)
+
+    if (confirm) {
+      const notifyCandidate = formData.get('notify_candidate') === 'on'
+      const notifyLeader = formData.get('notify_leader') === 'on'
+      if (notifyCandidate || notifyLeader) {
+        const transfer = transfers.find(t => t.id === transferId)
+        if (transfer) {
+          let leaderEmail: string | null = null
+          if (notifyLeader) {
+            const { data: leaderRow } = await sbAdmin.from('ministry_leaders').select('user_id').eq('ministry_id', transfer.to_ministry_id).maybeSingle()
+            if (leaderRow?.user_id) {
+              const { data: leaderUser } = await sbAdmin.auth.admin.getUserById(leaderRow.user_id)
+              leaderEmail = leaderUser.user?.email ?? null
+            }
+          }
+          await notifyFinancePendency({
+            organizationId: orgId,
+            personId: transfer.person_id,
+            personName: transferPersonMap.get(transfer.person_id) ?? 'Pessoa',
+            notifyCandidate,
+            notifyLeaderEmail: leaderEmail,
+          })
+        }
+      }
+    }
+
     redirect(`/${slug}/ministerios/${id}/equipe?msg=${confirm ? 'transfer_efetivada' : 'transfer_rejeitada_dh'}`)
   }
   const handleCancelTransfer = async (formData: FormData) => {
@@ -399,14 +432,25 @@ export default async function EquipePage({ params, searchParams }: Props) {
             <ul className="space-y-3">
               {dhTransfers.map(t => (
                 <li key={t.id} className="border border-amber-100 rounded-lg p-3 space-y-2">
-                  <p className="text-sm font-medium text-gray-800">{transferPersonMap.get(t.person_id) ?? '—'}</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-medium text-gray-800">{transferPersonMap.get(t.person_id) ?? '—'}</p>
+                    <PersonFinanceBadge summary={transferFinanceMap.get(t.person_id) ?? { personId: t.person_id, pendingCount: 0, overdueCount: 0, pendingAmount: 0, overdueAmount: 0 }} />
+                  </div>
                   <p className="text-xs text-gray-500">{transferMinistryMap.get(t.from_ministry_id) ?? '?'} → {transferMinistryMap.get(t.to_ministry_id) ?? '?'}</p>
                   {t.reason && <p className="text-xs text-gray-400 italic">&ldquo;{t.reason}&rdquo;</p>}
                   {t.dest_notes && <p className="text-xs text-green-600">Líder destino: &ldquo;{t.dest_notes}&rdquo;</p>}
                   <form action={handleConfirmTransfer} className="flex gap-2 pt-1">
                     <input type="hidden" name="transfer_id" value={t.id} />
                     <input name="notes" placeholder="Observação (opcional)" className="flex-1 border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand-400" />
-                    <button type="submit" name="confirm" value="true" className="px-3 py-1.5 bg-green-500 text-white text-xs font-medium rounded-lg hover:bg-green-600 transition-colors">Efetivar</button>
+                    <FinancePendingConfirmButton
+                      action={handleConfirmTransfer}
+                      financeSummary={transferFinanceMap.get(t.person_id) ?? null}
+                      personName={transferPersonMap.get(t.person_id) ?? 'Esta pessoa'}
+                      extraFields={{ confirm: 'true' }}
+                      className="px-3 py-1.5 bg-green-500 text-white text-xs font-medium rounded-lg hover:bg-green-600 transition-colors"
+                    >
+                      Efetivar
+                    </FinancePendingConfirmButton>
                     <button type="submit" name="confirm" value="false" className="px-3 py-1.5 border border-red-200 text-red-500 text-xs font-medium rounded-lg hover:bg-red-50 transition-colors">Recusar</button>
                   </form>
                 </li>

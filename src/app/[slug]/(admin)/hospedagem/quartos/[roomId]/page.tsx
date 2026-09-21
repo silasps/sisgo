@@ -1,7 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/Header'
-import { notFound, redirect } from 'next/navigation'
+import { notFound } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
 import { isManagementRole, userHasAnyRole, HOSPEDAGEM_ROLES } from '@/lib/auth/permissions'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { updateRoom, createBed, updateBed, removeBed, createAllocation, updateAllocationStatus, cancelAllocation } from '../../actions'
@@ -48,22 +49,40 @@ export default async function RoomDetailPage({ params, searchParams }: Props) {
 
   if (!isManagementRole(role) && !userHasAnyRole(allRoles, HOSPEDAGEM_ROLES)) notFound()
 
-  // ── Fetch room ──────────────────────────────────────────────────────────────
-  const { data: room } = await sbAdmin.from('rooms')
-    .select('id, name, floor_id, type, gender_constraint, destination, allocation_mode, capacity, status, notes, floors(name, blocks(name))')
-    .eq('id', roomId)
-    .eq('organization_id', org.id)
-    .single()
+  // ── Fetch tudo em paralelo — nenhuma dessas 5 depende do resultado das
+  // outras (todas só precisam de roomId/org.id, já conhecidos), então rodar
+  // em sequência só somava round-trips à toa. ────────────────────────────────
+  const [
+    { data: room },
+    { data: blocksData },
+    { data: floorsData },
+    { data: bedsRaw },
+    { data: allocsRaw },
+  ] = await Promise.all([
+    sbAdmin.from('rooms')
+      .select('id, name, floor_id, type, gender_constraint, destination, allocation_mode, capacity, status, notes, floors(name, blocks(name))')
+      .eq('id', roomId)
+      .eq('organization_id', org.id)
+      .single(),
+    sbAdmin.from('blocks').select('id, name').eq('organization_id', org.id).order('name'),
+    sbAdmin.from('floors').select('id, block_id, name, destination, gender_constraint').eq('organization_id', org.id).order('name'),
+    sbAdmin.from('beds')
+      .select('id, label, type, status, notes')
+      .eq('room_id', roomId)
+      .eq('organization_id', org.id)
+      .order('position')
+      .order('label'),
+    sbAdmin.from('room_allocations')
+      .select('id, guest_name, guest_type, bed_id, check_in, check_out, actual_check_in, actual_check_out, status, notes')
+      .eq('room_id', roomId)
+      .eq('organization_id', org.id)
+      .order('check_in', { ascending: false }),
+  ])
 
   if (!room) notFound()
 
   const roomFloor = room.floors as unknown as { name: string; blocks: { name: string } | null } | null
 
-  // ── Andares disponíveis (pra trocar o quarto de andar ao editar) ────────────
-  const [{ data: blocksData }, { data: floorsData }] = await Promise.all([
-    sbAdmin.from('blocks').select('id, name').eq('organization_id', org.id).order('name'),
-    sbAdmin.from('floors').select('id, block_id, name, destination, gender_constraint').eq('organization_id', org.id).order('name'),
-  ])
   const blocksList = (blocksData ?? []) as Array<{ id: string; name: string }>
   const floorOptions = ((floorsData ?? []) as Array<{ id: string; block_id: string; name: string; destination: string | null; gender_constraint: string | null }>).map(f => ({
     id: f.id,
@@ -73,24 +92,9 @@ export default async function RoomDetailPage({ params, searchParams }: Props) {
     genderConstraint: f.gender_constraint,
   }))
 
-  // ── Fetch beds ──────────────────────────────────────────────────────────────
-  const { data: bedsRaw } = await sbAdmin.from('beds')
-    .select('id, label, type, status, notes')
-    .eq('room_id', roomId)
-    .eq('organization_id', org.id)
-    .order('position')
-    .order('label')
-
   const bedsList = (bedsRaw ?? []) as Array<{
     id: string; label: string; type: string; status: string; notes: string | null
   }>
-
-  // ── Fetch allocations ───────────────────────────────────────────────────────
-  const { data: allocsRaw } = await sbAdmin.from('room_allocations')
-    .select('id, guest_name, guest_type, bed_id, check_in, check_out, actual_check_in, actual_check_out, status, notes')
-    .eq('room_id', roomId)
-    .eq('organization_id', org.id)
-    .order('check_in', { ascending: false })
 
   type AllocRow = {
     id: string; guest_name: string; guest_type: string; bed_id: string | null
@@ -122,6 +126,11 @@ export default async function RoomDetailPage({ params, searchParams }: Props) {
     .map(b => ({ id: b.id, label: b.label }))
 
   // ── Server actions ──────────────────────────────────────────────────────────
+  // Sem redirect nas de quarto/cama: revalidatePath só invalida o cache do
+  // RSC e o client fecha o modal na hora + toast (ver RoomForm/BedManager) —
+  // reduz bastante a demora percebida ao cadastrar várias camas em sequência.
+  const roomPath = `/${slug}/hospedagem/quartos/${roomId}`
+
   const handleEditRoom = async (formData: FormData) => {
     'use server'
     const name = (formData.get('name') as string).trim()
@@ -140,7 +149,7 @@ export default async function RoomDetailPage({ params, searchParams }: Props) {
       status:           formData.get('status') as string ?? 'ativo',
       notes:            (formData.get('notes') as string)?.trim() || null,
     })
-    redirect(`/${slug}/hospedagem/quartos/${roomId}?msg=quarto_atualizado`)
+    revalidatePath(roomPath)
   }
 
   const handleAddBed = async (formData: FormData) => {
@@ -154,7 +163,7 @@ export default async function RoomDetailPage({ params, searchParams }: Props) {
       type:  formData.get('type') as string,
       notes: (formData.get('notes') as string)?.trim() || null,
     })
-    redirect(`/${slug}/hospedagem/quartos/${roomId}?msg=cama_adicionada`)
+    revalidatePath(roomPath)
   }
 
   const handleEditBed = async (formData: FormData) => {
@@ -170,7 +179,7 @@ export default async function RoomDetailPage({ params, searchParams }: Props) {
       status: formData.get('status') as string,
       notes:  (formData.get('notes') as string)?.trim() || null,
     })
-    redirect(`/${slug}/hospedagem/quartos/${roomId}?msg=cama_atualizada`)
+    revalidatePath(roomPath)
   }
 
   const handleRemoveBed = async (formData: FormData) => {
@@ -180,7 +189,7 @@ export default async function RoomDetailPage({ params, searchParams }: Props) {
       roomId,
       organizationId: org.id,
     })
-    redirect(`/${slug}/hospedagem/quartos/${roomId}?msg=cama_removida`)
+    revalidatePath(roomPath)
   }
 
   const handleCreateAllocation = async (formData: FormData) => {
@@ -200,7 +209,7 @@ export default async function RoomDetailPage({ params, searchParams }: Props) {
       notes:          (formData.get('notes') as string)?.trim() || null,
       createdBy:      user.id,
     })
-    redirect(`/${slug}/hospedagem/quartos/${roomId}?msg=alocacao_criada`)
+    revalidatePath(roomPath)
   }
 
   const handleCheckin = async (formData: FormData) => {
@@ -211,7 +220,7 @@ export default async function RoomDetailPage({ params, searchParams }: Props) {
       status:         'checkin',
       bedId:          (formData.get('bed_id') as string) || null,
     })
-    redirect(`/${slug}/hospedagem/quartos/${roomId}`)
+    revalidatePath(roomPath)
   }
 
   const handleCheckout = async (formData: FormData) => {
@@ -222,7 +231,7 @@ export default async function RoomDetailPage({ params, searchParams }: Props) {
       status:         'checkout',
       bedId:          (formData.get('bed_id') as string) || null,
     })
-    redirect(`/${slug}/hospedagem/quartos/${roomId}`)
+    revalidatePath(roomPath)
   }
 
   const handleCancelAllocation = async (formData: FormData) => {
@@ -232,18 +241,17 @@ export default async function RoomDetailPage({ params, searchParams }: Props) {
       organizationId: org.id,
       bedId:          (formData.get('bed_id') as string) || null,
     })
-    redirect(`/${slug}/hospedagem/quartos/${roomId}`)
+    revalidatePath(roomPath)
   }
 
   const st     = STATUS_LABELS[room.status] ?? STATUS_LABELS.ativo
   const gender = room.gender_constraint ? GENDER_LABELS[room.gender_constraint] : null
 
+  // Quarto/cama não passam mais por aqui — fecham modal + toast direto no
+  // client (revalidatePath, sem redirect). Só alocação de hóspede ainda
+  // redireciona.
   const msgInfo: Record<string, string> = {
-    quarto_atualizado: 'Quarto atualizado.',
-    cama_adicionada:   'Cama adicionada.',
-    cama_atualizada:   'Cama atualizada.',
-    cama_removida:     'Cama removida.',
-    alocacao_criada:   'Hóspede alocado com sucesso.',
+    alocacao_criada: 'Hóspede alocado com sucesso.',
   }
 
   return (
@@ -298,15 +306,19 @@ export default async function RoomDetailPage({ params, searchParams }: Props) {
           </div>
         </div>
 
-        {/* Beds section */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <BedManager
-            beds={bedsWithOccupants}
-            addAction={handleAddBed}
-            editAction={handleEditBed}
-            removeAction={handleRemoveBed}
-          />
-        </div>
+        {/* Beds section — só faz sentido em modo "cama"; quarto inteiro é
+            alocado de uma vez (AllocationManager abaixo), sem granularidade
+            de cama nenhuma. */}
+        {room.allocation_mode === 'cama' && (
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <BedManager
+              beds={bedsWithOccupants}
+              addAction={handleAddBed}
+              editAction={handleEditBed}
+              removeAction={handleRemoveBed}
+            />
+          </div>
+        )}
 
         {/* Allocations section */}
         <div className="bg-white rounded-xl border border-gray-200 p-4">

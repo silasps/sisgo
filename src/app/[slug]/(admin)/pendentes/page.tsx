@@ -2,20 +2,18 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/Header'
-import { AnimatedDonutChart } from '@/components/ui/AnimatedDonutChart'
 import { redirect } from 'next/navigation'
 import { updateServiceStatus, cancelRequest } from '../ministerios/[id]/actions'
 import { confirmMealPayment, rejectMealPayment, requestMealPaymentProof } from '../cozinha/actions'
 import { getRolePreview } from '@/lib/role-preview'
 import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
 import { ServiceRequestsPanel } from './ServiceRequestsPanel'
-import { PendentesCardList } from './PendentesCardList'
-import { SearchBar } from '@/components/ui/SearchBar'
-import { Suspense } from 'react'
+import { HOSPEDAGEM_TYPES, extractFamilyInfo, extractGuestGender, guestTypeForServiceRequest, type FamilyInfo } from '@/lib/hospedagem'
+import { PendentesFilterPanel } from './PendentesFilterPanel'
 
 type Props = {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ q?: string }>
+  searchParams: Promise<{ q?: string; categoria?: string; urgencia?: string }>
 }
 
 type PendenteItem = {
@@ -98,7 +96,7 @@ function WhatsAppButton({ phone, label = 'WhatsApp' }: { phone?: string | null; 
 
 export default async function PendentesPage({ params, searchParams }: Props) {
   const { slug } = await params
-  const { q } = await searchParams
+  const { q, categoria, urgencia } = await searchParams
   const supabase = await createClient()
 
   const { data: org } = await supabase
@@ -270,9 +268,6 @@ export default async function PendentesPage({ params, searchParams }: Props) {
   }
 
   items.sort((a, b) => b.diasAberto - a.diasAberto)
-  const filteredItems = q
-    ? items.filter(i => i.nome.toLowerCase().includes(q.toLowerCase()))
-    : items
   const totalUrgentes = items.filter(i => i.diasAberto >= 3).length
 
   // ── 4. Solicitações de ministério (gestão) ──────────────────────────────────
@@ -332,6 +327,45 @@ export default async function PendentesPage({ params, searchParams }: Props) {
     if (!isManagement) q = q.in('target_department', myDepts.length > 0 ? myDepts : ['hospitalidade'])
     const { data } = await q
     serviceRequests = (data ?? []) as unknown as ServiceReqRaw[]
+  }
+
+  // ── 5b. Família (cônjuge/filhos) vindo junto, só pras pendências de
+  // hospedagem — busca form_data em lote, não uma query por pendência ────────
+  const hospedagemReqs = serviceRequests.filter(r => HOSPEDAGEM_TYPES.includes(r.request_type))
+  const staffAppIds  = [...new Set(hospedagemReqs.map(r => r.staff_application_id).filter((id): id is string => !!id))]
+  const schoolAppIds = [...new Set(hospedagemReqs.map(r => r.school_application_id).filter((id): id is string => !!id))]
+  const formDataByStaffApp  = new Map<string, Record<string, unknown>>()
+  const formDataBySchoolApp = new Map<string, Record<string, unknown>>()
+  if (staffAppIds.length > 0 || schoolAppIds.length > 0) {
+    const sbAdmin = createAdminClient()
+    const [{ data: staffApps }, { data: schoolApps }] = await Promise.all([
+      staffAppIds.length > 0
+        ? sbAdmin.from('staff_applications').select('id, form_data').in('id', staffAppIds)
+        : Promise.resolve({ data: [] }),
+      schoolAppIds.length > 0
+        ? sbAdmin.from('school_applications').select('id, form_data').in('id', schoolAppIds)
+        : Promise.resolve({ data: [] }),
+    ])
+    for (const a of (staffApps ?? []) as Array<{ id: string; form_data: Record<string, unknown> | null }>) {
+      formDataByStaffApp.set(a.id, a.form_data ?? {})
+    }
+    for (const a of (schoolApps ?? []) as Array<{ id: string; form_data: Record<string, unknown> | null }>) {
+      formDataBySchoolApp.set(a.id, a.form_data ?? {})
+    }
+  }
+  const familyInfoByRequest = new Map<string, FamilyInfo>()
+  const guestGenderByRequest = new Map<string, 'masculino' | 'feminino' | null>()
+  for (const r of hospedagemReqs) {
+    const guestType = guestTypeForServiceRequest(r.request_type, r.school_application_id)
+    const formData = r.staff_application_id
+      ? formDataByStaffApp.get(r.staff_application_id)
+      : r.school_application_id
+        ? formDataBySchoolApp.get(r.school_application_id)
+        : null
+    if (formData) {
+      familyInfoByRequest.set(r.id, extractFamilyInfo(formData, guestType))
+      guestGenderByRequest.set(r.id, extractGuestGender(formData, guestType))
+    }
   }
 
   // ── 6. Visão lider_ministerio: suas solicitações abertas ────────────────────
@@ -710,8 +744,18 @@ export default async function PendentesPage({ params, searchParams }: Props) {
   // ── Server actions inline ───────────────────────────────────────────────────
   const handleServiceStatusUpdate = async (formData: FormData) => {
     'use server'
-    await updateServiceStatus(formData.get('request_id') as string, formData.get('status') as string, user!.id)
+    const resolutionNotes = formData.has('resolution_notes') ? (formData.get('resolution_notes') as string) : undefined
+    await updateServiceStatus(formData.get('request_id') as string, formData.get('status') as string, user!.id, resolutionNotes)
     redirect(`/${slug}/pendentes`)
+  }
+
+  // Sem redirect de propósito — chamado no meio da busca de quartos (abrir a
+  // busca já conta como "estou analisando"), não pode recarregar a página no
+  // meio do fluxo.
+  const handleMarkEmAnalise = async (requestId: string) => {
+    'use server'
+    if (!user) return
+    await updateServiceStatus(requestId, 'em_analise', user.id)
   }
 
   const handleResolverHospedagemComAlocacao = async (params: {
@@ -725,13 +769,14 @@ export default async function PendentesPage({ params, searchParams }: Props) {
     redirect(`/${slug}/pendentes`)
   }
 
-  const handleResolverHospedagemSemAlocacao = async (params: {
-    requestId: string; guestName: string; staffApplicationId: string | null; schoolApplicationId: string | null; requestedArrivalDate: string | null
+  const handleResolverHospedagemComAlocacaoQuarto = async (params: {
+    requestId: string; roomId: string
+    guestName: string; guestType: 'obreiro' | 'aluno'; checkIn: string; checkOut: string
   }) => {
     'use server'
     if (!user) return
-    const { resolverHospedagemSemAlocacao } = await import('../hospedagem/actions')
-    await resolverHospedagemSemAlocacao({ ...params, organizationId: orgId, reviewedBy: user.id })
+    const { resolverHospedagemComAlocacaoQuarto } = await import('../hospedagem/actions')
+    await resolverHospedagemComAlocacaoQuarto({ ...params, organizationId: orgId, reviewedBy: user.id })
     redirect(`/${slug}/pendentes`)
   }
 
@@ -796,14 +841,14 @@ export default async function PendentesPage({ params, searchParams }: Props) {
   }, {})
 
   const categorySegments = [
-    { label: 'Pré-inscrição',       value: categoryCounts['Pré-inscrição']       ?? 0, color: '#F59E0B' },
-    { label: 'Candidato a Aluno',   value: categoryCounts['Candidato a Aluno']   ?? 0, color: '#8B5CF6' },
-    { label: 'Candidato a Obreiro', value: categoryCounts['Candidato a Obreiro'] ?? 0, color: '#10B981' },
+    { key: 'pre_inscricao',    label: 'Pré-inscrição',       value: categoryCounts['Pré-inscrição']       ?? 0, color: '#F59E0B' },
+    { key: 'candidato_aluno',  label: 'Candidato a Aluno',   value: categoryCounts['Candidato a Aluno']   ?? 0, color: '#8B5CF6' },
+    { key: 'candidato_obreiro', label: 'Candidato a Obreiro', value: categoryCounts['Candidato a Obreiro'] ?? 0, color: '#10B981' },
   ]
   const urgencySegments = [
-    { label: 'Ok (0–1 dia)',      value: items.filter(i => i.diasAberto <= 1).length, color: '#34D399' },
-    { label: 'Atenção (2 dias)',  value: items.filter(i => i.diasAberto === 2).length, color: '#FBBF24' },
-    { label: 'Urgente (3+ dias)', value: items.filter(i => i.diasAberto >= 3).length,  color: '#F87171' },
+    { key: 'ok',      label: 'Ok (0–1 dia)',      value: items.filter(i => i.diasAberto <= 1).length, color: '#34D399' },
+    { key: 'atencao', label: 'Atenção (2 dias)',  value: items.filter(i => i.diasAberto === 2).length, color: '#FBBF24' },
+    { key: 'urgente', label: 'Urgente (3+ dias)', value: items.filter(i => i.diasAberto >= 3).length,  color: '#F87171' },
   ]
 
   const hasPendingItems = items.length > 0
@@ -1156,10 +1201,14 @@ export default async function PendentesPage({ params, searchParams }: Props) {
                   requesterEmail: requesterMap.get(sr.requester_id)?.email ?? '—',
                   requesterPhone: requesterMap.get(sr.requester_id)?.phone ?? null,
                   diasAberto: daysAgo(sr.created_at),
+                  familyInfo: familyInfoByRequest.get(sr.id) ?? null,
+                  guestGender: guestGenderByRequest.get(sr.id) ?? null,
                 }))}
                 handleStatusUpdate={handleServiceStatusUpdate}
                 resolverComAlocacao={handleResolverHospedagemComAlocacao}
-                resolverSemAlocacao={handleResolverHospedagemSemAlocacao}
+                resolverComAlocacaoQuarto={handleResolverHospedagemComAlocacaoQuarto}
+                slug={slug}
+                markEmAnalise={handleMarkEmAnalise}
                 organizationId={orgId}
               />
             )}
@@ -1175,27 +1224,14 @@ export default async function PendentesPage({ params, searchParams }: Props) {
                 <p className="text-gray-400 text-sm">Nenhuma pendência no momento.</p>
               </div>
             ) : (
-              <>
-                {/* Gráficos */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="bg-white rounded-xl border border-gray-200 p-5">
-                    <h3 className="text-sm font-semibold text-gray-700 mb-4">Por categoria</h3>
-                    <AnimatedDonutChart segments={categorySegments} title="total" />
-                  </div>
-                  <div className="bg-white rounded-xl border border-gray-200 p-5">
-                    <h3 className="text-sm font-semibold text-gray-700 mb-4">Por urgência</h3>
-                    <AnimatedDonutChart segments={urgencySegments} title="total" />
-                  </div>
-                </div>
-
-                {/* Busca */}
-                <Suspense>
-                  <SearchBar placeholder="Buscar por nome…" className="w-full sm:w-72" />
-                </Suspense>
-
-                {/* Cards principais (client component com modal) */}
-                <PendentesCardList items={filteredItems} />
-              </>
+              <PendentesFilterPanel
+                items={items}
+                categorySegments={categorySegments}
+                urgencySegments={urgencySegments}
+                initialQ={q}
+                initialCategoria={categoria}
+                initialUrgencia={urgencia}
+              />
             )}
 
             {/* ── Seção: Solicitações de Ministério (gestão) ── */}
@@ -1218,15 +1254,21 @@ export default async function PendentesPage({ params, searchParams }: Props) {
                     const urg   = urgencyBadge(dias)
                     const requester = requesterMap.get(req.requested_by)
                     return (
-                      <Link
+                      // WhatsAppButton renderiza um <a> de verdade — dentro de um <Link>
+                      // isso é um <a> aninhado em outro <a> (inválido em HTML e dispara
+                      // navegação + barra de progresso além de abrir o WhatsApp). Troca
+                      // pro padrão de "link esticado": o <Link> vira um overlay absoluto
+                      // (z-0) por trás de todo o conteúdo real, que fica com z-10 —
+                      // clicar em qualquer lugar navega, clicar no botão específico não.
+                      <div
                         key={req.id}
-                        href={`/${slug}/ministerios/${req.ministry_id}`}
-                        className="group flex items-start gap-3 bg-gray-50 rounded-xl border border-gray-200 px-4 py-3 shadow-sm transition-all duration-150 hover:shadow-md hover:-translate-y-0.5"
+                        className="group relative flex items-start gap-3 bg-gray-50 rounded-xl border border-gray-200 px-4 py-3 shadow-sm transition-all duration-150 hover:shadow-md hover:-translate-y-0.5"
                       >
-                        <span className={`flex-shrink-0 inline-flex items-center justify-center min-w-[2.5rem] px-2 py-0.5 rounded-full text-xs font-bold ${urg.color}`}>
+                        <Link href={`/${slug}/ministerios/${req.ministry_id}`} className="absolute inset-0 z-0 rounded-xl" aria-label="Abrir ministério" />
+                        <span className={`relative z-10 flex-shrink-0 inline-flex items-center justify-center min-w-[2.5rem] px-2 py-0.5 rounded-full text-xs font-bold ${urg.color}`}>
                           {urg.label}
                         </span>
-                        <div className="flex-1 min-w-0">
+                        <div className="relative z-10 flex-1 min-w-0">
                           <p className="text-sm font-semibold text-gray-900 group-hover:text-brand-600 transition-colors">
                             {REQUEST_LABELS[req.request_type] ?? req.request_type}
                             {pName && ` — ${pName}`}
@@ -1236,13 +1278,13 @@ export default async function PendentesPage({ params, searchParams }: Props) {
                           {req.notes && <p className="text-xs text-gray-400 italic mt-0.5">&ldquo;{req.notes}&rdquo;</p>}
                           <div className="mt-1.5 flex flex-wrap items-center gap-2">
                             <span className="text-xs text-gray-500">{requester?.name ?? '—'}</span>
-                            <WhatsAppButton phone={requester?.phone} />
+                            <span className="relative z-10"><WhatsAppButton phone={requester?.phone} /></span>
                           </div>
                         </div>
-                        <span className="flex-shrink-0 text-xs font-semibold text-brand-500 group-hover:text-brand-700 transition-colors">
+                        <span className="relative z-10 flex-shrink-0 text-xs font-semibold text-brand-500 group-hover:text-brand-700 transition-colors">
                           Abrir →
                         </span>
-                      </Link>
+                      </div>
                     )
                   })}
                 </div>
@@ -1268,15 +1310,15 @@ export default async function PendentesPage({ params, searchParams }: Props) {
                     const urg   = urgencyBadge(dias)
                     const requester = requesterMap.get(req.requested_by)
                     return (
-                      <Link
+                      <div
                         key={req.id}
-                        href={`/${slug}/escolas/${req.school_id}`}
-                        className="group flex items-start gap-3 bg-gray-50 rounded-xl border border-gray-200 px-4 py-3 shadow-sm transition-all duration-150 hover:shadow-md hover:-translate-y-0.5"
+                        className="group relative flex items-start gap-3 bg-gray-50 rounded-xl border border-gray-200 px-4 py-3 shadow-sm transition-all duration-150 hover:shadow-md hover:-translate-y-0.5"
                       >
-                        <span className={`flex-shrink-0 inline-flex items-center justify-center min-w-[2.5rem] px-2 py-0.5 rounded-full text-xs font-bold ${urg.color}`}>
+                        <Link href={`/${slug}/escolas/${req.school_id}`} className="absolute inset-0 z-0 rounded-xl" aria-label="Abrir escola" />
+                        <span className={`relative z-10 flex-shrink-0 inline-flex items-center justify-center min-w-[2.5rem] px-2 py-0.5 rounded-full text-xs font-bold ${urg.color}`}>
                           {urg.label}
                         </span>
-                        <div className="flex-1 min-w-0">
+                        <div className="relative z-10 flex-1 min-w-0">
                           <p className="text-sm font-semibold text-gray-900 group-hover:text-brand-600 transition-colors">
                             Adicionar obreiro
                             {pName && ` — ${pName}`}
@@ -1286,13 +1328,13 @@ export default async function PendentesPage({ params, searchParams }: Props) {
                           {req.notes && <p className="text-xs text-gray-400 italic mt-0.5">&ldquo;{req.notes}&rdquo;</p>}
                           <div className="mt-1.5 flex flex-wrap items-center gap-2">
                             <span className="text-xs text-gray-500">{requester?.name ?? '—'}</span>
-                            <WhatsAppButton phone={requester?.phone} />
+                            <span className="relative z-10"><WhatsAppButton phone={requester?.phone} /></span>
                           </div>
                         </div>
-                        <span className="flex-shrink-0 text-xs font-semibold text-brand-500 group-hover:text-brand-700 transition-colors">
+                        <span className="relative z-10 flex-shrink-0 text-xs font-semibold text-brand-500 group-hover:text-brand-700 transition-colors">
                           Abrir →
                         </span>
-                      </Link>
+                      </div>
                     )
                   })}
                 </div>
@@ -1309,10 +1351,14 @@ export default async function PendentesPage({ params, searchParams }: Props) {
                   requesterEmail: requesterMap.get(sr.requester_id)?.email ?? '—',
                   requesterPhone: requesterMap.get(sr.requester_id)?.phone ?? null,
                   diasAberto: daysAgo(sr.created_at),
+                  familyInfo: familyInfoByRequest.get(sr.id) ?? null,
+                  guestGender: guestGenderByRequest.get(sr.id) ?? null,
                 }))}
                 handleStatusUpdate={handleServiceStatusUpdate}
                 resolverComAlocacao={handleResolverHospedagemComAlocacao}
-                resolverSemAlocacao={handleResolverHospedagemSemAlocacao}
+                resolverComAlocacaoQuarto={handleResolverHospedagemComAlocacaoQuarto}
+                slug={slug}
+                markEmAnalise={handleMarkEmAnalise}
                 organizationId={orgId}
               />
             )}

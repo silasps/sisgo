@@ -32,7 +32,6 @@ const SECTION_FIELDS: { key: string; title: string; fields: { label: string; nam
       { label: 'Estado', name: 'estado' },
       { label: 'País', name: 'pais' },
       { label: 'Celular', name: 'celular' },
-      { label: 'E-mail de contato', name: 'email_contato' },
       { label: 'Emergência — Nome', name: 'emergencia_nome' },
       { label: 'Emergência — Parentesco', name: 'emergencia_parentesco' },
       { label: 'Emergência — Telefone', name: 'emergencia_telefone' },

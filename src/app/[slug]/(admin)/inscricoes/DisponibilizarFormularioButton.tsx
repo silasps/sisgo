@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useEffect, type ReactNode } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { AlertTriangle, Link as LinkIcon, ClipboardList, Loader2, Mail, CheckCircle2 } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { LangSwitcher } from '@/components/ui/LangSwitcher'
@@ -11,6 +12,7 @@ type ActionResult = {
   url?: string
   error?: string
   emailWarning?: 'sem_email_eted' | 'sem_email_candidato' | 'email_falhou' | 'quota_atingida' | string
+  emailErrorDetail?: string
   schoolId?: string
 }
 
@@ -64,6 +66,7 @@ function CenterToast({ visible, icon, tone = 'dark', children }: {
 }
 
 export function DisponibilizarFormularioButton({ interestFormId, slug, action, schoolId, candidateName, emailDisabled, emailDisabledReason, label }: Props) {
+  const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [pendingAction, setPendingAction] = useState<'copy' | 'email' | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -105,6 +108,11 @@ export function DisponibilizarFormularioButton({ interestFormId, slug, action, s
       const url = `${result.url}${result.url.includes('?') ? '&' : '?'}lang=${lang}`
       setFormUrl(url)
 
+      // O item real (staffApplicationId/status) só muda no servidor — atualiza
+      // em segundo plano pra essa tela virar a etapa "Formulário enviado" do
+      // stepper assim que o servidor confirmar, sem travar a ação visível.
+      router.refresh()
+
       if (!sendEmail) {
         try { await navigator.clipboard.writeText(url) } catch {}
         flashToast(setShowCopied)
@@ -135,7 +143,7 @@ export function DisponibilizarFormularioButton({ interestFormId, slug, action, s
         })
       } else if (result.emailWarning === 'email_falhou') {
         setEmailNotice({
-          msg: 'E-mail não pôde ser enviado. O link foi copiado, envie manualmente ao candidato.',
+          msg: `E-mail não pôde ser enviado${result.emailErrorDetail ? ` (${result.emailErrorDetail})` : ''}. O link foi copiado, envie manualmente ao candidato.`,
         })
       }
     })

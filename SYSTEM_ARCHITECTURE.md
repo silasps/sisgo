@@ -38,6 +38,87 @@ O SISGO é um sistema de gestão **multi-tenant** para bases missionárias da JO
 
 ---
 
+## 1-bis. Princípios de comportamento e design
+
+Base: pesquisa real de UX e psicologia comportamental (Doherty Threshold,
+Nielsen Norman Group, Fogg Behavior Model B=MAP, heurísticas de Nielsen,
+pesquisa de fricção em ferramenta corporativa), adaptada ao contexto do
+SISGO — **ferramenta interna de gestão**, usada por obrigação por equipe de
+base (secretaria, hospitalidade, DH, liderança), não um app de
+consumo/doação. O objetivo não é prender atenção — é que ninguém tema abrir
+a tela. Estudo completo, com fontes citadas e aplicação tela a tela:
+["Dossiê SISGO"](https://claude.ai/code/artifact/bd1a668f-0b18-4e2e-a000-941f4aae44d9)
+(irmão do "Dossiê GO Guide", mesmo padrão adotado lá). **Toda tela nova,
+fluxo novo ou revisão de UX deve ser avaliada contra estes princípios antes
+de ser dada como pronta:**
+
+1. **Feedback tem que corresponder a trabalho de verdade — e o oposto é
+   igualmente proibido: nenhuma ação de escrita pode ficar muda.** Nunca
+   mostrar sinal de carregamento/progresso sem uma ação real acontecendo por
+   trás (bug real: o `nextjs-toploader` disparava a barra verde de
+   navegação ao clicar num botão de excluir dentro de um `<Link>` de card,
+   sem nenhuma navegação de verdade ocorrendo — corrigido tirando a ação da
+   árvore DOM do `<Link>`, nunca aninhando elemento clicável independente
+   dentro dele). E nunca deixar um clique sem *nenhum* feedback enquanto o
+   servidor processa (outro bug real, mesma origem: um botão com
+   `disabled={pending}` só via `opacity-50` — sem trocar o texto — passava a
+   sensação de tela travada, porque o `disabled`/dimming sozinho é sutil
+   demais pra registrar como "algo está acontecendo"). Toda ação de escrita
+   usa `usePendingAction` (`src/hooks/usePendingAction.ts`) ou `SubmitButton`
+   (`src/components/ui/SubmitButton.tsx`, via `useFormStatus`) pra
+   reconhecer o clique instantaneamente e manter o estado de "salvando…" até
+   o servidor responder de verdade — nunca fechar modal/navegar antes da
+   Server Action terminar. **`SubmitButton` já troca o texto do botão
+   sozinho (`pendingText`, default `"Salvando…"`) — prefira ele pra qualquer
+   botão dentro de `<form action={serverAction}>`.** Quando o botão não é um
+   submit de formulário (ação disparada via `onClick` + `usePendingAction`
+   direto), a troca de texto NÃO é automática — o call site precisa fazer
+   `{pending ? 'Verbo-ando…' : 'Texto normal'}` manualmente; `disabled`/
+   `opacity-50` sozinhos não contam como feedback suficiente pra este
+   princípio. **Buscas independentes não esperam uma pela outra**: se uma
+   tela/modal precisa de mais de uma consulta ao banco pra montar (ex.: KPIs
+   + lista filtrada), cada uma dispara e atualiza seu próprio pedaço da UI
+   assim que volta — nunca um único `Promise.all` que trava a tela inteira
+   atrás da consulta mais lenta das duas (visto em `AllocationScreen`,
+   `pendentes/ServiceRequestsPanel.tsx`: KPIs da hospitalidade e lista de
+   quartos disponíveis são duas buscas separadas, cada uma com seu próprio
+   estado de carregamento).
+2. **Reduzir fricção é reduzir passos, não adicionar recurso.** Antes de
+   adicionar um botão/confirmação/etapa nova, perguntar se um passo
+   existente pode sumir. Aplicado: unificação de "marcar em análise" +
+   "buscar quartos disponíveis" num clique só em Resolver Hospedagem;
+   eliminação do fluxo de "confirmar disponibilidade sem alocar cama" (
+   causava condição de corrida de dupla reserva).
+3. **Consistência é confiança.** Um mesmo padrão de modal/confirmação em
+   todo o sistema — sempre `Modal`/`ConfirmDialog`/`CascadeDeleteDialog`
+   (ver seção 10, `createPortal` obrigatório), nunca `window.confirm()`
+   nativo do navegador. Cards com ação rápida (editar/excluir) seguem o
+   padrão "ação como irmã do `<Link>`, nunca descendente dele" (ver
+   `BlockCard.tsx`/`FloorCard.tsx`/`RoomCard` em `hospedagem/`) — mesma
+   razão do princípio 1.
+4. **Cor carrega significado, não decoração.** Vocabulário de status já
+   estabelecido no sistema (amarelo=pendente, azul=em análise,
+   verde=resolvido, vermelho=rejeitado/urgente) deve ser reaproveitado, não
+   reinventado por módulo — nova cor só entra se representar um estado que
+   ainda não existe no vocabulário atual.
+5. **Tarefa longa vira etapas curtas.** Se o formulário não cabe numa tela
+   sem rolar, quebrar em seções com progresso visível (padrão já usado nas
+   inscrições de aluno/obreiro — `PipelineStepper`); se já cabe, não
+   fragmentar por fragmentar.
+6. **Notificação/gatilho só quando acionável.** Todo alerta novo (push,
+   badge, contador na sidebar) precisa, ao ser clicado, resolver uma tarefa
+   real — nunca um número que só existe pra parecer que "tem algo
+   acontecendo".
+
+**Linha vermelha, sem exceção:** nunca fabricar progresso, contagem de vaga/
+disponibilidade fictícia ou qualquer sinal visual de urgência que não
+corresponda a dado real — SISGO gerencia gente de instituição missionária
+(quarto, cama, aprovação, dado de menor de idade); confiança percebida como
+manipulada quebra de um jeito difícil de reconstruir. Mesmo princípio já
+adotado no `system.architecture.md` do projeto GO Guide.
+
+---
+
 ## 2. Stack
 
 | Camada | Tecnologia |

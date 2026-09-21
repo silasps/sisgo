@@ -1,8 +1,8 @@
 import Link from 'next/link'
-import Image from 'next/image'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { Landmark } from 'lucide-react'
+import { MarketingHeader } from '@/components/marketing/MarketingHeader'
 
 type Props = { searchParams: Promise<{ code?: string }> }
 
@@ -18,38 +18,16 @@ export default async function BasesPage({ searchParams }: Props) {
 
   return (
     <div className="min-h-screen bg-dark-950 text-white flex flex-col">
-      <div className="h-1 bg-brand-500 w-full" />
-
-      {/* Navbar */}
-      <nav className="flex items-center justify-between px-5 sm:px-10 py-4 max-w-6xl mx-auto w-full">
-        <Link href="/">
-          <Image
-            src="/images/logo-white.png"
-            alt="SISGO"
-            width={110}
-            height={38}
-            className="object-contain"
-            priority
-          />
-        </Link>
-        <div className="flex items-center gap-2">
-          <Link href="/login" className="px-4 py-2 text-sm text-gray-300 hover:text-white transition-colors font-medium">
-            Entrar
-          </Link>
-          <Link href="/login?tab=cadastro" className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg transition-colors">
-            Criar conta
-          </Link>
-        </div>
-      </nav>
+      <MarketingHeader />
 
       {/* Header */}
       <section className="px-5 sm:px-10 py-12 sm:py-16 max-w-6xl mx-auto w-full">
         <div className="bg-brand-500/10 border border-brand-500/20 rounded-2xl px-5 py-4 mb-8 text-sm text-brand-300">
-          Bem-vindo ao SISGO! Explore as bases abaixo e faça sua pré-inscrição para aluno, obreiro ou voluntário.
+          Bem-vindo ao SISGO! Explore as organizações abaixo e faça sua pré-inscrição para aluno, obreiro ou voluntário.
         </div>
-        <h1 className="text-3xl sm:text-4xl font-bold mb-3">Bases missionárias</h1>
+        <h1 className="text-3xl sm:text-4xl font-bold mb-3">Organizações missionárias</h1>
         <p className="text-gray-400">
-          Escolha uma base para ver as escolas disponíveis e opções de inscrição.
+          Escolha uma organização para ver as escolas disponíveis e opções de inscrição.
         </p>
       </section>
 
@@ -96,6 +74,21 @@ export default async function BasesPage({ searchParams }: Props) {
             <p className="font-medium">Nenhuma base disponível no momento.</p>
           </div>
         )}
+
+        <div className="mt-10 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-white/10 pt-8 text-sm">
+          <p className="text-gray-400">
+            Quer ver todas as escolas com inscrições abertas de uma vez?{' '}
+            <Link href="/oportunidades" className="text-brand-400 hover:underline font-medium">
+              Veja as oportunidades →
+            </Link>
+          </p>
+          <p className="text-gray-400">
+            Não encontrou sua organização?{' '}
+            <Link href="/cadastro" className="text-brand-400 hover:underline font-medium">
+              Crie a sua →
+            </Link>
+          </p>
+        </div>
       </section>
 
       {/* Footer */}
@@ -104,7 +97,7 @@ export default async function BasesPage({ searchParams }: Props) {
           ← Voltar ao início
         </Link>
         <span className="mx-3">·</span>
-        SISGO · JOCUM · {new Date().getFullYear()}
+        SISGO · {new Date().getFullYear()}
       </footer>
     </div>
   )

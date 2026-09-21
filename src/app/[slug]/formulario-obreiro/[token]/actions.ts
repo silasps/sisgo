@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getOrCreateReferenceForm, buildReferenceUrl } from '@/lib/staff/referenceForms'
 import { basicImageSanity } from '@/lib/documents/basicImageSanity'
 import { classifyDocument, type DocumentKind } from '@/lib/documents/classifyDocument'
+import { sendInstitutionRulesEmail } from '@/lib/email/sendInstitutionRulesEmail'
 
 const EDITABLE_SECTIONS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
 
@@ -31,7 +32,15 @@ async function getEditableApplication(token: string, slug: string) {
   return { app, sb }
 }
 
-export async function salvarSecaoObreiro(slug: string, token: string, section: number, data: Record<string, unknown>) {
+// `nextSection` é a seção pra onde o usuário está indo AGORA (a seguinte, se
+// clicou "Próxima seção"; a anterior, se clicou "Voltar") — current_section
+// grava exatamente isso, sem "Math.max" pra não regredir. Um max ali parecia
+// seguro (não perder progresso), mas quebrava justamente o caso de voltar
+// pra revisar uma seção anterior: ao recarregar, a pessoa era jogada de
+// volta pro ponto mais avançado já alcançado, não pra seção onde estava de
+// fato — dando a falsa impressão de que seções intermediárias já preenchidas
+// (quando na real ela só estava revisando uma anterior) continuavam ok.
+export async function salvarSecaoObreiro(slug: string, token: string, section: number, data: Record<string, unknown>, nextSection: number) {
   if (!EDITABLE_SECTIONS.has(section)) return { error: 'Seção inválida.' }
 
   const result = await getEditableApplication(token, slug)
@@ -47,7 +56,7 @@ export async function salvarSecaoObreiro(slug: string, token: string, section: n
 
   await sb.from('staff_applications').update({
     form_data: updated,
-    current_section: Math.max(app.current_section ?? 1, section),
+    current_section: nextSection,
   }).eq('id', app.id)
 
   return { success: true }
@@ -64,9 +73,40 @@ const DOCUMENT_KIND_BY_KEY: Record<string, DocumentKind> = {
   doc_foto: 'foto',
   doc_rg_frente: 'rg_frente',
   doc_rg_verso: 'rg_verso',
+  doc_cnh: 'cnh',
   doc_passaporte: 'passaporte',
+  doc_passaporte_opcional: 'passaporte',
   doc_certidao_casamento: 'certidao_casamento',
   doc_certidao_casamento_s10: 'certidao_casamento',
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+export async function enviarRegrasInstituicaoEmail(slug: string, token: string, email: string, lang?: string) {
+  if (!EMAIL_RE.test(email)) return { error: 'E-mail inválido.' }
+
+  const result = await getEditableApplication(token, slug)
+  if ('error' in result) return { error: result.error }
+  const { app, sb } = result
+
+  const { data: org } = await sb
+    .from('organizations')
+    .select('name, institution_rules_text')
+    .eq('id', app.organization_id)
+    .single()
+
+  const rulesText = (org as { institution_rules_text?: string | null } | null)?.institution_rules_text
+  if (!rulesText?.trim()) return { error: 'Nenhum texto de regras e valores configurado.' }
+
+  const sendResult = await sendInstitutionRulesEmail({
+    to: email,
+    orgName: org?.name ?? 'Organização',
+    rulesText,
+    organizationId: app.organization_id,
+    language: lang,
+  })
+  if (!sendResult.success) return { error: 'Não foi possível enviar o e-mail. Tente novamente.' }
+  return { success: true }
 }
 
 // Igual a salvarSecaoObreiro, mas pra seções que misturam campos de texto
@@ -76,7 +116,7 @@ const DOCUMENT_KIND_BY_KEY: Record<string, DocumentKind> = {
 // precisa ser enviado pro Storage antes — só o metadado (path/name/tipo)
 // vai pro form_data. Se a seção for reenviada sem escolher o arquivo de
 // novo (voltar/avançar sem reselecionar), o metadado já salvo é mantido.
-export async function salvarSecaoObreiroComArquivos(slug: string, token: string, section: number, formData: FormData) {
+export async function salvarSecaoObreiroComArquivos(slug: string, token: string, section: number, formData: FormData, nextSection: number) {
   if (!EDITABLE_SECTIONS.has(section)) return { error: 'Seção inválida.' }
 
   const result = await getEditableApplication(token, slug)
@@ -88,8 +128,18 @@ export async function salvarSecaoObreiroComArquivos(slug: string, token: string,
   const existingSection = (existing[`s${section}`] as Record<string, unknown>) ?? {}
   const updatedSection: Record<string, unknown> = { ...existingSection }
   const toRemove: string[] = []
+  const removedKeys = new Set<string>()
+  const uploadedKeys = new Set<string>()
 
   for (const [key, value] of formData.entries()) {
+    // Campo oculto marcado pelo botão "excluir" de um arquivo já salvo (ver
+    // FileInputField) — tratado depois do loop, pra saber se esse mesmo
+    // envio também trouxe um arquivo novo pra essa chave (aí é troca, não
+    // exclusão: o upload abaixo já cuida de remover o antigo).
+    if (key.startsWith('remove_') && value === '1') {
+      removedKeys.add(key.slice('remove_'.length))
+      continue
+    }
     if (value instanceof File) {
       if (value.size === 0) continue
       if (!DOCUMENT_TYPES[value.type]) return { error: `Envie imagens (JPG, PNG ou WebP) ou PDF em "${key}".` }
@@ -113,15 +163,23 @@ export async function salvarSecaoObreiroComArquivos(slug: string, token: string,
 
       const previous = existingSection[key] as { path?: string } | undefined
       updatedSection[key] = { path, name: value.name, type: value.type, size: value.size, uploaded_at: new Date().toISOString() }
+      uploadedKeys.add(key)
       if (previous?.path) toRemove.push(previous.path)
     } else if (typeof value === 'string') {
       updatedSection[key] = value
     }
   }
 
+  for (const key of removedKeys) {
+    if (uploadedKeys.has(key)) continue
+    const previous = existingSection[key] as { path?: string } | undefined
+    if (previous?.path) toRemove.push(previous.path)
+    delete updatedSection[key]
+  }
+
   await sb.from('staff_applications').update({
     form_data: { ...existing, [`s${section}`]: updatedSection },
-    current_section: Math.max(app.current_section ?? 1, section),
+    current_section: nextSection,
   }).eq('id', app.id)
 
   if (toRemove.length) await sb.storage.from('staff-application-documents').remove(toRemove)
@@ -168,12 +226,28 @@ export async function enviarFormularioObreiro(slug: string, token: string) {
       const checkTypes = isBrasileiro
         ? ['pf_federal', 'ssp_estadual', 'autodeclaracao_conduta', 'referencia_conduta_menores']
         : ['police_clearance_estrangeiro', 'autodeclaracao_conduta', 'referencia_conduta_menores']
-      await sb.from('background_checks').insert(checkTypes.map(check_type => ({
-        organization_id: appFull.organization_id,
-        staff_application_id: app.id,
-        person_id: appFull.person_id,
-        check_type,
-      })))
+      // "Autodeclaração de conduta" já foi respondida pelo próprio candidato no
+      // formulário (checkbox obrigatório decl_sem_condenacao_menor, seção 8) —
+      // não faz sentido o DH preencher de novo, então já entra aprovada.
+      const today = new Date().toISOString().slice(0, 10)
+      await sb.from('background_checks').insert(checkTypes.map(check_type => (
+        check_type === 'autodeclaracao_conduta'
+          ? {
+              organization_id: appFull.organization_id,
+              staff_application_id: app.id,
+              person_id: appFull.person_id,
+              check_type,
+              status: 'aprovado',
+              issued_at: today,
+              notes: 'Autodeclarado pelo(a) candidato(a) no formulário de inscrição.',
+            }
+          : {
+              organization_id: appFull.organization_id,
+              staff_application_id: app.id,
+              person_id: appFull.person_id,
+              check_type,
+            }
+      )))
     }
   }
 
@@ -191,7 +265,7 @@ async function enviarPedidosDeReferencia(
   formData: Record<string, Record<string, string>>
 ) {
   const { data: org } = await sb.from('organizations').select('name, email').eq('id', organizationId).maybeSingle()
-  let contextLabel = org?.name ?? 'JOCUM'
+  let contextLabel = org?.name ?? 'Organização'
   if (appFull?.ministry_id) {
     const { data: ministry } = await sb.from('ministries').select('name').eq('id', appFull.ministry_id).maybeSingle()
     if (ministry?.name) contextLabel = ministry.name
@@ -244,6 +318,41 @@ async function enviarPedidosDeReferencia(
       }).catch(() => {})
     }
   }
+
+  // Candidato menor de idade: em vez de "declaro que sou maior de 18 anos",
+  // a Seção 10 pede o contato do responsável — a autorização de verdade
+  // acontece aqui, com o responsável confirmando num link próprio (mesma
+  // infra de reference_forms usada pra pastor/liderança), não só um
+  // contato coletado e arquivado.
+  const s10 = formData.s10
+  if (isMinorByBirthDate(formData.s2?.data_nascimento) && s10?.responsavel_email) {
+    const ref = await getOrCreateReferenceForm(sb, staffApplicationId, 'responsavel')
+    if (ref.token) {
+      const url = await buildReferenceUrl(slug, ref.token)
+      await sendReferenceRequestEmail({
+        to: s10.responsavel_email,
+        recommenderRole: 'responsavel',
+        candidateName,
+        contextLabel,
+        formUrl: url,
+        expiresAt: ref.expiresAt,
+        replyTo,
+        organizationId,
+      }).catch(() => {})
+    }
+  }
+}
+
+function isMinorByBirthDate(dateStr?: string): boolean {
+  if (!dateStr) return false
+  const then = new Date(dateStr + 'T00:00:00')
+  if (Number.isNaN(then.getTime())) return false
+  const now = new Date()
+  let years = now.getFullYear() - then.getFullYear()
+  const beforeAnniversary = now.getMonth() < then.getMonth() ||
+    (now.getMonth() === then.getMonth() && now.getDate() < then.getDate())
+  if (beforeAnniversary) years -= 1
+  return years >= 0 && years < 18
 }
 
 export async function gerarLinkReferenciaObreiro(
