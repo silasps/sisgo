@@ -2,13 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { MessageCircle, Users, LayoutDashboard, Settings } from 'lucide-react'
+import { MessageCircle, Users, LayoutDashboard, Settings, Smile } from 'lucide-react'
 
 const ICON_MAP = {
   chat: MessageCircle,
   equipe: Users,
   geral: LayoutDashboard,
   configuracoes: Settings,
+  pesquisa: Smile,
 }
 
 type Tab = { href: string; label: string; icon?: keyof typeof ICON_MAP; alsoMatches?: string[] }
