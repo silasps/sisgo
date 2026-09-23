@@ -22,12 +22,15 @@ export default async function RelatoriosPage({ params, searchParams }: Props) {
   if (!org) notFound()
   const orgId = org.id
 
-  const { data: orgUser } = await supabase
-    .from('organization_users').select('roles(name), extra_roles')
-    .eq('user_id', user.id).eq('active', true).single()
-  const role = (orgUser?.roles as unknown as { name: string } | null)?.name ?? ''
+  const { data: orgUsers } = await supabase
+    .from('organization_users').select('organization_id, roles(name), extra_roles')
+    .eq('user_id', user.id).eq('active', true)
+  const userOrgRows = (orgUsers ?? []) as unknown as Array<{ organization_id: string | null; roles: { name: string } | null; extra_roles: string[] | null }>
+  const superadminRow = userOrgRows.find(row => row.roles?.name === 'superadmin')
+  const currentOrgRow = userOrgRows.find(row => row.organization_id === orgId)
+  const role = superadminRow?.roles?.name ?? currentOrgRow?.roles?.name ?? ''
   const orgAccumulations = (org?.role_accumulations as Record<string, string[]> | null) ?? {}
-  const extraRoles = (orgUser?.extra_roles as string[] | null) ?? []
+  const extraRoles = (currentOrgRow?.extra_roles as string[] | null) ?? []
   if (!userHasAnyRole([role, ...(orgAccumulations[role] ?? []), ...extraRoles], GENERAL_FINANCE_ROLES)) notFound()
 
   const today = new Date()

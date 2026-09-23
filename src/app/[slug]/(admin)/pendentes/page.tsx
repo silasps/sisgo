@@ -110,14 +110,16 @@ export default async function PendentesPage({ params, searchParams }: Props) {
     ?? { hospitalidade: 'hospitalidade', secretaria: 'secretaria' }
 
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: orgUser } = await supabase
+  const { data: orgUsers } = await supabase
     .from('organization_users')
-    .select('roles(name), user_id')
+    .select('organization_id, roles(name)')
     .eq('user_id', user?.id ?? '')
     .eq('active', true)
-    .single()
 
-  const realRole = (orgUser?.roles as unknown as { name: string } | null)?.name ?? ''
+  const userOrgRows = (orgUsers ?? []) as unknown as Array<{ organization_id: string | null; roles: { name: string } | null }>
+  const superadminRow = userOrgRows.find(row => row.roles?.name === 'superadmin')
+  const currentOrgRow = userOrgRows.find(row => row.organization_id === orgId)
+  const realRole = superadminRow?.roles?.name ?? currentOrgRow?.roles?.name ?? ''
   const preview = await getRolePreview(realRole)
   const role = preview?.role ?? realRole
   const isPreview = Boolean(preview)
