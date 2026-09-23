@@ -6,6 +6,9 @@ import type { Database } from '@/types/database'
 import { schoolTypeGroup, schoolTypeShortLabel } from '@/lib/schools'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { isManagementRole } from '@/lib/auth/permissions'
+import { deleteSchool } from './[id]/actions'
+import { triggerSiteRevalidation } from '@/lib/revalidate-webhook'
+import { DeleteSchoolButton } from './DeleteSchoolButton'
 
 type Props = { params: Promise<{ slug: string }> }
 type School = Database['public']['Tables']['schools']['Row']
@@ -54,6 +57,21 @@ export default async function EscolasPage({ params }: Props) {
   const secondLevelSchools = escolas.filter(e => schoolTypeGroup((e as unknown as { school_type: string | null }).school_type) === 'second_level')
   const otherSchools = escolas.filter(e => schoolTypeGroup((e as unknown as { school_type: string | null }).school_type) === 'other')
 
+  // Escolas com turma cadastrada não podem ser excluídas direto do card —
+  // evita apagar histórico sem querer; use "Configurar" pra desativar.
+  let schoolsWithTurmas = new Set<string>()
+  if (isManagement && escolas.length > 0) {
+    const { data: turmaRows } = await supabase.from('school_classes').select('school_id').in('school_id', escolas.map(e => e.id))
+    schoolsWithTurmas = new Set((turmaRows ?? []).map(r => r.school_id))
+  }
+
+  const handleDeleteSchool = async (formData: FormData) => {
+    'use server'
+    await deleteSchool(formData.get('school_id') as string)
+    if (orgId) await triggerSiteRevalidation(orgId, 'schools')
+    redirect(`/${slug}/escolas`)
+  }
+
   return (
     <>
       <Header
@@ -88,10 +106,10 @@ export default async function EscolasPage({ params }: Props) {
           </div>
         ) : (
           <div className="space-y-8 animate-stagger">
-            <SchoolSection title="ETED" schools={eteds} slug={slug} />
-            {seminarios.length > 0 && <SchoolSection title="Seminários" schools={seminarios} slug={slug} />}
-            <SchoolSection title="Escolas de 2º Nível" schools={secondLevelSchools} slug={slug} />
-            {otherSchools.length > 0 && <SchoolSection title="Outras escolas" schools={otherSchools} slug={slug} />}
+            <SchoolSection title="ETED" schools={eteds} slug={slug} isManagement={isManagement} schoolsWithTurmas={schoolsWithTurmas} onDelete={handleDeleteSchool} />
+            {seminarios.length > 0 && <SchoolSection title="Seminários" schools={seminarios} slug={slug} isManagement={isManagement} schoolsWithTurmas={schoolsWithTurmas} onDelete={handleDeleteSchool} />}
+            <SchoolSection title="Escolas de 2º Nível" schools={secondLevelSchools} slug={slug} isManagement={isManagement} schoolsWithTurmas={schoolsWithTurmas} onDelete={handleDeleteSchool} />
+            {otherSchools.length > 0 && <SchoolSection title="Outras escolas" schools={otherSchools} slug={slug} isManagement={isManagement} schoolsWithTurmas={schoolsWithTurmas} onDelete={handleDeleteSchool} />}
           </div>
         )}
       </main>
@@ -99,7 +117,10 @@ export default async function EscolasPage({ params }: Props) {
   )
 }
 
-function SchoolSection({ title, schools, slug }: { title: string; schools: School[]; slug: string }) {
+function SchoolSection({ title, schools, slug, isManagement, schoolsWithTurmas, onDelete }: {
+  title: string; schools: School[]; slug: string
+  isManagement: boolean; schoolsWithTurmas: Set<string>; onDelete: (formData: FormData) => Promise<void>
+}) {
   return (
     <section>
       <div className="mb-3 flex items-end justify-between gap-3">
@@ -112,14 +133,20 @@ function SchoolSection({ title, schools, slug }: { title: string; schools: Schoo
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 animate-stagger">
-          {schools.map(e => <SchoolCard key={e.id} school={e} slug={slug} />)}
+          {schools.map(e => (
+            <SchoolCard key={e.id} school={e} slug={slug} isManagement={isManagement}
+              hasTurmas={schoolsWithTurmas.has(e.id)} onDelete={onDelete} />
+          ))}
         </div>
       )}
     </section>
   )
 }
 
-function SchoolCard({ school: e, slug }: { school: School; slug: string }) {
+function SchoolCard({ school: e, slug, isManagement, hasTurmas, onDelete }: {
+  school: School; slug: string
+  isManagement: boolean; hasTurmas: boolean; onDelete: (formData: FormData) => Promise<void>
+}) {
   const type = (e as unknown as { school_type: string | null }).school_type
   return (
     <div className="group relative rounded-xl border border-gray-200 bg-white p-5 cursor-pointer transition-all duration-200 hover:border-brand-300 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm">
@@ -138,7 +165,20 @@ function SchoolCard({ school: e, slug }: { school: School; slug: string }) {
         <Link href={`/${slug}/escolas/${e.id}/turmas`} className="pointer-events-auto relative text-xs font-medium text-gray-500 hover:text-brand-600 py-1.5 px-2 rounded-lg hover:bg-brand-50 transition-colors">
           Ver turmas →
         </Link>
-        <span className="text-xs text-brand-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity">Abrir →</span>
+        {isManagement ? (
+          <div className="pointer-events-auto relative flex items-center gap-1">
+            <Link href={`/${slug}/escolas/${e.id}/configuracoes`} title="Editar escola"
+              className="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </Link>
+            <DeleteSchoolButton schoolId={e.id} schoolName={e.name} disabled={hasTurmas} action={onDelete} />
+          </div>
+        ) : (
+          <span className="text-xs text-brand-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity">Abrir →</span>
+        )}
       </div>
     </div>
   )

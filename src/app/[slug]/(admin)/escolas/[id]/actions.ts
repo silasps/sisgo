@@ -100,3 +100,19 @@ export async function deleteTurma(classId: string) {
   if (count && count > 0) throw new Error('Turma possui alunos matriculados.')
   await sb.from('school_classes').delete().eq('id', classId)
 }
+
+// Exclusão de escola cascateia turmas, inscrições e pré-inscrições (FKs "on
+// delete cascade"). Por segurança, só permite excluir uma escola vazia —
+// serve pra limpar duplicatas criadas por engano, não pra apagar histórico.
+export async function deleteSchool(schoolId: string) {
+  const sb = createAdminClient()
+  const [{ count: turmasCount }, { count: applicationsCount }, { count: interestCount }] = await Promise.all([
+    sb.from('school_classes').select('id', { count: 'exact', head: true }).eq('school_id', schoolId),
+    sb.from('school_applications').select('id', { count: 'exact', head: true }).eq('school_id', schoolId),
+    sb.from('school_interest_forms').select('id', { count: 'exact', head: true }).eq('school_id', schoolId),
+  ])
+  if (turmasCount) throw new Error('Escola possui turmas cadastradas — remova as turmas antes de excluir.')
+  if (applicationsCount) throw new Error('Escola possui inscrições cadastradas.')
+  if (interestCount) throw new Error('Escola possui pré-inscrições cadastradas.')
+  await sb.from('schools').delete().eq('id', schoolId)
+}
