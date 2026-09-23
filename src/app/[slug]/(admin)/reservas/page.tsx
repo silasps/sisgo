@@ -121,13 +121,15 @@ export default async function ReservasPage({ params, searchParams }: Props) {
   ])
   if (!user || !org) notFound()
 
-  const { data: orgUser } = await supabase
+  const { data: orgUsers } = await supabase
     .from('organization_users')
-    .select('roles(name)')
+    .select('organization_id, roles(name)')
     .eq('user_id', user.id)
     .eq('active', true)
-    .single()
-  const realRole        = (orgUser?.roles as unknown as { name: string } | null)?.name ?? ''
+  const userOrgRows      = (orgUsers ?? []) as unknown as Array<{ organization_id: string | null; roles: { name: string } | null }>
+  const superadminRow    = userOrgRows.find(row => row.roles?.name === 'superadmin')
+  const currentOrgRow    = userOrgRows.find(row => row.organization_id === org.id)
+  const realRole         = superadminRow?.roles?.name ?? currentOrgRow?.roles?.name ?? ''
   const preview         = await getRolePreview(realRole)
   const role            = preview?.role ?? realRole
   const isManagement    = isManagementRole(role)

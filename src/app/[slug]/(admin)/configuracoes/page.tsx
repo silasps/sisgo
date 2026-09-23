@@ -42,14 +42,16 @@ export default async function ConfiguracoesPage({ params }: Props) {
 
   if (!org) notFound()
 
-  const { data: orgUser } = await supabase
+  const { data: orgUsers } = await supabase
     .from('organization_users')
-    .select('roles(name, label)')
+    .select('organization_id, roles(name, label)')
     .eq('user_id', user.id)
     .eq('active', true)
-    .single()
 
-  const roles     = orgUser?.roles as unknown as { name: string; label: string } | null
+  const userOrgRows   = (orgUsers ?? []) as unknown as Array<{ organization_id: string | null; roles: { name: string; label: string } | null }>
+  const superadminRow = userOrgRows.find(row => row.roles?.name === 'superadmin')
+  const currentOrgRow = userOrgRows.find(row => row.organization_id === org.id)
+  const roles         = superadminRow?.roles ?? currentOrgRow?.roles ?? null
   const roleName  = roles?.name  ?? ''
   const roleLabel = roles?.label ?? ''
 
