@@ -1,7 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { notFound } from 'next/navigation'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { isManagementRole } from '@/lib/auth/permissions'
+import { getSchoolLink } from '@/lib/auth/unit-access'
 import { SurveyLinkBox } from './SurveyLinkBox'
 import { MessageCircle } from 'lucide-react'
 
@@ -26,10 +28,11 @@ export default async function EscolaPesquisaPage({ params }: Props) {
   ])
   if (!user || !org) notFound()
 
-  const { role } = await getCurrentOrganizationRole(supabase, user.id, org.id)
+  const { role, preview } = await getCurrentOrganizationRole(supabase, user.id, org.id)
   const isManagement = isManagementRole(role)
-  const isLiderEted = role === 'lider_eted'
-  if (!isManagement && !isLiderEted) notFound()
+  const isLeader = !isManagement
+    && (await getSchoolLink({ userId: user.id, orgId: org.id, role, preview }, id)) === 'lider'
+  if (!isManagement && !isLeader) notFound()
 
   const { data: escola } = await supabase
     .from('schools')
@@ -39,7 +42,9 @@ export default async function EscolaPesquisaPage({ params }: Props) {
     .single()
   if (!escola) notFound()
 
-  const { data: responses } = await supabase
+  // Admin: a RLS dessa tabela só libera gestão/hospitalidade, e o líder da
+  // escola (já validado acima) também precisa ver as respostas da própria escola.
+  const { data: responses } = await createAdminClient()
     .from('hospitality_seminar_survey_responses')
     .select('id, respondent_name, experience_feedback, favorite_class_feedback, improvement_suggestion, created_at')
     .eq('school_id', escola.id)

@@ -14,6 +14,8 @@ import { EmbedCodeBox } from '@/components/ui/EmbedCodeBox'
 import { SearchableSelectModal } from '@/components/ui/SearchableSelectModal'
 
 import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
+import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
+import { getSchoolLink } from '@/lib/auth/unit-access'
 import { SCHOOL_TYPES } from '@/lib/schools'
 import { triggerSiteRevalidation } from '@/lib/revalidate-webhook'
 import { CheckCircle2, AlertTriangle, Settings } from 'lucide-react'
@@ -63,21 +65,9 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
   ])
   if (!user || !org) notFound()
 
-  const { data: orgUsers } = await supabase
-    .from('organization_users')
-    .select('organization_id, roles(name)')
-    .eq('user_id', user.id)
-    .eq('active', true)
-  const userOrgRows   = (orgUsers ?? []) as unknown as Array<{ organization_id: string | null; roles: { name: string } | null }>
-  const superadminRow = userOrgRows.find(row => row.roles?.name === 'superadmin')
-  const currentOrgRow = userOrgRows.find(row => row.organization_id === org.id)
-  const role          = superadminRow?.roles?.name ?? currentOrgRow?.roles?.name ?? ''
+  const { role, preview } = await getCurrentOrganizationRole(supabase, user.id, org.id)
   const isManagement  = isManagementRole(role)
   const canWrite      = isOperationalManager(role)
-  const isLiderEted   = role === 'lider_eted'
-  const isObreiroEted = role === 'obreiro_eted'
-
-  if (!isManagement && !isLiderEted && !isObreiroEted) notFound()
 
   const { data: escola } = await supabase
     .from('schools')
@@ -87,16 +77,12 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
     .single()
   if (!escola) notFound()
 
-  // lider_eted só acessa a escola que lidera
-  if (isLiderEted) {
-    const { data: lc } = await supabase
-      .from('school_leaders')
-      .select('id')
-      .eq('school_id', id)
-      .eq('user_id', user.id)
-      .single()
-    if (!lc) redirect(`/${slug}/escolas`)
-  }
+  // Uma das três visões abaixo (gestão / líder / obreiro): gestão prevalece;
+  // fora dela, o vínculo com ESTA escola decide — ver lib/auth/unit-access.
+  const link = isManagement ? null : await getSchoolLink({ userId: user.id, orgId: org.id, role, preview }, id)
+  if (!isManagement && !link) redirect(`/${slug}/escolas`)
+  const isLiderEted   = link === 'lider'
+  const isObreiroEted = link === 'obreiro'
 
   const { data: turmas } = await supabase
     .from('school_classes')

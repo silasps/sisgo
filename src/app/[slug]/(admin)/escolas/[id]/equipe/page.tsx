@@ -9,6 +9,7 @@ import {
 } from '../actions'
 import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
+import { getSchoolLink } from '@/lib/auth/unit-access'
 
 type Props = {
   params: Promise<{ slug: string; id: string }>
@@ -28,10 +29,12 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
   if (!user || !org) notFound()
   const orgId = org.id
 
-  const { role } = await getCurrentOrganizationRole(supabase, user.id, orgId)
+  const { role, preview } = await getCurrentOrganizationRole(supabase, user.id, orgId)
   const isManagement = isManagementRole(role)
   const canWrite = isOperationalManager(role)
-  const isLiderEted = role === 'lider_eted'
+  // Líder DESTA escola (vínculo), não "tem papel lider_eted" — ver lib/auth/unit-access.
+  // Quem já escreve direto (canWrite) não passa pelo fluxo de solicitação ao DH.
+  const isLiderEted = !canWrite && (await getSchoolLink({ userId: user.id, orgId, role, preview }, id)) === 'lider'
 
   type StaffRaw = { id: string; person_id: string; role: string; people: { full_name: string } | null }
   const { data: staffData } = await supabase

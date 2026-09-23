@@ -4,6 +4,7 @@ import { WorkspaceTabBar } from '@/components/layout/WorkspaceTabBar'
 import { redirect, notFound } from 'next/navigation'
 import { isManagementRole } from '@/lib/auth/permissions'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
+import { getMinistryLink } from '@/lib/auth/unit-access'
 
 type Props = {
   children: React.ReactNode
@@ -23,8 +24,6 @@ export default async function MinisterioWorkspaceLayout({ children, params }: Pr
 
   const { role, preview } = await getCurrentOrganizationRole(supabase, user.id, orgId)
   const isManagement = isManagementRole(role)
-  const isLiderMinisterio = role === 'lider_ministerio'
-  const isObreiroMinisterio = role === 'obreiro_ministerio'
   // Papéis de departamento (hospitalidade, secretaria, cozinha, manutenção) só
   // entram no ministério vinculado à própria função — /ministerios já os
   // redireciona pra cá; sem essa checagem, batiam num notFound() indevido.
@@ -39,45 +38,12 @@ export default async function MinisterioWorkspaceLayout({ children, params }: Pr
     .single()
   if (!ministry) notFound()
 
-  if (!isManagement && !isLiderMinisterio && !isObreiroMinisterio && !(isDeptRole && ministry.linked_role === role)) notFound()
-
-  if (isLiderMinisterio) {
-    if (preview?.ministryId) {
-      if (preview.ministryId !== id) redirect(`/${slug}/ministerios`)
-    } else {
-      const { data: lc } = await supabase
-        .from('ministry_leaders')
-        .select('id')
-        .eq('ministry_id', id)
-        .eq('user_id', user.id)
-        .single()
-      if (!lc) redirect(`/${slug}/ministerios`)
-    }
-  }
-
-  if (isObreiroMinisterio) {
-    if (preview?.ministryId) {
-      if (preview.ministryId !== id) redirect(`/${slug}/ministerios`)
-    } else {
-      const { data: staffProfile } = await supabase
-        .from('staff_profiles')
-        .select('person_id')
-        .eq('organization_id', orgId)
-        .eq('user_id', user.id)
-        .single()
-
-      const { data: memberLink } = staffProfile?.person_id
-        ? await supabase
-          .from('ministry_members')
-          .select('id')
-          .eq('ministry_id', id)
-          .eq('person_id', staffProfile.person_id)
-          .eq('active', true)
-          .single()
-        : { data: null }
-
-      if (!memberLink) redirect(`/${slug}/ministerios`)
-    }
+  // Fora da gestão/departamento, quem entra é quem lidera ou é membro DESTE
+  // ministério, seja qual for o papel principal — ver lib/auth/unit-access.
+  const canEnterByRole = isManagement || (isDeptRole && ministry.linked_role === role)
+  if (!canEnterByRole) {
+    const link = await getMinistryLink({ userId: user.id, orgId, role, preview }, id)
+    if (!link) redirect(`/${slug}/ministerios`)
   }
 
   const base = `/${slug}/ministerios/${id}`

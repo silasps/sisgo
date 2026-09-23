@@ -15,6 +15,7 @@ import { FinancePendingConfirmButton } from '@/components/finance/FinancePending
 import { Suspense } from 'react'
 import { ScrollHighlight } from '@/components/ui/ScrollHighlight'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
+import { getMinistryLink } from '@/lib/auth/unit-access'
 import { EnviarFormularioObreiroDiretoButton } from '@/components/inscricoes/EnviarFormularioObreiroDiretoButton'
 import { SearchableSelectModal } from '@/components/ui/SearchableSelectModal'
 
@@ -50,11 +51,14 @@ export default async function EquipePage({ params, searchParams }: Props) {
   const { data: ministry } = await supabase.from('ministries').select('name').eq('id', id).single()
   const ministryName = ministry?.name ?? 'este ministério'
 
-  const { role } = await getCurrentOrganizationRole(supabase, user.id, orgId)
+  const { role, preview } = await getCurrentOrganizationRole(supabase, user.id, orgId)
   const isManagement = isManagementRole(role)
   const canWrite = isOperationalManager(role)
-  const isLiderMinisterio = role === 'lider_ministerio'
-  const isObreiroMinisterio = role === 'obreiro_ministerio'
+  // Líder DESTE ministério (vínculo), não "tem papel lider_ministerio" — quem
+  // lidera outro ministério e é só membro deste não ganha poderes aqui. Quem
+  // já escreve direto (canWrite) não passa pelo fluxo de solicitação ao DH.
+  const isLiderMinisterio = !canWrite
+    && (await getMinistryLink({ userId: user.id, orgId, role, preview }, id)) === 'lider'
 
   type MemberRaw = {
     id: string; person_id: string; joined_at: string | null
@@ -144,7 +148,8 @@ export default async function EquipePage({ params, searchParams }: Props) {
 
   if (isLiderMinisterio) {
     const [{ data: myReqData }, { data: pData }] = await Promise.all([
-      supabase.from('ministry_pending_requests')
+      // Admin: a RLS exige o papel lider_ministerio; o vínculo já foi validado acima.
+      sbAdmin.from('ministry_pending_requests')
         .select('id, request_type, notes, created_at, status, person_id, people(full_name), ministry_roles(name)')
         .eq('ministry_id', id).eq('requested_by', user.id).eq('status', 'pendente')
         .order('created_at', { ascending: false }),

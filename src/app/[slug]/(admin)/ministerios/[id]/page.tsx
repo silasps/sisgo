@@ -5,6 +5,7 @@ import { redirect, notFound } from 'next/navigation'
 import { updateMinistry, assignLeader, removeLeader } from './actions'
 import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
+import { getMinistryLink } from '@/lib/auth/unit-access'
 import { Users, ClipboardList } from 'lucide-react'
 import { MuralClient } from './mural/MuralClient'
 import { LocaleContentTabs } from '@/components/ui/LocaleContentTabs'
@@ -28,19 +29,10 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
   if (!user || !org) notFound()
   const orgId = org.id
 
-  const { role } = await getCurrentOrganizationRole(supabase, user.id, orgId)
+  const { role, preview } = await getCurrentOrganizationRole(supabase, user.id, orgId)
   const isManagement = isManagementRole(role)
-  let canWrite = isOperationalManager(role)
-
-  if (!canWrite && role === 'lider_ministerio') {
-    const { data: leaderLink } = await supabase
-      .from('ministry_leaders')
-      .select('id')
-      .eq('ministry_id', id)
-      .eq('user_id', user.id)
-      .maybeSingle()
-    if (leaderLink) canWrite = true
-  }
+  const canWrite = isOperationalManager(role)
+    || (await getMinistryLink({ userId: user.id, orgId, role, preview }, id)) === 'lider'
 
   const { data: ministry } = await supabase
     .from('ministries')
@@ -61,7 +53,11 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
 
   const [{ count: memberCount }, { count: pendingCount }, { data: messagesRaw }, { data: membersRaw }] = await Promise.all([
     supabase.from('ministry_members').select('*', { count: 'exact', head: true }).eq('ministry_id', id).eq('active', true),
-    supabase.from('ministry_pending_requests').select('*', { count: 'exact', head: true }).eq('ministry_id', id).eq('status', 'pendente'),
+    // Só gestão/líder vê pendências (mesmo recorte da RLS). Admin porque a RLS
+    // exige o papel lider_ministerio, e aqui quem decide é o vínculo.
+    isManagement || canWrite
+      ? sbAdmin.from('ministry_pending_requests').select('*', { count: 'exact', head: true }).eq('ministry_id', id).eq('status', 'pendente')
+      : Promise.resolve({ count: 0 }),
     sbAdmin.from('ministry_messages')
       .select('id, author_name, author_id, content, mentions, color, font, text_color, font_size, created_at, edited_at')
       .eq('ministry_id', id)
