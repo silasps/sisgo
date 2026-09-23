@@ -883,6 +883,19 @@ Autosserviço com pagamento por tempo. Cada máquina tem um relé Wi-Fi
   "Ver tudo" (`AllAppsPanel`) já usava. Ao criar um modal novo, prefira
   sempre `Modal` em vez de montar um `fixed inset-0` próprio — evita
   reintroduzir esse bug.
+- **Confirmação de ação destrutiva/rápida (excluir, cancelar):** nunca usar
+  `confirm()`/`window.confirm()` nativo do navegador — padrão é sempre modal.
+  Dois componentes prontos em `@/components/ui/`, ambos por cima do visual
+  compartilhado `ConfirmModal`:
+  - **`ConfirmSubmitButton`**: botão dentro de um `<form action={serverAction}>`
+    já existente — abre o modal e só dá `requestSubmit()` no form ao confirmar.
+    Caso de uso típico: ícone de lixeira numa linha/card de listagem (ver
+    `DeleteTurmaButton`, `DeleteSchoolButton` em `escolas/`).
+  - **`ConfirmDialog`**: quando não há um `<form>` por perto — recebe
+    `onConfirm` como callback direto e envolve qualquer `children` clicável.
+  Ambos tratam o digest `NEXT_REDIRECT` (não é erro de verdade, é o
+  `redirect()` da Server Action se propagando) e mostram `toast.error` pra
+  falhas reais.
 - **`SearchableSelectModal`** (`@/components/ui/SearchableSelectModal`):
   substitui `<select>` nativo pra escolher usuário/pessoa numa lista —
   abre `Modal` com busca (mesmo critério tolerante a acento/cedilha/

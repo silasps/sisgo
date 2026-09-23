@@ -2,14 +2,14 @@
 
 import { ConfirmSubmitButton } from '@/components/ui/ConfirmSubmitButton'
 
-export function DeleteTurmaButton({
-  classId,
-  className: turmaName,
+export function DeleteSchoolButton({
+  schoolId,
+  schoolName,
   disabled,
   action,
 }: {
-  classId: string
-  className: string
+  schoolId: string
+  schoolName: string
   disabled: boolean
   action: (formData: FormData) => Promise<void>
 }) {
@@ -18,7 +18,7 @@ export function DeleteTurmaButton({
       <button
         type="button"
         disabled
-        title="Turma com alunos matriculados — não pode ser excluída"
+        title="Escola com turmas ou inscrições — não pode ser excluída"
         className="p-1.5 rounded-lg text-gray-300 opacity-30 cursor-not-allowed"
       >
         <TrashIcon />
@@ -28,10 +28,10 @@ export function DeleteTurmaButton({
 
   return (
     <form action={action}>
-      <input type="hidden" name="class_id" value={classId} />
+      <input type="hidden" name="school_id" value={schoolId} />
       <ConfirmSubmitButton
-        confirmMessage={`Excluir a turma "${turmaName}"? Esta ação não pode ser desfeita.`}
-        title="Excluir turma"
+        confirmMessage={`Excluir a escola "${schoolName}"? Esta ação não pode ser desfeita.`}
+        title="Excluir escola"
         className="p-1.5 rounded-lg transition-colors text-gray-300 hover:text-red-500 hover:bg-red-50"
       >
         <TrashIcon />

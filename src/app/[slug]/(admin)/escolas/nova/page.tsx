@@ -5,6 +5,7 @@ import { SCHOOL_TYPES } from '@/lib/schools'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { isManagementRole } from '@/lib/auth/permissions'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = { params: Promise<{ slug: string }> }
 
@@ -89,10 +90,11 @@ export default async function NovaEscolaPage({ params }: Props) {
               className="px-5 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
               Cancelar
             </Link>
-            <button type="submit"
-              className="px-5 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg transition-colors">
+            <SubmitButton
+              pendingText="Criando…"
+              className="px-5 py-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors">
               Criar e editar →
-            </button>
+            </SubmitButton>
           </div>
         </form>
       </main>
