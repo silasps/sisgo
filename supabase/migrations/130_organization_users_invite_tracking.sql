@@ -1,5 +1,5 @@
 -- ============================================================
--- SISGO — Migration 128: rastreio de envio de credenciais de acesso
+-- SISGO — Migration 130: rastreio de envio de credenciais de acesso
 -- ============================================================
 --
 -- Import em massa de pessoas pode criar o login (auth.users +

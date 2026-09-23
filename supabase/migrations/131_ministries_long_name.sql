@@ -1,5 +1,5 @@
 -- ============================================================
--- SISGO — Migration 129: nome longo do ministério
+-- SISGO — Migration 131: nome longo do ministério
 -- ============================================================
 --
 -- `ministries.name` já funciona como identificador curto na prática (ex.

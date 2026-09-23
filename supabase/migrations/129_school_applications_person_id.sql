@@ -1,5 +1,5 @@
 -- ============================================================
--- SISGO — Migration 127: person_id em school_applications
+-- SISGO — Migration 129: person_id em school_applications
 -- ============================================================
 --
 -- staff_applications já nasceu com person_id (migration 001), mas
