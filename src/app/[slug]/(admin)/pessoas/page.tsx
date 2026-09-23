@@ -4,17 +4,20 @@ import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getRolePreview } from '@/lib/role-preview'
-import { SearchBar } from '@/components/ui/SearchBar'
 import { Suspense } from 'react'
 import { SCHOOL_APPLICATION_TYPES } from '@/lib/schools'
-import { PESSOAS_ROLES } from '@/lib/auth/permissions'
+import { PESSOAS_ROLES, MANAGEMENT_ROLES, isOperationalManager } from '@/lib/auth/permissions'
 import { SkTable } from '@/components/ui/Skeleton'
 import { NovaPessoaButton } from './NovaPessoaButton'
+import { PessoasList } from './PessoasList'
 import { criarPreInscricaoManual, criarPreInscricaoObreiroManual } from '../inscricoes/actions'
+import { loadStaffRoles } from '@/lib/staff/roleOptions'
+import { Upload, BarChart3, ChevronRight } from 'lucide-react'
+import { ClickableRow } from '@/components/ui/ClickableRow'
 
 type Props = {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ tab?: string; q?: string }>
+  searchParams: Promise<{ tab?: string; status?: string; ministerio?: string; genero?: string; semEmail?: string }>
 }
 
 const TABS = [
@@ -103,9 +106,33 @@ type StudentEnrollment = {
   } | null
 }
 
+export type PessoaRow = {
+  id: string
+  personId?: string
+  classId?: string | null
+  nome: string
+  detalhe: string | null
+  meta?: string | null
+  col2: string
+  col2Label: string
+  badge: { label: string; color: string } | null
+  criadoEm: string
+  /** usados só pra filtro vindo de link externo (Relatórios) — não exibidos */
+  ativo?: boolean
+  genero?: string | null
+}
+
+export type OpenClassOption = {
+  id: string
+  school_id: string
+  name: string
+  starts_at: string | null
+  schools: { name: string } | null
+}
+
 export default async function PessoasPage({ params, searchParams }: Props) {
   const { slug } = await params
-  const { tab = 'todos', q } = await searchParams
+  const { tab = 'todos', status, ministerio, genero, semEmail } = await searchParams
   const supabase = await createClient()
 
   const { data: org } = await supabase
@@ -206,6 +233,12 @@ export default async function PessoasPage({ params, searchParams }: Props) {
   const allSchools = (allSchoolsRaw ?? []) as Array<{ id: string; name: string }>
   const allMinistries = (allMinistriesRaw ?? []) as Array<{ id: string; name: string }>
 
+  // "Obreiro direto" (cria pessoa + login de uma vez, diferente de aluno/
+  // obreiro por pré-inscrição) é uma das opções do botão "+ Adicionar",
+  // disponível em qualquer aba pra quem pode operar.
+  const canCreateObreiro = isOperationalManager(userRole)
+  const staffRoles = canCreateObreiro ? await loadStaffRoles(supabase) : []
+
   // "+ Nova pessoa" só cria candidatos (pré-inscrição de aluno/obreiro), que
   // caem direto na aba Inscrições — sem sentido pra quem não vê essa aba.
   const visibleTabs = TABS.filter(t => !(isHospitalidade && t.key === 'inscricoes'))
@@ -216,28 +249,54 @@ export default async function PessoasPage({ params, searchParams }: Props) {
         title="Pessoas"
         actions={
           isHospitalidade ? undefined : (
-            <NovaPessoaButton
-              slug={slug}
-              openClasses={headerOpenClasses.map(c => ({
-                id: c.id,
-                school_id: c.school_id,
-                name: c.name,
-                starts_at: c.starts_at,
-                schoolName: c.schools?.name ?? null,
-              }))}
-              ministries={allMinistries}
-              schools={allSchools}
-              criarPreInscricaoManual={criarPreInscricaoManual.bind(null, orgId, slug)}
-              criarPreInscricaoObreiroManual={criarPreInscricaoObreiroManual.bind(null, orgId, slug)}
-            />
+            <div className="flex items-center gap-2">
+              {MANAGEMENT_ROLES.includes(userRole as never) && (
+                <Link
+                  href={`/${slug}/pessoas/importar`}
+                  title="Importar pessoas"
+                  className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <Upload className="size-4" />
+                  <span className="hidden sm:inline">Importar</span>
+                </Link>
+              )}
+              <NovaPessoaButton
+                slug={slug}
+                orgId={orgId}
+                openClasses={headerOpenClasses.map(c => ({
+                  id: c.id,
+                  school_id: c.school_id,
+                  name: c.name,
+                  starts_at: c.starts_at,
+                  schoolName: c.schools?.name ?? null,
+                }))}
+                ministries={allMinistries}
+                schools={allSchools}
+                staffRoles={staffRoles}
+                canCreateObreiroDireto={canCreateObreiro}
+                criarPreInscricaoManual={criarPreInscricaoManual.bind(null, orgId, slug)}
+                criarPreInscricaoObreiroManual={criarPreInscricaoObreiroManual.bind(null, orgId, slug)}
+              />
+            </div>
           )
         }
       />
       <main className="p-4 md:p-6 space-y-4">
 
-        <p className="text-xs text-gray-400 -mt-2">
-          Diretório geral da base. Vínculos com escola ou ministério (papel, entrada/saída) ficam no Quadro de Obreiros de cada unidade.
-        </p>
+        <div className="flex items-center justify-between gap-3 -mt-2">
+          <p className="text-xs text-gray-400">
+            Diretório geral da base. Vínculos com escola ou ministério (papel, entrada/saída) ficam no Quadro de Obreiros de cada unidade.
+          </p>
+          {MANAGEMENT_ROLES.includes(userRole as never) && (
+            <Link
+              href={`/${slug}/pessoas/relatorios`}
+              className="flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700 shrink-0"
+            >
+              <BarChart3 className="size-3.5" />
+              Relatórios
+            </Link>
+          )}
+        </div>
 
         {/* Tabs — ficam fora do Suspense: não recarregam nem piscam ao trocar de aba */}
         <div className="flex gap-1 bg-gray-100 p-1 rounded-xl overflow-x-auto scrollbar-none">
@@ -258,14 +317,17 @@ export default async function PessoasPage({ params, searchParams }: Props) {
 
         {/* Conteúdo da aba: componente próprio, streamado — só essa área mostra
             skeleton ao trocar de aba/buscar, em vez da página inteira. */}
-        <Suspense key={`${tab}-${q ?? ''}`} fallback={<SkTable rows={8} cols={4} />}>
+        <Suspense key={tab} fallback={<SkTable rows={8} cols={4} />}>
           <PessoasTabContent
             slug={slug}
             orgId={orgId}
             tab={tab}
-            q={q}
             allowedSchoolIds={allowedSchoolIds}
             supabase={supabase}
+            initialStatus={status}
+            initialMinisterio={ministerio}
+            initialGenero={genero}
+            initialSemEmail={semEmail === 'true'}
           />
         </Suspense>
       </main>
@@ -278,26 +340,23 @@ export default async function PessoasPage({ params, searchParams }: Props) {
 // trocar de aba não recarregue cabeçalho/abas — só essa parte refaz queries.
 
 async function PessoasTabContent({
-  slug, orgId, tab, q, allowedSchoolIds, supabase,
+  slug, orgId, tab, allowedSchoolIds, supabase, initialStatus, initialMinisterio, initialGenero, initialSemEmail,
 }: {
   slug: string
   orgId: string
   tab: string
-  q?: string
   allowedSchoolIds: string[] | null
   supabase: Awaited<ReturnType<typeof createClient>>
+  initialStatus?: string
+  initialMinisterio?: string
+  initialGenero?: string
+  initialSemEmail?: boolean
 }) {
   const sbAdmin = createAdminClient()
 
   // openClasses só é usado pelo seletor de turma da aba Alunos — buscar isso
   // em toda navegação (mesmo em "Todos"/"Obreiros"/etc.) era desperdício.
-  let openClasses: Array<{
-    id: string
-    school_id: string
-    name: string
-    starts_at: string | null
-    schools: { name: string } | null
-  }> = []
+  let openClasses: OpenClassOption[] = []
 
   if (tab === 'alunos') {
     let openClassesQuery = sbAdmin
@@ -459,46 +518,36 @@ async function PessoasTabContent({
     inscritoItems.sort((a, b) => b.diasAberto - a.diasAberto)
   }
 
-  type Row = {
-    id: string
-    personId?: string
-    classId?: string | null
-    nome: string
-    detalhe: string | null
-    meta?: string | null
-    col2: string
-    col2Label: string
-    badge: { label: string; color: string } | null
-  }
-
-  let rows: Row[] = []
+  let rows: PessoaRow[] = []
 
   if (tab === 'todos') {
     // Exclui pré-inscritos ainda não convertidos (ficam na aba Inscritos)
     const query = supabase
       .from('people')
-      .select('id, full_name, preferred_name, gender, source')
+      .select('id, full_name, preferred_name, gender, source, created_at')
       .eq('organization_id', orgId)
       .order('full_name')
 
     const { data, error } = await query
 
     if (!error) {
-      rows = ((data ?? []) as unknown as { id: string; full_name: string; preferred_name: string | null; gender: string | null; source: string | null }[])
+      rows = ((data ?? []) as unknown as { id: string; full_name: string; preferred_name: string | null; gender: string | null; source: string | null; created_at: string }[])
         .filter(p => p.source !== 'pre_inscricao_publica')
         .map(p => ({
           id: p.id,
           nome: p.full_name,
           detalhe: p.preferred_name ?? null,
-          col2: p.gender ?? '—',
-          col2Label: 'Gênero',
+          col2: '',
+          col2Label: '',
           badge: null,
+          criadoEm: p.created_at,
+          genero: p.gender,
         }))
     } else {
       // Fallback se a coluna source ainda não existir (migration pendente)
       const { data: fallbackData } = await supabase
         .from('people')
-        .select('id, full_name, preferred_name, gender')
+        .select('id, full_name, preferred_name, gender, created_at')
         .eq('organization_id', orgId)
         .order('full_name')
 
@@ -506,18 +555,20 @@ async function PessoasTabContent({
         id: p.id,
         nome: p.full_name,
         detalhe: p.preferred_name ?? null,
-        col2: p.gender ?? '—',
-        col2Label: 'Gênero',
+        col2: '',
+        col2Label: '',
         badge: null,
+        criadoEm: p.created_at,
+        genero: p.gender,
       }))
     }
   }
 
   if (tab === 'obreiros') {
-    type ObreiroRaw = { id: string; role_title: string | null; area: string | null; active: boolean; user_id?: string | null; people: { id: string; full_name: string } | null }
+    type ObreiroRaw = { id: string; role_title: string | null; area: string | null; active: boolean; user_id?: string | null; created_at: string; people: { id: string; full_name: string } | null }
     const result = await supabase
       .from('staff_profiles')
-      .select('id, role_title, area, active, user_id, people(id, full_name)')
+      .select('id, role_title, area, active, user_id, created_at, people(id, full_name)')
       .eq('organization_id', orgId)
       .order('created_at', { ascending: false })
 
@@ -525,29 +576,47 @@ async function PessoasTabContent({
     if (result.error) {
       const fallback = await supabase
         .from('staff_profiles')
-        .select('id, role_title, area, active, people(id, full_name)')
+        .select('id, role_title, area, created_at, people(id, full_name)')
         .eq('organization_id', orgId)
         .order('created_at', { ascending: false })
       staffProfiles = (fallback.data ?? []) as unknown as ObreiroRaw[]
+    }
+
+    const obreiroPersonIds = staffProfiles.map(s => s.people?.id).filter((id): id is string => Boolean(id))
+    const ministryNameByPersonId = new Map<string, string>()
+    if (obreiroPersonIds.length > 0) {
+      type MinistryMemberRaw = { person_id: string; ministries: { name: string } | null }
+      const { data: ministryLinks } = await supabase
+        .from('ministry_members')
+        .select('person_id, ministries(name)')
+        .in('person_id', obreiroPersonIds)
+        .eq('active', true)
+      for (const link of ((ministryLinks ?? []) as unknown) as MinistryMemberRaw[]) {
+        if (!link.ministries) continue
+        const existing = ministryNameByPersonId.get(link.person_id)
+        ministryNameByPersonId.set(link.person_id, existing ? `${existing}, ${link.ministries.name}` : link.ministries.name)
+      }
     }
 
     rows = staffProfiles.map(s => ({
       id: s.id,
       personId: s.people?.id,
       nome: s.people?.full_name ?? '—',
-      detalhe: s.area ?? null,
+      detalhe: s.area ?? (s.people?.id ? ministryNameByPersonId.get(s.people.id) ?? null : null),
       meta: s.user_id ? null : 'Obreiro sem cadastro',
       col2: s.role_title ?? '—',
       col2Label: 'Função',
       badge: { label: s.active ? 'Ativo' : 'Inativo', color: OBREIRO_STATUS_COLORS[String(s.active)] },
+      criadoEm: s.created_at,
+      ativo: s.active,
     }))
   }
 
   if (tab === 'alunos') {
-    type AlunoRaw = { id: string; active: boolean; accepted_by?: string | null; people: { id: string; full_name: string } | null }
+    type AlunoRaw = { id: string; active: boolean; accepted_by?: string | null; created_at: string; people: { id: string; full_name: string } | null }
     const result = await supabase
       .from('student_profiles')
-      .select('id, active, accepted_by, people(id, full_name)')
+      .select('id, active, accepted_by, created_at, people(id, full_name)')
       .eq('organization_id', orgId)
       .order('created_at', { ascending: false })
 
@@ -556,7 +625,7 @@ async function PessoasTabContent({
     if (result.error) {
       const fallback = await supabase
         .from('student_profiles')
-        .select('id, active, people(id, full_name)')
+        .select('id, active, created_at, people(id, full_name)')
         .eq('organization_id', orgId)
         .order('created_at', { ascending: false })
       studentProfiles = (fallback.data ?? []) as unknown as AlunoRaw[]
@@ -667,6 +736,8 @@ async function PessoasTabContent({
         col2: className,
         col2Label: 'Turma',
         badge: stage,
+        criadoEm: s.created_at,
+        ativo: s.active,
       }
     })
   }
@@ -683,11 +754,13 @@ async function PessoasTabContent({
       .filter(r => r.people != null)
       .map(r => ({
         id: r.id,
+        personId: r.people?.id,
         nome: r.people?.full_name ?? '—',
         detalhe: null,
         col2: new Date(r.started_at).toLocaleDateString('pt-BR'),
         col2Label: 'Desde',
         badge: { label: tab === 'voluntarios' ? 'Voluntário' : 'Associado', color: 'bg-indigo-50 text-indigo-700' },
+        criadoEm: r.started_at,
       }))
   }
 
@@ -703,6 +776,7 @@ async function PessoasTabContent({
       .filter(r => r.people != null)
       .map(r => ({
         id: r.id,
+        personId: r.people?.id,
         nome: r.people?.full_name ?? '—',
         detalhe: null,
         col2: new Date(r.started_at).toLocaleDateString('pt-BR'),
@@ -710,12 +784,16 @@ async function PessoasTabContent({
         badge: r.ended_at
           ? { label: 'Encerrada', color: 'bg-gray-100 text-gray-500' }
           : { label: 'Ativo', color: 'bg-green-50 text-green-700' },
+        criadoEm: r.started_at,
       }))
   }
 
-  const filteredRows = q
-    ? rows.filter(r => r.nome.toLowerCase().includes(q.toLowerCase()))
-    : rows
+  // "Todos" já vem ordenado por nome do banco; as outras abas vêm por
+  // criadoEm (mais recente primeiro) — isso vira o valor padrão do seletor
+  // de ordenação no cliente (a reordenação em si é local, sem ida ao
+  // servidor, já que os dados já estão todos carregados).
+  const defaultSort = tab === 'todos' ? 'nome_asc' : 'recente'
+
   const col2Label = rows[0]?.col2Label ?? 'Detalhe'
   const badgeLabel = tab === 'alunos' ? 'Etapa' : 'Status'
 
@@ -757,7 +835,7 @@ async function PessoasTabContent({
                       const statusInfo = INTEREST_STATUS[item.status] ?? { label: item.status, color: 'bg-gray-100 text-gray-500' }
                       const tabDestino = item.tipo === 'Pré-inscrição' ? 'pre_inscricao' : item.tipo === 'Candidato a Aluno' ? 'aluno' : 'obreiro'
                       return (
-                        <tr key={`${item.tipo}-${item.id}`} className="hover:bg-gray-50">
+                        <ClickableRow key={`${item.tipo}-${item.id}`} href={`/${slug}/inscricoes?tab=${tabDestino}`}>
                           <td className="px-4 py-3">
                             <span className={`inline-flex items-center justify-center min-w-[2.5rem] px-2 py-0.5 rounded-full text-xs font-bold tabular-nums ${urgency.color}`}>
                               {urgency.label}
@@ -781,14 +859,9 @@ async function PessoasTabContent({
                             </span>
                           </td>
                           <td className="px-4 py-3 text-right">
-                            <Link
-                              href={`/${slug}/inscricoes?tab=${tabDestino}`}
-                              className="text-xs text-brand-500 hover:text-brand-700 font-medium whitespace-nowrap"
-                            >
-                              Gerenciar →
-                            </Link>
+                            <ChevronRight className="size-4 text-gray-300 inline-block" aria-hidden />
                           </td>
-                        </tr>
+                        </ClickableRow>
                       )
                     })}
                   </tbody>
@@ -801,101 +874,21 @@ async function PessoasTabContent({
 
       {/* ── Abas padrão ───────────────────────────────────────────────────── */}
       {tab !== 'inscricoes' && (
-        <>
-          <Suspense>
-            <SearchBar placeholder="Buscar por nome…" className="w-full sm:w-72" />
-          </Suspense>
-          {!filteredRows.length ? (
-            <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
-              <p className="text-gray-400 text-sm">
-                {q ? `Nenhum resultado para "${q}".` : 'Nenhum registro encontrado nesta categoria.'}
-              </p>
-            </div>
-          ) : (
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Nome</th>
-                    <th className="hidden md:table-cell text-left px-4 py-3 font-medium text-gray-600">{col2Label}</th>
-                    <th className="hidden md:table-cell text-left px-4 py-3 font-medium text-gray-600">{badgeLabel}</th>
-                    {(tab === 'alunos' || tab === 'obreiros') && <th className="hidden md:table-cell px-4 py-3" />}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {filteredRows.map(r => (
-                    <tr key={r.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3">
-                        <p className="font-medium text-gray-900">{r.nome}</p>
-                        {r.detalhe && <p className="text-xs text-gray-400">{r.detalhe}</p>}
-                        {r.meta && <p className="text-xs text-gray-500 mt-0.5">{r.meta}</p>}
-                        <div className="md:hidden flex items-center gap-2 mt-1 flex-wrap">
-                          {r.col2 && r.col2 !== '—' && (
-                            <span className="text-xs text-gray-500">{r.col2}</span>
-                          )}
-                          {r.badge && (
-                            <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${r.badge.color}`}>
-                              {r.badge.label}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="hidden md:table-cell px-4 py-3 text-gray-500">
-                        {tab === 'alunos' && r.personId ? (
-                          <form action={trocarTurmaAluno} className="flex max-w-md items-center gap-2">
-                            <input type="hidden" name="person_id" value={r.personId} />
-                            <input type="hidden" name="org_id" value={orgId} />
-                            <select
-                              name="class_id"
-                              defaultValue={r.classId ?? ''}
-                              className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-400"
-                            >
-                              <option value="" disabled>Sem turma definida</option>
-                              {r.classId && !openClasses.some(classOption => classOption.id === r.classId) && (
-                                <option value={r.classId}>{r.col2} · atual</option>
-                              )}
-                              {openClasses.map(classOption => (
-                                <option key={classOption.id} value={classOption.id}>
-                                  {classOption.schools?.name ?? 'Escola'} · {classOption.name}
-                                  {classOption.starts_at ? ` · ${new Date(classOption.starts_at).toLocaleDateString('pt-BR')}` : ''}
-                                </option>
-                              ))}
-                            </select>
-                            <button
-                              type="submit"
-                              className="rounded-lg border border-gray-200 px-2.5 py-2 text-xs font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-800"
-                            >
-                              Confirmar
-                            </button>
-                          </form>
-                        ) : (
-                          r.col2
-                        )}
-                      </td>
-                      <td className="hidden md:table-cell px-4 py-3">
-                        {r.badge ? (
-                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${r.badge.color}`}>
-                            {r.badge.label}
-                          </span>
-                        ) : '—'}
-                      </td>
-                      {(tab === 'alunos' || tab === 'obreiros') && r.personId && (
-                        <td className="hidden md:table-cell px-4 py-3 text-right">
-                          <Link
-                            href={`/${slug}/pessoas/${r.personId}`}
-                            className="text-xs text-brand-500 hover:text-brand-700 font-medium hover:underline transition-colors"
-                          >
-                            Ver perfil →
-                          </Link>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </>
+        <PessoasList
+          rows={rows}
+          tab={tab}
+          slug={slug}
+          initialStatus={initialStatus}
+          initialMinisterio={initialMinisterio}
+          initialGenero={initialGenero}
+          initialSemEmail={initialSemEmail}
+          orgId={orgId}
+          openClasses={openClasses}
+          trocarTurmaAluno={trocarTurmaAluno}
+          col2Label={col2Label}
+          badgeLabel={badgeLabel}
+          defaultSort={defaultSort}
+        />
       )}
     </>
   )

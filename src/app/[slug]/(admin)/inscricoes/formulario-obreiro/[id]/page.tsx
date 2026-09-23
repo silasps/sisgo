@@ -25,7 +25,7 @@ import { PersonFinanceBadge } from '@/components/finance/PersonFinanceBadge'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
-type FormSection = { title: string; fields: { label: string; key: string; type?: 'textarea' | 'jocum_schools' | 'languages' | 'warning' | 'date_anos' | 'children' }[] }
+type FormSection = { title: string; fields: { label: string; key: string; type?: 'textarea' | 'institution_schools' | 'languages' | 'warning' | 'date_anos' | 'children' }[] }
 
 const SECTIONS: FormSection[] = [
   {
@@ -46,7 +46,7 @@ const SECTIONS: FormSection[] = [
       { label: 'Profissão', key: 'profissao' },
       { label: 'Habilidades', key: 'habilidades', type: 'textarea' },
       { label: 'Especialização profissional', key: 'especializacao_profissional' },
-      { label: 'Cursos e formações concluídos', key: 'escolas_jocum', type: 'jocum_schools' },
+      { label: 'Cursos e formações concluídos', key: 'escolas_instituicao', type: 'institution_schools' },
       { label: 'Idiomas', key: 'idiomas', type: 'languages' },
       { label: 'RG', key: 'rg' },
       { label: 'CPF', key: 'cpf' },
@@ -167,16 +167,16 @@ const SECTIONS: FormSection[] = [
 // "Escolas/especializações JOCUM" passou a ser uma lista (nome + mês/ano de
 // conclusão) serializada como JSON dentro do mesmo campo de texto — aceita
 // também o formato antigo (texto livre) salvo antes dessa mudança.
-type JocumSchoolRow = { escola: string; base: string; pais: string; mesAno: string }
+type InstitutionSchoolRow = { escola: string; base: string; pais: string; mesAno: string }
 
-function parseJocumSchools(value: unknown): JocumSchoolRow[] {
+function parseInstitutionSchools(value: unknown): InstitutionSchoolRow[] {
   if (typeof value !== 'string' || !value.trim()) return []
   try {
     const parsed = JSON.parse(value)
     if (Array.isArray(parsed)) {
       return parsed
         .map((r: unknown) => {
-          const row = (r ?? {}) as Partial<JocumSchoolRow>
+          const row = (r ?? {}) as Partial<InstitutionSchoolRow>
           return { escola: row.escola ?? '', base: row.base ?? '', pais: row.pais ?? '', mesAno: row.mesAno ?? '' }
         })
         .filter(r => r.escola.trim())
@@ -318,7 +318,7 @@ function formatRefFieldValue(value: string): string {
   return capitalizeFirst(value)
 }
 
-function FieldRow({ label, value, type }: { label: string; value: unknown; type?: 'textarea' | 'jocum_schools' | 'languages' | 'warning' | 'date_anos' | 'children' }) {
+function FieldRow({ label, value, type }: { label: string; value: unknown; type?: 'textarea' | 'institution_schools' | 'languages' | 'warning' | 'date_anos' | 'children' }) {
   if (type === 'date_anos') {
     const str = typeof value === 'string' ? value.trim() : ''
     if (!str) return null
@@ -372,8 +372,8 @@ function FieldRow({ label, value, type }: { label: string; value: unknown; type?
       </div>
     )
   }
-  if (type === 'jocum_schools') {
-    const rows = parseJocumSchools(value)
+  if (type === 'institution_schools') {
+    const rows = parseInstitutionSchools(value)
     if (!rows.length) return null
     return (
       <div className="py-2.5 border-b border-gray-50 last:border-0">
@@ -606,6 +606,13 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
       acc[k] = (v as Record<string, string>) ?? {}
       return acc
     }, {})
+
+  // Compat: candidaturas enviadas antes do campo "escolas_jocum" virar
+  // "escolas_instituicao" (nome genérico, não amarrado à JOCUM) ainda têm o
+  // valor salvo na chave antiga.
+  if (sectionData.s2 && !sectionData.s2.escolas_instituicao && sectionData.s2.escolas_jocum) {
+    sectionData.s2.escolas_instituicao = sectionData.s2.escolas_jocum
+  }
 
   const allFields = Object.values(sectionData).reduce<Record<string, string>>((acc, sec) => ({ ...acc, ...sec }), {})
 

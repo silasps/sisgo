@@ -230,8 +230,16 @@ export default async function EquipePage({ params, searchParams }: Props) {
       const notifyCandidate = formData.get('notify_candidate') === 'on'
       const notifyLeader = formData.get('notify_leader') === 'on'
       if (notifyCandidate || notifyLeader) {
-        const transfer = transfers.find(t => t.id === transferId)
+        // Busca direto no banco em vez de fechar sobre `transfers`/`transferPersonMap`
+        // carregados na renderização — evita dado desatualizado se o status mudou
+        // entre o load da página e o clique, e mantém a closure desta action leve.
+        const { data: transfer } = await sbAdmin
+          .from('ministry_transfers')
+          .select('person_id, to_ministry_id')
+          .eq('id', transferId)
+          .single()
         if (transfer) {
+          const { data: personRow } = await sbAdmin.from('people').select('full_name').eq('id', transfer.person_id).single()
           let leaderEmail: string | null = null
           if (notifyLeader) {
             const { data: leaderRow } = await sbAdmin.from('ministry_leaders').select('user_id').eq('ministry_id', transfer.to_ministry_id).maybeSingle()
@@ -243,7 +251,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
           await notifyFinancePendency({
             organizationId: orgId,
             personId: transfer.person_id,
-            personName: transferPersonMap.get(transfer.person_id) ?? 'Pessoa',
+            personName: personRow?.full_name ?? 'Pessoa',
             notifyCandidate,
             notifyLeaderEmail: leaderEmail,
           })

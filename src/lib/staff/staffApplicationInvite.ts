@@ -1,6 +1,9 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { resolvePerson } from '@/lib/people/resolvePerson'
+import { getPersonPrefillData } from '@/lib/people/getPersonPrefillData'
+import { getCompletedInstitutionSchools } from '@/lib/people/getCompletedInstitutionSchools'
 import { headers as nextHeaders } from 'next/headers'
 
 export type StaffInviteResult = { url?: string; error?: string; emailWarning?: string; emailErrorDetail?: string }
@@ -104,16 +107,14 @@ export async function createAndSendStaffApplication(params: CreateAndSendParams)
   const db = createAdminClient()
   const { organizationId, interestFormId, ministryId, schoolId, fullName, email, phone, language, leaderAcceptedBy } = params
 
+  // Reaproveita a people já existente (por email ou telefone — quem chama
+  // aqui não coleta CPF) em vez de duplicar quem já passou pelo sistema
+  // antes, ativo ou não (ex-aluno virando obreiro, obreiro desligado que
+  // volta anos depois etc.). Ver src/lib/people/resolvePerson.ts.
   let personId = params.personId ?? null
-  if (!personId && email) {
-    const { data: contact } = await db.from('person_contacts')
-      .select('person_id').eq('type', 'email').eq('value', email).maybeSingle()
-    if (contact) personId = contact.person_id
-  }
-  if (!personId && !email && phone) {
-    const { data: contact } = await db.from('person_contacts')
-      .select('person_id').eq('type', 'phone').eq('value', phone).maybeSingle()
-    if (contact) personId = contact.person_id
+  if (!personId) {
+    const resolved = await resolvePerson({ organizationId, email, phone })
+    if (resolved) personId = resolved.personId
   }
   if (!personId) {
     const { data: person } = await db.from('people')
@@ -130,6 +131,18 @@ export async function createAndSendStaffApplication(params: CreateAndSendParams)
   }
   if (!personId) return { error: 'Não foi possível criar a pessoa.' }
 
+  // Se essa pessoa já tem dados pessoais conhecidos (foi aluna, já foi
+  // obreira antes, veio de um import), pré-preenche a seção 2 (dados
+  // pessoais) do formulário de obreiro — ela só revisa/confirma em vez de
+  // digitar tudo de novo. Ver src/lib/people/getPersonPrefillData.ts.
+  const s2Prefill = await getPersonPrefillData(personId)
+
+  // Idem pra lista "Escolas ou especializações da instituição": se ela já
+  // concluiu alguma escola desta organização (marcado pelo líder da escola,
+  // ver getCompletedInstitutionSchools.ts), a lista já entra preenchida em
+  // vez de pedir pra ela redigitar o que o sistema já sabe.
+  const escolasInstituicao = await getCompletedInstitutionSchools(personId, organizationId)
+
   const { data: newApp } = await db
     .from('staff_applications')
     .insert({
@@ -141,6 +154,9 @@ export async function createAndSendStaffApplication(params: CreateAndSendParams)
       status: 'rascunho',
       form_data: {
         prefill: { nome: fullName, email, telefone: phone, idioma: language },
+        ...(s2Prefill || escolasInstituicao.length
+          ? { s2: { ...s2Prefill, ...(escolasInstituicao.length ? { escolas_instituicao: JSON.stringify(escolasInstituicao) } : {}) } }
+          : {}),
       },
       leader_accepted_by: leaderAcceptedBy,
       leader_accepted_at: new Date().toISOString(),

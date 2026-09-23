@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { triggerSiteRevalidation } from '@/lib/revalidate-webhook'
+import { assignLeader } from '../ministerios/[id]/actions'
 
 const BLOCKED_ROLE_NAMES = ['superadmin', 'admin_base', 'lider_base']
 const REQUIRED_STAFF_ROLES: Record<string, { label: string; description: string }> = {
@@ -54,6 +55,7 @@ export async function changeRole(formData: FormData) {
   const roleTitle = roleTitleInput || roleTitleFallback || null
   const slug = formData.get('slug') as string
   const orgId = formData.get('org_id') as string
+  const redirectTo = (formData.get('redirect_to') as string | null) || `/${slug}/obreiros`
 
   if (!roleId) return
 
@@ -81,7 +83,7 @@ export async function changeRole(formData: FormData) {
     }
   }
 
-  redirect(`/${slug}/obreiros`)
+  redirect(redirectTo)
 }
 
 export async function createStaffUser(formData: FormData) {
@@ -179,7 +181,9 @@ export async function updateExtraRoles(formData: FormData) {
   const orgUserId = formData.get('org_user_id') as string
   const orgId = formData.get('org_id') as string
   const slug = formData.get('slug') as string
+  const redirectTo = (formData.get('redirect_to') as string | null) || `/${slug}/obreiros`
   const extraRoles = formData.getAll('extra_roles').map(String).filter(Boolean)
+  const liderMinisterioId = (formData.get('lider_ministerio_id') as string | null) || null
 
   if (!orgUserId || !orgId) return
 
@@ -206,13 +210,24 @@ export async function updateExtraRoles(formData: FormData) {
     .eq('id', orgUserId)
     .eq('organization_id', orgId)
 
-  redirect(`/${slug}/obreiros`)
+  // "Líder de Ministério" como função adicional precisa saber de QUAL
+  // ministério — reaproveita o mesmo assignLeader() da tela do ministério
+  // (substitui quem já era líder desse ministério, igual lá).
+  if (extraRoles.includes('lider_ministerio') && liderMinisterioId) {
+    const { data: orgUser } = await admin.from('organization_users').select('user_id').eq('id', orgUserId).single()
+    if (orgUser?.user_id) {
+      await assignLeader(orgId, liderMinisterioId, orgUser.user_id)
+    }
+  }
+
+  redirect(redirectTo)
 }
 
 export async function toggleActive(formData: FormData) {
   const orgUserId = formData.get('org_user_id') as string
   const active = formData.get('active') === 'true'
   const slug = formData.get('slug') as string
+  const redirectTo = (formData.get('redirect_to') as string | null) || `/${slug}/obreiros`
   const sentAsMissionary = formData.get('sent_as_missionary') === 'on'
   const sentTo = (formData.get('sent_to') as string | null)?.trim() || null
 
@@ -232,21 +247,51 @@ export async function toggleActive(formData: FormData) {
       .single()
 
     if (orgUser?.user_id && orgUser.organization_id) {
-      await admin
+      const { data: profile } = await admin
         .from('staff_profiles')
-        .update({
-          active: false,
-          left_at: new Date().toISOString().slice(0, 10),
-          sent_as_missionary: sentAsMissionary,
-          sent_to: sentTo,
-          updated_at: new Date().toISOString(),
-        })
+        .select('id, person_id')
         .eq('organization_id', orgUser.organization_id)
         .eq('user_id', orgUser.user_id)
+        .maybeSingle()
+
+      if (profile) {
+        await admin
+          .from('staff_profiles')
+          .update({
+            active: false,
+            left_at: new Date().toISOString().slice(0, 10),
+            sent_as_missionary: sentAsMissionary,
+            sent_to: sentTo,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', profile.id)
+
+        // Fecha o período em aberto no histórico da pessoa (aberto em
+        // finalizarObreiro, src/app/[slug]/(admin)/inscricoes/page.tsx) — é
+        // o que permite mostrar, se ela voltar anos depois, desde quando/até
+        // quando foi obreira da última vez.
+        const { data: openHistory } = await admin
+          .from('person_status_history')
+          .select('id')
+          .eq('person_id', profile.person_id)
+          .eq('status', 'obreiro')
+          .is('ended_at', null)
+          .order('started_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (openHistory) {
+          await admin.from('person_status_history')
+            .update({
+              ended_at: new Date().toISOString(),
+              notes: sentAsMissionary ? `Enviado como missionário${sentTo ? ` — ${sentTo}` : ''}` : null,
+            })
+            .eq('id', openHistory.id)
+        }
+      }
 
       if (sentAsMissionary) await triggerSiteRevalidation(orgUser.organization_id, 'stats')
     }
   }
 
-  redirect(`/${slug}/obreiros`)
+  redirect(redirectTo)
 }

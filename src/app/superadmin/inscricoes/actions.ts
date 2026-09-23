@@ -115,5 +115,5 @@ export async function pushUserToBase(formData: FormData) {
   })
 
   revalidatePath('/superadmin/inscricoes')
-  revalidatePath(`/${org.slug}/obreiros`)
+  revalidatePath(`/${org.slug}/pessoas`)
 }

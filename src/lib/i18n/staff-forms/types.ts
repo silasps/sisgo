@@ -106,15 +106,15 @@ export interface StaffFormDict {
     habilidades_ph: string
     especializacao_profissional: string
     especializacao_profissional_ph: string
-    escolas_jocum: string
-    escolas_jocum_ph: string
-    escolas_jocum_mes_ano: string
-    escolas_jocum_local: string
-    escolas_jocum_local_ph: string
-    escolas_jocum_pais: string
-    escolas_jocum_pais_ph: string
-    escolas_jocum_add: string
-    escolas_jocum_remove: string
+    escolas_instituicao: string
+    escolas_instituicao_ph: string
+    escolas_instituicao_mes_ano: string
+    escolas_instituicao_local: string
+    escolas_instituicao_local_ph: string
+    escolas_instituicao_pais: string
+    escolas_instituicao_pais_ph: string
+    escolas_instituicao_add: string
+    escolas_instituicao_remove: string
     // Languages
     idiomas_section: string
     idioma_nativo: string

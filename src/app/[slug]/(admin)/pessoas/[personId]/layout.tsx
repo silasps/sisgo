@@ -3,10 +3,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/Header'
 import { WorkspaceTabBar } from '@/components/layout/WorkspaceTabBar'
 import { notFound, redirect } from 'next/navigation'
-import Link from 'next/link'
-import { ChevronLeft } from 'lucide-react'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
-import { PROFILE_ROLES, HEALTH_ROLES } from '@/lib/auth/permissions'
+import { PROFILE_ROLES, HEALTH_ROLES, MANAGEMENT_ROLES } from '@/lib/auth/permissions'
 
 type Props = {
   children: React.ReactNode
@@ -54,20 +52,15 @@ export default async function PessoaWorkspaceLayout({ children, params }: Props)
   const tabs = [
     { href: `${base}/carteirinha`, label: 'Carteirinha' },
     { href: `${base}/financeiro`, label: 'Financeiro' },
+    { href: `${base}/hospedagem`, label: 'Hospedagem' },
+    ...(MANAGEMENT_ROLES.includes(role as never) ? [{ href: `${base}/transferencias`, label: 'Transferências' }] : []),
+    ...(MANAGEMENT_ROLES.includes(role as never) ? [{ href: `${base}/acesso`, label: 'Acesso' }] : []),
     ...(HEALTH_ROLES.includes(role as never) ? [{ href: `${base}/saude`, label: 'Saúde' }] : []),
   ]
 
   return (
     <>
-      <Header
-        title={person.full_name}
-        actions={
-          <Link href={`/${slug}/pessoas`} className="flex items-center gap-1.5 text-sm text-gray-300 hover:text-white transition-colors">
-            <ChevronLeft size={16} />
-            Voltar
-          </Link>
-        }
-      />
+      <Header title={person.full_name} backHref={`/${slug}/pessoas`} />
       <div className="px-4 md:px-6 pt-2.5 pb-2 bg-white border-b border-gray-100">
         <p className="text-xs text-gray-500">
           <span className="font-medium text-gray-600">Serve em:</span>{' '}

@@ -82,7 +82,7 @@ export async function createMinistry(orgId: string, name: string, description: s
 export async function updateMinistry(
   id: string,
   data: {
-    name?: string; description?: string | null; active?: boolean
+    name?: string; long_name?: string | null; description?: string | null; active?: boolean
     slug?: string | null; subtitle?: string | null; hero_image_url?: string | null; is_public?: boolean
     description_translations?: Partial<Record<'en' | 'es', string>>
     subtitle_translations?: Partial<Record<'en' | 'es', string>>

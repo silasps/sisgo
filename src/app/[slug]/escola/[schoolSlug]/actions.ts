@@ -1,6 +1,7 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { resolvePerson } from '@/lib/people/resolvePerson'
 
 type PreRegistrationInput = {
   slug: string
@@ -67,18 +68,14 @@ export async function submitPreRegistration(input: PreRegistrationInput): Promis
   }
 
   // ── Garante que existe um registro em people ──────────────────────────────
+  // Reconhece quem já passou pelo sistema antes (por email ou telefone),
+  // ativo ou não, em vez de duplicar — ver src/lib/people/resolvePerson.ts.
   let personId: string | null = null
 
-  const { data: existingPerson } = await sb
-    .from('people')
-    .select('id, person_contacts!inner(type, value)')
-    .eq('organization_id', org.id)
-    .eq('person_contacts.type', 'email')
-    .eq('person_contacts.value', email)
-    .maybeSingle()
+  const resolved = await resolvePerson({ organizationId: org.id, email, phone: input.phone?.trim() || null })
 
-  if (existingPerson) {
-    personId = existingPerson.id
+  if (resolved) {
+    personId = resolved.personId
   } else {
     // Tenta criar com source; fallback sem source se a coluna não existir ainda
     const { data: newPerson, error: personError } = await sb

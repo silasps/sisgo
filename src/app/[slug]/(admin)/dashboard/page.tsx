@@ -308,7 +308,7 @@ export default async function BaseDashboard({ params }: Props) {
 
     const resolvedMinistryId = ministryId ?? obreiroMinistryId
 
-    const [{ count: pendingRequests }, { count: myReservations }, { data: ministry }, { count: memberCount }, { count: upcomingEvents }] = await Promise.all([
+    const [{ count: pendingRequests }, { count: myReservations }, { data: ministry }, { count: memberCount }, { count: upcomingEvents }, { data: announcementsRaw }] = await Promise.all([
       resolvedMinistryId
         ? supabase.from('ministry_pending_requests')
           .select('*', { count: 'exact', head: true })
@@ -324,7 +324,7 @@ export default async function BaseDashboard({ params }: Props) {
         .eq('organization_id', orgId)
         .eq('requested_by', user?.id ?? ''),
       resolvedMinistryId
-        ? supabase.from('ministries').select('id, name').eq('id', resolvedMinistryId).single()
+        ? supabase.from('ministries').select('id, name, long_name').eq('id', resolvedMinistryId).single()
         : Promise.resolve({ data: null }),
       resolvedMinistryId
         ? supabase.from('ministry_members').select('*', { count: 'exact', head: true }).eq('ministry_id', resolvedMinistryId).eq('active', true)
@@ -332,16 +332,50 @@ export default async function BaseDashboard({ params }: Props) {
       resolvedMinistryId
         ? sbAdmin.from('ministry_calendar_events').select('*', { count: 'exact', head: true }).eq('ministry_id', resolvedMinistryId).gte('starts_at', new Date().toISOString())
         : Promise.resolve({ count: 0 }),
+      sbAdmin
+        .from('base_announcements')
+        .select('id, title, body, pinned, visible_to_roles, expires_at, created_at')
+        .eq('organization_id', orgId)
+        .or(`expires_at.is.null,expires_at.gte.${today.slice(0, 10)}`)
+        .order('pinned', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(20),
     ])
 
     const ministryBase = resolvedMinistryId ? `/${slug}/ministerios/${resolvedMinistryId}` : `/${slug}/ministerios`
+
+    const isVisibleToRole = (roles: string[] | null) => !roles || roles.length === 0 || roles.includes(userRole)
+    const heroAnnouncements = ((announcementsRaw ?? []) as Array<{
+      id: string; title: string; body: string; pinned: boolean; visible_to_roles: string[] | null; expires_at: string | null; created_at: string
+    }>).filter(a => isVisibleToRole(a.visible_to_roles)).slice(0, 3)
+    const ministryDisplayName = ministry?.long_name || ministry?.name
 
     return (
       <>
         <Header title="Início" />
         <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
           {ministry?.name && (
-            <p className="text-sm text-gray-500">Ministério: <span className="font-semibold text-gray-900">{ministry.name}</span></p>
+            <div className="rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 text-white p-4 md:p-5">
+              <p className="text-xs uppercase tracking-wide text-white/70">Ministério</p>
+              <p className="text-lg font-bold leading-tight">{ministryDisplayName}</p>
+              {heroAnnouncements.length > 0 ? (
+                <div className="mt-3 space-y-2">
+                  {heroAnnouncements.map(a => (
+                    <div key={a.id} className="flex items-start gap-2 bg-white/10 rounded-lg px-3 py-2">
+                      {a.pinned && <Pin size={13} className="mt-0.5 shrink-0" />}
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold">{a.title}</p>
+                        <p className="text-xs text-white/80 line-clamp-2">{a.body}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-white/70 mt-2 flex items-center gap-1">
+                  <Megaphone size={12} /> Nenhum anúncio da Comunicação no momento.
+                </p>
+              )}
+            </div>
           )}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 animate-stagger">
             <StatCard label="Membros" value={memberCount ?? 0} icon={Users} href={`${ministryBase}/equipe`} color="teal" />
@@ -506,7 +540,7 @@ export default async function BaseDashboard({ params }: Props) {
               <GraduationCap size={20} className="text-brand-500 mx-auto mb-1.5" />
               <p className="text-xs font-semibold text-gray-700 group-hover:text-brand-600">Inscrições</p>
             </Link>
-            <Link href={`/${slug}/obreiros`} className="group bg-white rounded-xl border border-gray-200 p-4 text-center transition-all hover:shadow-md hover:-translate-y-0.5">
+            <Link href={`/${slug}/pessoas?tab=obreiros`} className="group bg-white rounded-xl border border-gray-200 p-4 text-center transition-all hover:shadow-md hover:-translate-y-0.5">
               <Briefcase size={20} className="text-brand-500 mx-auto mb-1.5" />
               <p className="text-xs font-semibold text-gray-700 group-hover:text-brand-600">Obreiros</p>
             </Link>
@@ -854,7 +888,7 @@ export default async function BaseDashboard({ params }: Props) {
         {/* ── Stat Cards ─────────────────────────────── */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 animate-stagger">
           <StatCard label="Pessoas" value={peopleCount ?? 0} icon={Users} href={`/${slug}/pessoas`} color="blue" />
-          <StatCard label="Obreiros" value={staffCount ?? 0} icon={Briefcase} href={`/${slug}/obreiros`} color="green" />
+          <StatCard label="Obreiros" value={staffCount ?? 0} icon={Briefcase} href={`/${slug}/pessoas?tab=obreiros`} color="green" />
           <StatCard label="Alunos" value={studentCount ?? 0} icon={GraduationCap} href={`/${slug}/pessoas`} color="purple" />
           <StatCard label="Escolas" value={schoolCount ?? 0} icon={BookOpen} href={`/${slug}/escolas`} color="orange" />
           <StatCard label="Ministérios" value={ministryCount ?? 0} icon={Music} href={`/${slug}/ministerios`} color="pink" />

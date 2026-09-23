@@ -250,11 +250,13 @@ export function ToggleActiveForm({
   active,
   slug,
   disabled,
+  redirectTo,
 }: {
   orgUserId: string
   active: boolean
   slug: string
   disabled: boolean
+  redirectTo?: string
 }) {
   const [showDesligamento, setShowDesligamento] = useState(false)
 
@@ -265,6 +267,7 @@ export function ToggleActiveForm({
         <input type="hidden" name="org_user_id" value={orgUserId} />
         <input type="hidden" name="active" value={String(active)} />
         <input type="hidden" name="slug" value={slug} />
+        {redirectTo && <input type="hidden" name="redirect_to" value={redirectTo} />}
         <label className="flex items-center gap-1.5 text-xs text-gray-700">
           <input type="checkbox" name="sent_as_missionary" />
           Foi enviado(a) como missionário(a)?
@@ -300,6 +303,7 @@ export function ToggleActiveForm({
       <input type="hidden" name="org_user_id" value={orgUserId} />
       <input type="hidden" name="active" value={String(active)} />
       <input type="hidden" name="slug" value={slug} />
+      {redirectTo && <input type="hidden" name="redirect_to" value={redirectTo} />}
       <button
         type="submit"
         disabled={disabled}
@@ -319,6 +323,7 @@ export function ObreiroCard({
   orgUserId, userId, currentRoleId, currentRoleName, currentArea, currentRoleTitle,
   roles, schools, ministries, slug, orgId, fullName, email, active, isCurrentUser,
   accumulatedRoleLabels = [], currentExtraRoles = [], viewerIsDH = false, readOnly = false,
+  redirectTo,
 }: {
   orgUserId: string; userId: string; currentRoleId: string; currentRoleName: string
   currentArea?: string | null; currentRoleTitle?: string | null
@@ -328,6 +333,8 @@ export function ObreiroCard({
   currentExtraRoles?: string[]
   viewerIsDH?: boolean
   readOnly?: boolean
+  /** pra onde voltar depois de salvar — se omitido, mantém o comportamento padrão (lista de obreiros) */
+  redirectTo?: string
 }) {
   const isPending = currentRoleName === 'pendente_alocacao'
   const [open, setOpen] = useState(isPending)
@@ -347,7 +354,7 @@ export function ObreiroCard({
   const roleLabel = roles.find(r => r.name === currentRoleName)?.label ?? currentRoleName
 
   return (
-    <div className={`rounded-xl border bg-white overflow-hidden transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 ${
+    <div className={`w-full rounded-xl border bg-white overflow-hidden transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 ${
       isPending ? 'border-amber-300 ring-1 ring-amber-200 bg-amber-50/30' : 'border-gray-200'
     } ${!active ? 'opacity-60' : ''}`}>
       {/* Cabeçalho clicável */}
@@ -405,7 +412,7 @@ export function ObreiroCard({
             <span>{open ? 'Fechar edição' : 'Editar função'}</span>
             <ChevronDown size={13} className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
           </button>
-          <ToggleActiveForm orgUserId={orgUserId} active={active} slug={slug} disabled={isCurrentUser} />
+          <ToggleActiveForm orgUserId={orgUserId} active={active} slug={slug} disabled={isCurrentUser} redirectTo={redirectTo} />
         </div>
       )}
 
@@ -421,6 +428,7 @@ export function ObreiroCard({
             <input type="hidden" name="role_title" value={roleTitle} />
             <input type="hidden" name="slug" value={slug} />
             <input type="hidden" name="org_id" value={orgId} />
+            {redirectTo && <input type="hidden" name="redirect_to" value={redirectTo} />}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-600">Área</label>
@@ -437,36 +445,82 @@ export function ObreiroCard({
           </form>
 
           {viewerIsDH && (
-            <form action={updateExtraRoles} className="border-t border-dashed border-amber-200 bg-amber-50/40 p-4 space-y-3">
-              <input type="hidden" name="org_user_id" value={orgUserId} />
-              <input type="hidden" name="org_id" value={orgId} />
-              <input type="hidden" name="slug" value={slug} />
-              <p className="text-xs font-semibold text-gray-700">Funções adicionais</p>
-              <p className="text-xs text-gray-400 -mt-2">Áreas extras que esta pessoa também cobre individualmente.</p>
-              <div className="flex flex-wrap gap-2">
-                {roles
-                  .filter(r => r.name !== currentRoleName && !['superadmin', 'admin_base', 'lider_base', 'pendente_alocacao'].includes(r.name))
-                  .map(r => (
-                    <label key={r.name} className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs hover:border-amber-300 hover:bg-amber-50">
-                      <input
-                        type="checkbox"
-                        name="extra_roles"
-                        value={r.name}
-                        defaultChecked={currentExtraRoles.includes(r.name)}
-                        className="h-3.5 w-3.5 rounded border-gray-300 text-amber-500 focus:ring-amber-400"
-                      />
-                      <span className="text-gray-700">{r.label}</span>
-                    </label>
-                  ))}
-              </div>
-              <button type="submit" className="rounded-lg bg-amber-500 hover:bg-amber-600 px-4 py-1.5 text-xs font-semibold text-white transition-colors">
-                Salvar funções adicionais
-              </button>
-            </form>
+            <ExtraRolesForm
+              orgUserId={orgUserId}
+              orgId={orgId}
+              slug={slug}
+              redirectTo={redirectTo}
+              roles={roles}
+              ministries={ministries}
+              currentRoleName={currentRoleName}
+              currentExtraRoles={currentExtraRoles}
+            />
           )}
         </>
       )}
     </div>
+  )
+}
+
+function ExtraRolesForm({
+  orgUserId, orgId, slug, redirectTo, roles, ministries, currentRoleName, currentExtraRoles,
+}: {
+  orgUserId: string; orgId: string; slug: string; redirectTo?: string
+  roles: RoleRow[]; ministries: OptionRow[]; currentRoleName: string; currentExtraRoles: string[]
+}) {
+  const [checked, setChecked] = useState<Set<string>>(new Set(currentExtraRoles))
+
+  function toggle(name: string, on: boolean) {
+    setChecked(prev => {
+      const next = new Set(prev)
+      if (on) next.add(name); else next.delete(name)
+      return next
+    })
+  }
+
+  return (
+    <form action={updateExtraRoles} className="border-t border-dashed border-amber-200 bg-amber-50/40 p-4 space-y-3">
+      <input type="hidden" name="org_user_id" value={orgUserId} />
+      <input type="hidden" name="org_id" value={orgId} />
+      <input type="hidden" name="slug" value={slug} />
+      {redirectTo && <input type="hidden" name="redirect_to" value={redirectTo} />}
+      <p className="text-xs font-semibold text-gray-700">Funções adicionais</p>
+      <p className="text-xs text-gray-400 -mt-2">Áreas extras que esta pessoa também cobre individualmente.</p>
+      <div className="flex flex-wrap gap-2">
+        {roles
+          .filter(r => r.name !== currentRoleName && !['superadmin', 'admin_base', 'lider_base', 'pendente_alocacao'].includes(r.name))
+          .map(r => (
+            <label key={r.name} className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs hover:border-amber-300 hover:bg-amber-50">
+              <input
+                type="checkbox"
+                name="extra_roles"
+                value={r.name}
+                checked={checked.has(r.name)}
+                onChange={e => toggle(r.name, e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-gray-300 text-amber-500 focus:ring-amber-400"
+              />
+              <span className="text-gray-700">{r.label}</span>
+            </label>
+          ))}
+      </div>
+      {checked.has('lider_ministerio') && (
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-600">Líder de qual ministério?</label>
+          <select
+            name="lider_ministerio_id"
+            required
+            defaultValue=""
+            className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          >
+            <option value="" disabled>Selecionar ministério...</option>
+            {ministries.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+        </div>
+      )}
+      <button type="submit" className="rounded-lg bg-amber-500 hover:bg-amber-600 px-4 py-1.5 text-xs font-semibold text-white transition-colors">
+        Salvar funções adicionais
+      </button>
+    </form>
   )
 }
 
@@ -543,19 +597,27 @@ export function CreateStaffUserForm({
 
 export function CreateObreiroModal({
   roles, schools, ministries, orgId, slug,
+  open: openProp, onOpenChange, hideTrigger = false,
 }: {
   roles: RoleRow[]; schools: OptionRow[]; ministries: OptionRow[]; orgId: string; slug: string
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  hideTrigger?: boolean
 }) {
-  const [open, setOpen] = useState(false)
+  const [openState, setOpenState] = useState(false)
+  const open = openProp ?? openState
+  const setOpen = (value: boolean) => (onOpenChange ? onOpenChange(value) : setOpenState(value))
   const sidebarLeftClass = useSidebarLeftClass()
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
-      >
-        + Novo obreiro
-      </button>
+      {!hideTrigger && (
+        <button
+          onClick={() => setOpen(true)}
+          className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
+        >
+          + Novo obreiro
+        </button>
+      )}
 
       {open && (
         <div

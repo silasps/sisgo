@@ -199,7 +199,7 @@ function ZipAddressFields({ data }: { data?: Record<string, string> }) {
 
 // ── Escolas/especializações — lista dinâmica (nome + mês/ano de conclusão) ──
 
-type JocumSchoolEntry = { escola: string; base: string; pais: string; mesAno: string }
+type InstitutionSchoolEntry = { escola: string; base: string; pais: string; mesAno: string }
 
 // Formata como MM/AAAA enquanto digita (só números, barra automática) —
 // guarda direto nesse formato, sem depender do datepicker nativo de
@@ -218,14 +218,14 @@ function normalizeMesAno(mesAno?: string): string {
   return m ? `${m[2]}/${m[1]}` : (mesAno ?? '')
 }
 
-function parseJocumSchools(raw?: string): JocumSchoolEntry[] {
+function parseInstitutionSchools(raw?: string): InstitutionSchoolEntry[] {
   const empty = { escola: '', base: '', pais: '', mesAno: '' }
   if (!raw) return [empty]
   try {
     const parsed = JSON.parse(raw)
     if (Array.isArray(parsed) && parsed.length) {
       return parsed.map((r: unknown) => {
-        const row = (r ?? {}) as Partial<JocumSchoolEntry>
+        const row = (r ?? {}) as Partial<InstitutionSchoolEntry>
         return { escola: row.escola ?? '', base: row.base ?? '', pais: row.pais ?? '', mesAno: normalizeMesAno(row.mesAno) }
       })
     }
@@ -299,7 +299,7 @@ function LanguagesField({ data }: { data?: Record<string, string> }) {
             </div>
           )}
           {i > 0 && (
-            <button type="button" onClick={() => removeRow(i)} aria-label={d.s2.escolas_jocum_remove}
+            <button type="button" onClick={() => removeRow(i)} aria-label={d.s2.escolas_instituicao_remove}
               className="px-3 py-2.5 text-gray-400 hover:text-red-500 text-sm">✕</button>
           )}
         </div>
@@ -313,11 +313,11 @@ function LanguagesField({ data }: { data?: Record<string, string> }) {
   )
 }
 
-function JocumSchoolsField({ label, placeholder, data }: { label: string; placeholder: string; data?: string }) {
+function InstitutionSchoolsField({ label, placeholder, data }: { label: string; placeholder: string; data?: string }) {
   const d = useContext(DictCtx)
-  const [rows, setRows] = useState<JocumSchoolEntry[]>(() => parseJocumSchools(data))
+  const [rows, setRows] = useState<InstitutionSchoolEntry[]>(() => parseInstitutionSchools(data))
 
-  function updateRow(i: number, patch: Partial<JocumSchoolEntry>) {
+  function updateRow(i: number, patch: Partial<InstitutionSchoolEntry>) {
     setRows(prev => prev.map((r, idx) => idx === i ? { ...r, ...patch } : r))
   }
   function addRow() {
@@ -338,24 +338,24 @@ function JocumSchoolsField({ label, placeholder, data }: { label: string; placeh
       {rows.map((row, i) => (
         <div key={i} className="relative rounded-xl border border-gray-200 bg-white p-3 space-y-2">
           {rows.length > 1 && (
-            <button type="button" onClick={() => removeRow(i)} aria-label={d.s2.escolas_jocum_remove}
+            <button type="button" onClick={() => removeRow(i)} aria-label={d.s2.escolas_instituicao_remove}
               className="absolute top-2 right-2 text-gray-400 hover:text-red-500 text-sm">✕</button>
           )}
           <input type="text" value={row.escola} onChange={e => updateRow(i, { escola: e.target.value })}
             placeholder={placeholder} className={`${inputClass} pr-8`} />
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <div>
-              <label className="block text-xs text-gray-500 mb-0.5">{d.s2.escolas_jocum_local}</label>
+              <label className="block text-xs text-gray-500 mb-0.5">{d.s2.escolas_instituicao_local}</label>
               <input type="text" value={row.base} onChange={e => updateRow(i, { base: e.target.value })}
-                placeholder={d.s2.escolas_jocum_local_ph} className={inputClass} />
+                placeholder={d.s2.escolas_instituicao_local_ph} className={inputClass} />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-0.5">{d.s2.escolas_jocum_pais}</label>
+              <label className="block text-xs text-gray-500 mb-0.5">{d.s2.escolas_instituicao_pais}</label>
               <input type="text" value={row.pais} onChange={e => updateRow(i, { pais: e.target.value })}
-                placeholder={d.s2.escolas_jocum_pais_ph} className={inputClass} />
+                placeholder={d.s2.escolas_instituicao_pais_ph} className={inputClass} />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-0.5">{d.s2.escolas_jocum_mes_ano}</label>
+              <label className="block text-xs text-gray-500 mb-0.5">{d.s2.escolas_instituicao_mes_ano}</label>
               <input type="text" inputMode="numeric" value={row.mesAno}
                 onChange={e => updateRow(i, { mesAno: formatMesAnoInput(e.target.value) })}
                 placeholder="10/2026" maxLength={7} className={inputClass} />
@@ -365,11 +365,11 @@ function JocumSchoolsField({ label, placeholder, data }: { label: string; placeh
       ))}
       <button type="button" onClick={addRow}
         className="text-xs font-semibold text-amber-600 hover:text-amber-800">
-        {d.s2.escolas_jocum_add}
+        {d.s2.escolas_instituicao_add}
       </button>
       {/* Campo de verdade enviado no submit — mesmo `name` de sempre, só que
           agora carregando um JSON array em vez de texto livre. */}
-      <input type="hidden" name="escolas_jocum" value={serialized} readOnly />
+      <input type="hidden" name="escolas_instituicao" value={serialized} readOnly />
     </div>
   )
 }
@@ -467,10 +467,10 @@ function S2Dados({ prefill, data, onNationalityChange, orgName }: {
             defaultValue={data?.especializacao_profissional}
             placeholder={d.s2.especializacao_profissional_ph} />
         </div>
-        <JocumSchoolsField
-          label={tStaff(d.s2.escolas_jocum, { orgName: orgShortName(orgName) })}
-          placeholder={d.s2.escolas_jocum_ph}
-          data={data?.escolas_jocum}
+        <InstitutionSchoolsField
+          label={tStaff(d.s2.escolas_instituicao, { orgName: orgShortName(orgName) })}
+          placeholder={d.s2.escolas_instituicao_ph}
+          data={data?.escolas_instituicao ?? data?.escolas_jocum}
         />
 
         <SubSection title={d.s2.idiomas_section} />

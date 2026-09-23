@@ -4,13 +4,15 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { headers } from 'next/headers'
 import { basicImageSanity } from '@/lib/documents/basicImageSanity'
 import { classifyDocument, type DocumentKind } from '@/lib/documents/classifyDocument'
+import { resolvePerson } from '@/lib/people/resolvePerson'
 
 const EDITABLE_SECTIONS = new Set([1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16])
 
 // Só usado no fluxo de matrícula direta de seminário (sem pré-inscrição
 // prévia) — resolve/cria a pessoa a partir do que ela mesma preencheu no
-// formulário (s1.nome, s5.email, s5.celular), mesmo padrão de
-// submitPreRegistration (escola/[schoolSlug]/actions.ts).
+// formulário (s1.nome, s5.email, s5.celular). Reconhece quem já passou pelo
+// sistema antes (por email ou telefone), ativo ou não, em vez de duplicar —
+// ver src/lib/people/resolvePerson.ts.
 async function findOrCreatePersonFromApplication(
   sb: ReturnType<typeof createAdminClient>,
   organizationId: string,
@@ -23,15 +25,8 @@ async function findOrCreatePersonFromApplication(
   const phone = (s5.celular ?? '').trim()
   if (!email || !fullName) return null
 
-  const { data: existingPerson } = await sb
-    .from('people')
-    .select('id, person_contacts!inner(type, value)')
-    .eq('organization_id', organizationId)
-    .eq('person_contacts.type', 'email')
-    .eq('person_contacts.value', email)
-    .maybeSingle()
-
-  if (existingPerson) return { personId: existingPerson.id, fullName }
+  const resolved = await resolvePerson({ organizationId, email, phone: phone || null })
+  if (resolved) return { personId: resolved.personId, fullName }
 
   const { data: newPerson } = await sb
     .from('people')

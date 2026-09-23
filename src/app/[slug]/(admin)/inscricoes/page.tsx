@@ -676,7 +676,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       }
     }
 
-    const { data: existingProfile } = await db.from('staff_profiles').select('id').eq('person_id', personId).maybeSingle()
+    const { data: existingProfile } = await db.from('staff_profiles').select('id, active').eq('person_id', personId).maybeSingle()
     const profilePayload = {
       organization_id: orgIdForm,
       person_id: personId,
@@ -691,6 +691,19 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       await db.from('staff_profiles').update(profilePayload).eq('id', existingProfile.id)
     } else {
       await db.from('staff_profiles').insert(profilePayload)
+    }
+
+    // Marca no histórico da pessoa (person_status_history) o início desse
+    // período como obreiro — só quando não estava ativa antes, pra não gerar
+    // linha duplicada num reenvio. É o que permite reconhecer, anos depois,
+    // que alguém já foi obreiro (e desde quando) mesmo após ficar inativo.
+    if (!existingProfile?.active) {
+      await db.from('person_status_history').insert({
+        person_id: personId,
+        status: 'obreiro',
+        started_at: now,
+        created_by: actingUser?.id ?? null,
+      })
     }
 
     if (ministryId) {
@@ -780,11 +793,12 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     // Busca o interest form e a escola
     const { data: form } = await db
       .from('school_interest_forms')
-      .select('id, organization_id, full_name, email, phone, language, school_id, class_id, schools(id, name, contact_email)')
+      .select('id, organization_id, full_name, email, phone, language, school_id, class_id, person_id, schools(id, name, contact_email)')
       .eq('id', interestFormId)
       .single()
 
     if (!form) return { error: 'not_found' }
+    const formPersonId = (form as unknown as { person_id: string | null }).person_id
 
     const escola = form.schools as unknown as {
       id: string; name: string; contact_email: string | null
@@ -805,6 +819,13 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       token = existing.token
       expiresAt = existing.token_expires_at
     } else {
+      // Se essa pessoa já tem dados pessoais conhecidos (foi obreira, já
+      // fez outra escola, veio de um import), pré-preenche a seção 5
+      // (dados pessoais) do formulário — ela só revisa/confirma em vez de
+      // digitar tudo de novo. Ver src/lib/people/getPersonPrefillData.ts.
+      const { getPersonPrefillData } = await import('@/lib/people/getPersonPrefillData')
+      const s5Prefill = formPersonId ? await getPersonPrefillData(formPersonId) : null
+
       const { data: newApp } = await db
         .from('school_applications')
         .insert({
@@ -819,7 +840,8 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
               email: form.email,
               telefone: form.phone,
               idioma: (form as unknown as { language?: string }).language,
-            }
+            },
+            ...(s5Prefill ? { s5: s5Prefill } : {}),
           },
         })
         .select('token, token_expires_at')

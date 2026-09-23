@@ -1,6 +1,7 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { resolvePerson } from '@/lib/people/resolvePerson'
 
 type StaffPreRegistrationInput = {
   slug: string
@@ -63,33 +64,12 @@ export async function submitStaffPreRegistration(
     if (!school) return { success: false, error: 'Escola não encontrada.' }
   }
 
-  let personId: string | null = null
+  // Reconhece quem já passou pelo sistema antes (por email ou telefone),
+  // ativo ou não, em vez de duplicar — ver src/lib/people/resolvePerson.ts.
+  const resolved = await resolvePerson({ organizationId: org.id, email, phone })
+  let personId: string | null = resolved?.personId ?? null
 
-  let existingPerson: { id: string } | null = null
-  if (email) {
-    const { data } = await sb
-      .from('people')
-      .select('id, person_contacts!inner(type, value)')
-      .eq('organization_id', org.id)
-      .eq('person_contacts.type', 'email')
-      .eq('person_contacts.value', email)
-      .maybeSingle()
-    existingPerson = data
-  }
-  if (!existingPerson && phone) {
-    const { data } = await sb
-      .from('people')
-      .select('id, person_contacts!inner(type, value)')
-      .eq('organization_id', org.id)
-      .eq('person_contacts.type', 'phone')
-      .eq('person_contacts.value', phone)
-      .maybeSingle()
-    existingPerson = data
-  }
-
-  if (existingPerson) {
-    personId = existingPerson.id
-  } else {
+  if (!personId) {
     const { data: newPerson, error: personError } = await sb
       .from('people')
       .insert({ organization_id: org.id, full_name: input.fullName.trim(), source: 'pre_inscricao_obreiro' })

@@ -12,6 +12,7 @@ import { Toaster } from 'sonner'
 import { Suspense } from 'react'
 import { FlashToast } from '@/components/ui/FlashToast'
 import { PushNotificationManager } from '@/components/PushNotificationManager'
+import { CadastroIncompletoAlert } from '@/components/layout/CadastroIncompletoAlert'
 import type { BottomBarItem } from '@/components/layout/BottomNav'
 
 type RegularNavItem = { href: string; label: string; icon: string; alert?: boolean }
@@ -115,7 +116,6 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
     { href: `/${slug}/comunicacao`,  label: 'Comunicação',      icon: 'comunicacao',   show: role === 'lider_base' || role === 'superadmin' || is('comunicacao') },
     { href: `/${slug}/pessoas`,      label: 'Pessoas',          icon: 'pessoas',       show: !is('lider_eted') && !isLiderMinisterio },
     { href: `/${slug}/presenca`,     label: 'Presença',         icon: 'presenca',      show: isManagement || is('secretaria') || is('hospitalidade') || isCozinha || is('lider_eted') || isObreiroEted || isLiderMinisterio || isObreiroMinisterio },
-    { href: `/${slug}/obreiros`,     label: 'Obreiros',         icon: 'obreiros',      show: isManagement },
     { href: `/${slug}/escolas`,      label: 'Escolas',          icon: 'escolas',       show: isManagement || is('lider_eted') || isObreiroEted, alert: hasSchoolMessages },
     { href: `/${slug}/inscricoes`,   label: 'Inscrições',       icon: 'inscricoes',    show: isManagement || is('lider_eted') || isLiderMinisterio },
     { href: `/${slug}/ministerios`,  label: 'Ministérios',      icon: 'ministerios',   show: isManagement || isLiderMinisterio || isObreiroMinisterio || isHospitalidade || isCozinha || isManutencao || is('secretaria'), alert: hasMinistryMessages },
@@ -244,6 +244,11 @@ export default async function SlugLayout({ children, params }: Props) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  // Login criado pelo import em massa de pessoas: senha padrão previsível,
+  // troca obrigatória antes de qualquer outra tela do admin.
+  const mustChangePassword = (user.user_metadata as Record<string, unknown> | null)?.must_change_password === true
+  if (mustChangePassword) redirect(`/${slug}/primeiro-acesso`)
+
   const { data: org } = await supabase
     .from('organizations')
     .select('id, name, active, logo_url, accent_color, department_assignments, role_accumulations, laundry_enabled, id_card_enabled')
@@ -298,6 +303,37 @@ export default async function SlugLayout({ children, params }: Props) {
     .maybeSingle()
 
   const personIdForLinked = staffProfileForLinked?.person_id
+
+  const { data: studentProfileForLinked } = await sbAdmin
+    .from('student_profiles')
+    .select('person_id')
+    .eq('organization_id', org.id)
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  const studentPersonId = studentProfileForLinked?.person_id ?? null
+
+  // Cadastro em etapas (import em massa): candidatura própria ainda em
+  // rascunho -> mostra o aviso "complete seu cadastro" no shell inteiro.
+  let pendingProfileCompletion: { tipo: 'aluno' | 'obreiro'; token: string } | null = null
+  if (studentPersonId) {
+    const { data: rascunhoAluno } = await sbAdmin
+      .from('school_applications')
+      .select('token')
+      .eq('person_id', studentPersonId)
+      .eq('status', 'rascunho')
+      .maybeSingle()
+    if (rascunhoAluno?.token) pendingProfileCompletion = { tipo: 'aluno', token: rascunhoAluno.token }
+  }
+  if (!pendingProfileCompletion && personIdForLinked) {
+    const { data: rascunhoObreiro } = await sbAdmin
+      .from('staff_applications')
+      .select('token')
+      .eq('person_id', personIdForLinked)
+      .eq('status', 'rascunho')
+      .maybeSingle()
+    if (rascunhoObreiro?.token) pendingProfileCompletion = { tipo: 'obreiro', token: rascunhoObreiro.token }
+  }
 
   const [{ data: leaderLinkedData }, { data: memberLinkedData }] = await Promise.all([
     sbAdmin
@@ -634,6 +670,13 @@ export default async function SlugLayout({ children, params }: Props) {
         <FlashToast />
       </Suspense>
       <PushNotificationManager />
+      {pendingProfileCompletion && (
+        <CadastroIncompletoAlert
+          href={pendingProfileCompletion.tipo === 'aluno'
+            ? `/${slug}/formulario/${pendingProfileCompletion.token}`
+            : `/${slug}/formulario-obreiro/${pendingProfileCompletion.token}`}
+        />
+      )}
     </div>
   )
 }

@@ -135,9 +135,20 @@ export default async function MinistriosPage({ params }: Props) {
     .eq('organization_id', orgId)
     .order('name')
   if (allowedMinistryIds) ministeriosQuery = ministeriosQuery.in('id', allowedMinistryIds)
-  const { data } = await ministeriosQuery
+
+  // Nesta instituição "escola" é tratada como um tipo de ministério — a
+  // listagem mistura os dois (cada card ainda abre a tela certa por trás:
+  // escola continua tendo turma/matrícula, ministério continua tendo
+  // membro/líder — só a navegação/mental model é unificada).
+  type SchoolRaw = { id: string; name: string; description: string | null; active: boolean }
+  const schoolsQuery = allowedMinistryIds
+    ? Promise.resolve({ data: [] as SchoolRaw[] })
+    : supabase.from('schools').select('id, name, description, active').eq('organization_id', orgId).order('name')
+
+  const [{ data }, { data: schoolsData }] = await Promise.all([ministeriosQuery, schoolsQuery])
 
   const ministerios = (data ?? []) as unknown as MinistryRaw[]
+  const escolas = (schoolsData ?? []) as SchoolRaw[]
 
   const PRECONFIGURED = [
     { role: 'hospitalidade', name: 'Hospitalidade', description: 'Recepção, hospedagem e acolhimento' },
@@ -200,7 +211,7 @@ export default async function MinistriosPage({ params }: Props) {
           </div>
         )}
 
-        {!ministerios.length && !availableFunctions.length && (
+        {!ministerios.length && !escolas.length && !availableFunctions.length && (
           <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
             <Music className="size-8 mx-auto mb-3 text-gray-300" />
             <p className="text-gray-400 text-sm">Nenhum ministério cadastrado ainda.</p>
@@ -215,14 +226,14 @@ export default async function MinistriosPage({ params }: Props) {
           </div>
         )}
 
-        {ministerios.length > 0 && (
+        {(ministerios.length > 0 || escolas.length > 0) && (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {ministerios.map(m => {
               const memberCount = m.ministry_members.filter(mm => mm.active).length
               const hasLeader = m.ministry_leaders.length > 0
               return (
                 <Link
-                  key={m.id}
+                  key={`ministerio-${m.id}`}
                   href={`/${slug}/ministerios/${m.id}`}
                   className="group flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-5 cursor-pointer transition-all duration-200 hover:border-brand-300 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm"
                 >
@@ -254,6 +265,32 @@ export default async function MinistriosPage({ params }: Props) {
                 </Link>
               )
             })}
+
+            {escolas.map(s => (
+              <Link
+                key={`escola-${s.id}`}
+                href={`/${slug}/escolas/${s.id}`}
+                className="group flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-5 cursor-pointer transition-all duration-200 hover:border-brand-300 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <p className="font-semibold text-gray-900 leading-snug group-hover:text-brand-600 transition-colors">{s.name}</p>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">Escola</span>
+                  </div>
+                  <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${s.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                    {s.active ? 'Ativa' : 'Inativa'}
+                  </span>
+                </div>
+                {s.description && (
+                  <p className="text-sm text-gray-500 line-clamp-2">{s.description}</p>
+                )}
+                <div className="flex items-center justify-end text-xs text-gray-400 mt-auto">
+                  <span className="text-brand-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                    Abrir →
+                  </span>
+                </div>
+              </Link>
+            ))}
           </div>
         )}
       </main>

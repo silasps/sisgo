@@ -44,7 +44,7 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
 
   const { data: ministry } = await supabase
     .from('ministries')
-    .select('id, name, description, description_translations, active, linked_role, slug, subtitle, subtitle_translations, hero_image_url, is_public')
+    .select('id, name, long_name, description, description_translations, active, linked_role, slug, subtitle, subtitle_translations, hero_image_url, is_public')
     .eq('id', id)
     .eq('organization_id', orgId)
     .single()
@@ -137,6 +137,7 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
     }
     await updateMinistry(ministry.id, {
       name: (formData.get('name') as string).trim(),
+      long_name: (formData.get('long_name') as string)?.trim() || null,
       description: (formData.get('description') as string).trim() || null,
       description_translations: parseTranslations('description_translations'),
       active: formData.get('active') === 'on',
@@ -265,7 +266,8 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
                 <p className="text-[10px] text-indigo-600 font-medium mb-2 bg-indigo-50 inline-block px-1.5 py-0.5 rounded capitalize">Função: {ministry.linked_role}</p>
               )}
               <form action={handleUpdate} className="space-y-2">
-                <input name="name" defaultValue={ministry.name} required className={`${INPUT} text-xs`} />
+                <input name="name" defaultValue={ministry.name} required placeholder="Nome curto (ex: CM)" className={`${INPUT} text-xs`} />
+                <input name="long_name" defaultValue={ministry.long_name ?? ''} placeholder="Nome por extenso (ex: Comunicação e Mobilização)" className={`${INPUT} text-xs`} />
                 <LocaleContentTabs label="Descrição" name="description" rows={2}
                   defaultValue={ministry.description ?? ''} placeholder="Descrição..."
                   translationsName="description_translations"
