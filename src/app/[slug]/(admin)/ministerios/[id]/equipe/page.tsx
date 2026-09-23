@@ -294,7 +294,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
   return (
     <>
     <Suspense><ScrollHighlight /></Suspense>
-    <main className="p-4 md:p-6 space-y-4 max-w-3xl mx-auto overflow-y-auto flex-1">
+    <main className="p-4 md:p-6 space-y-4 max-w-5xl mx-auto overflow-y-auto flex-1">
       <p className="text-xs text-gray-400 -mt-2">
         Vínculo de líderes e obreiros com este ministério — quem serve aqui e com que papel.
       </p>
@@ -437,7 +437,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
               Transferências p/ Confirmar
               <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">{dhTransfers.length}</span>
             </h2>
-            <ul className="space-y-3">
+            <ul className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
               {dhTransfers.map(t => (
                 <li key={t.id} className="border border-amber-100 rounded-lg p-3 space-y-2">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -475,7 +475,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
             Solicitações do Líder
             <span className="ml-2 text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full">{pendingRequests.length}</span>
           </h2>
-          <ul className="space-y-3">
+          <ul className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
             {pendingRequests.map(req => {
               const pName = (req.people as { full_name: string } | null)?.full_name
               const rName = (req.ministry_roles as { name: string } | null)?.name
@@ -510,7 +510,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
               Transferências Recebidas
               <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">{incoming.length}</span>
             </h2>
-            <ul className="space-y-3">
+            <ul className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
               {incoming.map(t => (
                 <li key={t.id} className="border border-amber-100 rounded-lg p-3 space-y-2">
                   <p className="text-sm font-medium text-gray-800">{transferPersonMap.get(t.person_id) ?? '—'}</p>

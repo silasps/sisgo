@@ -155,7 +155,8 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
   const msgInfo = msg ? msgs[msg] : null
 
   return (
-    <main className="p-4 md:p-6 space-y-4 max-w-3xl mx-auto overflow-y-auto flex-1">
+    <main className="p-4 md:p-6 space-y-4 overflow-y-auto flex-1">
+      <div className="max-w-3xl mx-auto w-full space-y-4">
       <p className="text-xs text-gray-400 -mt-2">
         Vínculo de líderes e obreiros com esta escola — quem serve aqui e com que papel.
       </p>
@@ -250,15 +251,16 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
           </details>
         )}
       </div>
+      </div>
 
       {/* DH: requests pendentes */}
       {canWrite && pendingRequests.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="max-w-5xl mx-auto bg-white rounded-xl border border-gray-200 p-5">
           <h2 className="text-sm font-semibold text-gray-700 mb-3">
             Solicitações Pendentes
             <span className="ml-2 text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full">{pendingRequests.length}</span>
           </h2>
-          <ul className="space-y-3">
+          <ul className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
             {pendingRequests.map(req => (
               <li key={req.id} className="border border-gray-100 rounded-lg p-3 space-y-2">
                 <p className="text-sm font-medium text-gray-800">{req.people?.full_name ?? '—'}</p>
@@ -277,6 +279,7 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
         </div>
       )}
 
+      <div className="max-w-3xl mx-auto w-full space-y-4">
       {/* Líder: minhas solicitações */}
       {isLiderEted && myRequests.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -308,6 +311,7 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
           </ul>
         </div>
       )}
+      </div>
     </main>
   )
 }

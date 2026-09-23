@@ -112,8 +112,8 @@ export default async function ComunicacaoPage({ params }: Props) {
   return (
     <>
       <Header title="Comunicação" />
-      <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1 max-w-2xl mx-auto">
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
+        <div className="max-w-2xl mx-auto bg-white rounded-xl border border-gray-200 p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-gray-700">Novo anúncio</h2>
             <Link
@@ -172,9 +172,9 @@ export default async function ComunicacaoPage({ params }: Props) {
           </form>
         </div>
 
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 items-start">
           {announcements.length === 0 && (
-            <p className="text-sm text-gray-400 text-center py-6">Nenhum anúncio publicado ainda.</p>
+            <p className="text-sm text-gray-400 text-center py-6 lg:col-span-2 xl:col-span-3">Nenhum anúncio publicado ainda.</p>
           )}
           {announcements.map(a => (
             <div key={a.id} className="bg-white rounded-xl border border-gray-200 p-4">
