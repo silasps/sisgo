@@ -36,7 +36,7 @@ export default async function PessoaAcessoPage({ params }: Props) {
 
   if (!staffProfile?.user_id) {
     return (
-      <main className="p-4 md:p-6 max-w-2xl">
+      <main className="p-4 md:p-6 max-w-2xl mx-auto">
         {staffProfile ? (
           <CriarAcessoForm action={criarAcessoComEmail.bind(null, personId, org.id, slug)} />
         ) : (
@@ -71,7 +71,7 @@ export default async function PessoaAcessoPage({ params }: Props) {
   const viewerIsDH = role === 'dh'
 
   return (
-    <main className="p-4 md:p-6 max-w-2xl">
+    <main className="p-4 md:p-6 max-w-2xl mx-auto">
       <ObreiroCard
         orgUserId={orgUser.id}
         userId={staffProfile.user_id}

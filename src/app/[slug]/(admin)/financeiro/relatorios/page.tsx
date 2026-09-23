@@ -117,7 +117,7 @@ export default async function RelatoriosPage({ params, searchParams }: Props) {
           </Link>
         }
       />
-      <main className="p-4 md:p-6 space-y-6 max-w-4xl">
+      <main className="p-4 md:p-6 space-y-6">
 
         {/* Filtro de período */}
         <div className="bg-white rounded-xl border border-gray-200 p-3 space-y-3">

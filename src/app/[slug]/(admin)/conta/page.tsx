@@ -29,7 +29,7 @@ export default async function ContaPage({ params }: Props) {
   return (
     <>
       <Header title="Minha conta" backHref={`/${slug}/dashboard`} />
-      <main className="p-4 md:p-6 space-y-8 max-w-2xl">
+      <main className="p-4 md:p-6 space-y-8 max-w-2xl mx-auto">
         <AccountSettingsForm
           slug={slug}
           userId={user.id}

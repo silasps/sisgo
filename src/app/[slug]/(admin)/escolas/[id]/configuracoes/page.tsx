@@ -400,7 +400,7 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
     <>
       {/* ════════ VISÃO MANAGEMENT ═══════════════════════════════════════════════ */}
       {isManagement && (
-        <main className="p-4 md:p-6 max-w-5xl overflow-y-auto flex-1">
+        <main className="p-4 md:p-6 overflow-y-auto flex-1">
           {msg && msgs[msg] && (
             <div className={`border rounded-lg px-4 py-3 text-sm mb-4 ${msgs[msg].cls}`}>
               {msgs[msg].text}
@@ -761,7 +761,7 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
 
       {/* ════════ VISÃO LÍDER DE ESCOLA ═══════════════════════════════════════════════ */}
       {isLiderEted && (
-        <main className="p-4 md:p-6 space-y-4 max-w-2xl overflow-y-auto flex-1">
+        <main className="p-4 md:p-6 space-y-4 max-w-2xl mx-auto overflow-y-auto flex-1">
 
           {/* Dados da escola — mesmo formulário da visão de gestão */}
           <form action={updateSchool} className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
@@ -1051,7 +1051,7 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
 
       {/* ════════ VISÃO OBREIRO DE ESCOLA ═══════════════════════════════════════════════ */}
       {isObreiroEted && (
-        <main className="p-4 md:p-6 space-y-4 max-w-2xl overflow-y-auto flex-1">
+        <main className="p-4 md:p-6 space-y-4 max-w-2xl mx-auto overflow-y-auto flex-1">
 
           {/* Info da escola */}
           <div className="bg-white rounded-xl border border-gray-200 p-5 flex items-start justify-between gap-3">

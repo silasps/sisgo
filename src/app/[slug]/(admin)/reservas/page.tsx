@@ -628,7 +628,7 @@ export default async function ReservasPage({ params, searchParams }: Props) {
           )
         }
       />
-      <main className="p-4 md:p-6 space-y-6 max-w-3xl">
+      <main className="p-4 md:p-6 space-y-6 max-w-3xl mx-auto">
 
         {msg && msgInfo[msg] && (
           <div className="border rounded-lg px-4 py-3 text-sm bg-blue-50 border-blue-200 text-blue-700">

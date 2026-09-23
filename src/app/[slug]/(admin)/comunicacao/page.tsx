@@ -112,7 +112,7 @@ export default async function ComunicacaoPage({ params }: Props) {
   return (
     <>
       <Header title="Comunicação" />
-      <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1 max-w-2xl">
+      <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1 max-w-2xl mx-auto">
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-gray-700">Novo anúncio</h2>

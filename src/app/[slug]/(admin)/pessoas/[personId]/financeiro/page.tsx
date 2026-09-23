@@ -73,7 +73,7 @@ export default async function PessoaFinanceiroPage({ params }: Props) {
   const totalPaid = paid.reduce((s, c) => s + Number(c.amount), 0)
 
   return (
-    <main className="p-4 md:p-6 space-y-5 max-w-2xl">
+    <main className="p-4 md:p-6 space-y-5 max-w-2xl mx-auto">
       <section className="grid grid-cols-3 gap-3">
         <div className={`rounded-xl border p-4 ${totalOverdue > 0 ? 'bg-red-50 border-red-100' : 'bg-yellow-50 border-yellow-100'}`}>
           <p className={`text-xl font-bold ${totalOverdue > 0 ? 'text-red-600' : 'text-yellow-600'}`}>{fmt(totalPending)}</p>

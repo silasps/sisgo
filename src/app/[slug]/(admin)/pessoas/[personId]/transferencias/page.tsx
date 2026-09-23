@@ -87,7 +87,7 @@ export default async function PessoaTransferenciasPage({ params }: Props) {
   const transfers = ((transfersData ?? []) as unknown) as TransferRow[]
 
   return (
-    <main className="p-4 md:p-6 space-y-5 max-w-2xl">
+    <main className="p-4 md:p-6 space-y-5 max-w-2xl mx-auto">
       <section className="rounded-xl border border-gray-200 bg-white overflow-hidden">
         <div className="border-b border-gray-100 px-4 py-3">
           <h2 className="text-sm font-semibold text-gray-800">Histórico de transferências entre ministérios</h2>

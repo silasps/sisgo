@@ -63,7 +63,7 @@ export default async function NovoMinisterioPage({ params }: Props) {
           </Link>
         }
       />
-      <main className="p-4 md:p-6 max-w-lg">
+      <main className="p-4 md:p-6 max-w-lg mx-auto">
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <form action={handleCreate} className="space-y-5">
             <div>

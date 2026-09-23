@@ -52,7 +52,7 @@ export default function NovaBasePage() {
           </Link>
         }
       />
-      <main className="p-4 md:p-6 max-w-xl">
+      <main className="p-4 md:p-6 max-w-xl mx-auto">
         <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
 
           <div className="p-4 sm:p-6 space-y-4">

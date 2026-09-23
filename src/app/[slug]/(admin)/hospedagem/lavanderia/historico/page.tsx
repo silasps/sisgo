@@ -103,7 +103,7 @@ export default async function HistoricoPage({ params, searchParams }: Props) {
   return (
     <>
       <Header title="Histórico de Lavanderia" />
-      <main className="p-4 md:p-6 space-y-5 max-w-6xl">
+      <main className="p-4 md:p-6 space-y-5">
         <Link
           href={`/${slug}/hospedagem/lavanderia`}
           className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
