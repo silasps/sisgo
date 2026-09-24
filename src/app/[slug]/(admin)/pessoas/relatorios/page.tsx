@@ -74,6 +74,7 @@ export default async function RelatoriosPage({ params }: Props) {
     { data: ministryLinksRows },
     { count: acessosPendentes },
     { count: obreirosSemEmail },
+    { count: emergenciasAtivas },
   ] = await Promise.all([
     db.from('people').select('id', { count: 'exact', head: true }).eq('organization_id', org.id),
     db.from('staff_profiles').select('id', { count: 'exact', head: true }).eq('organization_id', org.id).eq('active', true),
@@ -85,6 +86,7 @@ export default async function RelatoriosPage({ params }: Props) {
     db.from('ministry_members').select('person_id, ministries(name)').eq('active', true),
     db.from('organization_users').select('id', { count: 'exact', head: true }).eq('organization_id', org.id).eq('active', true).is('invite_sent_at', null),
     db.from('staff_profiles').select('id', { count: 'exact', head: true }).eq('organization_id', org.id).eq('active', true).is('user_id', null),
+    db.from('person_emergency_access').select('id', { count: 'exact', head: true }).eq('organization_id', org.id).is('revoked_at', null).gt('expires_at', new Date().toISOString()),
   ])
 
   const genderCounts = { M: 0, F: 0, outro: 0, none: 0 }
@@ -152,10 +154,11 @@ export default async function RelatoriosPage({ params }: Props) {
           <div className="border-b border-gray-100 px-4 py-3">
             <h2 className="text-sm font-semibold text-gray-800">Acesso</h2>
           </div>
-          <div className="p-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="p-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
             <StatCard value={obreirosInativos ?? 0} label="Obreiros inativos/desligados" href={`/${slug}/pessoas?tab=obreiros&status=inativo`} />
             <StatCard value={obreirosSemEmail ?? 0} label="Obreiros sem email (sem login ainda)" tone="amber" href={`/${slug}/pessoas?tab=obreiros&status=ativo&semEmail=true`} />
             <StatCard value={acessosPendentes ?? 0} label="Logins aguardando envio de credenciais" tone="amber" href={`/${slug}/pessoas/importar`} />
+            <StatCard value={emergenciasAtivas ?? 0} label="Acessos de emergência ativos" tone="amber" href={`/${slug}/pessoas/emergencia`} />
           </div>
         </section>
       </main>
