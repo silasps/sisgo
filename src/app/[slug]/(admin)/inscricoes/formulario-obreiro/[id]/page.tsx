@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getRolePreview } from '@/lib/role-preview'
+import { canReviewStaffApplication } from '@/lib/auth/unit-access'
 import { Pencil } from 'lucide-react'
 import { PipelineStepper } from '@/components/inscricoes/PipelineStepper'
 import { stagesFromFlags } from '@/components/inscricoes/pipelineStages'
@@ -440,8 +441,6 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
   const realRole = superadminRow?.roles?.name ?? currentOrgRow?.roles?.name ?? ''
   const preview = await getRolePreview(realRole)
   const userRole = preview?.role ?? realRole
-  const allowed = ['superadmin', 'admin_base', 'lider_base', 'dh', 'lider_eted', 'lider_ministerio'].includes(userRole)
-  if (!allowed) notFound()
   const canManageChecks = ['superadmin', 'admin_base', 'lider_base', 'dh'].includes(userRole)
   const canManagePastorSkip = ['superadmin', 'admin_base', 'dh'].includes(userRole)
 
@@ -449,7 +448,7 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
     .from('staff_applications')
     .select(`
       id, status, form_data, applied_at,
-      organization_id, ministry_id, person_id, interest_form_id,
+      organization_id, school_id, ministry_id, person_id, interest_form_id,
       pastor_reference_skip_reason, pastor_reference_skipped_by, pastor_reference_skipped_at,
       hospedagem_skip_reason, hospedagem_skipped_by, hospedagem_skipped_at,
       edited_by, edited_at,
@@ -462,6 +461,11 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
     .single()
 
   if (!app) notFound()
+
+  // Acesso é por VÍNCULO com a escola/ministério de destino da candidatura,
+  // não pelo papel principal — ver comentário em lib/auth/unit-access.ts.
+  const allowed = await canReviewStaffApplication({ userId: user.id, orgId: org.id, role: userRole, preview }, app.school_id, app.ministry_id)
+  if (!allowed) notFound()
 
   let wasStudentBefore = false
   let exAlunoFinanceSummary: PersonFinanceSummary | null = null

@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { basicImageSanity } from '@/lib/documents/basicImageSanity'
 import { classifyDocument, type DocumentKind } from '@/lib/documents/classifyDocument'
+import { getRolePreview } from '@/lib/role-preview'
+import { canReviewStaffApplication } from '@/lib/auth/unit-access'
 
 const DOCUMENT_TYPES: Record<string, string> = {
   'application/pdf': 'pdf',
@@ -21,7 +23,10 @@ const DOCUMENT_KIND_BY_KEY: Record<string, DocumentKind> = {
   doc_certidao_casamento_s10: 'certidao_casamento',
 }
 
-async function assertCanEdit(organizationId: string) {
+// applicationId presente pra checar o VÍNCULO com a escola/ministério de
+// destino da candidatura (não basta o papel principal — ver
+// lib/auth/unit-access.ts).
+async function assertCanEdit(organizationId: string, applicationId: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('unauthorized')
@@ -37,6 +42,23 @@ async function assertCanEdit(organizationId: string) {
     ?? memberships.find(m => m.organization_id === organizationId)?.roles?.name
     ?? ''
   if (!['superadmin', 'admin_base', 'lider_base', 'dh', 'lider_eted', 'lider_ministerio'].includes(role)) throw new Error('forbidden')
+
+  const preview = await getRolePreview(role)
+  const effectiveRole = preview?.role ?? role
+  if (!['superadmin', 'admin_base', 'lider_base', 'dh'].includes(effectiveRole)) {
+    const { data: app } = await createAdminClient()
+      .from('staff_applications')
+      .select('school_id, ministry_id')
+      .eq('id', applicationId)
+      .eq('organization_id', organizationId)
+      .maybeSingle()
+    const canReview = await canReviewStaffApplication(
+      { userId: user.id, orgId: organizationId, role: effectiveRole, preview },
+      app?.school_id ?? null,
+      app?.ministry_id ?? null,
+    )
+    if (!canReview) throw new Error('forbidden')
+  }
 }
 
 // Deixa o DH/líder anexar (ou substituir) um documento da Seção 10 direto
@@ -50,7 +72,7 @@ export async function anexarDocumentoObreiroAdmin(
   params: { slug: string; organizationId: string; applicationId: string; key: string },
   formData: FormData
 ) {
-  await assertCanEdit(params.organizationId)
+  await assertCanEdit(params.organizationId, params.applicationId)
   const sb = createAdminClient()
 
   const file = formData.get('file')

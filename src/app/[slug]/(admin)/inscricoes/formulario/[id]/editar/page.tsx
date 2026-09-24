@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { getRolePreview } from '@/lib/role-preview'
+import { canLeadSchool } from '@/lib/auth/unit-access'
 import { AdminFileUpload } from '@/components/inscricoes/AdminFileUpload'
 import { anexarDocumentoAdmin, anexarComprovanteAdmin } from './actions'
 
@@ -237,15 +238,19 @@ export default async function FormularioEditorPage({ params }: Props) {
   const realRole = superadminRow?.roles?.name ?? currentOrgRow?.roles?.name ?? ''
   const preview = await getRolePreview(realRole)
   const userRole = preview?.role ?? realRole
-  if (!['superadmin', 'admin_base', 'lider_base', 'dh', 'lider_eted'].includes(userRole)) notFound()
 
   const { data: app } = await sb
     .from('school_applications')
-    .select('id, status, form_data, organization_id, school_interest_forms(full_name), schools(form_config)')
+    .select('id, status, form_data, organization_id, school_id, school_interest_forms(full_name), schools(form_config)')
     .eq('id', id)
     .eq('organization_id', org.id)
     .single()
   if (!app) notFound()
+
+  // Edição exige liderança da escola da inscrição (não basta ser obreiro
+  // lá) — ver comentário em lib/auth/unit-access.ts.
+  const canEdit = await canLeadSchool({ userId: user.id, orgId: org.id, role: userRole, preview }, app.school_id)
+  if (!canEdit) notFound()
 
   const formData = (app.form_data as Record<string, Record<string, string>>) ?? {}
   const preform = app.school_interest_forms as unknown as { full_name?: string } | null

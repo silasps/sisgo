@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { insertStageAdvance } from '@/lib/pipelineStageAdvance'
 import { getOrRegenerateToken } from '@/lib/inscricoes/resendLink'
+import { getRolePreview } from '@/lib/role-preview'
+import { canLeadSchool } from '@/lib/auth/unit-access'
 
 async function assertDh(organizationId: string) {
   const supabase = await createClient()
@@ -26,7 +28,9 @@ async function assertDh(organizationId: string) {
   return user.id
 }
 
-async function assertCanRequestHospedagem(organizationId: string) {
+// applicationId presente pra checar o VÍNCULO com a escola da inscrição
+// (não basta o papel principal ser lider_eted — ver lib/auth/unit-access.ts).
+async function assertCanRequestHospedagem(organizationId: string, applicationId: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('unauthorized')
@@ -43,6 +47,19 @@ async function assertCanRequestHospedagem(organizationId: string) {
     ?? ''
   if (!['superadmin', 'admin_base', 'lider_base', 'dh', 'lider_eted'].includes(role)) throw new Error('forbidden')
 
+  const preview = await getRolePreview(role)
+  const effectiveRole = preview?.role ?? role
+  if (!['superadmin', 'admin_base', 'lider_base', 'dh'].includes(effectiveRole)) {
+    const { data: app } = await createAdminClient()
+      .from('school_applications')
+      .select('school_id')
+      .eq('id', applicationId)
+      .eq('organization_id', organizationId)
+      .maybeSingle()
+    const canLead = await canLeadSchool({ userId: user.id, orgId: organizationId, role: effectiveRole, preview }, app?.school_id ?? null)
+    if (!canLead) throw new Error('forbidden')
+  }
+
   return { userId: user.id, role }
 }
 
@@ -56,9 +73,9 @@ export async function solicitarHospedagemAluno(params: {
   departureDate?: string | null
   notes: string | null
 }) {
-  const { userId, role } = await assertCanRequestHospedagem(params.organizationId)
-  const sb = createAdminClient()
   const applicationId = params.staffApplicationId
+  const { userId, role } = await assertCanRequestHospedagem(params.organizationId, applicationId)
+  const sb = createAdminClient()
 
   const { data: existing } = await sb
     .from('service_requests')
@@ -103,7 +120,7 @@ export async function reenviarLinkFormulario(params: {
   organizationId: string
   applicationId: string
 }) {
-  await assertCanRequestHospedagem(params.organizationId)
+  await assertCanRequestHospedagem(params.organizationId, params.applicationId)
   const sb = createAdminClient()
   const result = await getOrRegenerateToken(sb, 'school_applications', params.applicationId, params.organizationId)
   if ('error' in result) throw new Error(result.error)

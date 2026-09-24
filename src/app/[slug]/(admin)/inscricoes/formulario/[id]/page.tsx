@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getRolePreview } from '@/lib/role-preview'
+import { canAccessSchool } from '@/lib/auth/unit-access'
 import { ReferenceModal } from './ReferenceModal'
 import { IncompleteFormLinkCard } from '@/components/inscricoes/IncompleteFormLinkCard'
 import { DocumentPreviewGrid } from '@/components/inscricoes/DocumentPreviewGrid'
@@ -405,14 +406,12 @@ export default async function FormularioViewerPage({ params }: Props) {
   const realRole = superadminRow?.roles?.name ?? currentOrgRow?.roles?.name ?? ''
   const preview = await getRolePreview(realRole)
   const userRole = preview?.role ?? realRole
-  const allowed = ['superadmin', 'admin_base', 'lider_base', 'dh', 'lider_eted'].includes(userRole)
-  if (!allowed) notFound()
 
   const { data: app } = await sb
     .from('school_applications')
     .select(`
       id, status, form_data, created_at, edited_by, edited_at,
-      organization_id,
+      organization_id, school_id,
       schools(name, form_config),
       school_classes(name),
       school_interest_forms(full_name, email, phone)
@@ -422,6 +421,11 @@ export default async function FormularioViewerPage({ params }: Props) {
     .single()
 
   if (!app) notFound()
+
+  // Acesso é por VÍNCULO com a escola da inscrição (líder ou obreiro), não
+  // pelo papel principal — ver comentário em lib/auth/unit-access.ts.
+  const allowed = await canAccessSchool({ userId: user.id, orgId: org.id, role: userRole, preview }, app.school_id)
+  if (!allowed) notFound()
 
   const formData = (app.form_data as Record<string, unknown>) ?? {}
   const isExterno = (formData as Record<string, unknown>).source === 'externo'

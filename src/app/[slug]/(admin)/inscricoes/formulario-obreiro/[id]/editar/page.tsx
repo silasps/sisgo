@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { getRolePreview } from '@/lib/role-preview'
+import { canReviewStaffApplication } from '@/lib/auth/unit-access'
 import { AdminFileUpload } from '@/components/inscricoes/AdminFileUpload'
 import { anexarDocumentoObreiroAdmin } from './actions'
 
@@ -131,17 +132,20 @@ export default async function EditarFormularioObreiroPage({ params }: Props) {
   const realRole = superadminRow?.roles?.name ?? currentOrgRow?.roles?.name ?? ''
   const preview = await getRolePreview(realRole)
   const userRole = preview?.role ?? realRole
-  const allowed = ['superadmin', 'admin_base', 'lider_base', 'dh', 'lider_eted', 'lider_ministerio'].includes(userRole)
-  if (!allowed) notFound()
 
   const { data: app } = await sb
     .from('staff_applications')
-    .select('id, organization_id, form_data, people(full_name)')
+    .select('id, organization_id, school_id, ministry_id, form_data, people(full_name)')
     .eq('id', id)
     .eq('organization_id', org.id)
     .single()
 
   if (!app) notFound()
+
+  // Acesso é por VÍNCULO com a escola/ministério de destino da candidatura,
+  // não pelo papel principal — ver comentário em lib/auth/unit-access.ts.
+  const allowed = await canReviewStaffApplication({ userId: user.id, orgId: org.id, role: userRole, preview }, app.school_id, app.ministry_id)
+  if (!allowed) notFound()
 
   const nomeCandidato = (app.people as unknown as { full_name?: string } | null)?.full_name ?? 'Obreiro'
   const formData = (app.form_data as Record<string, unknown>) ?? {}

@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { RolePreview } from '@/lib/role-preview'
+import { isManagementRole } from '@/lib/auth/permissions'
 
 /**
  * Acesso a uma escola/ministério pelo VÍNCULO da pessoa com a unidade, não
@@ -151,4 +152,50 @@ export async function getSchoolLink(ctx: UnitAccessContext, schoolId: string): P
 
 export async function getMinistryLink(ctx: UnitAccessContext, ministryId: string): Promise<MinistryLink | null> {
   return (await getMyMinistries(ctx)).find(m => m.id === ministryId)?.link ?? null
+}
+
+/**
+ * Telas de revisão de inscrição (formulario/formulario-obreiro) usavam
+ * `role === 'lider_eted'`/`'lider_ministerio'` pra liberar acesso, sem checar
+ * a QUAL escola/ministério a inscrição pertence — isso ao mesmo tempo (a)
+ * bloqueava quem lidera a unidade certa mas cujo papel principal é outro
+ * (ex.: obreiro_ministerio que também lidera uma escola via school_leaders,
+ * ver comentário no topo do arquivo) e (b) vazava inscrições de QUALQUER
+ * escola/ministério pra qualquer lider_eted/lider_ministerio da base. Use
+ * estas funções em vez de checar o papel principal diretamente.
+ */
+export async function canAccessSchool(ctx: UnitAccessContext, schoolId: string | null): Promise<boolean> {
+  if (isManagementRole(ctx.role)) return true
+  if (!schoolId) return false
+  return (await getSchoolLink(ctx, schoolId)) !== null
+}
+
+/** Igual a canAccessSchool, mas só libera quem lidera a escola (não obreiro/membro). */
+export async function canLeadSchool(ctx: UnitAccessContext, schoolId: string | null): Promise<boolean> {
+  if (isManagementRole(ctx.role)) return true
+  if (!schoolId) return false
+  return (await getSchoolLink(ctx, schoolId)) === 'lider'
+}
+
+/** Igual a canLeadSchool, mas pra ministério. */
+export async function canLeadMinistry(ctx: UnitAccessContext, ministryId: string | null): Promise<boolean> {
+  if (isManagementRole(ctx.role)) return true
+  if (!ministryId) return false
+  return (await getMinistryLink(ctx, ministryId)) === 'lider'
+}
+
+/**
+ * Candidatura de obreiro (staff_applications/staff_interest_forms) — destino
+ * é escola OU ministério (mutuamente exclusivo, migration 089) OU nenhum
+ * ainda (fica visível a quem lidera algum ministério, pra escolher destino).
+ */
+export async function canReviewStaffApplication(
+  ctx: UnitAccessContext,
+  schoolId: string | null,
+  ministryId: string | null,
+): Promise<boolean> {
+  if (isManagementRole(ctx.role)) return true
+  if (schoolId) return (await getSchoolLink(ctx, schoolId)) === 'lider'
+  if (ministryId) return (await getMinistryLink(ctx, ministryId)) === 'lider'
+  return (await getMyMinistries(ctx)).some(m => m.link === 'lider')
 }
