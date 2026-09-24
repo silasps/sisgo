@@ -106,7 +106,7 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
   // em outra escola/ministério — precisam da aprovação do líder daqui.
   type LoanRaw = {
     id: string; person_id: string; to_unit_type: string; role: string | null
-    starts_on: string; ends_on: string | null; created_at: string
+    starts_on: string; ends_on: string; created_at: string
     people: { full_name: string } | null
   }
   let outgoingLoans: Array<LoanRaw & { destinationName: string | null }> = []
@@ -139,7 +139,8 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
     const personIds = formData.getAll('person_id') as string[]
     if (personIds.length === 0) return
     const startsOn = (formData.get('starts_on') as string) || new Date().toISOString().slice(0, 10)
-    const endsOn = (formData.get('ends_on') as string) || null
+    const endsOn = formData.get('ends_on') as string
+    if (!endsOn) return
     const result = await addSchoolStaffBatch({
       orgId, schoolId: id, personIds, role: (formData.get('role') as string) || 'Obreiro',
       requestedBy: user.id, startsOn, endsOn,
@@ -288,7 +289,7 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
                   <p className="text-xs text-gray-400">
                     {new Date(`${loan.starts_on}T00:00:00`).toLocaleDateString('pt-BR')}
                     {' – '}
-                    {loan.ends_on ? new Date(`${loan.ends_on}T00:00:00`).toLocaleDateString('pt-BR') : 'sem previsão de retorno'}
+                    {new Date(`${loan.ends_on}T00:00:00`).toLocaleDateString('pt-BR')}
                   </p>
                 </div>
                 <form action={handleApproveLoan} className="space-y-1.5">
@@ -347,12 +348,12 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
                   <input type="date" name="starts_on" defaultValue={todayStr} required className={INPUT} />
                 </div>
                 <div className="flex-1">
-                  <label className="block text-[11px] text-gray-400 mb-1">Até (opcional)</label>
-                  <input type="date" name="ends_on" className={INPUT} />
+                  <label className="block text-[11px] text-gray-400 mb-1">Até</label>
+                  <input type="date" name="ends_on" required className={INPUT} />
                 </div>
               </div>
               <p className="text-[11px] text-gray-400">
-                Usado só se alguém selecionado já servir em outro ministério/escola — vira um pedido de empréstimo pro líder de origem aprovar, com esse período.
+                Usado só se alguém selecionado já servir em outro ministério/escola — vira um pedido de empréstimo pro líder de origem aprovar, com esse período (obrigatório: o líder precisa saber até quando pode contar sem a pessoa).
               </p>
               <SubmitButton pendingText="Adicionando…" className="w-full px-4 py-2 text-sm font-medium rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white transition-colors">
                 Adicionar

@@ -35,7 +35,7 @@ export async function createStaffLoan(params: {
   role: string | null
   requestedBy: string
   startsOn: string
-  endsOn: string | null
+  endsOn: string
 }) {
   const sb = createAdminClient()
   const { error } = await sb.from('staff_loans').insert({

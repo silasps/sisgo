@@ -318,7 +318,7 @@ export default async function PendentesPage({ params, searchParams }: Props) {
     id: string; person_id: string
     from_unit_type: string; from_school_id: string | null; from_ministry_id: string | null
     to_unit_type: string; to_school_id: string | null; to_ministry_id: string | null
-    role: string | null; starts_on: string; ends_on: string | null; created_at: string
+    role: string | null; starts_on: string; ends_on: string; created_at: string
     people: { full_name: string } | null
   }
   let staffLoans: Array<StaffLoanRaw & { fromName: string | null; toName: string | null }> = []
@@ -1435,8 +1435,7 @@ export default async function PendentesPage({ params, searchParams }: Props) {
                             {pName ?? '—'} → {loan.toName ?? '—'}
                           </p>
                           <p className="text-xs text-gray-400 mt-0.5">
-                            Serve em: {loan.fromName ?? '—'} · {new Date(`${loan.starts_on}T00:00:00`).toLocaleDateString('pt-BR')}
-                            {loan.ends_on ? ` a ${new Date(`${loan.ends_on}T00:00:00`).toLocaleDateString('pt-BR')}` : ' (sem previsão de retorno)'}
+                            Serve em: {loan.fromName ?? '—'} · {new Date(`${loan.starts_on}T00:00:00`).toLocaleDateString('pt-BR')} a {new Date(`${loan.ends_on}T00:00:00`).toLocaleDateString('pt-BR')}
                           </p>
                         </div>
                         <span className="relative z-10 flex-shrink-0 text-xs font-semibold text-brand-500 group-hover:text-brand-700 transition-colors">

@@ -140,7 +140,7 @@ export async function addMember(ministryId: string, personId: string, roleId: st
 // src/lib/staff-loans.ts e o hub de Pendências). ──────────────────────────────
 export async function addMemberChecked(params: {
   orgId: string; ministryId: string; personId: string; roleId: string | null
-  requestedBy: string; startsOn: string; endsOn: string | null
+  requestedBy: string; startsOn: string; endsOn: string
 }): Promise<'added' | 'pending_loan'> {
   const { findActiveUnit, createStaffLoan } = await import('@/lib/staff-loans')
   const from = await findActiveUnit(params.orgId, params.personId, { type: 'ministry', id: params.ministryId })

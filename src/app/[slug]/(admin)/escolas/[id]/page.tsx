@@ -31,7 +31,7 @@ export default async function EscolaOverviewPage({ params }: Props) {
 
   const { data: escola } = await supabase
     .from('schools')
-    .select('id, name, description, active, school_type, type_name')
+    .select('id, name, description, active, school_type, type_name, duration_hours')
     .eq('id', id)
     .eq('organization_id', orgId)
     .single()
@@ -118,20 +118,28 @@ export default async function EscolaOverviewPage({ params }: Props) {
   }
 
   const base = `/${slug}/escolas/${id}`
+  const missingItems = [
+    !leaderCount && { text: 'Esta escola ainda não tem um líder definido.', href: `${base}/configuracoes#lideranca`, cta: 'Atribuir líder →' },
+    !escola.duration_hours && { text: 'A carga horária total ainda não foi informada.', href: `${base}/configuracoes`, cta: 'Preencher →' },
+  ].filter((item): item is { text: string; href: string; cta: string } => Boolean(item))
 
   return (
     <>
-      {!leaderCount && (
-        <div className="mx-3 mt-3 lg:mx-4 lg:mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <div className="flex items-center gap-2 text-sm text-amber-700">
-            <AlertTriangle size={16} className="flex-shrink-0" />
-            <span>Esta escola ainda não tem um líder definido.</span>
+      {missingItems.length > 0 && (
+        <div className="mx-3 mt-3 lg:mx-4 lg:mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 space-y-1.5">
+          <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 uppercase tracking-wide">
+            <AlertTriangle size={14} className="flex-shrink-0" /> Cadastro incompleto
           </div>
-          {canWrite && (
-            <Link href={`${base}/configuracoes#lideranca`} className="flex-shrink-0 text-xs font-semibold text-amber-700 hover:text-amber-900 underline underline-offset-2">
-              Atribuir líder →
-            </Link>
-          )}
+          {missingItems.map(item => (
+            <div key={item.text} className="flex flex-wrap items-center justify-between gap-2 text-sm text-amber-700">
+              <span>{item.text}</span>
+              {canWrite && (
+                <Link href={item.href} className="flex-shrink-0 text-xs font-semibold text-amber-700 hover:text-amber-900 underline underline-offset-2">
+                  {item.cta}
+                </Link>
+              )}
+            </div>
+          ))}
         </div>
       )}
       <main className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">

@@ -68,7 +68,7 @@ export async function addSchoolStaff(schoolId: string, personId: string, role: s
 // (ver src/lib/staff-loans.ts e o hub de Pendências).
 export async function addSchoolStaffChecked(params: {
   orgId: string; schoolId: string; personId: string; role: string
-  requestedBy: string; startsOn: string; endsOn: string | null
+  requestedBy: string; startsOn: string; endsOn: string
 }): Promise<'added' | 'pending_loan'> {
   const { findActiveUnit, createStaffLoan } = await import('@/lib/staff-loans')
   const from = await findActiveUnit(params.orgId, params.personId, { type: 'school', id: params.schoolId })
@@ -88,7 +88,7 @@ export async function addSchoolStaffChecked(params: {
 // quantos entraram direto vs. quantos viraram pendência de empréstimo.
 export async function addSchoolStaffBatch(params: {
   orgId: string; schoolId: string; personIds: string[]; role: string
-  requestedBy: string; startsOn: string; endsOn: string | null
+  requestedBy: string; startsOn: string; endsOn: string
 }): Promise<{ added: number; pendingLoans: number }> {
   const results = await Promise.all(params.personIds.map(personId =>
     addSchoolStaffChecked({ ...params, personId })

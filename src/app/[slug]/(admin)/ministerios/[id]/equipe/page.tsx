@@ -112,7 +112,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
   // adicionar em outra escola/ministério — precisam da aprovação do líder daqui.
   type LoanRaw = {
     id: string; person_id: string; to_unit_type: string; role: string | null
-    starts_on: string; ends_on: string | null; created_at: string
+    starts_on: string; ends_on: string; created_at: string
     people: { full_name: string } | null
   }
   let outgoingLoans: Array<LoanRaw & { destinationName: string | null }> = []
@@ -192,7 +192,8 @@ export default async function EquipePage({ params, searchParams }: Props) {
     const personId = formData.get('person_id') as string
     if (!personId) return
     const startsOn = (formData.get('starts_on') as string) || new Date().toISOString().slice(0, 10)
-    const endsOn = (formData.get('ends_on') as string) || null
+    const endsOn = formData.get('ends_on') as string
+    if (!endsOn) return
     const result = await addMemberChecked({
       orgId, ministryId: id, personId, roleId: (formData.get('role_id') as string) || null,
       requestedBy: user.id, startsOn, endsOn,
@@ -388,7 +389,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
                   <p className="text-xs text-gray-400">
                     {new Date(`${loan.starts_on}T00:00:00`).toLocaleDateString('pt-BR')}
                     {' – '}
-                    {loan.ends_on ? new Date(`${loan.ends_on}T00:00:00`).toLocaleDateString('pt-BR') : 'sem previsão de retorno'}
+                    {new Date(`${loan.ends_on}T00:00:00`).toLocaleDateString('pt-BR')}
                   </p>
                 </div>
                 <form action={handleApproveLoan} className="space-y-1.5">
@@ -491,7 +492,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
               )}
               <div className="flex gap-2 w-full basis-full">
                 <input type="date" name="starts_on" defaultValue={todayStr} required title="A partir de" className={`flex-1 ${INPUT}`} />
-                <input type="date" name="ends_on" title="Até (opcional)" className={`flex-1 ${INPUT}`} />
+                <input type="date" name="ends_on" required title="Até" className={`flex-1 ${INPUT}`} />
               </div>
               <button type="submit" className="px-4 py-2 text-sm font-medium rounded-lg bg-brand-500 hover:bg-brand-600 text-white transition-colors">Adicionar</button>
             </form>

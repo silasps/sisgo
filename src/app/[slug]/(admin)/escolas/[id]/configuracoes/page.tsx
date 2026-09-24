@@ -4,7 +4,7 @@ import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import {
   assignSchoolLeader, addSchoolCoLeader, removeSchoolLeader,
-  addSchoolStaff, removeSchoolStaff,
+  removeSchoolStaff,
   submitSchoolObreiroRequest, approveSchoolObreiroRequest,
   rejectSchoolObreiroRequest, cancelSchoolObreiroRequest,
   toggleTurmaActive, deleteTurma,
@@ -18,7 +18,9 @@ import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { getSchoolLink } from '@/lib/auth/unit-access'
 import { SCHOOL_TYPES } from '@/lib/schools'
 import { triggerSiteRevalidation } from '@/lib/revalidate-webhook'
-import { CheckCircle2, AlertTriangle, Settings } from 'lucide-react'
+import { CheckCircle2, AlertTriangle, Settings, Image as ImageIcon } from 'lucide-react'
+import { FileInputField } from '@/components/ui/FileInputField'
+import { HoursField } from '@/components/ui/HoursField'
 
 type Props = {
   params: Promise<{ slug: string; id: string }>
@@ -81,6 +83,7 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
   // campo abaixo, pra não perder o nome digitado numa escola anterior.
   const { data: typeNameRows } = await supabase.from('schools').select('type_name').eq('organization_id', org.id)
   const existingTypeNames = [...new Set((typeNameRows ?? []).map(r => r.type_name).filter(Boolean))].sort()
+  const todayStr = new Date().toISOString().slice(0, 10)
 
   // Uma das três visões abaixo (gestão / líder / obreiro): gestão prevalece;
   // fora dela, o vínculo com ESTA escola decide — ver lib/auth/unit-access.
@@ -223,6 +226,34 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
     const sb = mkAdmin()
     const objectives    = (formData.get('objectives') as string ?? '').split('\n').map(s => s.trim()).filter(Boolean)
     const prerequisites = (formData.get('prerequisites') as string ?? '').split('\n').map(s => s.trim()).filter(Boolean)
+
+    // Imagem hero: upload no bucket público school-media (já existe desde a
+    // migration 003, sem migration nova aqui). undefined = não mexe no que
+    // já tem; null = removeu; string = trocou.
+    const heroFile = formData.get('hero_image') as File | null
+    const removeHero = formData.get('remove_hero_image') === '1'
+    let heroImageUrl: string | null | undefined
+    const extractSchoolMediaPath = (url: string | null) => {
+      const marker = '/school-media/'
+      const idx = url ? url.indexOf(marker) : -1
+      return idx === -1 ? null : url!.slice(idx + marker.length)
+    }
+    if (heroFile && heroFile.size > 0) {
+      const ext = heroFile.type === 'image/png' ? 'png' : heroFile.type === 'image/webp' ? 'webp' : 'jpg'
+      const path = `${id}/hero-${Date.now()}.${ext}`
+      const buffer = Buffer.from(await heroFile.arrayBuffer())
+      const { error: uploadError } = await sb.storage.from('school-media').upload(path, buffer, { contentType: heroFile.type })
+      if (!uploadError) {
+        heroImageUrl = sb.storage.from('school-media').getPublicUrl(path).data.publicUrl
+        const oldPath = extractSchoolMediaPath(escola.hero_image_url as string | null)
+        if (oldPath) await sb.storage.from('school-media').remove([oldPath])
+      }
+    } else if (removeHero) {
+      const oldPath = extractSchoolMediaPath(escola.hero_image_url as string | null)
+      if (oldPath) await sb.storage.from('school-media').remove([oldPath])
+      heroImageUrl = null
+    }
+
     await sb.from('schools').update({
       name: formData.get('name') as string,
       acronym: (formData.get('acronym') as string) || null,
@@ -233,7 +264,8 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
       long_description: (formData.get('long_description') as string) || null,
       target_audience: (formData.get('target_audience') as string) || null,
       duration_description: (formData.get('duration_description') as string) || null,
-      hero_image_url: (formData.get('hero_image_url') as string) || null,
+      duration_hours: formData.get('duration_hours') ? Number(formData.get('duration_hours')) : null,
+      ...(heroImageUrl !== undefined ? { hero_image_url: heroImageUrl } : {}),
       promo_video_url: (formData.get('promo_video_url') as string) || null,
       objectives: objectives.length ? objectives : null,
       prerequisites: prerequisites.length ? prerequisites : null,
@@ -333,8 +365,15 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
     'use server'
     const personId = formData.get('person_id') as string
     if (!personId) return
-    await addSchoolStaff(id, personId, (formData.get('role') as string).trim() || 'Obreiro')
-    redirect(`/${slug}/escolas/${id}`)
+    const endsOn = formData.get('ends_on') as string
+    if (!endsOn) return
+    const startsOn = (formData.get('starts_on') as string) || new Date().toISOString().slice(0, 10)
+    const { addSchoolStaffChecked } = await import('../actions')
+    const result = await addSchoolStaffChecked({
+      orgId: org.id, schoolId: id, personId, role: (formData.get('role') as string).trim() || 'Obreiro',
+      requestedBy: user.id, startsOn, endsOn,
+    })
+    redirect(result === 'pending_loan' ? `/${slug}/escolas/${id}?pending=1` : `/${slug}/escolas/${id}`)
   }
 
   const handleRemoveStaff = async (formData: FormData) => {
@@ -450,9 +489,36 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                     <div className="sm:col-span-2">
                       <Field label="Subtítulo" name="subtitle" defaultValue={(escola as unknown as { subtitle: string | null }).subtitle ?? ''} placeholder="Uma frase que resume o propósito da escola" />
                     </div>
-                    <Field label="Duração" name="duration_description" defaultValue={(escola as unknown as { duration_description: string | null }).duration_description ?? ''} placeholder="Ex: 20 semanas (5 meses)" />
-                    <Field label="URL da imagem hero" name="hero_image_url" defaultValue={(escola as unknown as { hero_image_url: string | null }).hero_image_url ?? ''} placeholder="https://..." />
+                    <Field label="Duração (texto, pra página pública)" name="duration_description" defaultValue={(escola as unknown as { duration_description: string | null }).duration_description ?? ''} placeholder="Ex: 20 semanas (5 meses)" />
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Carga horária total (horas)</label>
+                      <HoursField name="duration_hours" defaultValue={(escola as unknown as { duration_hours: number | null }).duration_hours} />
+                    </div>
                     <Field label="URL do vídeo promocional" name="promo_video_url" defaultValue={(escola as unknown as { promo_video_url: string | null }).promo_video_url ?? ''} placeholder="https://youtube.com/..." />
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Imagem hero</label>
+                      <FileInputField
+                        name="hero_image"
+                        accept="image/jpeg,image/png,image/webp"
+                        tone="indigo"
+                        icon={<ImageIcon size={16} aria-hidden />}
+                        title="Imagem de capa da página pública"
+                        badgeLabel="Opcional" readyLabel="Pronta"
+                        dropLabel="Clique ou arraste uma imagem" dropHint="JPG, PNG ou WEBP"
+                        attachedLabel="Imagem anexada"
+                        changeLabel="Trocar" removeLabel="Remover"
+                        crop={{
+                          aspect: 16 / 9, title: 'Ajustar imagem hero', zoomLabel: 'Zoom',
+                          confirmLabel: 'Confirmar', cancelLabel: 'Cancelar',
+                          errorLabel: 'Não foi possível recortar a imagem.', editLabel: 'Ajustar recorte',
+                        }}
+                        existingFileUrl={(escola as unknown as { hero_image_url: string | null }).hero_image_url}
+                        existingFileType={(escola as unknown as { hero_image_url: string | null }).hero_image_url ? 'image/jpeg' : null}
+                      />
+                      <p className="text-[11px] text-gray-400 mt-1">
+                        Recomendado: 1600×900px (proporção 16:9), até 10MB. Se for criar no Canva, use o formato &ldquo;Apresentação (16:9)&rdquo; ou um tamanho customizado de 1600×900.
+                      </p>
+                    </div>
                   </div>
                 </div>
 
@@ -759,6 +825,15 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                           Adicionar
                         </button>
                       </div>
+                      <div className="flex gap-2">
+                        <input type="date" name="starts_on" defaultValue={todayStr} required title="A partir de"
+                          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                        <input type="date" name="ends_on" required title="Até"
+                          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                      </div>
+                      <p className="text-[11px] text-gray-400">
+                        Usado só se a pessoa já servir em outro ministério/escola — vira um pedido de empréstimo pro líder de origem aprovar, com esse período.
+                      </p>
                     </form>
                   </details>
                 )}
@@ -817,9 +892,36 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                 <div className="sm:col-span-2">
                   <Field label="Subtítulo" name="subtitle" defaultValue={(escola as unknown as { subtitle: string | null }).subtitle ?? ''} placeholder="Uma frase que resume o propósito da escola" />
                 </div>
-                <Field label="Duração" name="duration_description" defaultValue={(escola as unknown as { duration_description: string | null }).duration_description ?? ''} placeholder="Ex: 20 semanas (5 meses)" />
-                <Field label="URL da imagem hero" name="hero_image_url" defaultValue={(escola as unknown as { hero_image_url: string | null }).hero_image_url ?? ''} placeholder="https://..." />
+                <Field label="Duração (texto, pra página pública)" name="duration_description" defaultValue={(escola as unknown as { duration_description: string | null }).duration_description ?? ''} placeholder="Ex: 20 semanas (5 meses)" />
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Carga horária total (horas)</label>
+                  <HoursField name="duration_hours" defaultValue={(escola as unknown as { duration_hours: number | null }).duration_hours} />
+                </div>
                 <Field label="URL do vídeo promocional" name="promo_video_url" defaultValue={(escola as unknown as { promo_video_url: string | null }).promo_video_url ?? ''} placeholder="https://youtube.com/..." />
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Imagem hero</label>
+                  <FileInputField
+                    name="hero_image"
+                    accept="image/jpeg,image/png,image/webp"
+                    tone="indigo"
+                    icon={<ImageIcon size={16} aria-hidden />}
+                    title="Imagem de capa da página pública"
+                    badgeLabel="Opcional" readyLabel="Pronta"
+                    dropLabel="Clique ou arraste uma imagem" dropHint="JPG, PNG ou WEBP"
+                    attachedLabel="Imagem anexada"
+                    changeLabel="Trocar" removeLabel="Remover"
+                    crop={{
+                      aspect: 16 / 9, title: 'Ajustar imagem hero', zoomLabel: 'Zoom',
+                      confirmLabel: 'Confirmar', cancelLabel: 'Cancelar',
+                      errorLabel: 'Não foi possível recortar a imagem.', editLabel: 'Ajustar recorte',
+                    }}
+                    existingFileUrl={(escola as unknown as { hero_image_url: string | null }).hero_image_url}
+                    existingFileType={(escola as unknown as { hero_image_url: string | null }).hero_image_url ? 'image/jpeg' : null}
+                  />
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    Recomendado: 1600×900px (proporção 16:9), até 10MB. Se for criar no Canva, use o formato &ldquo;Apresentação (16:9)&rdquo; ou um tamanho customizado de 1600×900.
+                  </p>
+                </div>
               </div>
             </div>
 
