@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
-import { getRolePreview } from '@/lib/role-preview'
+import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
+import { isManagementRole } from '@/lib/auth/permissions'
 import { getSchoolLink } from '@/lib/auth/unit-access'
 import { FormularioInscricao } from '@/app/[slug]/formulario/[token]/FormularioInscricao'
 
@@ -16,19 +17,11 @@ export default async function VisualizarFormularioPage({ params }: Props) {
   const { data: org } = await supabase.from('organizations').select('id, name').eq('slug', slug).single()
   if (!org) notFound()
 
-  const { data: orgUsers } = await supabase
-    .from('organization_users')
-    .select('organization_id, roles(name)')
-    .eq('user_id', user.id).eq('active', true)
-  const memberships = (orgUsers ?? []) as unknown as Array<{ organization_id: string | null; roles: { name: string } | null }>
-  const superadminRow = memberships.find(r => r.roles?.name === 'superadmin')
-  const currentOrgRow = memberships.find(r => r.organization_id === org.id)
-  const realRole = superadminRow?.roles?.name ?? currentOrgRow?.roles?.name ?? ''
-  const preview = await getRolePreview(realRole)
-  const userRole = preview?.role ?? realRole
+  const { role, preview } = await getCurrentOrganizationRole(supabase, user.id, org.id)
+  const isManagement = isManagementRole(role)
   // Gestão que edita formulário, ou o líder DESTA escola (vínculo) — ver lib/auth/unit-access.
-  const canEditForm = ['superadmin', 'admin_base', 'lider_base'].includes(userRole)
-    || (await getSchoolLink({ userId: user.id, orgId: org.id, role: userRole, preview }, id)) === 'lider'
+  const canEditForm = isManagement
+    || (await getSchoolLink({ userId: user.id, orgId: org.id, role, preview }, id)) === 'lider'
   if (!canEditForm) notFound()
 
   const { data: school } = await supabase
