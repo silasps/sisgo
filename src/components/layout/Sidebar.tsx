@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   Home, AlertTriangle, Users, Church, GraduationCap,
-  ClipboardList, Music2, BedDouble, UtensilsCrossed, Landmark,
+  ClipboardList, BedDouble, UtensilsCrossed, Landmark,
   ChefHat, Package, Boxes, DollarSign, Receipt, Settings, LogOut,
   UserCheck, CalendarDays, Wrench, Building2, Eye, Code2, Inbox, CookingPot,
   Hotel, DoorOpen, WashingMachine, Shirt, IdCard, Megaphone,
@@ -24,7 +24,19 @@ type SidebarProps = {
   onToggleCollapsed?: () => void
 }
 
-export const ICON_MAP: Record<string, LucideIcon> = {
+function MinisteriosIcon({ size = 24, className }: { size?: number | string; className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width={size} height={size} className={className} aria-hidden>
+      <rect x="14" y="14" width="42" height="42" rx="9" fill="none" stroke="currentColor" strokeWidth="7" />
+      <circle cx="93" cy="35" r="21" fill="none" stroke="currentColor" strokeWidth="7" />
+      <polygon points="35,74 12,114 58,114" fill="none" stroke="currentColor" strokeWidth="7" strokeLinejoin="round" />
+      <line x1="93" y1="70" x2="93" y2="116" stroke="currentColor" strokeWidth="7" strokeLinecap="round" />
+      <line x1="73" y1="84" x2="113" y2="84" stroke="currentColor" strokeWidth="7" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+export const ICON_MAP: Record<string, LucideIcon | typeof MinisteriosIcon> = {
   dashboard:      Home,
   calendario:     CalendarDays,
   pendentes:      AlertTriangle,
@@ -34,7 +46,7 @@ export const ICON_MAP: Record<string, LucideIcon> = {
   obreiros:       Church,
   escolas:        GraduationCap,
   inscricoes:     ClipboardList,
-  ministerios:    Music2,
+  ministerios:    MinisteriosIcon,
   reservas:       BedDouble,
   hospedagem:     Hotel,
   quartos:        DoorOpen,
