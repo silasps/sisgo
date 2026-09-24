@@ -180,11 +180,15 @@ export default async function PessoasPage({ params, searchParams }: Props) {
   // nem por link direto — bloqueio de rota, não só esconder do menu.
   if (!PESSOAS_ROLES.includes(userRole as never)) redirect(`/${slug}/dashboard`)
 
-  // Hospitalidade só cuida de estrutura/hospedagem, não do processo seletivo
-  // de aluno/obreiro — a aba de Inscrições fica fora do alcance dela, com
-  // bloqueio de rota (não só escondida do menu/abas) igual ao resto da página.
+  // Hospitalidade só cuida de estrutura/hospedagem, e obreiro (sem ser líder)
+  // não participa do processo seletivo — a aba de Inscrições (mostra até
+  // email de candidato ainda não vinculado a nada) fica fora do alcance dos
+  // dois, com bloqueio de rota (não só escondida do menu/abas) igual ao
+  // resto da página. Líder de ministério/escola já mexe com inscrições em
+  // outro lugar do sistema, então continua vendo aqui também.
   const isHospitalidade = userRole === 'hospitalidade'
-  if (isHospitalidade && tab === 'inscricoes') redirect(`/${slug}/pessoas`)
+  const isPlainObreiro = userRole === 'obreiro_ministerio' || userRole === 'obreiro_eted'
+  if ((isHospitalidade || isPlainObreiro) && tab === 'inscricoes') redirect(`/${slug}/pessoas`)
 
   const isEtedLeader = userRole === 'lider_eted'
 
@@ -241,7 +245,7 @@ export default async function PessoasPage({ params, searchParams }: Props) {
 
   // "+ Nova pessoa" só cria candidatos (pré-inscrição de aluno/obreiro), que
   // caem direto na aba Inscrições — sem sentido pra quem não vê essa aba.
-  const visibleTabs = TABS.filter(t => !(isHospitalidade && t.key === 'inscricoes'))
+  const visibleTabs = TABS.filter(t => !((isHospitalidade || isPlainObreiro) && t.key === 'inscricoes'))
 
   return (
     <>

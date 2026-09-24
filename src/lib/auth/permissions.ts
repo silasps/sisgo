@@ -70,13 +70,21 @@ export const PROFILE_ROLES: readonly Role[] = [
   'secretaria',
 ]
 
-/** Papéis com acesso ao diretório geral da base (/pessoas) — LGPD: todo o
- * resto (obreiro/aluno/associado/líder de unidade) fica escopado à própria
- * unidade, no Quadro de Obreiros de cada escola/ministério. */
+/** Papéis com acesso ao DIRETÓRIO geral da base (/pessoas) — nome, ministério/
+ * escola e cargo, sem dado sensível (a lista em si já não expõe CPF, contato
+ * pessoal, saúde ou financeiro). O PERFIL individual completo continua
+ * restrito a `PROFILE_ROLES` — abrir o diretório pra mais gente não abre o
+ * perfil. Líder/obreiro de ministério ou escola entram aqui; o "need to
+ * know" de decisão (ex. pendência financeira pra aprovar transferência)
+ * já é resolvido à parte no Quadro de Obreiros de cada unidade. */
 export const PESSOAS_ROLES: readonly Role[] = [
   ...MANAGEMENT_ROLES,
   'secretaria',
   'hospitalidade',
+  'lider_ministerio',
+  'obreiro_ministerio',
+  'lider_eted',
+  'obreiro_eted',
 ]
 
 /** Papéis com acesso a dados sensíveis de saúde (LGPD — dado sensível) */
