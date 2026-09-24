@@ -44,6 +44,26 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
     .eq('school_id', id).eq('active', true).order('joined_at', { ascending: true })
   const staffMembers = (staffData ?? []) as unknown as StaffRaw[]
 
+  // Quem também serve ativamente em outra escola/ministério — mostra como
+  // tag "também em" (sem bloquear nada, só pra ficar visível pro DH onde
+  // essa pessoa está "emprestada"). Independe do fluxo de aprovação de
+  // staff_loans: cobre também quem entrou via "Solicitar adição" (líder
+  // pede → DH aprova), que não passa pela checagem de empréstimo.
+  const otherUnitByPerson = new Map<string, string>()
+  if (staffMembers.length > 0) {
+    const personIds = staffMembers.map(s => s.person_id)
+    const [{ data: otherSchoolRows }, { data: otherMinistryRows }] = await Promise.all([
+      sbAdmin.from('school_staff').select('person_id, schools(name)').in('person_id', personIds).eq('active', true).neq('school_id', id),
+      sbAdmin.from('ministry_members').select('person_id, ministries(name)').in('person_id', personIds).eq('active', true),
+    ])
+    for (const r of (otherSchoolRows ?? []) as unknown as Array<{ person_id: string; schools: { name: string } | null }>) {
+      if (r.schools?.name) otherUnitByPerson.set(r.person_id, r.schools.name)
+    }
+    for (const r of (otherMinistryRows ?? []) as unknown as Array<{ person_id: string; ministries: { name: string } | null }>) {
+      if (r.ministries?.name && !otherUnitByPerson.has(r.person_id)) otherUnitByPerson.set(r.person_id, r.ministries.name)
+    }
+  }
+
   type ObreiroReqRow = {
     id: string; role: string; notes: string | null; status: string
     requested_by: string; person_id: string | null; created_at: string; review_notes: string | null
@@ -316,6 +336,11 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
                 <div className="min-w-0">
                   <span className="text-sm font-medium text-gray-900">{s.people?.full_name ?? '—'}</span>
                   <span className="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{s.role}</span>
+                  {otherUnitByPerson.has(s.person_id) && (
+                    <span className="ml-2 text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full">
+                      também em: {otherUnitByPerson.get(s.person_id)}
+                    </span>
+                  )}
                 </div>
                 {canWrite && (
                   <form action={handleRemoveStaff} className="flex-shrink-0">

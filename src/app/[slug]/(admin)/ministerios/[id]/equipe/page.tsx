@@ -73,6 +73,26 @@ export default async function EquipePage({ params, searchParams }: Props) {
     .order('joined_at', { ascending: true })
   const members = (membersData ?? []) as unknown as MemberRaw[]
 
+  // Quem também serve ativamente em outra escola/ministério — mostra como
+  // tag "também em" (sem bloquear nada, só pra ficar visível pro DH onde
+  // essa pessoa está "emprestada"). Independe do fluxo de aprovação de
+  // staff_loans: cobre também quem entrou via "Solicitar adição" (líder
+  // pede → DH aprova), que não passa pela checagem de empréstimo.
+  const otherUnitByPerson = new Map<string, string>()
+  if (members.length > 0) {
+    const personIds = members.map(m => m.person_id)
+    const [{ data: otherMinistryRows }, { data: otherSchoolRows }] = await Promise.all([
+      sbAdmin.from('ministry_members').select('person_id, ministries(name)').in('person_id', personIds).eq('active', true).neq('ministry_id', id),
+      sbAdmin.from('school_staff').select('person_id, schools(name)').in('person_id', personIds).eq('active', true),
+    ])
+    for (const r of (otherMinistryRows ?? []) as unknown as Array<{ person_id: string; ministries: { name: string } | null }>) {
+      if (r.ministries?.name) otherUnitByPerson.set(r.person_id, r.ministries.name)
+    }
+    for (const r of (otherSchoolRows ?? []) as unknown as Array<{ person_id: string; schools: { name: string } | null }>) {
+      if (r.schools?.name && !otherUnitByPerson.has(r.person_id)) otherUnitByPerson.set(r.person_id, r.schools.name)
+    }
+  }
+
   const { data: ministryRolesData } = await supabase
     .from('ministry_roles')
     .select('id, name')
@@ -422,6 +442,11 @@ export default async function EquipePage({ params, searchParams }: Props) {
                     )}
                     {hasPendingTransfer && (
                       <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Em transferência</span>
+                    )}
+                    {otherUnitByPerson.has(m.person_id) && (
+                      <span className="ml-2 text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full">
+                        também em: {otherUnitByPerson.get(m.person_id)}
+                      </span>
                     )}
                   </div>
                   {/* DH: remove direto */}
