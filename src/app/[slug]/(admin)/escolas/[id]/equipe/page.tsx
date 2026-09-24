@@ -2,14 +2,16 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { notFound, redirect } from 'next/navigation'
 import {
-  assignSchoolLeader, removeSchoolLeader,
-  addSchoolStaff, removeSchoolStaff,
+  assignSchoolLeader, addSchoolCoLeader, removeSchoolLeader,
+  addSchoolStaffBatch, removeSchoolStaff,
   submitSchoolObreiroRequest, approveSchoolObreiroRequest,
   rejectSchoolObreiroRequest, cancelSchoolObreiroRequest,
 } from '../actions'
 import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { getSchoolLink } from '@/lib/auth/unit-access'
+import { MultiSelectModal } from '@/components/ui/MultiSelectModal'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = {
   params: Promise<{ slug: string; id: string }>
@@ -72,23 +74,29 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
     .from('people').select('id, full_name').eq('organization_id', orgId).order('full_name')
   const availablePeople = (allPeople ?? []).filter(p => !staffPersonIds.has(p.id))
 
-  let leaderEmail: string | null = null
+  // Uma escola pode ter mais de um líder (colíderes) — school_leaders só tem
+  // unique(school_id, user_id), não um líder único por escola.
+  let leaders: Array<{ userId: string; email: string | null }> = []
   let orgUsersForAssignment: Array<{ id: string; email: string }> = []
 
   if (isManagement) {
-    const { data: leaderRow } = await supabase
-      .from('school_leaders').select('user_id').eq('school_id', id).single()
-    if (leaderRow) {
-      const { data: { user: lu } } = await sbAdmin.auth.admin.getUserById(leaderRow.user_id)
-      leaderEmail = lu?.email ?? null
+    const { data: leaderRows } = await supabase
+      .from('school_leaders').select('user_id').eq('school_id', id)
+    const leaderUserIds = (leaderRows ?? []).map(r => r.user_id)
+    if (leaderUserIds.length > 0) {
+      leaders = await Promise.all(leaderUserIds.map(async userId => {
+        const { data: { user: lu } } = await sbAdmin.auth.admin.getUserById(userId)
+        return { userId, email: lu?.email ?? null }
+      }))
     }
     const { data: orgUsersData } = await supabase
       .from('organization_users').select('user_id').eq('organization_id', orgId).eq('active', true)
     if (orgUsersData?.length) {
       const { data: { users: authUsers } } = await sbAdmin.auth.admin.listUsers({ perPage: 1000 })
       const orgUserSet = new Set(orgUsersData.map(u => u.user_id))
+      const leaderUserIdSet = new Set(leaderUserIds)
       orgUsersForAssignment = authUsers
-        .filter(u => orgUserSet.has(u.id) && u.id !== (leaderRow?.user_id ?? ''))
+        .filter(u => orgUserSet.has(u.id) && !leaderUserIdSet.has(u.id))
         .map(u => ({ id: u.id, email: u.email ?? u.id }))
         .sort((a, b) => a.email.localeCompare(b.email))
     }
@@ -99,9 +107,9 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
 
   const handleAddStaff = async (formData: FormData) => {
     'use server'
-    const personId = formData.get('person_id') as string
-    if (!personId) return
-    await addSchoolStaff(id, personId, (formData.get('role') as string) || 'Obreiro')
+    const personIds = formData.getAll('person_id') as string[]
+    if (personIds.length === 0) return
+    await addSchoolStaffBatch(id, personIds, (formData.get('role') as string) || 'Obreiro')
     redirect(base)
   }
   const handleRemoveStaff = async (formData: FormData) => {
@@ -135,19 +143,21 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
     'use server'
     const userId = formData.get('user_id') as string
     if (!userId) return
-    const sb = createAdminClient()
-    const { data: liderRole } = await sb.from('roles').select('id').eq('name', 'lider_eted').single()
-    if (liderRole) {
-      await sb.from('organization_users')
-        .update({ role_id: liderRole.id, updated_at: new Date().toISOString() })
-        .eq('user_id', userId).eq('organization_id', orgId)
-    }
     await assignSchoolLeader(orgId, id, userId)
     redirect(`${base}?msg=lider_atribuido`)
   }
-  const handleRemoveLeader = async () => {
+  const handleAddCoLeader = async (formData: FormData) => {
     'use server'
-    await removeSchoolLeader(id)
+    const userId = formData.get('user_id') as string
+    if (!userId) return
+    await addSchoolCoLeader(orgId, id, userId)
+    redirect(`${base}?msg=lider_atribuido`)
+  }
+  const handleRemoveLeader = async (formData: FormData) => {
+    'use server'
+    const userId = formData.get('user_id') as string
+    if (!userId) return
+    await removeSchoolLeader(id, userId)
     redirect(base)
   }
 
@@ -168,26 +178,31 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
         <div className={`border rounded-lg px-4 py-3 text-sm ${msgInfo.cls}`}>{msgInfo.text}</div>
       )}
 
-      {/* Líder */}
+      {/* Liderança */}
       {isManagement && (
         <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Líder da Escola</h3>
-          {leaderEmail ? (
-            <div>
-              <p className="text-sm font-medium text-gray-900 truncate">{leaderEmail}</p>
-              <form action={handleRemoveLeader} className="mt-1">
-                <button type="submit" className="text-[10px] text-red-400 hover:text-red-600 transition-colors">Remover</button>
-              </form>
-            </div>
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Liderança da Escola</h3>
+          {leaders.length > 0 ? (
+            <ul className="space-y-1">
+              {leaders.map(l => (
+                <li key={l.userId} className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-gray-900 truncate">{l.email}</p>
+                  <form action={handleRemoveLeader}>
+                    <input type="hidden" name="user_id" value={l.userId} />
+                    <button type="submit" className="text-[10px] text-red-400 hover:text-red-600 transition-colors flex-shrink-0">Remover</button>
+                  </form>
+                </li>
+              ))}
+            </ul>
           ) : (
             <p className="text-xs text-gray-400">Sem líder atribuído.</p>
           )}
           {orgUsersForAssignment.length > 0 && (
             <details className="mt-2 border-t border-gray-100 pt-2">
               <summary className="text-xs text-brand-600 cursor-pointer select-none font-medium">
-                {leaderEmail ? 'Trocar' : 'Atribuir'}
+                {leaders.length > 0 ? '+ Adicionar colíder' : 'Atribuir'}
               </summary>
-              <form action={handleAssignLeader} className="mt-2 space-y-1.5">
+              <form action={leaders.length > 0 ? handleAddCoLeader : handleAssignLeader} className="mt-2 space-y-1.5">
                 <select name="user_id" required className={`${INPUT} text-xs`}>
                   <option value="">Selecionar...</option>
                   {orgUsersForAssignment.map(u => (
@@ -225,16 +240,21 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
           <p className="text-sm text-gray-400 mb-3">Nenhum obreiro ainda.</p>
         )}
 
-        {/* DH: add direto */}
+        {/* DH: add direto — seleção múltipla, tipo escolher participantes de um grupo */}
         {canWrite && availablePeople.length > 0 && (
           <details className={staffMembers.length > 0 ? 'border-t border-gray-100 pt-3' : ''}>
             <summary className="text-sm text-brand-600 cursor-pointer select-none font-medium">+ Adicionar obreiro</summary>
-            <form action={handleAddStaff} className="mt-3 flex flex-wrap gap-2">
-              <select name="person_id" required className={`flex-1 min-w-0 ${INPUT}`}>
-                <option value="">Selecionar pessoa...</option>
-                {availablePeople.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
-              </select>
-              <button type="submit" className="px-4 py-2 text-sm font-medium rounded-lg bg-brand-500 hover:bg-brand-600 text-white transition-colors">Adicionar</button>
+            <form action={handleAddStaff} className="mt-3 space-y-2">
+              <MultiSelectModal
+                name="person_id"
+                options={availablePeople.map(p => ({ id: p.id, label: p.full_name }))}
+                placeholder="Selecionar pessoas..."
+                searchPlaceholder="Buscar por nome..."
+                title="Selecionar pessoas"
+              />
+              <SubmitButton pendingText="Adicionando…" className="w-full px-4 py-2 text-sm font-medium rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white transition-colors">
+                Adicionar
+              </SubmitButton>
             </form>
           </details>
         )}

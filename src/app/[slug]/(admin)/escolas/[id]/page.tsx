@@ -5,7 +5,7 @@ import { notFound } from 'next/navigation'
 import { isOperationalManager } from '@/lib/auth/permissions'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { getSchoolLink } from '@/lib/auth/unit-access'
-import { Users, BookOpen, ClipboardList } from 'lucide-react'
+import { Users, BookOpen, ClipboardList, AlertTriangle } from 'lucide-react'
 import { MuralClient } from '../../ministerios/[id]/mural/MuralClient'
 import { schoolDisplayType } from '@/lib/schools'
 
@@ -45,10 +45,11 @@ export default async function EscolaOverviewPage({ params }: Props) {
     .single()
   const authorName = (profile?.people as unknown as { full_name: string } | null)?.full_name ?? user.email ?? 'Anônimo'
 
-  const [{ count: staffCount }, { count: classCount }, { count: pendingCount }, { data: messagesRaw }, { data: staffRaw }] = await Promise.all([
+  const [{ count: staffCount }, { count: classCount }, { count: pendingCount }, { count: leaderCount }, { data: messagesRaw }, { data: staffRaw }] = await Promise.all([
     supabase.from('school_staff').select('*', { count: 'exact', head: true }).eq('school_id', id).eq('active', true),
     supabase.from('school_classes').select('*', { count: 'exact', head: true }).eq('school_id', id).eq('active', true),
     supabase.from('school_pending_requests').select('*', { count: 'exact', head: true }).eq('school_id', id).eq('status', 'pendente'),
+    supabase.from('school_leaders').select('*', { count: 'exact', head: true }).eq('school_id', id),
     sbAdmin.from('school_messages')
       .select('id, author_name, author_id, content, mentions, color, font, text_color, font_size, created_at')
       .eq('school_id', id)
@@ -119,7 +120,21 @@ export default async function EscolaOverviewPage({ params }: Props) {
   const base = `/${slug}/escolas/${id}`
 
   return (
-    <main className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
+    <>
+      {!leaderCount && (
+        <div className="mx-3 mt-3 lg:mx-4 lg:mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <div className="flex items-center gap-2 text-sm text-amber-700">
+            <AlertTriangle size={16} className="flex-shrink-0" />
+            <span>Esta escola ainda não tem um líder definido.</span>
+          </div>
+          {canWrite && (
+            <Link href={`${base}/configuracoes#lideranca`} className="flex-shrink-0 text-xs font-semibold text-amber-700 hover:text-amber-900 underline underline-offset-2">
+              Atribuir líder →
+            </Link>
+          )}
+        </div>
+      )}
+      <main className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
       {/* Sidebar — mobile: faixa horizontal no topo / desktop: coluna direita */}
       <aside className="order-first lg:order-last w-full lg:w-72 shrink-0 border-b lg:border-b-0 lg:border-l border-gray-200 bg-gray-50/50 overflow-y-auto p-3 lg:p-4 space-y-2 lg:space-y-3">
         {/* Stats */}
@@ -181,6 +196,7 @@ export default async function EscolaOverviewPage({ params }: Props) {
           deleteAction={deleteMessage}
         />
       </div>
-    </main>
+      </main>
+    </>
   )
 }

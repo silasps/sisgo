@@ -2,10 +2,9 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 
-export async function assignSchoolLeader(orgId: string, schoolId: string, userId: string) {
-  const sb = createAdminClient()
-  await sb.from('school_leaders').delete().eq('school_id', schoolId)
-  await sb.from('school_leaders').insert({ organization_id: orgId, school_id: schoolId, user_id: userId })
+type AdminClient = ReturnType<typeof createAdminClient>
+
+async function grantSchoolLeaderRole(sb: AdminClient, orgId: string, schoolId: string, userId: string) {
   const { data: role } = await sb.from('roles').select('id').eq('name', 'lider_eted').single()
   if (role) {
     await sb.from('organization_users')
@@ -26,9 +25,30 @@ export async function assignSchoolLeader(orgId: string, schoolId: string, userId
   }
 }
 
-export async function removeSchoolLeader(schoolId: string) {
+// "Atribuir líder" — usado quando a escola ainda não tem nenhum. Substitui
+// qualquer liderança anterior (histórico: era o único fluxo, "trocar líder").
+export async function assignSchoolLeader(orgId: string, schoolId: string, userId: string) {
   const sb = createAdminClient()
   await sb.from('school_leaders').delete().eq('school_id', schoolId)
+  await sb.from('school_leaders').insert({ organization_id: orgId, school_id: schoolId, user_id: userId })
+  await grantSchoolLeaderRole(sb, orgId, schoolId, userId)
+}
+
+// "Adicionar colíder" — soma à liderança existente em vez de substituir.
+// school_leaders permite N líderes por escola (unique é (school_id, user_id),
+// não escola sozinha) — getMySchools/getSchoolLink já tratam qualquer linha
+// como acesso de líder, então múltiplas linhas já funcionavam no lado de
+// leitura; só faltava um jeito de inserir sem apagar os demais.
+export async function addSchoolCoLeader(orgId: string, schoolId: string, userId: string) {
+  const sb = createAdminClient()
+  const { error } = await sb.from('school_leaders').insert({ organization_id: orgId, school_id: schoolId, user_id: userId })
+  if (error) throw new Error(error.message)
+  await grantSchoolLeaderRole(sb, orgId, schoolId, userId)
+}
+
+export async function removeSchoolLeader(schoolId: string, userId: string) {
+  const sb = createAdminClient()
+  await sb.from('school_leaders').delete().eq('school_id', schoolId).eq('user_id', userId)
 }
 
 export async function addSchoolStaff(schoolId: string, personId: string, role: string) {
@@ -40,6 +60,12 @@ export async function addSchoolStaff(schoolId: string, personId: string, role: s
   } else {
     await sb.from('school_staff').insert({ school_id: schoolId, person_id: personId, role })
   }
+}
+
+// Adiciona vários obreiros de uma vez (ex.: DH selecionando um lote no
+// MultiSelectModal) — cada pessoa é independente, roda em paralelo.
+export async function addSchoolStaffBatch(schoolId: string, personIds: string[], role: string) {
+  await Promise.all(personIds.map(personId => addSchoolStaff(schoolId, personId, role)))
 }
 
 export async function removeSchoolStaff(staffId: string) {

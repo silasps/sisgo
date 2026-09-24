@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import {
-  assignSchoolLeader, removeSchoolLeader,
+  assignSchoolLeader, addSchoolCoLeader, removeSchoolLeader,
   addSchoolStaff, removeSchoolStaff,
   submitSchoolObreiroRequest, approveSchoolObreiroRequest,
   rejectSchoolObreiroRequest, cancelSchoolObreiroRequest,
@@ -176,20 +176,24 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
     }
   }
 
-  // ── Dados de líder (management) ──────────────────────────────────────────────
-  const { data: leaderRow } = await supabase
+  // ── Dados de liderança (management) — uma escola pode ter vários líderes
+  // (colíderes): school_leaders só tem unique(school_id, user_id), não um
+  // líder único por escola. ─────────────────────────────────────────────────
+  const { data: leaderRows } = await supabase
     .from('school_leaders')
     .select('user_id')
     .eq('school_id', id)
-    .single()
 
-  let leaderEmail: string | null = null
+  let leaders: Array<{ userId: string; email: string | null }> = []
   let orgUsersForAssignment: Array<{ id: string; email: string; fullName: string | null }> = []
 
   if (isManagement) {
-    if (leaderRow) {
-      const { data: { user: lu } } = await sbAdmin.auth.admin.getUserById(leaderRow.user_id)
-      leaderEmail = lu?.email ?? null
+    const leaderUserIds = (leaderRows ?? []).map(r => r.user_id)
+    if (leaderUserIds.length > 0) {
+      leaders = await Promise.all(leaderUserIds.map(async userId => {
+        const { data: { user: lu } } = await sbAdmin.auth.admin.getUserById(userId)
+        return { userId, email: lu?.email ?? null }
+      }))
     }
     const { data: orgUsersData } = await supabase
       .from('organization_users').select('user_id').eq('organization_id', org.id).eq('active', true)
@@ -203,8 +207,9 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
         if (s.user_id && s.people?.full_name) namesByUserId.set(s.user_id, s.people.full_name)
       }
       const orgUserSet = new Set(orgUsersData.map((u: { user_id: string }) => u.user_id))
+      const leaderUserIdSet = new Set(leaderUserIds)
       orgUsersForAssignment = authUsers
-        .filter(u => orgUserSet.has(u.id) && u.id !== (leaderRow?.user_id ?? ''))
+        .filter(u => orgUserSet.has(u.id) && !leaderUserIdSet.has(u.id))
         .map(u => ({ id: u.id, email: u.email ?? u.id, fullName: namesByUserId.get(u.id) ?? null }))
         .sort((a, b) => (a.fullName ?? a.email).localeCompare(b.fullName ?? b.email))
     }
@@ -305,13 +310,23 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
     const userId = formData.get('user_id') as string
     if (!userId) return
     await assignSchoolLeader(org.id, id, userId)
-    redirect(`/${slug}/escolas/${id}?msg=lider_atribuido`)
+    redirect(`/${slug}/escolas/${id}/configuracoes?msg=lider_atribuido`)
   }
 
-  const handleRemoveLeader = async () => {
+  const handleAddCoLeader = async (formData: FormData) => {
     'use server'
-    await removeSchoolLeader(id)
-    redirect(`/${slug}/escolas/${id}`)
+    const userId = formData.get('user_id') as string
+    if (!userId) return
+    await addSchoolCoLeader(org.id, id, userId)
+    redirect(`/${slug}/escolas/${id}/configuracoes?msg=lider_atribuido`)
+  }
+
+  const handleRemoveLeader = async (formData: FormData) => {
+    'use server'
+    const userId = formData.get('user_id') as string
+    if (!userId) return
+    await removeSchoolLeader(id, userId)
+    redirect(`/${slug}/escolas/${id}/configuracoes`)
   }
 
   const handleAddStaff = async (formData: FormData) => {
@@ -618,27 +633,32 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
 
             {/* Sidebar */}
             <div className="space-y-4">
-              {/* Líder da Escola */}
-              <div className="bg-white rounded-xl border border-gray-200 p-5">
-                <h2 className="text-sm font-semibold text-gray-700 mb-3">Líder da Escola</h2>
-                {leaderEmail ? (
-                  <div className="mb-3">
-                    <p className="text-sm font-medium text-gray-900">{leaderEmail}</p>
-                    <form action={handleRemoveLeader} className="mt-1">
-                      <button type="submit" className="text-xs text-red-400 hover:text-red-600 transition-colors">
-                        Remover líder
-                      </button>
-                    </form>
-                  </div>
+              {/* Liderança da Escola */}
+              <div id="lideranca" className="bg-white rounded-xl border border-gray-200 p-5">
+                <h2 className="text-sm font-semibold text-gray-700 mb-3">Liderança da Escola</h2>
+                {leaders.length > 0 ? (
+                  <ul className="mb-3 space-y-2">
+                    {leaders.map(l => (
+                      <li key={l.userId} className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium text-gray-900">{l.email}</p>
+                        <form action={handleRemoveLeader}>
+                          <input type="hidden" name="user_id" value={l.userId} />
+                          <button type="submit" className="text-xs text-red-400 hover:text-red-600 transition-colors">
+                            Remover
+                          </button>
+                        </form>
+                      </li>
+                    ))}
+                  </ul>
                 ) : (
                   <p className="text-sm text-gray-400 mb-3">Sem líder atribuído.</p>
                 )}
                 {orgUsersForAssignment.length > 0 ? (
-                  <details className={leaderEmail ? 'border-t border-gray-100 pt-3' : ''}>
+                  <details className={leaders.length > 0 ? 'border-t border-gray-100 pt-3' : ''}>
                     <summary className="text-sm text-brand-600 cursor-pointer select-none font-medium">
-                      {leaderEmail ? 'Trocar líder' : 'Atribuir líder'}
+                      {leaders.length > 0 ? '+ Adicionar colíder' : 'Atribuir líder'}
                     </summary>
-                    <form action={handleAssignLeader} className="mt-3 space-y-2">
+                    <form action={leaders.length > 0 ? handleAddCoLeader : handleAssignLeader} className="mt-3 space-y-2">
                       <SearchableSelectModal
                         name="user_id"
                         options={orgUsersForAssignment.map(u => ({
