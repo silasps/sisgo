@@ -11,12 +11,14 @@ import { getVerseOfDay } from '@/lib/votd'
 import { StatCard, SectionCard, EmptyState } from './ui'
 import { AreaTabs } from './AreaTabs'
 import { getMyAreas, buildAreaTabs } from './areas'
+import { PersonalAccountCard } from './PersonalAccountCard'
+import { AnnouncementList, type AnnouncementListItem } from '@/components/ui/AnnouncementList'
 import type { LucideIcon } from 'lucide-react'
 import {
   Users, Briefcase, GraduationCap, BookOpen, Music, Home,
   CalendarDays, AlertTriangle, ClipboardList, CheckCircle2,
   Wallet, LayoutDashboard, MessageSquare, Wrench, UtensilsCrossed, BedDouble,
-  Megaphone, Pin, BookMarked, Shirt, IdCard,
+  Megaphone, BookMarked,
 } from 'lucide-react'
 
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ area?: string }> }
@@ -92,7 +94,7 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
       getVerseOfDay(),
       admin
         .from('base_announcements')
-        .select('id, title, body, pinned, visible_to_roles, expires_at, created_at')
+        .select('id, title, body, pinned, category, image_url, image_focal_x, image_focal_y, link_url, link_label, visible_to_roles, expires_at, publish_at, author_name, created_at')
         .eq('organization_id', orgId)
         .or(`expires_at.is.null,expires_at.gte.${today}`)
         .order('pinned', { ascending: false })
@@ -118,11 +120,12 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
     ])
 
     const isVisibleToAluno = (roles: string[] | null) => !roles || roles.length === 0 || roles.includes('aluno')
+    const isPublished = (publishAt: string | null) => !publishAt || new Date(publishAt).getTime() <= Date.now()
 
-    const announcements = ((announcementsRaw ?? []) as Array<{
-      id: string; title: string; body: string; pinned: boolean; visible_to_roles: string[] | null; expires_at: string | null; created_at: string
-    }>)
-      .filter(a => isVisibleToAluno(a.visible_to_roles))
+    const announcements: AnnouncementListItem[] = ((announcementsRaw ?? []) as Array<
+      AnnouncementListItem & { visible_to_roles: string[] | null; publish_at: string | null }
+    >)
+      .filter(a => isVisibleToAluno(a.visible_to_roles) && isPublished(a.publish_at))
       .slice(0, 3)
 
     const baseEvents = ((baseEventsRaw ?? []) as Array<{ id: string; title: string; starts_on: string; visible_to_roles: string[] | null }>)
@@ -144,21 +147,11 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
 
           <PersonalAccountCard slug={slug} orgId={orgId} userId={user?.id ?? ''} laundryEnabled={laundryEnabled} />
 
-          <SectionCard title="Anúncios">
+          <SectionCard title="Anúncios" href={`/${slug}/anuncios`} linkLabel="Ver todos">
             {announcements.length === 0 ? (
               <EmptyState icon={Megaphone} label="Nenhum anúncio no momento" />
             ) : (
-              <div className="space-y-3">
-                {announcements.map(a => (
-                  <div key={a.id} className="border-b border-gray-100 pb-3 last:border-0 last:pb-0">
-                    <div className="flex items-center gap-1.5">
-                      {a.pinned && <Pin size={12} className="text-brand-500 shrink-0" />}
-                      <p className="text-sm font-semibold text-gray-800">{a.title}</p>
-                    </div>
-                    <p className="text-sm text-gray-600 mt-0.5 line-clamp-3">{a.body}</p>
-                  </div>
-                ))}
-              </div>
+              <AnnouncementList announcements={announcements} variant="default" />
             )}
           </SectionCard>
 
@@ -216,7 +209,7 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
   const sbAreas = createAdminClient()
   const myAreas = await getMyAreas({ orgId, userId: user?.id ?? '', role: userRole, preview })
   const areaItems = await buildAreaTabs({
-    supabase, sbAdmin: sbAreas, slug, orgId, userId: user?.id ?? '', role: userRole, areas: myAreas,
+    supabase, sbAdmin: sbAreas, slug, orgId, userId: user?.id ?? '', role: userRole, areas: myAreas, laundryEnabled,
   })
 
   const renderHome = (principal: { label: string; content: React.ReactNode } | null) => {
@@ -229,7 +222,11 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
         <Header title="Início" />
         <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
           <AreaTabs tabs={items.map(i => i.tab)} panels={items.map(i => i.panel)} initialKey={initialArea} />
-          <PersonalAccountCard slug={slug} orgId={orgId} userId={user?.id ?? ''} laundryEnabled={laundryEnabled} />
+          {/* Sem "principal" é só área (ministério/escola) — cada painel já
+              traz o próprio "Minha conta" na posição certa (antes do
+              calendário). Com "principal", o painel não inclui isso, então
+              cobre aqui embaixo, fora das abas, pra ficar visível sempre. */}
+          {principal && <PersonalAccountCard slug={slug} orgId={orgId} userId={user?.id ?? ''} laundryEnabled={laundryEnabled} />}
         </main>
       </>
     )
@@ -956,86 +953,6 @@ function VerseOfDayCard({ verse }: { verse: Awaited<ReturnType<typeof getVerseOf
         <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-brand-600">{verse.reference}</p>
       </div>
     </a>
-  )
-}
-
-// Resumo de acesso pessoal (refeições, contas, lavanderia, carteirinha) — todo
-// usuário com login tem essas 4 páginas, então esse card aparece em todos os
-// papéis, sem gate de permissão. Cada mini-item leva direto pra sua própria
-// página; não existe "ver tudo" porque não há uma página que agregue as 4.
-async function PersonalAccountCard({ slug, orgId, userId, laundryEnabled }: {
-  slug: string; orgId: string; userId: string; laundryEnabled: boolean
-}) {
-  const sbAdmin = createAdminClient()
-
-  const [{ data: staffProfile }, { data: studentProfile }, { data: associadoProfile }] = await Promise.all([
-    sbAdmin.from('staff_profiles').select('person_id').eq('user_id', userId).eq('organization_id', orgId).maybeSingle(),
-    sbAdmin.from('student_profiles').select('person_id').eq('user_id', userId).eq('organization_id', orgId).maybeSingle(),
-    sbAdmin.from('associado_profiles').select('person_id').eq('user_id', userId).eq('organization_id', orgId).maybeSingle(),
-  ])
-  const personId = staffProfile?.person_id ?? studentProfile?.person_id ?? associadoProfile?.person_id ?? null
-
-  const [{ count: pendingMeals }, chargesResult, tokenResult] = await Promise.all([
-    sbAdmin.from('kitchen_meal_consumers')
-      .select('*', { count: 'exact', head: true })
-      .eq('organization_id', orgId)
-      .eq('requested_by', userId)
-      .eq('payment_status', 'pending'),
-    personId
-      ? sbAdmin.from('finance_charges').select('amount').eq('organization_id', orgId).eq('person_id', personId).in('status', ['pending', 'overdue'])
-      : Promise.resolve({ data: [] as Array<{ amount: number }> }),
-    personId
-      ? sbAdmin.from('person_public_tokens').select('token').eq('person_id', personId).is('revoked_at', null).maybeSingle()
-      : Promise.resolve({ data: null as { token: string } | null }),
-  ])
-
-  const pendingBalance = (chargesResult.data ?? []).reduce((s, c) => s + Number(c.amount), 0)
-
-  return (
-    <SectionCard title="Minha conta">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-        <PersonalTile
-          icon={UtensilsCrossed}
-          label="Refeições"
-          href={`/${slug}/refeicoes`}
-          status={(pendingMeals ?? 0) > 0 ? `${pendingMeals} pendente${(pendingMeals ?? 0) > 1 ? 's' : ''}` : 'Em dia'}
-          alert={(pendingMeals ?? 0) > 0}
-        />
-        <PersonalTile
-          icon={Wallet}
-          label="Minhas Contas"
-          href={`/${slug}/minhas-contas`}
-          status={pendingBalance > 0 ? `${fmt(pendingBalance)} pendente` : 'Sem pendências'}
-          alert={pendingBalance > 0}
-        />
-        {laundryEnabled && (
-          <PersonalTile icon={Shirt} label="Lavanderia" href={`/${slug}/minha-lavanderia`} status="Reservar máquina" />
-        )}
-        <PersonalTile
-          icon={IdCard}
-          label="Carteirinha"
-          href={`/${slug}/minha-carteirinha`}
-          status={tokenResult.data ? 'Ativa' : 'Gerar'}
-        />
-      </div>
-    </SectionCard>
-  )
-}
-
-function PersonalTile({ icon: Icon, label, status, href, alert }: {
-  icon: LucideIcon; label: string; status: string; href: string; alert?: boolean
-}) {
-  return (
-    <Link
-      href={href}
-      className="group flex items-center gap-2.5 rounded-lg border border-gray-100 p-3 transition-colors hover:bg-brand-50 hover:border-brand-100"
-    >
-      <Icon size={18} className="text-brand-500 shrink-0" />
-      <div className="min-w-0">
-        <p className="text-xs font-semibold text-gray-700 group-hover:text-brand-700 truncate">{label}</p>
-        <p className={`text-[11px] mt-0.5 truncate ${alert ? 'text-amber-600 font-medium' : 'text-gray-400'}`}>{status}</p>
-      </div>
-    </Link>
   )
 }
 
