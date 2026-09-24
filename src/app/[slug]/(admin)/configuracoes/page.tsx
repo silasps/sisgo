@@ -1,18 +1,21 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/Header'
 import { notFound, redirect } from 'next/navigation'
 import { BrandingForm } from './BrandingForm'
 import { ConfigForm } from './ConfigForm'
-import { updateAreaCashScopes, updateRoleAccumulations, updateIdCardEnabled, updateStaffCommunicationLanguages, updateStudentCommunicationLanguages, updateInstitutionRulesText } from './actions'
+import { updateAreaCashScopes, updateRoleAccumulations, updateIdCardEnabled, updateStaffCommunicationLanguages, updateStudentCommunicationLanguages, updateInstitutionRulesText, addSchoolCreationDelegate, removeSchoolCreationDelegate } from './actions'
 import { asLooseClient } from '@/lib/supabase/loose-client'
 import { schoolDisplayType } from '@/lib/schools'
 import { LANGUAGES } from '@/lib/i18n/phoneCountries'
+import { SearchableSelectModal } from '@/components/ui/SearchableSelectModal'
 
 type Props = { params: Promise<{ slug: string }> }
 
 const BRANDING_ROLES = ['superadmin', 'lider_base']
 const CASH_SCOPE_ROLES = ['superadmin', 'lider_base']
 const ACCUMULATION_ROLES = ['superadmin', 'lider_base']
+const SCHOOL_DELEGATE_ROLES = ['superadmin', 'lider_base']
 
 const ACCUMULATION_OPTIONS = [
   { role: 'dh',           label: 'DH',           canAccumulate: ['secretaria', 'hospitalidade', 'cozinha'] },
@@ -58,9 +61,33 @@ export default async function ConfiguracoesPage({ params }: Props) {
   const canBrand = BRANDING_ROLES.includes(roleName)
   const canConfigureCashScopes = CASH_SCOPE_ROLES.includes(roleName)
   const canConfigureAccumulations = ACCUMULATION_ROLES.includes(roleName)
+  const canManageSchoolDelegates = SCHOOL_DELEGATE_ROLES.includes(roleName)
   const currentAccumulations = (org?.role_accumulations as Record<string, string[]> | null) ?? {}
   const currentStaffLanguages = ((org?.staff_communication_languages as string[] | null) ?? [])
   const currentStudentLanguages = ((org?.student_communication_languages as string[] | null) ?? [])
+
+  // Delegados pontuais que podem criar escola sem ter papel de gestão
+  // (school_creation_delegates, migration 137) — só líder_base gerencia.
+  let schoolDelegates: Array<{ id: string; userId: string; email: string }> = []
+  let orgUsersForDelegation: Array<{ id: string; email: string }> = []
+  if (canManageSchoolDelegates) {
+    const sbAdmin = createAdminClient()
+    const [{ data: delegateRows }, { data: orgUsersData }] = await Promise.all([
+      supabase.from('school_creation_delegates').select('id, user_id').eq('organization_id', org.id),
+      supabase.from('organization_users').select('user_id').eq('organization_id', org.id).eq('active', true),
+    ])
+    const delegateUserIds = new Set((delegateRows ?? []).map(d => d.user_id))
+    if (delegateRows?.length || orgUsersData?.length) {
+      const { data: { users: authUsers } } = await sbAdmin.auth.admin.listUsers({ perPage: 1000 })
+      const emailById = new Map(authUsers.map(u => [u.id, u.email ?? u.id]))
+      schoolDelegates = (delegateRows ?? []).map(d => ({ id: d.id, userId: d.user_id, email: emailById.get(d.user_id) ?? d.user_id }))
+      const orgUserSet = new Set((orgUsersData ?? []).map(u => u.user_id))
+      orgUsersForDelegation = authUsers
+        .filter(u => orgUserSet.has(u.id) && !delegateUserIds.has(u.id))
+        .map(u => ({ id: u.id, email: u.email ?? u.id }))
+        .sort((a, b) => a.email.localeCompare(b.email))
+    }
+  }
 
   const [{ data: schools }, { data: ministries }, { data: cashScopes }] = canConfigureCashScopes
     ? await Promise.all([
@@ -198,6 +225,43 @@ export default async function ConfiguracoesPage({ params }: Props) {
                 </div>
               </div>
             </ConfigForm>
+          </Section>
+        )}
+
+        {canManageSchoolDelegates && (
+          <Section title="Quem pode criar escola">
+            <p className="text-sm text-gray-500 mb-4">
+              Além da gestão (líder da base, DH, administrador), você pode liberar pessoas específicas pra criar escola sem
+              mudar o papel delas — evita que qualquer obreiro crie escola por conta própria e a organização fique bagunçada.
+            </p>
+
+            {schoolDelegates.length > 0 && (
+              <ul className="divide-y divide-gray-100 mb-4">
+                {schoolDelegates.map(d => (
+                  <li key={d.id} className="py-2 flex items-center justify-between gap-2">
+                    <span className="text-sm text-gray-800">{d.email}</span>
+                    <form action={removeSchoolCreationDelegate.bind(null, org.id, slug)}>
+                      <input type="hidden" name="delegate_id" value={d.id} />
+                      <button type="submit" className="text-xs text-red-400 hover:text-red-600 transition-colors">Remover</button>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {orgUsersForDelegation.length > 0 ? (
+              <ConfigForm action={addSchoolCreationDelegate.bind(null, org.id, slug)} buttonLabel="Adicionar" className="space-y-2">
+                <SearchableSelectModal
+                  name="user_id"
+                  options={orgUsersForDelegation.map(u => ({ id: u.id, label: u.email }))}
+                  placeholder="Selecionar pessoa..."
+                  searchPlaceholder="Buscar por e-mail..."
+                  title="Selecionar pessoa"
+                />
+              </ConfigForm>
+            ) : (
+              <p className="text-xs text-gray-400">Nenhum outro usuário disponível.</p>
+            )}
           </Section>
         )}
 

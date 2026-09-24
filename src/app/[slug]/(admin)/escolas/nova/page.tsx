@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { SCHOOL_TYPES } from '@/lib/schools'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
-import { isManagementRole } from '@/lib/auth/permissions'
+import { canCreateSchool } from '@/lib/auth/school-access'
 import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = { params: Promise<{ slug: string }> }
@@ -20,7 +20,7 @@ export default async function NovaEscolaPage({ params }: Props) {
   if (!org) notFound()
 
   const { role } = await getCurrentOrganizationRole(supabase, user.id, org.id)
-  if (!isManagementRole(role)) redirect(`/${slug}/escolas`)
+  if (!(await canCreateSchool(supabase, user.id, org.id, role))) redirect(`/${slug}/escolas`)
 
   // Nomes de tipo já usados nessa organização — vira sugestão (datalist) no
   // campo abaixo, pra não perder o nome digitado numa escola anterior.
@@ -32,6 +32,7 @@ export default async function NovaEscolaPage({ params }: Props) {
     const { createClient: createServerClient } = await import('@/lib/supabase/server')
     const { getCurrentOrganizationRole: getRole } = await import('@/lib/auth/org-role')
     const { isManagementRole: isMgmt } = await import('@/lib/auth/permissions')
+    const { canCreateSchool: canCreate } = await import('@/lib/auth/school-access')
     const { createAdminClient } = await import('@/lib/supabase/admin')
 
     const authClient = await createServerClient()
@@ -43,7 +44,8 @@ export default async function NovaEscolaPage({ params }: Props) {
     if (!orgRow) return
 
     const { role: actionRole } = await getRole(authClient, actionUser.id, orgRow.id)
-    if (!isMgmt(actionRole)) return
+    const isManagementCreator = isMgmt(actionRole)
+    if (!isManagementCreator && !(await canCreate(authClient, actionUser.id, orgRow.id, actionRole))) return
 
     const schoolType = formData.get('school_type') as string
 
@@ -68,7 +70,17 @@ export default async function NovaEscolaPage({ params }: Props) {
     }).select('id').single()
 
     if (error) console.error('createSchool', error)
-    if (escola) redirect(`/${slug}/escolas/${escola.id}`)
+    if (!escola) return
+
+    // Delegado (não-gestão) que cria a escola precisa continuar acessando
+    // ela depois — sem isso, a própria página da escola bloqueia quem não é
+    // gestão e não lidera aquela escola especificamente (ver escolas/[id]/
+    // layout.tsx). Gestão já acessa tudo, não precisa disso.
+    if (!isManagementCreator) {
+      await sb.from('school_leaders').insert({ organization_id: orgRow.id, school_id: escola.id, user_id: actionUser.id })
+    }
+
+    redirect(`/${slug}/escolas/${escola.id}`)
   }
 
   return (

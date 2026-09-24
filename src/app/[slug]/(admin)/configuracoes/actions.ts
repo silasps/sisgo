@@ -74,6 +74,30 @@ export async function updateRoleAccumulations(orgId: string, slug: string, formD
   revalidatePath(`/${slug}/configuracoes`)
 }
 
+export async function addSchoolCreationDelegate(orgId: string, slug: string, formData: FormData) {
+  const admin = await verifyAccess(orgId)
+  if (!admin) return
+  const userId = formData.get('user_id') as string
+  if (!userId) return
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  const { error } = await admin.from('school_creation_delegates')
+    .insert({ organization_id: orgId, user_id: userId, granted_by: user?.id ?? null })
+  if (error) throw new Error(error.message)
+  revalidatePath(`/${slug}/configuracoes`)
+}
+
+export async function removeSchoolCreationDelegate(orgId: string, slug: string, formData: FormData) {
+  const admin = await verifyAccess(orgId)
+  if (!admin) return
+  const delegateId = formData.get('delegate_id') as string
+  if (!delegateId) return
+  await admin.from('school_creation_delegates').delete().eq('id', delegateId).eq('organization_id', orgId)
+  revalidatePath(`/${slug}/configuracoes`)
+}
+
 export async function updateAreaCashScopes(orgId: string, slug: string, formData: FormData) {
   const verifiedAdmin = await verifyAccess(orgId)
   if (!verifiedAdmin) return

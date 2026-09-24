@@ -7,6 +7,7 @@ import { schoolTypeGroup, schoolDisplayType } from '@/lib/schools'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { getMySchools } from '@/lib/auth/unit-access'
 import { isManagementRole } from '@/lib/auth/permissions'
+import { canCreateSchool } from '@/lib/auth/school-access'
 import { deleteSchool } from './[id]/actions'
 import { triggerSiteRevalidation } from '@/lib/revalidate-webhook'
 import { DeleteSchoolButton } from './DeleteSchoolButton'
@@ -23,6 +24,7 @@ export default async function EscolasPage({ params }: Props) {
   const orgId = org?.id ?? ''
 
   let isManagement = false
+  let canCreate = false
   // null = sem restrição (gestão); array (mesmo vazio) = escopado às unidades da pessoa.
   // Fica vazio (não null) quando o vínculo ainda não existe, pra nunca cair na
   // listagem completa por engano (fail closed, não fail open).
@@ -31,6 +33,10 @@ export default async function EscolasPage({ params }: Props) {
   if (user && orgId) {
     const { role, preview } = await getCurrentOrganizationRole(supabase, user.id, orgId)
     isManagement = isManagementRole(role)
+    // "+ Nova escola" é mais permissivo que a listagem completa — cobre
+    // também delegados pontuais (school_creation_delegates), que não viram
+    // gestão pra mais nada, só ganham esse botão.
+    canCreate = isManagement || (await canCreateSchool(supabase, user.id, orgId, role))
     // Fora da gestão: só as escolas com que a pessoa tem vínculo (líder ou
     // obreiro), seja qual for o papel principal — ver lib/auth/unit-access.
     if (!isManagement) {
@@ -71,7 +77,7 @@ export default async function EscolasPage({ params }: Props) {
       <Header
         title="Escolas Missionárias"
         actions={
-          isManagement ? (
+          canCreate ? (
             <Link href={`/${slug}/escolas/nova`}
               className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg transition-colors">
               + Nova escola
@@ -82,20 +88,20 @@ export default async function EscolasPage({ params }: Props) {
       <main className="p-4 md:p-6">
         {!escolas.length ? (
           <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
-            {noSchoolAssigned ? (
+            {canCreate ? (
+              <>
+                <p className="text-gray-400 text-sm mb-3">Nenhuma escola cadastrada ainda.</p>
+                <Link href={`/${slug}/escolas/nova`} className="text-brand-500 hover:text-brand-600 text-sm font-medium">
+                  + Criar primeira escola
+                </Link>
+              </>
+            ) : noSchoolAssigned ? (
               <>
                 <p className="text-gray-400 text-sm">Nenhuma escola atribuída a você ainda.</p>
                 <p className="text-gray-400 text-xs mt-1">Entre em contato com o DH da sua base.</p>
               </>
             ) : (
-              <>
-                <p className="text-gray-400 text-sm mb-3">Nenhuma escola cadastrada ainda.</p>
-                {isManagement && (
-                  <Link href={`/${slug}/escolas/nova`} className="text-brand-500 hover:text-brand-600 text-sm font-medium">
-                    + Criar primeira escola
-                  </Link>
-                )}
-              </>
+              <p className="text-gray-400 text-sm">Nenhuma escola cadastrada ainda.</p>
             )}
           </div>
         ) : (
