@@ -2,7 +2,8 @@
 
 import { useRef, useState, useContext, createContext } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
-import { HeartHandshake, Camera, IdCard, FileText } from 'lucide-react'
+import Link from 'next/link'
+import { HeartHandshake, Camera, IdCard, FileText, KeyRound, Copy, Check } from 'lucide-react'
 import { salvarSecaoObreiro, salvarSecaoObreiroComArquivos, enviarFormularioObreiro, gerarLinkReferenciaObreiro, enviarRegrasInstituicaoEmail } from './actions'
 
 const SECTIONS_COM_ARQUIVO = new Set([3, 7, 10])
@@ -1320,6 +1321,61 @@ function S10DocumentosAceite({ data, isBrazilian, estadoCivil, temPassaporte, se
 
 // ── Tela de sucesso ──────────────────────────────────────────────────────────
 
+// Só aparece pra quem já era obreiro ativo (importado sem email) e acabou
+// de completar o próprio cadastro — o login é criado na hora (ver
+// finalizarCadastroObreiroImportado em actions.ts), então mostra a senha
+// aqui mesmo em vez do fluxo normal de "aguarde a análise" + referências.
+function CredentialsScreen({ orgName, credentials, d }: {
+  orgName: string; credentials: { email: string; password: string }; d: StaffFormDict
+}) {
+  const [copied, setCopied] = useState(false)
+
+  async function copiar() {
+    await navigator.clipboard.writeText(credentials.password).catch(() => {})
+    setCopied(true)
+    setTimeout(() => setCopied(false), 3000)
+  }
+
+  return (
+    <div className="text-center py-12 px-4 space-y-8">
+      <div>
+        <HeartHandshake className="size-14 mx-auto mb-4 text-amber-500" />
+        <h2 className="text-3xl font-black text-gray-900 mb-3">Cadastro completo!</h2>
+        <p className="text-gray-600 max-w-md mx-auto text-base leading-relaxed">
+          {tStaff(d.submitted.body, { org: orgName })} Seu acesso já está liberado — use os dados abaixo pra entrar.
+        </p>
+      </div>
+
+      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-left max-w-md mx-auto space-y-4">
+        <h3 className="font-bold text-gray-900 text-center flex items-center justify-center gap-2">
+          <KeyRound className="size-4" /> Seu acesso
+        </h3>
+        <div className="bg-white border border-amber-200 rounded-xl px-4 py-3 space-y-1">
+          <p className="text-xs text-gray-500">Email</p>
+          <p className="text-sm font-semibold text-gray-900 break-all">{credentials.email}</p>
+        </div>
+        <div className="bg-white border border-amber-200 rounded-xl px-4 py-3 flex items-center justify-between gap-2">
+          <div>
+            <p className="text-xs text-gray-500">Senha</p>
+            <p className="text-sm font-semibold text-gray-900">{credentials.password}</p>
+          </div>
+          <button onClick={copiar} className="shrink-0 flex items-center gap-1 text-xs font-semibold text-amber-600 hover:text-amber-800">
+            {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+            {copied ? 'Copiado' : 'Copiar'}
+          </button>
+        </div>
+        <p className="text-xs text-gray-500 text-center">
+          No primeiro acesso, o sistema vai pedir pra você trocar essa senha.
+        </p>
+        <Link href="/login"
+          className="block w-full py-3 px-4 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-xl transition-colors text-sm text-center">
+          Fazer login
+        </Link>
+      </div>
+    </div>
+  )
+}
+
 function SubmittedScreen({ slug, applicationId, orgName, d }: {
   slug: string; applicationId: string; orgName: string; d: StaffFormDict
 }) {
@@ -1433,6 +1489,7 @@ export function FormularioObreiro({
   const [current, setCurrent] = useState(initialSection)
   const [saving, setSaving] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [credentials, setCredentials] = useState<{ email: string; password: string } | null>(null)
   const [error, setError] = useState('')
   const formRef = useRef<HTMLFormElement>(null)
 
@@ -1571,6 +1628,7 @@ export function FormularioObreiro({
       if (isLast) {
         const submitResult = await enviarFormularioObreiro(slug, token)
         if ('error' in submitResult) throw new Error(submitResult.error)
+        if (submitResult.credentials) setCredentials(submitResult.credentials)
         setSubmitted(true)
       } else {
         setCurrent(sections[currentIndex + 1].id)
@@ -1584,6 +1642,7 @@ export function FormularioObreiro({
   }
 
   if (submitted) {
+    if (credentials) return <CredentialsScreen orgName={orgName} credentials={credentials} d={d} />
     return <SubmittedScreen slug={slug} applicationId={applicationId} orgName={orgName} d={d} />
   }
 

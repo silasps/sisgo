@@ -5,6 +5,9 @@ import { getOrCreateReferenceForm, buildReferenceUrl } from '@/lib/staff/referen
 import { basicImageSanity } from '@/lib/documents/basicImageSanity'
 import { classifyDocument, type DocumentKind } from '@/lib/documents/classifyDocument'
 import { sendInstitutionRulesEmail } from '@/lib/email/sendInstitutionRulesEmail'
+import { sendImportWelcomeEmail } from '@/lib/email/sendImportWelcomeEmail'
+import { generateDefaultPassword } from '@/lib/import-pessoas/password'
+import { resolveOrCreateRoleId } from '@/lib/import-pessoas/roles'
 
 const EDITABLE_SECTIONS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
 
@@ -187,11 +190,34 @@ export async function salvarSecaoObreiroComArquivos(slug: string, token: string,
   return { success: true }
 }
 
-export async function enviarFormularioObreiro(slug: string, token: string) {
+export async function enviarFormularioObreiro(slug: string, token: string): Promise<
+  { error: string } | { success: true; credentials?: { email: string; password: string } }
+> {
   const result = await getEditableApplication(token, slug)
-  if ('error' in result) return { error: result.error }
+  if ('error' in result) return { error: result.error ?? 'Erro desconhecido.' }
 
   const { app, sb } = result
+
+  const { data: appFull } = await sb
+    .from('staff_applications')
+    .select('interest_form_id, ministry_id, school_id, organization_id, person_id, form_data')
+    .eq('id', app.id)
+    .single()
+
+  // Obreiro importado sem email (staff_profiles já ativo desde o import,
+  // só faltava esse dado): não é candidatura nova, então pula toda a esteira
+  // de aprovação (sem referência, sem background_checks) e já cria o login
+  // aqui, mostrando as credenciais pra pessoa na hora.
+  const { data: staffProfile } = appFull?.person_id
+    ? await sb.from('staff_profiles').select('active, user_id').eq('person_id', appFull.person_id).maybeSingle()
+    : { data: null }
+
+  if (staffProfile?.active && !staffProfile.user_id && appFull?.person_id) {
+    return finalizarCadastroObreiroImportado(
+      sb, slug, app.id, appFull.organization_id, appFull.person_id,
+      (app.form_data as Record<string, Record<string, string>>) ?? {},
+    )
+  }
 
   // Vai direto para 'em_analise' — a partir do envio do formulário definitivo,
   // o acompanhamento é do DH (o líder passa a só visualizar), conforme
@@ -199,12 +225,6 @@ export async function enviarFormularioObreiro(slug: string, token: string) {
   await sb.from('staff_applications')
     .update({ status: 'em_analise', reviewed_at: new Date().toISOString() })
     .eq('id', app.id)
-
-  const { data: appFull } = await sb
-    .from('staff_applications')
-    .select('interest_form_id, ministry_id, school_id, organization_id, person_id, form_data')
-    .eq('id', app.id)
-    .single()
 
   if (appFull?.interest_form_id) {
     await sb.from('staff_interest_forms')
@@ -254,6 +274,83 @@ export async function enviarFormularioObreiro(slug: string, token: string) {
   await enviarPedidosDeReferencia(sb, slug, app.id, app.organization_id, appFull ?? null, formSections)
 
   return { success: true }
+}
+
+// Só pro caso de obreiro importado sem email completando o próprio cadastro
+// (ver enviarFormularioObreiro acima) — a pessoa já é obreiro ativo de
+// verdade, então aqui só falta criar o login e devolver a senha pra tela
+// mostrar na hora, sem passar pela fila de aprovação/DH.
+async function finalizarCadastroObreiroImportado(
+  sb: ReturnType<typeof createAdminClient>,
+  slug: string,
+  applicationId: string,
+  organizationId: string,
+  personId: string,
+  formData: Record<string, Record<string, string>>,
+): Promise<{ error: string } | { success: true; credentials: { email: string; password: string } }> {
+  const email = (formData.s1?.email ?? '').trim().toLowerCase()
+  const nome = (formData.s2?.nome ?? '').trim()
+
+  if (!email || !EMAIL_RE.test(email)) {
+    return { error: 'Informe um email válido na primeira seção antes de enviar.' }
+  }
+
+  const { data: { users } } = await sb.auth.admin.listUsers({ perPage: 1000 })
+  let userId = users.find(u => u.email?.toLowerCase() === email)?.id
+  const password = generateDefaultPassword(nome || 'obreiro')
+
+  if (!userId) {
+    const { data: created, error } = await sb.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { full_name: nome, must_change_password: true },
+    })
+    if (error || !created.user) return { error: error?.message ?? 'Não foi possível criar o login.' }
+    userId = created.user.id
+  }
+
+  // Mesmo sinal usado no import pra saber se o destino era ministério (nesse
+  // caso o ministry_members já foi criado lá, mesmo sem login) ou escola.
+  const { data: activeMembership } = await sb.from('ministry_members')
+    .select('id').eq('person_id', personId).eq('active', true).maybeSingle()
+  const roleName = activeMembership ? 'obreiro_ministerio' : 'obreiro_eted'
+  const roleId = await resolveOrCreateRoleId(sb, roleName)
+
+  const { data: existingOrgUser } = await sb.from('organization_users')
+    .select('id').eq('organization_id', organizationId).eq('user_id', userId).maybeSingle()
+  if (existingOrgUser) {
+    await sb.from('organization_users').update({ role_id: roleId, active: true, updated_at: new Date().toISOString() }).eq('id', existingOrgUser.id)
+  } else {
+    await sb.from('organization_users').insert({ organization_id: organizationId, user_id: userId, role_id: roleId, active: true })
+  }
+
+  await sb.from('staff_profiles').update({ user_id: userId, accepted_at: new Date().toISOString() }).eq('person_id', personId)
+  if (nome) await sb.from('people').update({ full_name: nome }).eq('id', personId)
+
+  const { data: existingEmailContact } = await sb.from('person_contacts')
+    .select('id').eq('person_id', personId).eq('type', 'email').maybeSingle()
+  if (existingEmailContact) {
+    await sb.from('person_contacts').update({ value: email, is_primary: true }).eq('id', existingEmailContact.id)
+  } else {
+    await sb.from('person_contacts').insert({ person_id: personId, type: 'email', value: email, is_primary: true })
+  }
+
+  await sb.from('staff_applications')
+    .update({ status: 'aprovado', reviewed_at: new Date().toISOString() })
+    .eq('id', applicationId)
+
+  const { data: org } = await sb.from('organizations').select('name').eq('id', organizationId).maybeSingle()
+  await sendImportWelcomeEmail({
+    to: email,
+    candidateName: nome || 'Obreiro',
+    organizationId,
+    organizationName: org?.name ?? '',
+    password,
+    loginUrl: `https://www.sisgomission.com/${slug}`,
+  }).catch(() => {})
+
+  return { success: true, credentials: { email, password } }
 }
 
 async function enviarPedidosDeReferencia(
