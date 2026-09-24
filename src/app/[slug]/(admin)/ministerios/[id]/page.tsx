@@ -1,13 +1,13 @@
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import { redirect, notFound } from 'next/navigation'
-import { updateMinistry, assignLeader, removeLeader } from './actions'
+import { Suspense } from 'react'
+import { updateMinistry } from './actions'
 import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
-import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
-import { getMinistryLink } from '@/lib/auth/unit-access'
+import { getOrgAndUser, getWorkspaceRole, getWorkspaceMinistry, getWorkspaceMinistryLink } from './_data'
 import { Users, ClipboardList } from 'lucide-react'
 import { MuralClient } from './mural/MuralClient'
+import { LeaderPanel } from './LeaderPanel'
 import { LocaleContentTabs } from '@/components/ui/LocaleContentTabs'
 
 type Props = {
@@ -19,27 +19,17 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
   const { slug, id } = await params
   const { msg } = await searchParams
 
-  const supabase = await createClient()
   const sbAdmin = createAdminClient()
 
-  const [{ data: { user } }, { data: org }] = await Promise.all([
-    supabase.auth.getUser(),
-    supabase.from('organizations').select('id').eq('slug', slug).single(),
-  ])
-  if (!user || !org) notFound()
-  const orgId = org.id
+  const { user, orgId } = await getOrgAndUser(slug)
+  if (!user || !orgId) notFound()
 
-  const { role, preview } = await getCurrentOrganizationRole(supabase, user.id, orgId)
+  const { role, preview } = await getWorkspaceRole(user.id, orgId)
   const isManagement = isManagementRole(role)
   const canWrite = isOperationalManager(role)
-    || (await getMinistryLink({ userId: user.id, orgId, role, preview }, id)) === 'lider'
+    || (await getWorkspaceMinistryLink(user.id, orgId, role, preview, id)) === 'lider'
 
-  const { data: ministry } = await supabase
-    .from('ministries')
-    .select('id, name, long_name, description, description_translations, active, linked_role, slug, subtitle, subtitle_translations, hero_image_url, is_public')
-    .eq('id', id)
-    .eq('organization_id', orgId)
-    .single()
+  const ministry = await getWorkspaceMinistry(orgId, id)
   if (!ministry) notFound()
 
   // ── Data ──────────────────────────────────────────────────────────────────────
@@ -52,7 +42,7 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
   const authorName = (profile?.people as unknown as { full_name: string } | null)?.full_name ?? user.email ?? 'Anônimo'
 
   const [{ count: memberCount }, { count: pendingCount }, { data: messagesRaw }, { data: membersRaw }] = await Promise.all([
-    supabase.from('ministry_members').select('*', { count: 'exact', head: true }).eq('ministry_id', id).eq('active', true),
+    sbAdmin.from('ministry_members').select('*', { count: 'exact', head: true }).eq('ministry_id', id).eq('active', true),
     // Só gestão/líder vê pendências (mesmo recorte da RLS). Admin porque a RLS
     // exige o papel lider_ministerio, e aqui quem decide é o vínculo.
     isManagement || canWrite
@@ -92,39 +82,6 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
     { onConflict: 'user_id,ministry_id' }
   )
 
-  let leaderEmail: string | null = null
-  let orgUsersForAssignment: Array<{ id: string; email: string }> = []
-  let leaderUserId: string | null = null
-
-  if (isManagement) {
-    const { data: leaderRow } = await supabase
-      .from('ministry_leaders')
-      .select('user_id')
-      .eq('ministry_id', id)
-      .single()
-    leaderUserId = leaderRow?.user_id ?? null
-
-    if (leaderRow) {
-      const { data: { user: lu } } = await sbAdmin.auth.admin.getUserById(leaderRow.user_id)
-      leaderEmail = lu?.email ?? null
-    }
-
-    const { data: orgUsersData } = await supabase
-      .from('organization_users')
-      .select('user_id')
-      .eq('organization_id', orgId)
-      .eq('active', true)
-
-    if (orgUsersData?.length) {
-      const { data: { users: authUsers } } = await sbAdmin.auth.admin.listUsers({ perPage: 1000 })
-      const orgUserSet = new Set(orgUsersData.map(u => u.user_id))
-      orgUsersForAssignment = authUsers
-        .filter(u => orgUserSet.has(u.id) && u.id !== (leaderUserId ?? ''))
-        .map(u => ({ id: u.id, email: u.email ?? u.id }))
-        .sort((a, b) => a.email.localeCompare(b.email))
-    }
-  }
-
   // ── Actions ───────────────────────────────────────────────────────────────────
   const handleUpdate = async (formData: FormData) => {
     'use server'
@@ -144,27 +101,6 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
       is_public: formData.get('is_public') === 'on',
     })
     redirect(`/${slug}/ministerios/${id}?msg=atualizado`)
-  }
-
-  const handleAssignLeader = async (formData: FormData) => {
-    'use server'
-    const userId = formData.get('user_id') as string
-    if (!userId) return
-    const sb = createAdminClient()
-    const { data: liderRole } = await sb.from('roles').select('id').eq('name', 'lider_ministerio').single()
-    if (liderRole) {
-      await sb.from('organization_users')
-        .update({ role_id: liderRole.id, updated_at: new Date().toISOString() })
-        .eq('user_id', userId).eq('organization_id', orgId)
-    }
-    await assignLeader(orgId, id, userId)
-    redirect(`/${slug}/ministerios/${id}?msg=lider_atribuido`)
-  }
-
-  const handleRemoveLeader = async () => {
-    'use server'
-    await removeLeader(id)
-    redirect(`/${slug}/ministerios/${id}`)
   }
 
   async function postMessage(formData: FormData) {
@@ -318,39 +254,12 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
           )}
         </div>
 
-        {/* Líder — hidden on mobile */}
+        {/* Líder — hidden on mobile; carrega à parte (lista de usuários da
+            organização é a consulta mais cara da tela e não bloqueia o chat) */}
         {isManagement && (
-          <div className="hidden lg:block bg-white rounded-xl border border-gray-200 p-4">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Líder</h3>
-            {leaderEmail ? (
-              <div>
-                <p className="text-sm font-medium text-gray-900 truncate">{leaderEmail}</p>
-                <form action={handleRemoveLeader} className="mt-1">
-                  <button type="submit" className="text-[10px] text-red-400 hover:text-red-600 transition-colors">Remover</button>
-                </form>
-              </div>
-            ) : (
-              <p className="text-xs text-gray-400">Sem líder atribuído.</p>
-            )}
-            {orgUsersForAssignment.length > 0 && (
-              <details className="mt-2 border-t border-gray-100 pt-2">
-                <summary className="text-xs text-brand-600 cursor-pointer select-none font-medium">
-                  {leaderEmail ? 'Trocar' : 'Atribuir'}
-                </summary>
-                <form action={handleAssignLeader} className="mt-2 space-y-1.5">
-                  <select name="user_id" required className={`${INPUT} text-xs`}>
-                    <option value="">Selecionar...</option>
-                    {orgUsersForAssignment.map(u => (
-                      <option key={u.id} value={u.id}>{u.email}</option>
-                    ))}
-                  </select>
-                  <button type="submit" className="w-full px-3 py-1.5 text-xs font-medium rounded-lg bg-brand-500 hover:bg-brand-600 text-white transition-colors">
-                    Confirmar
-                  </button>
-                </form>
-              </details>
-            )}
-          </div>
+          <Suspense fallback={<div className="hidden lg:block bg-white rounded-xl border border-gray-200 p-4 h-24 animate-pulse" />}>
+            <LeaderPanel slug={slug} ministryId={id} orgId={orgId} />
+          </Suspense>
         )}
       </aside>
 

@@ -1,4 +1,3 @@
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect, notFound } from 'next/navigation'
 import {
@@ -14,8 +13,7 @@ import { PersonFinanceBadge } from '@/components/finance/PersonFinanceBadge'
 import { FinancePendingConfirmButton } from '@/components/finance/FinancePendingConfirmButton'
 import { Suspense } from 'react'
 import { ScrollHighlight } from '@/components/ui/ScrollHighlight'
-import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
-import { getMinistryLink } from '@/lib/auth/unit-access'
+import { getOrgAndUser, getWorkspaceClient, getWorkspaceRole, getWorkspaceMinistry, getWorkspaceMinistryLink } from '../_data'
 import { EnviarFormularioObreiroDiretoButton } from '@/components/inscricoes/EnviarFormularioObreiroDiretoButton'
 import { SearchableSelectModal } from '@/components/ui/SearchableSelectModal'
 
@@ -38,27 +36,23 @@ export default async function EquipePage({ params, searchParams }: Props) {
   const { slug, id } = await params
   const { msg, pending } = await searchParams
 
-  const supabase = await createClient()
+  const supabase = await getWorkspaceClient()
   const sbAdmin = createAdminClient()
 
-  const [{ data: { user } }, { data: org }] = await Promise.all([
-    supabase.auth.getUser(),
-    supabase.from('organizations').select('id').eq('slug', slug).single(),
-  ])
-  if (!user || !org) notFound()
-  const orgId = org.id
+  const { user, orgId } = await getOrgAndUser(slug)
+  if (!user || !orgId) notFound()
 
-  const { data: ministry } = await supabase.from('ministries').select('name').eq('id', id).single()
+  const ministry = await getWorkspaceMinistry(orgId, id)
   const ministryName = ministry?.name ?? 'este ministério'
 
-  const { role, preview } = await getCurrentOrganizationRole(supabase, user.id, orgId)
+  const { role, preview } = await getWorkspaceRole(user.id, orgId)
   const isManagement = isManagementRole(role)
   const canWrite = isOperationalManager(role)
   // Líder DESTE ministério (vínculo), não "tem papel lider_ministerio" — quem
   // lidera outro ministério e é só membro deste não ganha poderes aqui. Quem
   // já escreve direto (canWrite) não passa pelo fluxo de solicitação ao DH.
   const isLiderMinisterio = !canWrite
-    && (await getMinistryLink({ userId: user.id, orgId, role, preview }, id)) === 'lider'
+    && (await getWorkspaceMinistryLink(user.id, orgId, role, preview, id)) === 'lider'
 
   type MemberRaw = {
     id: string; person_id: string; joined_at: string | null
