@@ -134,6 +134,27 @@ export async function addMember(ministryId: string, personId: string, roleId: st
   await promotePendingIfLinkedRole(sb, ministryId, personId, roleId)
 }
 
+// ── DH: adiciona membro só se a pessoa não estiver ativa em outra escola/
+// ministério da mesma organização — se estiver, vira um empréstimo pendente
+// (staff_loans) que só efetiva quando o líder de origem aprova (ver
+// src/lib/staff-loans.ts e o hub de Pendências). ──────────────────────────────
+export async function addMemberChecked(params: {
+  orgId: string; ministryId: string; personId: string; roleId: string | null
+  requestedBy: string; startsOn: string; endsOn: string | null
+}): Promise<'added' | 'pending_loan'> {
+  const { findActiveUnit, createStaffLoan } = await import('@/lib/staff-loans')
+  const from = await findActiveUnit(params.orgId, params.personId, { type: 'ministry', id: params.ministryId })
+  if (!from) {
+    await addMember(params.ministryId, params.personId, params.roleId)
+    return 'added'
+  }
+  await createStaffLoan({
+    orgId: params.orgId, personId: params.personId, from, to: { type: 'ministry', id: params.ministryId },
+    role: null, requestedBy: params.requestedBy, startsOn: params.startsOn, endsOn: params.endsOn,
+  })
+  return 'pending_loan'
+}
+
 // ── DH: remove membro (soft) ─────────────────────────────────────────────────
 export async function removeMember(memberId: string) {
   const sb = createAdminClient()

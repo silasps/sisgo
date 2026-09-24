@@ -8,7 +8,7 @@ import { getRolePreview } from '@/lib/role-preview'
 import { getMySchools, getMyMinistries } from '@/lib/auth/unit-access'
 import { asLooseClient } from '@/lib/supabase/loose-client'
 import { FeedbackButton } from '@/components/layout/FeedbackButton'
-import { isManagementRole, isGeneralFinanceRole, MANUTENCAO_ROLES, HOSPEDAGEM_ROLES, KITCHEN_ROLES, userHasAnyRole } from '@/lib/auth/permissions'
+import { isManagementRole, isGeneralFinanceRole, MANUTENCAO_ROLES, HOSPEDAGEM_ROLES, KITCHEN_ROLES, PESSOAS_ROLES, userHasAnyRole } from '@/lib/auth/permissions'
 import { Toaster } from 'sonner'
 import { Suspense } from 'react'
 import { FlashToast } from '@/components/ui/FlashToast'
@@ -55,13 +55,24 @@ const NAV_SECTION_BY_ICON: Record<string, string> = {
 }
 
 function sectionize(items: RegularNavItem[]): NavItem[] {
-  const out: NavItem[] = []
-  let lastSection: string | null = null
+  // Agrupa de verdade por seção (não só "mudou desde o item anterior") —
+  // `withAccumulatedExtras` pode colocar um item de uma seção já vista lá
+  // no fim da lista (ex. "Pessoas" reaparecendo depois de "Hospedagem"),
+  // o que duplicava o cabeçalho da seção se a checagem fosse só posicional.
+  const bucketOrder: (string | null)[] = []
+  const buckets = new Map<string | null, RegularNavItem[]>()
   for (const item of items) {
     const section = NAV_SECTION_BY_ICON[item.icon] ?? null
-    if (section && section !== lastSection) out.push({ divider: true, label: section })
-    lastSection = section
-    out.push(item)
+    if (!buckets.has(section)) {
+      buckets.set(section, [])
+      bucketOrder.push(section)
+    }
+    buckets.get(section)!.push(item)
+  }
+  const out: NavItem[] = []
+  for (const section of bucketOrder) {
+    if (section) out.push({ divider: true, label: section })
+    out.push(...buckets.get(section)!)
   }
   return out
 }
@@ -102,6 +113,7 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
   const canSeeGeneralFinance = isGeneralFinanceRole(role) || accumulatedRoles.some(r => isGeneralFinanceRole(r))
   const canSeeManutencao    = userHasAnyRole(allRoles, MANUTENCAO_ROLES)
   const canSeeHospedagem    = userHasAnyRole(allRoles, HOSPEDAGEM_ROLES)
+  const canSeePessoas       = userHasAnyRole(allRoles, PESSOAS_ROLES)
   const canSeeCozinha       = userHasAnyRole(allRoles, KITCHEN_ROLES)
   const canBuyMeals         = true
   const canSeeReservas      = isManagement || isHospitalidade || is('lider_eted') || isObreiroEted || isAluno || isAssociado || isLiderMinisterio || isObreiroMinisterio
@@ -115,7 +127,7 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
     { href: `/${slug}/calendario`,   label: 'Calendário',       icon: 'calendario',    show: true },
     { href: `/${slug}/pendentes`,    label: 'Pendentes',        icon: 'pendentes',     show: true, alert: hasPending },
     { href: `/${slug}/comunicacao`,  label: 'Comunicação',      icon: 'comunicacao',   show: role === 'lider_base' || role === 'superadmin' || is('comunicacao') },
-    { href: `/${slug}/pessoas`,      label: 'Pessoas',          icon: 'pessoas',       show: !is('lider_eted') && !isLiderMinisterio },
+    { href: `/${slug}/pessoas`,      label: 'Pessoas',          icon: 'pessoas',       show: canSeePessoas },
     { href: `/${slug}/presenca`,     label: 'Presença',         icon: 'presenca',      show: isManagement || is('secretaria') || is('hospitalidade') || isCozinha || is('lider_eted') || isObreiroEted || isLiderMinisterio || isObreiroMinisterio },
     { href: `/${slug}/escolas`,      label: 'Escolas',          icon: 'escolas',       show: isManagement || is('lider_eted') || isObreiroEted || hasSchoolLinks, alert: hasSchoolMessages },
     { href: `/${slug}/inscricoes`,   label: 'Inscrições',       icon: 'inscricoes',    show: isManagement || is('lider_eted') || isLiderMinisterio || hasInscricoesScope },
@@ -172,12 +184,18 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
 
   if (role === 'obreiro_ministerio') {
     const narrow = all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/ministerios', '/reservas', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))
-    return addPersonalSplit(dropDisabledCard(withAccumulatedExtras(narrow)).map(toItem))
+    return addPersonalSplit(
+      dropDisabledCard(withAccumulatedExtras(narrow)).map(toItem),
+      new Set(['reservas', 'refeicoes', 'contas', 'carteirinha', 'minha-lavanderia']),
+    )
   }
 
   if (role === 'obreiro_eted') {
     const narrow = all.filter(pick('/dashboard', '/calendario', '/pendentes', '/presenca', '/escolas', '/reservas', '/manutencao', '/refeicoes', '/minhas-contas', '/minha-lavanderia', '/minha-carteirinha'))
-    return addPersonalSplit(dropDisabledCard(withAccumulatedExtras(narrow)).map(toItem))
+    return addPersonalSplit(
+      dropDisabledCard(withAccumulatedExtras(narrow)).map(toItem),
+      new Set(['reservas', 'refeicoes', 'contas', 'carteirinha', 'minha-lavanderia']),
+    )
   }
 
   if (role === 'aluno' || role === 'associado') {
@@ -426,6 +444,35 @@ export default async function SlugLayout({ children, params }: Props) {
         .eq('status', 'aceito_destino'),
     ])
     pendingTotal += (ac ?? 0) + (mc ?? 0) + (src ?? 0) + (tc ?? 0)
+
+    const { count: loanCount } = await sbAdmin.from('staff_loans')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', org.id)
+      .eq('status', 'pendente')
+    pendingTotal += (loanCount ?? 0)
+  }
+
+  // Empréstimos pendentes de saída das unidades que a pessoa lidera (vínculo
+  // real via school_leaders/ministry_leaders, cobre colíder também) — não
+  // repete a contagem de isManagementUser acima, que já é org-wide.
+  if (!isManagementUser && (isLiderEted || isLiderMinisterio)) {
+    const { getMySchools, getMyMinistries } = await import('@/lib/auth/unit-access')
+    const [mySchools, myMinistries] = await Promise.all([
+      getMySchools({ userId: user.id, orgId: org.id, role, preview }),
+      getMyMinistries({ userId: user.id, orgId: org.id, role, preview }),
+    ])
+    const ledSchoolIds = mySchools.filter(s => s.link === 'lider').map(s => s.id)
+    const ledMinistryIds = myMinistries.filter(m => m.link === 'lider').map(m => m.id)
+    if (ledSchoolIds.length > 0 || ledMinistryIds.length > 0) {
+      const { count: loanCount } = await sbAdmin.from('staff_loans')
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', org.id).eq('status', 'pendente')
+        .or([
+          ledSchoolIds.length > 0 ? `from_school_id.in.(${ledSchoolIds.join(',')})` : null,
+          ledMinistryIds.length > 0 ? `from_ministry_id.in.(${ledMinistryIds.join(',')})` : null,
+        ].filter(Boolean).join(','))
+      pendingTotal += (loanCount ?? 0)
+    }
   }
 
   if (!isManagementUser && isManutencaoUser) {

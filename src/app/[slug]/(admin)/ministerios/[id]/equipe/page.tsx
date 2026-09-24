@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect, notFound } from 'next/navigation'
 import {
-  addMember, removeMember, approveRequest, rejectRequest,
+  addMemberChecked, removeMember, approveRequest, rejectRequest,
   submitMemberRequest, cancelRequest,
   requestTransfer, respondTransferAsDestination, confirmTransferAsDH, cancelTransfer,
   inviteStaffMemberDirect,
@@ -21,7 +21,7 @@ import { SearchableSelectModal } from '@/components/ui/SearchableSelectModal'
 
 type Props = {
   params: Promise<{ slug: string; id: string }>
-  searchParams: Promise<{ msg?: string }>
+  searchParams: Promise<{ msg?: string; pending?: string }>
 }
 
 const REQUEST_LABELS: Record<string, string> = {
@@ -36,7 +36,7 @@ function daysAgo(d: string) {
 
 export default async function EquipePage({ params, searchParams }: Props) {
   const { slug, id } = await params
-  const { msg } = await searchParams
+  const { msg, pending } = await searchParams
 
   const supabase = await createClient()
   const sbAdmin = createAdminClient()
@@ -108,6 +108,34 @@ export default async function EquipePage({ params, searchParams }: Props) {
   const dhTransferPersonIds = [...new Set(transfers.filter(t => t.status === 'aceito_destino').map(t => t.person_id))]
   const transferFinanceMap = await getPeopleFinanceSummaries(orgId, dhTransferPersonIds)
 
+  // Empréstimos de saída: obreiros DESTE ministério que alguém quis
+  // adicionar em outra escola/ministério — precisam da aprovação do líder daqui.
+  type LoanRaw = {
+    id: string; person_id: string; to_unit_type: string; role: string | null
+    starts_on: string; ends_on: string | null; created_at: string
+    people: { full_name: string } | null
+  }
+  let outgoingLoans: Array<LoanRaw & { destinationName: string | null }> = []
+  if (canWrite || isLiderMinisterio) {
+    const { data } = await sbAdmin
+      .from('staff_loans')
+      .select('id, person_id, to_unit_type, to_school_id, to_ministry_id, role, starts_on, ends_on, created_at, people(full_name)')
+      .eq('from_ministry_id', id).eq('status', 'pendente').order('created_at', { ascending: true })
+    const rows = (data ?? []) as unknown as Array<LoanRaw & { to_school_id: string | null; to_ministry_id: string | null }>
+    const schoolIds = [...new Set(rows.filter(r => r.to_unit_type === 'school').map(r => r.to_school_id).filter((v): v is string => !!v))]
+    const ministryIds = [...new Set(rows.filter(r => r.to_unit_type === 'ministry').map(r => r.to_ministry_id).filter((v): v is string => !!v))]
+    const [{ data: schoolsData }, { data: ministriesData }] = await Promise.all([
+      schoolIds.length > 0 ? sbAdmin.from('schools').select('id, name').in('id', schoolIds) : Promise.resolve({ data: [] }),
+      ministryIds.length > 0 ? sbAdmin.from('ministries').select('id, name').in('id', ministryIds) : Promise.resolve({ data: [] }),
+    ])
+    const schoolNameById = new Map((schoolsData ?? []).map(s => [s.id, s.name]))
+    const ministryNameById = new Map((ministriesData ?? []).map(m => [m.id, m.name]))
+    outgoingLoans = rows.map(r => ({
+      ...r,
+      destinationName: r.to_unit_type === 'school' ? (schoolNameById.get(r.to_school_id ?? '') ?? null) : (ministryNameById.get(r.to_ministry_id ?? '') ?? null),
+    }))
+  }
+
   let otherMinistries: Array<{ id: string; name: string }> = []
   if (isLiderMinisterio || isManagement) {
     const { data: mData } = await supabase.from('ministries')
@@ -163,8 +191,13 @@ export default async function EquipePage({ params, searchParams }: Props) {
     'use server'
     const personId = formData.get('person_id') as string
     if (!personId) return
-    await addMember(id, personId, (formData.get('role_id') as string) || null)
-    redirect(`/${slug}/ministerios/${id}/equipe`)
+    const startsOn = (formData.get('starts_on') as string) || new Date().toISOString().slice(0, 10)
+    const endsOn = (formData.get('ends_on') as string) || null
+    const result = await addMemberChecked({
+      orgId, ministryId: id, personId, roleId: (formData.get('role_id') as string) || null,
+      requestedBy: user.id, startsOn, endsOn,
+    })
+    redirect(result === 'pending_loan' ? `/${slug}/ministerios/${id}/equipe?pending=1` : `/${slug}/ministerios/${id}/equipe`)
   }
   const handleRemoveMember = async (formData: FormData) => {
     'use server'
@@ -271,6 +304,18 @@ export default async function EquipePage({ params, searchParams }: Props) {
     await cancelTransfer(formData.get('transfer_id') as string, user.id)
     redirect(`/${slug}/ministerios/${id}/equipe`)
   }
+  const handleApproveLoan = async (formData: FormData) => {
+    'use server'
+    const { approveStaffLoan } = await import('@/lib/staff-loans')
+    await approveStaffLoan(formData.get('loan_id') as string, user.id, (formData.get('recommendation') as string)?.trim() || null)
+    redirect(`/${slug}/ministerios/${id}/equipe`)
+  }
+  const handleRejectLoan = async (formData: FormData) => {
+    'use server'
+    const { rejectStaffLoan } = await import('@/lib/staff-loans')
+    await rejectStaffLoan(formData.get('loan_id') as string, user.id, (formData.get('recommendation') as string)?.trim() || null)
+    redirect(`/${slug}/ministerios/${id}/equipe`)
+  }
   const handleEnviarFormularioDireto = async (formData: FormData) => {
     'use server'
     return inviteStaffMemberDirect({
@@ -295,6 +340,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
   }
   const msgInfo = msg ? msgs[msg] : null
   const INPUT = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400'
+  const todayStr = new Date().toISOString().slice(0, 10)
 
   return (
     <>
@@ -307,6 +353,11 @@ export default async function EquipePage({ params, searchParams }: Props) {
       {msgInfo && (
         <div className={`border rounded-lg px-4 py-3 text-sm ${msgInfo.cls}`}>{msgInfo.text}</div>
       )}
+      {pending && (
+        <div className="border rounded-lg px-4 py-3 text-sm bg-amber-50 border-amber-200 text-amber-700">
+          Essa pessoa já serve em outra escola/ministério — aguardando aprovação do líder de origem (ver Pendências).
+        </div>
+      )}
 
       {(canWrite || isLiderMinisterio) && (
         <div className="flex justify-end">
@@ -315,6 +366,42 @@ export default async function EquipePage({ params, searchParams }: Props) {
             action={handleEnviarFormularioDireto}
             fixedDestination={{ type: 'ministry', id, label: ministryName }}
           />
+        </div>
+      )}
+
+      {/* Empréstimos pendentes — obreiro deste ministério pedido em outro lugar */}
+      {outgoingLoans.length > 0 && (
+        <div className="bg-white rounded-xl border border-amber-200 p-5">
+          <h2 className="text-sm font-semibold text-amber-700 mb-3">
+            Empréstimos Pendentes
+            <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">{outgoingLoans.length}</span>
+          </h2>
+          <ul className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
+            {outgoingLoans.map(loan => (
+              <li key={loan.id} className="border border-amber-100 rounded-lg p-3 space-y-2">
+                <div className="text-sm">
+                  <p className="font-medium text-gray-800">{loan.people?.full_name ?? '—'}</p>
+                  <p className="text-xs text-gray-500">
+                    Pedido para {loan.to_unit_type === 'school' ? 'a escola' : 'o ministério'} <strong>{loan.destinationName ?? '—'}</strong>
+                    {loan.role ? ` como ${loan.role}` : ''}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {new Date(`${loan.starts_on}T00:00:00`).toLocaleDateString('pt-BR')}
+                    {' – '}
+                    {loan.ends_on ? new Date(`${loan.ends_on}T00:00:00`).toLocaleDateString('pt-BR') : 'sem previsão de retorno'}
+                  </p>
+                </div>
+                <form action={handleApproveLoan} className="space-y-1.5">
+                  <input type="hidden" name="loan_id" value={loan.id} />
+                  <input name="recommendation" placeholder="Recomendação sobre a pessoa (opcional)" className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand-400" />
+                  <div className="flex gap-2">
+                    <button type="submit" className="px-3 py-1.5 bg-green-500 text-white text-xs font-medium rounded-lg hover:bg-green-600 transition-colors">Aprovar</button>
+                    <button type="submit" formAction={handleRejectLoan} className="px-3 py-1.5 border border-red-200 text-red-500 text-xs font-medium rounded-lg hover:bg-red-50 transition-colors">Recusar</button>
+                  </div>
+                </form>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -402,6 +489,10 @@ export default async function EquipePage({ params, searchParams }: Props) {
                   {ministryRoles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                 </select>
               )}
+              <div className="flex gap-2 w-full basis-full">
+                <input type="date" name="starts_on" defaultValue={todayStr} required title="A partir de" className={`flex-1 ${INPUT}`} />
+                <input type="date" name="ends_on" title="Até (opcional)" className={`flex-1 ${INPUT}`} />
+              </div>
               <button type="submit" className="px-4 py-2 text-sm font-medium rounded-lg bg-brand-500 hover:bg-brand-600 text-white transition-colors">Adicionar</button>
             </form>
           </details>

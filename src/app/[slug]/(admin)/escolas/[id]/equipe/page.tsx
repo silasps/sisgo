@@ -15,12 +15,12 @@ import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = {
   params: Promise<{ slug: string; id: string }>
-  searchParams: Promise<{ msg?: string }>
+  searchParams: Promise<{ msg?: string; pending?: string }>
 }
 
 export default async function EscolaEquipePage({ params, searchParams }: Props) {
   const { slug, id } = await params
-  const { msg } = await searchParams
+  const { msg, pending } = await searchParams
   const supabase = await createClient()
   const sbAdmin = createAdminClient()
 
@@ -102,15 +102,49 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
     }
   }
 
+  // Empréstimos de saída: obreiros DESTA escola que alguém quis adicionar
+  // em outra escola/ministério — precisam da aprovação do líder daqui.
+  type LoanRaw = {
+    id: string; person_id: string; to_unit_type: string; role: string | null
+    starts_on: string; ends_on: string | null; created_at: string
+    people: { full_name: string } | null
+  }
+  let outgoingLoans: Array<LoanRaw & { destinationName: string | null }> = []
+  if (canWrite || isLiderEted) {
+    const { data } = await sbAdmin
+      .from('staff_loans')
+      .select('id, person_id, to_unit_type, to_school_id, to_ministry_id, role, starts_on, ends_on, created_at, people(full_name)')
+      .eq('from_school_id', id).eq('status', 'pendente').order('created_at', { ascending: true })
+    const rows = (data ?? []) as unknown as Array<LoanRaw & { to_school_id: string | null; to_ministry_id: string | null }>
+    const schoolIds = [...new Set(rows.filter(r => r.to_unit_type === 'school').map(r => r.to_school_id).filter((v): v is string => !!v))]
+    const ministryIds = [...new Set(rows.filter(r => r.to_unit_type === 'ministry').map(r => r.to_ministry_id).filter((v): v is string => !!v))]
+    const [{ data: schoolsData }, { data: ministriesData }] = await Promise.all([
+      schoolIds.length > 0 ? sbAdmin.from('schools').select('id, name').in('id', schoolIds) : Promise.resolve({ data: [] }),
+      ministryIds.length > 0 ? sbAdmin.from('ministries').select('id, name').in('id', ministryIds) : Promise.resolve({ data: [] }),
+    ])
+    const schoolNameById = new Map((schoolsData ?? []).map(s => [s.id, s.name]))
+    const ministryNameById = new Map((ministriesData ?? []).map(m => [m.id, m.name]))
+    outgoingLoans = rows.map(r => ({
+      ...r,
+      destinationName: r.to_unit_type === 'school' ? (schoolNameById.get(r.to_school_id ?? '') ?? null) : (ministryNameById.get(r.to_ministry_id ?? '') ?? null),
+    }))
+  }
+
   const base = `/${slug}/escolas/${id}/equipe`
   const INPUT = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400'
+  const todayStr = new Date().toISOString().slice(0, 10)
 
   const handleAddStaff = async (formData: FormData) => {
     'use server'
     const personIds = formData.getAll('person_id') as string[]
     if (personIds.length === 0) return
-    await addSchoolStaffBatch(id, personIds, (formData.get('role') as string) || 'Obreiro')
-    redirect(base)
+    const startsOn = (formData.get('starts_on') as string) || new Date().toISOString().slice(0, 10)
+    const endsOn = (formData.get('ends_on') as string) || null
+    const result = await addSchoolStaffBatch({
+      orgId, schoolId: id, personIds, role: (formData.get('role') as string) || 'Obreiro',
+      requestedBy: user.id, startsOn, endsOn,
+    })
+    redirect(result.pendingLoans > 0 ? `${base}?pending=${result.pendingLoans}` : base)
   }
   const handleRemoveStaff = async (formData: FormData) => {
     'use server'
@@ -160,6 +194,18 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
     await removeSchoolLeader(id, userId)
     redirect(base)
   }
+  const handleApproveLoan = async (formData: FormData) => {
+    'use server'
+    const { approveStaffLoan } = await import('@/lib/staff-loans')
+    await approveStaffLoan(formData.get('loan_id') as string, user.id, (formData.get('recommendation') as string)?.trim() || null)
+    redirect(base)
+  }
+  const handleRejectLoan = async (formData: FormData) => {
+    'use server'
+    const { rejectStaffLoan } = await import('@/lib/staff-loans')
+    await rejectStaffLoan(formData.get('loan_id') as string, user.id, (formData.get('recommendation') as string)?.trim() || null)
+    redirect(base)
+  }
 
   const msgs: Record<string, { text: string; cls: string }> = {
     enviada: { text: 'Solicitação enviada.', cls: 'bg-blue-50 border-blue-200 text-blue-700' },
@@ -176,6 +222,13 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
 
       {msgInfo && (
         <div className={`border rounded-lg px-4 py-3 text-sm ${msgInfo.cls}`}>{msgInfo.text}</div>
+      )}
+      {pending && Number(pending) > 0 && (
+        <div className="border rounded-lg px-4 py-3 text-sm bg-amber-50 border-amber-200 text-amber-700">
+          {Number(pending) === 1
+            ? '1 pessoa já serve em outra escola/ministério — aguardando aprovação do líder de origem (ver Pendências).'
+            : `${pending} pessoas já servem em outra escola/ministério — aguardando aprovação do líder de origem (ver Pendências).`}
+        </div>
       )}
 
       {/* Liderança */}
@@ -216,6 +269,42 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
         </div>
       )}
 
+      {/* Empréstimos pendentes — obreiro desta escola pedido em outro lugar */}
+      {outgoingLoans.length > 0 && (
+        <div className="bg-white rounded-xl border border-amber-200 p-5">
+          <h2 className="text-sm font-semibold text-amber-700 mb-3">
+            Empréstimos Pendentes
+            <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">{outgoingLoans.length}</span>
+          </h2>
+          <ul className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
+            {outgoingLoans.map(loan => (
+              <li key={loan.id} className="border border-amber-100 rounded-lg p-3 space-y-2">
+                <div className="text-sm">
+                  <p className="font-medium text-gray-800">{loan.people?.full_name ?? '—'}</p>
+                  <p className="text-xs text-gray-500">
+                    Pedido para {loan.to_unit_type === 'school' ? 'a escola' : 'o ministério'} <strong>{loan.destinationName ?? '—'}</strong>
+                    {loan.role ? ` como ${loan.role}` : ''}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {new Date(`${loan.starts_on}T00:00:00`).toLocaleDateString('pt-BR')}
+                    {' – '}
+                    {loan.ends_on ? new Date(`${loan.ends_on}T00:00:00`).toLocaleDateString('pt-BR') : 'sem previsão de retorno'}
+                  </p>
+                </div>
+                <form action={handleApproveLoan} className="space-y-1.5">
+                  <input type="hidden" name="loan_id" value={loan.id} />
+                  <input name="recommendation" placeholder="Recomendação sobre a pessoa (opcional)" className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand-400" />
+                  <div className="flex gap-2">
+                    <button type="submit" className="px-3 py-1.5 bg-green-500 text-white text-xs font-medium rounded-lg hover:bg-green-600 transition-colors">Aprovar</button>
+                    <button type="submit" formAction={handleRejectLoan} className="px-3 py-1.5 border border-red-200 text-red-500 text-xs font-medium rounded-lg hover:bg-red-50 transition-colors">Recusar</button>
+                  </div>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Obreiros */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <h2 className="text-sm font-semibold text-gray-700 mb-3">Obreiros ({staffMembers.length})</h2>
@@ -252,6 +341,19 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
                 searchPlaceholder="Buscar por nome..."
                 title="Selecionar pessoas"
               />
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="block text-[11px] text-gray-400 mb-1">A partir de</label>
+                  <input type="date" name="starts_on" defaultValue={todayStr} required className={INPUT} />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-[11px] text-gray-400 mb-1">Até (opcional)</label>
+                  <input type="date" name="ends_on" className={INPUT} />
+                </div>
+              </div>
+              <p className="text-[11px] text-gray-400">
+                Usado só se alguém selecionado já servir em outro ministério/escola — vira um pedido de empréstimo pro líder de origem aprovar, com esse período.
+              </p>
               <SubmitButton pendingText="Adicionando…" className="w-full px-4 py-2 text-sm font-medium rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white transition-colors">
                 Adicionar
               </SubmitButton>

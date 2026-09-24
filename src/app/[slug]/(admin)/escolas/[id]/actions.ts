@@ -62,10 +62,41 @@ export async function addSchoolStaff(schoolId: string, personId: string, role: s
   }
 }
 
+// Adiciona só se a pessoa não estiver ativa em outra escola/ministério da
+// mesma organização — se estiver, não adiciona direto: cria um empréstimo
+// pendente (staff_loans) que só efetiva quando o líder de origem aprova
+// (ver src/lib/staff-loans.ts e o hub de Pendências).
+export async function addSchoolStaffChecked(params: {
+  orgId: string; schoolId: string; personId: string; role: string
+  requestedBy: string; startsOn: string; endsOn: string | null
+}): Promise<'added' | 'pending_loan'> {
+  const { findActiveUnit, createStaffLoan } = await import('@/lib/staff-loans')
+  const from = await findActiveUnit(params.orgId, params.personId, { type: 'school', id: params.schoolId })
+  if (!from) {
+    await addSchoolStaff(params.schoolId, params.personId, params.role)
+    return 'added'
+  }
+  await createStaffLoan({
+    orgId: params.orgId, personId: params.personId, from, to: { type: 'school', id: params.schoolId },
+    role: params.role, requestedBy: params.requestedBy, startsOn: params.startsOn, endsOn: params.endsOn,
+  })
+  return 'pending_loan'
+}
+
 // Adiciona vários obreiros de uma vez (ex.: DH selecionando um lote no
-// MultiSelectModal) — cada pessoa é independente, roda em paralelo.
-export async function addSchoolStaffBatch(schoolId: string, personIds: string[], role: string) {
-  await Promise.all(personIds.map(personId => addSchoolStaff(schoolId, personId, role)))
+// MultiSelectModal) — cada pessoa é independente, roda em paralelo. Retorna
+// quantos entraram direto vs. quantos viraram pendência de empréstimo.
+export async function addSchoolStaffBatch(params: {
+  orgId: string; schoolId: string; personIds: string[]; role: string
+  requestedBy: string; startsOn: string; endsOn: string | null
+}): Promise<{ added: number; pendingLoans: number }> {
+  const results = await Promise.all(params.personIds.map(personId =>
+    addSchoolStaffChecked({ ...params, personId })
+  ))
+  return {
+    added: results.filter(r => r === 'added').length,
+    pendingLoans: results.filter(r => r === 'pending_loan').length,
+  }
 }
 
 export async function removeSchoolStaff(staffId: string) {
