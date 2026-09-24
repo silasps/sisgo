@@ -75,7 +75,7 @@ export default async function NovaEscolaPage({ params }: Props) {
     <>
       <Header title="Nova escola" />
       <main className="p-4 md:p-6">
-        <form action={createSchool} className="bg-white rounded-xl border border-gray-200 p-6 max-w-lg space-y-4">
+        <form action={createSchool} className="bg-white rounded-xl border border-gray-200 p-6 max-w-lg mx-auto space-y-4">
           <p className="text-sm text-gray-500">Preencha os dados básicos para criar a escola. Você poderá editar todos os detalhes na próxima etapa.</p>
 
           <div>
