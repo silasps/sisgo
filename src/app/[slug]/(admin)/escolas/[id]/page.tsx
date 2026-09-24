@@ -6,6 +6,7 @@ import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { Users, BookOpen, ClipboardList } from 'lucide-react'
 import { MuralClient } from '../../ministerios/[id]/mural/MuralClient'
+import { schoolDisplayType } from '@/lib/schools'
 
 type Props = {
   params: Promise<{ slug: string; id: string }>
@@ -39,7 +40,7 @@ export default async function EscolaOverviewPage({ params }: Props) {
 
   const { data: escola } = await supabase
     .from('schools')
-    .select('id, name, description, active, school_type')
+    .select('id, name, description, active, school_type, type_name')
     .eq('id', id)
     .eq('organization_id', orgId)
     .single()
@@ -171,7 +172,7 @@ export default async function EscolaOverviewPage({ params }: Props) {
           </div>
           {escola.description && <p className="text-xs text-gray-500 mt-1">{escola.description}</p>}
           {escola.school_type && (
-            <p className="text-[10px] text-gray-400 mt-1.5 uppercase tracking-wide">{escola.school_type}</p>
+            <p className="text-[10px] text-gray-400 mt-1.5 uppercase tracking-wide">{schoolDisplayType(escola)}</p>
           )}
         </div>
       </aside>

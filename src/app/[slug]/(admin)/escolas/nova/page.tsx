@@ -22,6 +22,11 @@ export default async function NovaEscolaPage({ params }: Props) {
   const { role } = await getCurrentOrganizationRole(supabase, user.id, org.id)
   if (!isManagementRole(role)) redirect(`/${slug}/escolas`)
 
+  // Nomes de tipo já usados nessa organização — vira sugestão (datalist) no
+  // campo abaixo, pra não perder o nome digitado numa escola anterior.
+  const { data: typeNameRows } = await supabase.from('schools').select('type_name').eq('organization_id', org.id)
+  const existingTypeNames = [...new Set((typeNameRows ?? []).map(r => r.type_name).filter(Boolean))].sort()
+
   async function createSchool(formData: FormData) {
     'use server'
     const { createClient: createServerClient } = await import('@/lib/supabase/server')
@@ -56,6 +61,8 @@ export default async function NovaEscolaPage({ params }: Props) {
       organization_id: orgRow.id,
       name: formData.get('name') as string,
       school_type: schoolType,
+      type_name: (formData.get('type_name') as string)?.trim() || 'Escola',
+      subtitle: (formData.get('subtitle') as string)?.trim() || null,
       form_config: formConfig,
       active: true,
     }).select('id').single()
@@ -78,11 +85,28 @@ export default async function NovaEscolaPage({ params }: Props) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Tipo de escola</label>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Categoria</label>
             <select name="school_type" defaultValue="eted"
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
               {SCHOOL_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
+            <p className="text-[11px] text-gray-400 mt-1">Define o formato do formulário de inscrição — não aparece pro candidato.</p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Nome do tipo *</label>
+            <input name="type_name" required list="type-name-suggestions" placeholder="Ex: ETED, Curso Técnico, Pós-graduação..."
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+            <datalist id="type-name-suggestions">
+              {existingTypeNames.map(name => <option key={name} value={name} />)}
+            </datalist>
+            <p className="text-[11px] text-gray-400 mt-1">Como esse tipo de escola é chamado — aparece nos cards e na página pública.</p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Descrição rápida</label>
+            <input name="subtitle" placeholder="Uma frase que resume o propósito da escola"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
           </div>
 
           <div className="flex justify-end gap-3 pt-2">

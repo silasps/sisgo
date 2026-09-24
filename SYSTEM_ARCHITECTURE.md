@@ -442,6 +442,25 @@ qualquer usuário logado) · `hospedagem` (quartos/camas, agenda, **lavanderia**
   em silêncio, sem nunca redirecionar). Sempre conferir a coluna de verdade
   (`psql "$DATABASE_URL" -c "\d schools"`) antes de confiar nesse arquivo
   pra essa tabela especificamente.
+- **`schools.type_name` (migration 133) — nome do tipo, livre e genérico:**
+  `school_type` continua com os mesmos valores internos de sempre ('eted',
+  'seminario', 'segundo_nivel', 'udn', 'curso_online', 'voluntariado',
+  'outro') e continua controlando comportamento (formulário curto/longo,
+  matrícula automática pra 'seminario') — os valores nunca podem ser
+  renomeados porque a API pública (`api/public/[slug]/schools`,
+  `.../events`) os expõe pra sites institucionais externos que já fazem
+  `school_type === 'eted'` direto (ex.: `jocumAt_site`, outro repositório).
+  O que mudou é a UI: `SCHOOL_TYPES` em `src/lib/schools.ts` agora rotula
+  as poucas opções de categoria de forma genérica ("Programa de formação",
+  "Curso curto", "Curso de nível avançado", "Outro" — sem nomenclatura de
+  uma instituição específica), e a instituição digita livremente o nome de
+  verdade do tipo em `type_name` (ex. "ETED", "Curso Técnico",
+  "Pós-graduação"), com sugestão via `<datalist>` dos nomes já usados na
+  organização (não há tabela/tela de cadastro de tipos — o "salvar pra
+  próxima" é só reaproveitar os valores distintos já gravados em
+  `schools.type_name`). `schoolDisplayType(school)` (`src/lib/schools.ts`)
+  é a função de exibição: mostra `type_name`, caindo pro rótulo genérico da
+  categoria (`schoolTypeShortLabel`) só pra dado legado sem `type_name`.
 - **Escolas ficam mais leves com "Seminários":** `school_type='seminario'`
   agora tem grupo e seção próprios em `/escolas` (`schoolTypeGroup`/
   `schoolTypeShortLabel` em `src/lib/schools.ts`), separado de "Escolas de

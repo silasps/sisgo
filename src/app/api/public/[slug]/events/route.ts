@@ -13,7 +13,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   const { data: schools } = await supabase
     .from('schools')
-    .select('id, name, acronym, slug, school_type, hero_image_url')
+    .select('id, name, acronym, slug, school_type, type_name, hero_image_url')
     .eq('organization_id', org.id)
     .eq('is_public', true)
     .eq('active', true)
@@ -42,6 +42,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       school_acronym: school?.acronym ?? null,
       school_slug: school?.slug ?? null,
       school_type: school?.school_type ?? null,
+      school_type_name: school?.type_name ?? null,
       hero_image_url: school?.hero_image_url ?? null,
     }
   })

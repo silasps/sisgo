@@ -5,7 +5,7 @@ import { BrandingForm } from './BrandingForm'
 import { ConfigForm } from './ConfigForm'
 import { updateAreaCashScopes, updateRoleAccumulations, updateIdCardEnabled, updateStaffCommunicationLanguages, updateStudentCommunicationLanguages, updateInstitutionRulesText } from './actions'
 import { asLooseClient } from '@/lib/supabase/loose-client'
-import { schoolTypeShortLabel } from '@/lib/schools'
+import { schoolDisplayType } from '@/lib/schools'
 import { LANGUAGES } from '@/lib/i18n/phoneCountries'
 
 type Props = { params: Promise<{ slug: string }> }
@@ -64,7 +64,7 @@ export default async function ConfiguracoesPage({ params }: Props) {
 
   const [{ data: schools }, { data: ministries }, { data: cashScopes }] = canConfigureCashScopes
     ? await Promise.all([
-      supabase.from('schools').select('id, name, acronym, school_type, active').eq('organization_id', org.id).eq('active', true).order('name'),
+      supabase.from('schools').select('id, name, acronym, school_type, type_name, active').eq('organization_id', org.id).eq('active', true).order('name'),
       supabase.from('ministries').select('id, name, active').eq('organization_id', org.id).eq('active', true).order('name'),
       asLooseClient(supabase).from('finance_cash_scopes').select('id, entity_type, school_id, ministry_id, enabled').eq('organization_id', org.id),
     ])
@@ -173,7 +173,7 @@ export default async function ConfiguracoesPage({ params }: Props) {
                         value={`school:${school.id}`}
                         checked={enabledScopes.has(`school:${school.id}`)}
                         title={school.name}
-                        subtitle={`${school.acronym ? `${school.acronym} · ` : ''}${schoolTypeShortLabel(school.school_type)}`}
+                        subtitle={`${school.acronym ? `${school.acronym} · ` : ''}${schoolDisplayType(school)}`}
                       />
                     ))}
                   </div>

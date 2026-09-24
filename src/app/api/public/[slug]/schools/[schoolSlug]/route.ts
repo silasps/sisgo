@@ -16,7 +16,7 @@ export async function GET(
 
   const { data: school } = await supabase
     .from('schools')
-    .select('id, slug, name, acronym, school_type, subtitle, long_description, objectives, target_audience, duration_description, hero_image_url, hero_video_url, promo_video_url, prerequisites')
+    .select('id, slug, name, acronym, school_type, type_name, subtitle, long_description, objectives, target_audience, duration_description, hero_image_url, hero_video_url, promo_video_url, prerequisites')
     .eq('organization_id', org.id)
     .eq('slug', schoolSlug)
     .eq('is_public', true)

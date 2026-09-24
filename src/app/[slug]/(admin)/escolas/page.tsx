@@ -3,7 +3,7 @@ import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import type { Database } from '@/types/database'
-import { schoolTypeGroup, schoolTypeShortLabel } from '@/lib/schools'
+import { schoolTypeGroup, schoolDisplayType } from '@/lib/schools'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { isManagementRole } from '@/lib/auth/permissions'
 import { deleteSchool } from './[id]/actions'
@@ -106,10 +106,10 @@ export default async function EscolasPage({ params }: Props) {
           </div>
         ) : (
           <div className="space-y-8 animate-stagger">
-            <SchoolSection title="ETED" schools={eteds} slug={slug} isManagement={isManagement} schoolsWithTurmas={schoolsWithTurmas} onDelete={handleDeleteSchool} />
-            {seminarios.length > 0 && <SchoolSection title="Seminários" schools={seminarios} slug={slug} isManagement={isManagement} schoolsWithTurmas={schoolsWithTurmas} onDelete={handleDeleteSchool} />}
-            <SchoolSection title="Escolas de 2º Nível" schools={secondLevelSchools} slug={slug} isManagement={isManagement} schoolsWithTurmas={schoolsWithTurmas} onDelete={handleDeleteSchool} />
-            {otherSchools.length > 0 && <SchoolSection title="Outras escolas" schools={otherSchools} slug={slug} isManagement={isManagement} schoolsWithTurmas={schoolsWithTurmas} onDelete={handleDeleteSchool} />}
+            <SchoolSection title="Programas de Formação" schools={eteds} slug={slug} isManagement={isManagement} schoolsWithTurmas={schoolsWithTurmas} onDelete={handleDeleteSchool} />
+            {seminarios.length > 0 && <SchoolSection title="Cursos Curtos" schools={seminarios} slug={slug} isManagement={isManagement} schoolsWithTurmas={schoolsWithTurmas} onDelete={handleDeleteSchool} />}
+            <SchoolSection title="Nível Avançado" schools={secondLevelSchools} slug={slug} isManagement={isManagement} schoolsWithTurmas={schoolsWithTurmas} onDelete={handleDeleteSchool} />
+            {otherSchools.length > 0 && <SchoolSection title="Outras" schools={otherSchools} slug={slug} isManagement={isManagement} schoolsWithTurmas={schoolsWithTurmas} onDelete={handleDeleteSchool} />}
           </div>
         )}
       </main>
@@ -147,14 +147,13 @@ function SchoolCard({ school: e, slug, isManagement, hasTurmas, onDelete }: {
   school: School; slug: string
   isManagement: boolean; hasTurmas: boolean; onDelete: (formData: FormData) => Promise<void>
 }) {
-  const type = (e as unknown as { school_type: string | null }).school_type
   return (
     <div className="group relative rounded-xl border border-gray-200 bg-white p-5 cursor-pointer transition-all duration-200 hover:border-brand-300 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm">
       <Link href={`/${slug}/escolas/${e.id}`} className="absolute inset-0 rounded-xl" aria-label={`Abrir escola ${e.name}`} />
       <div className="pointer-events-none mb-2 flex items-start justify-between">
         <div className="min-w-0 flex-1">
           <p className="font-semibold text-gray-900 truncate group-hover:text-brand-600 transition-colors">{e.name}</p>
-          <p className="text-xs text-gray-500 mt-0.5">{[e.acronym, schoolTypeShortLabel(type)].filter(Boolean).join(' · ')}</p>
+          <p className="text-xs text-gray-500 mt-0.5">{[e.acronym, schoolDisplayType(e as unknown as { school_type: string | null; type_name: string | null })].filter(Boolean).join(' · ')}</p>
         </div>
         <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ml-2 ${e.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
           {e.active ? 'Ativa' : 'Inativa'}

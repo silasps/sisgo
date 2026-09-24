@@ -14,7 +14,7 @@ export default async function OportunidadesPage({ searchParams }: Props) {
   const { data } = await supabase
     .from('schools')
     .select(`
-      id, slug, name, acronym, school_type, subtitle, hero_image_url,
+      id, slug, name, acronym, school_type, type_name, subtitle, hero_image_url,
       organizations!inner ( slug, name, city, state, logo_url, active )
     `)
     .eq('is_public', true)

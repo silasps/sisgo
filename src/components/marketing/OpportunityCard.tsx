@@ -1,5 +1,5 @@
 import { BookOpen } from 'lucide-react'
-import { schoolTypeShortLabel } from '@/lib/schools'
+import { schoolDisplayType } from '@/lib/schools'
 
 export type OpportunitySchool = {
   id: string
@@ -7,6 +7,7 @@ export type OpportunitySchool = {
   name: string
   acronym: string | null
   school_type: string | null
+  type_name: string | null
   subtitle: string | null
   hero_image_url: string | null
   organizations: { slug: string; name: string; city: string | null; state: string | null; logo_url: string | null; active?: boolean } | null
@@ -36,7 +37,7 @@ export function OpportunityCard({ school }: { school: OpportunitySchool }) {
       </div>
       <div className="p-5">
         <span className="text-xs font-semibold uppercase tracking-wide text-brand-400">
-          {schoolTypeShortLabel(school.school_type)}
+          {schoolDisplayType(school)}
         </span>
         <h3 className="font-bold text-lg mt-1 group-hover:text-brand-400 transition-colors">
           {school.name}

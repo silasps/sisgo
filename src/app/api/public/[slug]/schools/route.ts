@@ -13,7 +13,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   const { data: schools } = await supabase
     .from('schools')
-    .select('slug, name, acronym, school_type, subtitle, long_description, objectives, target_audience, duration_description, hero_image_url, hero_video_url, promo_video_url, prerequisites')
+    .select('slug, name, acronym, school_type, type_name, subtitle, long_description, objectives, target_audience, duration_description, hero_image_url, hero_video_url, promo_video_url, prerequisites')
     .eq('organization_id', org.id)
     .eq('is_public', true)
     .eq('active', true)

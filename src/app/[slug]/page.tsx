@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { SuperAdminContextBar } from '@/components/layout/SuperAdminContextBar'
 import { notFound } from 'next/navigation'
-import { schoolTypeShortLabel } from '@/lib/schools'
+import { schoolDisplayType } from '@/lib/schools'
 import { orgShortName } from '@/lib/orgShortName'
 import { BookOpen } from 'lucide-react'
 
@@ -38,7 +38,7 @@ export default async function PublicBasePage({ params, searchParams }: Props) {
 
   const { data: schools } = await supabase
     .from('schools')
-    .select('id, name, acronym, slug, school_type, subtitle, hero_image_url, is_public')
+    .select('id, name, acronym, slug, school_type, type_name, subtitle, hero_image_url, is_public')
     .eq('organization_id', org.id)
     .eq('active', true)
     .eq('is_public', true)
@@ -102,7 +102,7 @@ export default async function PublicBasePage({ params, searchParams }: Props) {
                 </div>
                 <div className="p-5">
                   <span className="text-xs font-semibold uppercase tracking-wide text-brand-500">
-                    {schoolTypeShortLabel(school.school_type)}
+                    {schoolDisplayType(school)}
                   </span>
                   <h3 className="font-bold text-dark-950 text-lg mt-1 group-hover:text-brand-600 transition-colors">
                     {school.name}

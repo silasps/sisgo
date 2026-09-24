@@ -87,6 +87,11 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
     .single()
   if (!escola) notFound()
 
+  // Nomes de tipo já usados nessa organização — vira sugestão (datalist) no
+  // campo abaixo, pra não perder o nome digitado numa escola anterior.
+  const { data: typeNameRows } = await supabase.from('schools').select('type_name').eq('organization_id', org.id)
+  const existingTypeNames = [...new Set((typeNameRows ?? []).map(r => r.type_name).filter(Boolean))].sort()
+
   // lider_eted só acessa a escola que lidera
   if (isLiderEted) {
     const { data: lc } = await supabase
@@ -232,6 +237,7 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
       acronym: (formData.get('acronym') as string) || null,
       slug: (formData.get('slug') as string) || null,
       school_type: formData.get('school_type') as string,
+      type_name: (formData.get('type_name') as string)?.trim() || 'Escola',
       subtitle: (formData.get('subtitle') as string) || null,
       long_description: (formData.get('long_description') as string) || null,
       target_audience: (formData.get('target_audience') as string) || null,
@@ -422,12 +428,23 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                     </div>
                     <Field label="Sigla / Acrônimo" name="acronym" defaultValue={escola.acronym ?? ''} placeholder="Ex: ETED" />
                     <Field label="Slug (URL pública)" name="slug" defaultValue={(escola as unknown as { slug: string | null }).slug ?? ''} placeholder="ex: eted-almirante" />
-                    <div className="sm:col-span-2">
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Tipo de escola</label>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Categoria</label>
                       <select name="school_type" defaultValue={(escola as unknown as { school_type: string }).school_type}
                         className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
                         {SCHOOL_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                       </select>
+                      <p className="text-[11px] text-gray-400 mt-1">Define o formato do formulário de inscrição.</p>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Nome do tipo *</label>
+                      <input name="type_name" required list="type-name-suggestions"
+                        defaultValue={(escola as unknown as { type_name: string | null }).type_name ?? ''}
+                        placeholder="Ex: ETED, Curso Técnico..."
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                      <datalist id="type-name-suggestions">
+                        {existingTypeNames.map(name => <option key={name} value={name!} />)}
+                      </datalist>
                     </div>
                     <div className="sm:col-span-2">
                       <Field label="Subtítulo" name="subtitle" defaultValue={(escola as unknown as { subtitle: string | null }).subtitle ?? ''} placeholder="Uma frase que resume o propósito da escola" />
@@ -773,12 +790,23 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                 </div>
                 <Field label="Sigla / Acrônimo" name="acronym" defaultValue={escola.acronym ?? ''} placeholder="Ex: ETED" />
                 <Field label="Slug (URL pública)" name="slug" defaultValue={(escola as unknown as { slug: string | null }).slug ?? ''} placeholder="ex: eted-almirante" />
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Tipo de escola</label>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Categoria</label>
                   <select name="school_type" defaultValue={(escola as unknown as { school_type: string }).school_type}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
                     {SCHOOL_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
+                  <p className="text-[11px] text-gray-400 mt-1">Define o formato do formulário de inscrição.</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Nome do tipo *</label>
+                  <input name="type_name" required list="type-name-suggestions"
+                    defaultValue={(escola as unknown as { type_name: string | null }).type_name ?? ''}
+                    placeholder="Ex: ETED, Curso Técnico..."
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                  <datalist id="type-name-suggestions">
+                    {existingTypeNames.map(name => <option key={name} value={name!} />)}
+                  </datalist>
                 </div>
                 <div className="sm:col-span-2">
                   <Field label="Subtítulo" name="subtitle" defaultValue={(escola as unknown as { subtitle: string | null }).subtitle ?? ''} placeholder="Uma frase que resume o propósito da escola" />

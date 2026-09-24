@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { headers } from 'next/headers'
 import { RegistrationForm } from './RegistrationForm'
-import { schoolTypeShortLabel } from '@/lib/schools'
+import { schoolDisplayType } from '@/lib/schools'
 import { getFormDict, normalizeLang, detectLangFromHeader } from '@/lib/i18n/forms'
 import { resolveLocalizedText } from '@/lib/i18n/resolveLocalizedText'
 import { orgShortName } from '@/lib/orgShortName'
@@ -37,7 +37,7 @@ export default async function SchoolPublicPage({ params, searchParams }: Props) 
 
   const query = supabase
     .from('schools')
-    .select('id, name, acronym, school_type, subtitle, long_description, long_description_translations, objectives, target_audience, target_audience_translations, duration_description, hero_image_url, promo_video_url, prerequisites, is_public')
+    .select('id, name, acronym, school_type, type_name, subtitle, long_description, long_description_translations, objectives, target_audience, target_audience_translations, duration_description, hero_image_url, promo_video_url, prerequisites, is_public')
     .eq('organization_id', org.id)
     .eq('is_public', true)
     .eq('active', true)
@@ -122,7 +122,7 @@ export default async function SchoolPublicPage({ params, searchParams }: Props) 
 
         <div className="relative z-10 text-center px-5 sm:px-6 max-w-4xl mx-auto">
           <span className="inline-block mb-4 sm:mb-6 text-xs font-bold uppercase tracking-[0.2em] text-brand-400 bg-brand-500/10 border border-brand-500/30 px-4 py-1.5 rounded-full">
-            {schoolTypeShortLabel(school.school_type)}
+            {schoolDisplayType(school)}
           </span>
           <h1 className="text-4xl sm:text-5xl md:text-7xl font-black text-white leading-tight mb-3 sm:mb-4">
             {school.name}
@@ -179,7 +179,7 @@ export default async function SchoolPublicPage({ params, searchParams }: Props) 
               <StatHighlight value={school.duration_description ?? '20 semanas'} label={d.landingChrome.stat_duration_label} />
               <StatHighlight value={d.landingChrome.stat_theory_value} label={d.landingChrome.stat_theory_label} />
               <StatHighlight value={d.landingChrome.stat_field_value} label={d.landingChrome.stat_field_label} />
-              <StatHighlight value={schoolTypeShortLabel(school.school_type)} label={d.landingChrome.stat_type_label} />
+              <StatHighlight value={schoolDisplayType(school)} label={d.landingChrome.stat_type_label} />
             </div>
           </div>
         </div>
