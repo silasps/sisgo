@@ -78,7 +78,7 @@ export default async function BaseDetailPage({ params }: Props) {
           </div>
         }
       />
-      <main className="p-4 md:p-6 space-y-6 max-w-4xl">
+      <main className="p-4 md:p-6 space-y-6 max-w-4xl mx-auto">
 
         {/* Status banner + toggle */}
         <div className={`rounded-xl px-5 py-3 flex items-center gap-3 ${

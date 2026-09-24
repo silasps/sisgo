@@ -9,6 +9,7 @@ import { RecusarModal } from './RecusarModal'
 import { DisponibilizarFormularioButton } from './DisponibilizarFormularioButton'
 import { getEmailQuota } from '@/lib/email/getEmailQuota'
 import { getRolePreview } from '@/lib/role-preview'
+import { getMySchools, getMyMinistries, type LinkedSchool, type LinkedMinistry } from '@/lib/auth/unit-access'
 import { Suspense } from 'react'
 import { ScrollHighlight } from '@/components/ui/ScrollHighlight'
 import { SCHOOL_APPLICATION_TYPES } from '@/lib/schools'
@@ -190,36 +191,46 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
   const preview = await getRolePreview(realRole)
   const userRole = preview?.role ?? realRole
 
-  // Hospitalidade cuida só de estrutura/hospedagem, não do processo seletivo —
-  // o menu já não mostra este link pra ela, mas a rota em si não tinha bloqueio
-  // (só esconder do menu não impede acesso por URL direta).
-  if (userRole === 'hospitalidade') redirect(`/${slug}/dashboard`)
-
-  const isEtedLeader = userRole === 'lider_eted'
-  const isLiderMinisterio = userRole === 'lider_ministerio'
   const isManagement = ['superadmin', 'admin_base', 'lider_base', 'dh'].includes(userRole)
   const canWrite = ['superadmin', 'admin_base', 'dh'].includes(userRole)
 
-  let leaderMinistryId: string | null = null
-  if (isLiderMinisterio) {
-    leaderMinistryId = preview?.ministryId
-      ?? (await supabase.from('ministry_leaders').select('ministry_id').eq('user_id', user?.id ?? '').limit(1).single()).data?.ministry_id ?? null
-  }
+  // Fora da gestão, o escopo vem dos VÍNCULOS da pessoa (lib/auth/unit-access),
+  // não do papel principal — quem lidera a escola X e o ministério Y vê e age
+  // sobre as inscrições dos dois, seja qual for o papel:
+  //   • escolas que lidera → inscrições de aluno e de obreiro dessas escolas (com escrita)
+  //   • escolas em que é obreiro → inscrições de aluno dessas escolas (só leitura)
+  //   • ministérios que lidera → inscrições de obreiro desses ministérios + as ainda sem destino
+  // Sem nenhum desses vínculos não há o que ver aqui — inclusive Hospitalidade,
+  // que cuida de estrutura e não do processo seletivo (antes, papéis fora do
+  // menu viam a lista da base inteira pela URL direta).
+  const unitCtx = { userId: user?.id ?? '', orgId, role: userRole, preview }
+  const [mySchools, myMinistries]: [LinkedSchool[], LinkedMinistry[]] = isManagement
+    ? [[], []]
+    : await Promise.all([getMySchools(unitCtx), getMyMinistries(unitCtx)])
+  const leaderSchoolIds = mySchools.filter(s => s.link === 'lider').map(s => s.id)
+  const viewAlunoSchoolIds = mySchools.map(s => s.id)
+  const leaderMinistryIds = myMinistries.filter(m => m.link === 'lider').map(m => m.id)
 
-  let allowedSchoolIds: string[] | null = null
-  if (isEtedLeader) {
-    const leaderSchools = preview?.schoolId
-      ? [{ school_id: preview.schoolId }]
-      : (await supabase
-        .from('school_leaders')
-        .select('school_id')
-        .eq('organization_id', orgId)
-        .eq('user_id', user?.id ?? '')).data
-    allowedSchoolIds = leaderSchools?.map(row => row.school_id) ?? []
-  }
+  if (!isManagement && viewAlunoSchoolIds.length === 0 && leaderMinistryIds.length === 0) redirect(`/${slug}/dashboard`)
 
-  const canWriteEted = isEtedLeader && (allowedSchoolIds?.length ?? 0) > 0
-  const canWriteObreiro = canWrite || isLiderMinisterio || canWriteEted
+  // Escopo de ESCRITA em escolas (null = gestão, sem restrição).
+  const allowedSchoolIds: string[] | null = isManagement ? null : leaderSchoolIds
+  const canWriteEted = leaderSchoolIds.length > 0
+  const canWriteObreiro = canWrite || leaderMinistryIds.length > 0 || canWriteEted
+  // Só tem ministério no escopo: esconde o fluxo de aluno e, com um único
+  // ministério, fixa o destino do formulário de obreiro nele.
+  const onlyMinistryScope = !isManagement && viewAlunoSchoolIds.length === 0
+  const fixedMinistryId = onlyMinistryScope && leaderMinistryIds.length === 1 ? leaderMinistryIds[0] : null
+
+  const isAlunoTipo = (tipo: string) => tipo === 'pre_inscricao' || tipo === 'aluno'
+  const inScope = (tipo: string, schoolId?: string | null, ministryId?: string | null) => {
+    if (isManagement) return true
+    if (isAlunoTipo(tipo)) return !!schoolId && viewAlunoSchoolIds.includes(schoolId)
+    if (schoolId && leaderSchoolIds.includes(schoolId)) return true
+    if (ministryId && leaderMinistryIds.includes(ministryId)) return true
+    // Candidatura de obreiro ainda sem destino: fica visível a quem lidera ministério.
+    return tipo === 'obreiro' && !schoolId && !ministryId && leaderMinistryIds.length > 0
+  }
 
   const canWriteItem = (item: InscricaoItem) => {
     if (canWrite) return true
@@ -1730,26 +1741,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     }
   }
 
-  // Lider ETED: só vê inscrições (aluno e obreiro) das suas escolas (não sem preferência)
-  // Lider Ministério: só vê inscrições de obreiro do seu ministério
-  const roleFiltered = isEtedLeader
-    ? items.filter(i => {
-        if ((i.tipo === 'pre_inscricao' || i.tipo === 'aluno') && !i.schoolId) return false
-        if ((i.tipo === 'pre_inscricao' || i.tipo === 'aluno') && allowedSchoolIds && !allowedSchoolIds.includes(i.schoolId!)) return false
-        if ((i.tipo === 'pre_inscricao_obreiro' || i.tipo === 'obreiro')) {
-          if (!i.schoolId) return false
-          if (allowedSchoolIds && !allowedSchoolIds.includes(i.schoolId)) return false
-        }
-        return true
-      })
-    : isLiderMinisterio && leaderMinistryId
-    ? items.filter(i => {
-        if (i.tipo === 'pre_inscricao' || i.tipo === 'aluno') return false
-        if ((i.tipo === 'pre_inscricao_obreiro' || i.tipo === 'obreiro') && i.ministryId && i.ministryId !== leaderMinistryId) return false
-        if (i.tipo === 'pre_inscricao_obreiro' && !i.ministryId) return false
-        return true
-      })
-    : items
+  const roleFiltered = items.filter(i => inScope(i.tipo, i.schoolId, i.ministryId))
 
   roleFiltered.sort((a, b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime())
   const quota = await getEmailQuota()
@@ -1757,22 +1749,13 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
   // Mesma regra de escopo do roleFiltered acima, aplicada ao histórico de
   // recusas/exclusões — sem isso, líder de ETED/escola/seminário via o
   // histórico de TODAS as escolas/ministérios da organização.
-  const historicoRoleFiltered = isEtedLeader
-    ? historico.filter(h => {
-        if (h.tipo === 'Pré-inscrição' || h.tipo === 'Candidato a Aluno' || h.tipo === 'Pré-inscrição Obreiro' || h.tipo === 'Candidato a Obreiro') {
-          if (!h.schoolId) return false
-          if (allowedSchoolIds && !allowedSchoolIds.includes(h.schoolId)) return false
-        }
-        return true
-      })
-    : isLiderMinisterio && leaderMinistryId
-    ? historico.filter(h => {
-        if (h.tipo === 'Pré-inscrição' || h.tipo === 'Candidato a Aluno') return false
-        if ((h.tipo === 'Pré-inscrição Obreiro' || h.tipo === 'Candidato a Obreiro') && h.ministryId && h.ministryId !== leaderMinistryId) return false
-        if (h.tipo === 'Pré-inscrição Obreiro' && !h.ministryId) return false
-        return true
-      })
-    : historico
+  const HISTORICO_TIPO: Record<string, string> = {
+    'Pré-inscrição': 'pre_inscricao',
+    'Candidato a Aluno': 'aluno',
+    'Pré-inscrição Obreiro': 'pre_inscricao_obreiro',
+    'Candidato a Obreiro': 'obreiro',
+  }
+  const historicoRoleFiltered = historico.filter(h => inScope(HISTORICO_TIPO[h.tipo] ?? h.tipo, h.schoolId, h.ministryId))
 
   // As 3 listas de ids abaixo (reviewer/assumed/createdBy) costumavam ser
   // resolvidas em 3 chamadas Promise.all sequenciais — cada uma batendo na
@@ -1838,12 +1821,12 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
               <EnviarFormularioObreiroDiretoButton
                 slug={slug}
                 action={enviarFormularioObreiroDireto}
-                ministries={isLiderMinisterio ? [] : allMinistries}
-                schools={isLiderMinisterio ? [] : allSchools}
-                fixedDestination={isLiderMinisterio && leaderMinistryId ? {
+                ministries={fixedMinistryId ? [] : isManagement ? allMinistries : allMinistries.filter(m => leaderMinistryIds.includes(m.id))}
+                schools={fixedMinistryId ? [] : isManagement ? allSchools : allSchools.filter(sc => leaderSchoolIds.includes(sc.id))}
+                fixedDestination={fixedMinistryId ? {
                   type: 'ministry',
-                  id: leaderMinistryId,
-                  label: allMinistries.find(m => m.id === leaderMinistryId)?.name ?? 'seu ministério',
+                  id: fixedMinistryId,
+                  label: allMinistries.find(m => m.id === fixedMinistryId)?.name ?? 'seu ministério',
                 } : undefined}
               />
             )}
@@ -1862,12 +1845,12 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           orgId={orgId}
           initialTab={tab}
           initialEtapa={etapa}
-          hideAlunoTipo={isLiderMinisterio}
+          hideAlunoTipo={onlyMinistryScope}
           linksAluno={publicSchools.length > 0 ? (
             <InscricaoLinkCard
               orgSlug={slug}
-              schools={(allowedSchoolIds
-                ? publicSchools.filter(s => allowedSchoolIds.includes(s.id))
+              schools={(!isManagement
+                ? publicSchools.filter(s => viewAlunoSchoolIds.includes(s.id))
                 : publicSchools
               ).map(s => ({ slug: s.slug, name: s.name }))}
             />
@@ -1878,8 +1861,8 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
               {publicMinistries.length > 0 && (
                 <MinistryLinkCard
                   orgSlug={slug}
-                  ministries={(isLiderMinisterio && leaderMinistryId
-                    ? publicMinistries.filter(m => m.id === leaderMinistryId)
+                  ministries={(!isManagement
+                    ? publicMinistries.filter(m => leaderMinistryIds.includes(m.id))
                     : publicMinistries
                   ).map(m => ({ slug: m.slug, name: m.name }))}
                 />

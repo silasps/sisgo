@@ -15,6 +15,7 @@ import { FinancePendingConfirmButton } from '@/components/finance/FinancePending
 import { Suspense } from 'react'
 import { ScrollHighlight } from '@/components/ui/ScrollHighlight'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
+import { getMinistryLink } from '@/lib/auth/unit-access'
 import { EnviarFormularioObreiroDiretoButton } from '@/components/inscricoes/EnviarFormularioObreiroDiretoButton'
 import { SearchableSelectModal } from '@/components/ui/SearchableSelectModal'
 
@@ -50,11 +51,14 @@ export default async function EquipePage({ params, searchParams }: Props) {
   const { data: ministry } = await supabase.from('ministries').select('name').eq('id', id).single()
   const ministryName = ministry?.name ?? 'este ministério'
 
-  const { role } = await getCurrentOrganizationRole(supabase, user.id, orgId)
+  const { role, preview } = await getCurrentOrganizationRole(supabase, user.id, orgId)
   const isManagement = isManagementRole(role)
   const canWrite = isOperationalManager(role)
-  const isLiderMinisterio = role === 'lider_ministerio'
-  const isObreiroMinisterio = role === 'obreiro_ministerio'
+  // Líder DESTE ministério (vínculo), não "tem papel lider_ministerio" — quem
+  // lidera outro ministério e é só membro deste não ganha poderes aqui. Quem
+  // já escreve direto (canWrite) não passa pelo fluxo de solicitação ao DH.
+  const isLiderMinisterio = !canWrite
+    && (await getMinistryLink({ userId: user.id, orgId, role, preview }, id)) === 'lider'
 
   type MemberRaw = {
     id: string; person_id: string; joined_at: string | null
@@ -144,7 +148,8 @@ export default async function EquipePage({ params, searchParams }: Props) {
 
   if (isLiderMinisterio) {
     const [{ data: myReqData }, { data: pData }] = await Promise.all([
-      supabase.from('ministry_pending_requests')
+      // Admin: a RLS exige o papel lider_ministerio; o vínculo já foi validado acima.
+      sbAdmin.from('ministry_pending_requests')
         .select('id, request_type, notes, created_at, status, person_id, people(full_name), ministry_roles(name)')
         .eq('ministry_id', id).eq('requested_by', user.id).eq('status', 'pendente')
         .order('created_at', { ascending: false }),
@@ -294,7 +299,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
   return (
     <>
     <Suspense><ScrollHighlight /></Suspense>
-    <main className="p-4 md:p-6 space-y-4 max-w-3xl overflow-y-auto flex-1">
+    <main className="p-4 md:p-6 space-y-4 max-w-5xl mx-auto overflow-y-auto flex-1">
       <p className="text-xs text-gray-400 -mt-2">
         Vínculo de líderes e obreiros com este ministério — quem serve aqui e com que papel.
       </p>
@@ -437,7 +442,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
               Transferências p/ Confirmar
               <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">{dhTransfers.length}</span>
             </h2>
-            <ul className="space-y-3">
+            <ul className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
               {dhTransfers.map(t => (
                 <li key={t.id} className="border border-amber-100 rounded-lg p-3 space-y-2">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -475,7 +480,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
             Solicitações do Líder
             <span className="ml-2 text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full">{pendingRequests.length}</span>
           </h2>
-          <ul className="space-y-3">
+          <ul className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
             {pendingRequests.map(req => {
               const pName = (req.people as { full_name: string } | null)?.full_name
               const rName = (req.ministry_roles as { name: string } | null)?.name
@@ -510,7 +515,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
               Transferências Recebidas
               <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">{incoming.length}</span>
             </h2>
-            <ul className="space-y-3">
+            <ul className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
               {incoming.map(t => (
                 <li key={t.id} className="border border-amber-100 rounded-lg p-3 space-y-2">
                   <p className="text-sm font-medium text-gray-800">{transferPersonMap.get(t.person_id) ?? '—'}</p>

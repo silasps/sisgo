@@ -70,7 +70,7 @@ export default async function MinhaCarteirinhaPage({ params }: Props) {
   return (
     <>
       <Header title="Minha Carteirinha" />
-      <main className="p-4 md:p-6 max-w-sm">
+      <main className="p-4 md:p-6 max-w-sm mx-auto">
         {token?.token ? (
           <IdCardWithQr
             personName={person.full_name}

@@ -3,12 +3,14 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/Header'
 import { AnimatedDonutChart } from '@/components/ui/AnimatedDonutChart'
 import { FinancialMiniChart } from '@/components/ui/FinancialMiniChart'
-import { AnimatedNumber } from '@/components/ui/AnimatedNumber'
 import Link from 'next/link'
 import { getRolePreview } from '@/lib/role-preview'
 import { isManagementRole } from '@/lib/auth/permissions'
 import { getStudentSchoolIds } from '@/lib/school-scope'
 import { getVerseOfDay } from '@/lib/votd'
+import { StatCard, SectionCard, EmptyState } from './ui'
+import { AreaTabs } from './AreaTabs'
+import { getMyAreas, buildAreaTabs } from './areas'
 import type { LucideIcon } from 'lucide-react'
 import {
   Users, Briefcase, GraduationCap, BookOpen, Music, Home,
@@ -17,7 +19,7 @@ import {
   Megaphone, Pin, BookMarked, Shirt, IdCard,
 } from 'lucide-react'
 
-type Props = { params: Promise<{ slug: string }> }
+type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ area?: string }> }
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
@@ -32,8 +34,9 @@ const PERSON_STATUSES = [
   { key: 'sem_status',  label: 'Sem status',  color: '#9CA3AF' },
 ] as const
 
-export default async function BaseDashboard({ params }: Props) {
+export default async function BaseDashboard({ params, searchParams }: Props) {
   const { slug } = await params
+  const { area: initialArea } = await searchParams
   const supabase = await createClient()
 
   const { data: org } = await supabase
@@ -206,22 +209,34 @@ export default async function BaseDashboard({ params }: Props) {
     )
   }
 
-  // For lider_eted: discover their assigned school IDs
-  let etedSchoolIds: string[] = []
-  let etedSchoolNames: string[] = []
+  // ── Áreas acumuladas (ministérios/escolas) ──────────────────
+  // Quem lidera/serve em mais de um ministério ou escola ganha uma aba por
+  // área; papéis com painel próprio (gestão, DH, hospitalidade...) ganham a
+  // aba "principal" + as abas das áreas que acumulam.
+  const sbAreas = createAdminClient()
+  const myAreas = await getMyAreas({ orgId, userId: user?.id ?? '', role: userRole, preview })
+  const areaItems = await buildAreaTabs({
+    supabase, sbAdmin: sbAreas, slug, orgId, userId: user?.id ?? '', role: userRole, areas: myAreas,
+  })
 
-  if (isEtedLeader) {
-    const mySchools = preview?.schoolId
-      ? [{ school_id: preview.schoolId, schools: null }]
-      : (await supabase
-        .from('school_leaders')
-        .select('school_id, schools(name)')
-        .eq('user_id', user?.id ?? '')
-        .eq('organization_id', orgId)).data
-
-    etedSchoolIds = mySchools?.map(s => s.school_id) ?? []
-    etedSchoolNames = mySchools?.map(s => (s.schools as unknown as { name: string })?.name).filter(Boolean) ?? []
+  const renderHome = (principal: { label: string; content: React.ReactNode } | null) => {
+    const items = [
+      ...(principal ? [{ tab: { key: 'geral', label: principal.label, kind: 'principal' as const }, panel: principal.content }] : []),
+      ...areaItems,
+    ]
+    return (
+      <>
+        <Header title="Início" />
+        <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
+          <AreaTabs tabs={items.map(i => i.tab)} panels={items.map(i => i.panel)} initialKey={initialArea} />
+          <PersonalAccountCard slug={slug} orgId={orgId} userId={user?.id ?? ''} laundryEnabled={laundryEnabled} />
+        </main>
+      </>
+    )
   }
+
+  const etedSchoolIds = myAreas.schools.map(s => s.id)
+  const etedSchoolNames = myAreas.schools.map(s => s.name)
 
   if (isHospitalidade) {
     const hospitalityDepts = myDepts.length > 0 ? myDepts : ['hospitalidade']
@@ -259,10 +274,10 @@ export default async function BaseDashboard({ params }: Props) {
     for (const a of activeAllocs) byGuestType.set(a.guest_type, (byGuestType.get(a.guest_type) ?? 0) + 1)
     const guestTypeRows = [...byGuestType.entries()].sort((a, b) => b[1] - a[1])
 
-    return (
-      <>
-        <Header title="Início" />
-        <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
+    return renderHome({
+      label: 'Hospitalidade',
+      content: (
+        <>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 animate-stagger">
             <StatCard label="Quartos pendentes" value={pendingRooms ?? 0} icon={Home} href={`/${slug}/reservas`} color="orange" />
             <StatCard label="Hospedagens do mês" value={approvedRooms ?? 0} icon={CalendarDays} href={`/${slug}/reservas?tab=quartos`} color="green" />
@@ -283,126 +298,41 @@ export default async function BaseDashboard({ params }: Props) {
               </div>
             )}
           </SectionCard>
-
-          <PersonalAccountCard slug={slug} orgId={orgId} userId={user?.id ?? ''} laundryEnabled={laundryEnabled} />
-        </main>
-      </>
-    )
+        </>
+      ),
+    })
   }
 
   if (isLiderMinisterio || isObreiroMinisterio) {
-    const sbAdmin = createAdminClient()
-    const ministryId = preview?.ministryId
-      ?? (isLiderMinisterio
-        ? (await supabase.from('ministry_leaders').select('ministry_id').eq('user_id', user?.id ?? '').single()).data?.ministry_id
-        : null)
+    if (areaItems.length > 0) return renderHome(null)
 
-    const obreiroMinistryId = isObreiroMinisterio && !ministryId
-      ? await (async () => {
-          const { data: sp } = await sbAdmin.from('staff_profiles').select('person_id').eq('organization_id', orgId).eq('user_id', user?.id ?? '').single()
-          if (!sp?.person_id) return null
-          const { data: mm } = await sbAdmin.from('ministry_members').select('ministry_id').eq('person_id', sp.person_id).eq('active', true).limit(1).single()
-          return mm?.ministry_id ?? null
-        })()
-      : null
-
-    const resolvedMinistryId = ministryId ?? obreiroMinistryId
-
-    const [{ count: pendingRequests }, { count: myReservations }, { data: ministry }, { count: memberCount }, { count: upcomingEvents }, { data: announcementsRaw }] = await Promise.all([
-      resolvedMinistryId
-        ? supabase.from('ministry_pending_requests')
-          .select('*', { count: 'exact', head: true })
-          .eq('ministry_id', resolvedMinistryId)
-          .eq('status', 'pendente')
-        : supabase.from('service_requests')
-          .select('*', { count: 'exact', head: true })
-          .eq('organization_id', orgId)
-          .eq('requester_id', user?.id ?? '')
-          .in('status', ['pendente', 'em_analise']),
+    // Papel de ministério mas ainda sem nenhum ministério vinculado.
+    const [{ count: myRequests }, { count: myReservations }] = await Promise.all([
+      supabase.from('service_requests')
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', orgId)
+        .eq('requester_id', user?.id ?? '')
+        .in('status', ['pendente', 'em_analise']),
       supabase.from('reservations')
         .select('*', { count: 'exact', head: true })
         .eq('organization_id', orgId)
         .eq('requested_by', user?.id ?? ''),
-      resolvedMinistryId
-        ? supabase.from('ministries').select('id, name, long_name').eq('id', resolvedMinistryId).single()
-        : Promise.resolve({ data: null }),
-      resolvedMinistryId
-        ? supabase.from('ministry_members').select('*', { count: 'exact', head: true }).eq('ministry_id', resolvedMinistryId).eq('active', true)
-        : Promise.resolve({ count: 0 }),
-      resolvedMinistryId
-        ? sbAdmin.from('ministry_calendar_events').select('*', { count: 'exact', head: true }).eq('ministry_id', resolvedMinistryId).gte('starts_at', new Date().toISOString())
-        : Promise.resolve({ count: 0 }),
-      sbAdmin
-        .from('base_announcements')
-        .select('id, title, body, pinned, visible_to_roles, expires_at, created_at')
-        .eq('organization_id', orgId)
-        .or(`expires_at.is.null,expires_at.gte.${today.slice(0, 10)}`)
-        .order('pinned', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(20),
     ])
 
-    const ministryBase = resolvedMinistryId ? `/${slug}/ministerios/${resolvedMinistryId}` : `/${slug}/ministerios`
-
-    const isVisibleToRole = (roles: string[] | null) => !roles || roles.length === 0 || roles.includes(userRole)
-    const heroAnnouncements = ((announcementsRaw ?? []) as Array<{
-      id: string; title: string; body: string; pinned: boolean; visible_to_roles: string[] | null; expires_at: string | null; created_at: string
-    }>).filter(a => isVisibleToRole(a.visible_to_roles)).slice(0, 3)
-    const ministryDisplayName = ministry?.long_name || ministry?.name
-
-    return (
-      <>
-        <Header title="Início" />
-        <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
-          {ministry?.name && (
-            <div className="rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 text-white p-4 md:p-5">
-              <p className="text-xs uppercase tracking-wide text-white/70">Ministério</p>
-              <p className="text-lg font-bold leading-tight">{ministryDisplayName}</p>
-              {heroAnnouncements.length > 0 ? (
-                <div className="mt-3 space-y-2">
-                  {heroAnnouncements.map(a => (
-                    <div key={a.id} className="flex items-start gap-2 bg-white/10 rounded-lg px-3 py-2">
-                      {a.pinned && <Pin size={13} className="mt-0.5 shrink-0" />}
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold">{a.title}</p>
-                        <p className="text-xs text-white/80 line-clamp-2">{a.body}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-white/70 mt-2 flex items-center gap-1">
-                  <Megaphone size={12} /> Nenhum anúncio da Comunicação no momento.
-                </p>
-              )}
-            </div>
-          )}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 animate-stagger">
-            <StatCard label="Membros" value={memberCount ?? 0} icon={Users} href={`${ministryBase}/equipe`} color="teal" />
-            <StatCard label={isLiderMinisterio ? 'Pendências' : 'Solicitações'} value={pendingRequests ?? 0} icon={AlertTriangle} href={`${ministryBase}/equipe`} color="pink" />
-            <StatCard label="Eventos futuros" value={upcomingEvents ?? 0} icon={CalendarDays} href={`${ministryBase}/calendario`} color="blue" />
+    return renderHome({
+      label: 'Ministério',
+      content: (
+        <>
+          <div className="grid grid-cols-2 gap-3 animate-stagger">
+            <StatCard label="Solicitações" value={myRequests ?? 0} icon={AlertTriangle} href={`/${slug}/pendentes`} color="pink" />
             <StatCard label="Reservas" value={myReservations ?? 0} icon={Home} href={`/${slug}/reservas`} color="orange" />
           </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Link href={ministryBase} className="group bg-white rounded-xl border border-gray-200 p-4 transition-all hover:shadow-md hover:-translate-y-0.5">
-              <p className="text-sm font-semibold text-gray-900 group-hover:text-brand-600 transition-colors">Geral</p>
-              <p className="text-xs text-gray-500 mt-0.5">Visão geral do ministério</p>
-            </Link>
-            <Link href={`${ministryBase}/equipe`} className="group bg-white rounded-xl border border-gray-200 p-4 transition-all hover:shadow-md hover:-translate-y-0.5">
-              <p className="text-sm font-semibold text-gray-900 group-hover:text-brand-600 transition-colors">Equipe</p>
-              <p className="text-xs text-gray-500 mt-0.5">Membros e solicitações</p>
-            </Link>
-            <Link href={`${ministryBase}/calendario`} className="group bg-white rounded-xl border border-gray-200 p-4 transition-all hover:shadow-md hover:-translate-y-0.5">
-              <p className="text-sm font-semibold text-gray-900 group-hover:text-brand-600 transition-colors">Calendário</p>
-              <p className="text-xs text-gray-500 mt-0.5">Reuniões e devocionais</p>
-            </Link>
-          </div>
-
-          <PersonalAccountCard slug={slug} orgId={orgId} userId={user?.id ?? ''} laundryEnabled={laundryEnabled} />
-        </main>
-      </>
-    )
+          <SectionCard title="Ministério" href={`/${slug}/ministerios`} linkLabel="Ver ministérios">
+            <EmptyState icon={Music} label="Você ainda não está vinculado a nenhum ministério" />
+          </SectionCard>
+        </>
+      ),
+    })
   }
 
   if (isSecretaria || isCozinha) {
@@ -418,10 +348,10 @@ export default async function BaseDashboard({ params }: Props) {
         .in('target_department', scopedDepartments)
         .in('status', ['pendente', 'em_analise'])
 
-    return (
-      <>
-        <Header title="Início" />
-        <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
+    return renderHome({
+      label: isSecretaria ? 'Secretaria' : 'Cozinha',
+      content: (
+        <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 animate-stagger">
             <StatCard label="Solicitações da área" value={serviceRequests ?? 0} icon={AlertTriangle} href={`/${slug}/pendentes`} color="pink" />
           </div>
@@ -438,11 +368,9 @@ export default async function BaseDashboard({ params }: Props) {
                 : `Escopo: ${scopedDepartments.join(', ')}`}
             />
           </SectionCard>
-
-          <PersonalAccountCard slug={slug} orgId={orgId} userId={user?.id ?? ''} laundryEnabled={laundryEnabled} />
-        </main>
-      </>
-    )
+        </>
+      ),
+    })
   }
 
   if (userRole === 'dh') {
@@ -498,10 +426,10 @@ export default async function BaseDashboard({ params }: Props) {
     const totalPipeline = (pendingStudentInterests ?? 0) + (pendingStaffInterests ?? 0)
     const totalForms = (formsAwaiting ?? 0) + (staffFormsAwaiting ?? 0)
 
-    return (
-      <>
-        <Header title="Início" />
-        <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
+    return renderHome({
+      label: 'Gestão de Pessoas',
+      content: (
+        <>
           <p className="text-sm text-gray-500">Departamento Humano — <span className="font-semibold text-gray-900">Gestão de Pessoas</span></p>
 
           {/* Pipeline principal */}
@@ -553,97 +481,27 @@ export default async function BaseDashboard({ params }: Props) {
               <p className="text-xs font-semibold text-gray-700 group-hover:text-brand-600">Presença</p>
             </Link>
           </div>
-
-          <PersonalAccountCard slug={slug} orgId={orgId} userId={user?.id ?? ''} laundryEnabled={laundryEnabled} />
-        </main>
-      </>
-    )
+        </>
+      ),
+    })
   }
 
   if (isEtedLeader) {
-    const scopedSchoolIds = etedSchoolIds.length > 0 ? etedSchoolIds : ['no-match']
-    const sbAdminScoped = createAdminClient()
-    const [{ count: classCount }, { count: pendingInterests }, { count: pendingStudentApps }, { data: activeClasses }] = await Promise.all([
-      supabase.from('school_classes')
-        .select('*', { count: 'exact', head: true })
-        .in('school_id', scopedSchoolIds)
-        .gte('ends_at', today),
-      sbAdminScoped.from('school_interest_forms')
-        .select('*', { count: 'exact', head: true })
-        .eq('organization_id', orgId)
-        .in('school_id', scopedSchoolIds)
-        .not('status', 'in', '("convertido","descartado")'),
-      supabase.from('student_applications')
-        .select('*', { count: 'exact', head: true })
-        .eq('organization_id', orgId)
-        .in('school_id', scopedSchoolIds)
-        .in('status', ['pendente', 'em_analise']),
-      supabase.from('school_classes')
-        .select('id, school_id, name, year, semester, starts_at, ends_at, max_students, schools(name)')
-        .in('school_id', scopedSchoolIds)
-        .gte('ends_at', today)
-        .order('starts_at', { ascending: true })
-        .limit(5),
-    ])
+    if (areaItems.length > 0) return renderHome(null)
 
-    return (
-      <>
-        <Header title="Início" />
-        <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 animate-stagger">
-            <StatCard label="Turmas ativas" value={classCount ?? 0} icon={BookOpen} href={`/${slug}/escolas`} color="orange" />
-            <StatCard label="Pré-inscrições" value={pendingInterests ?? 0} icon={ClipboardList} href={`/${slug}/inscricoes`} color="blue" />
-            <StatCard label="Inscrições em análise" value={pendingStudentApps ?? 0} icon={GraduationCap} href={`/${slug}/inscricoes`} color="purple" />
-          </div>
-
-          <SectionCard title="Turmas da sua escola" href={`/${slug}/escolas`} linkLabel="Ver escolas">
-            {!activeClasses || activeClasses.length === 0 ? (
-              <EmptyState icon={BookOpen} label="Nenhuma turma ativa na sua escola" />
-            ) : (
-              <div className="divide-y divide-gray-100">
-                {activeClasses.map((c) => {
-                  const school = c.schools as unknown as { name: string } | null
-                  const start = c.starts_at
-                    ? new Date(c.starts_at).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })
-                    : null
-                  const end = c.ends_at
-                    ? new Date(c.ends_at).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })
-                    : null
-                  return (
-                    <Link key={c.id} href={`/${slug}/escolas/${c.school_id}/turmas/${c.id}`}
-                      className="flex items-start justify-between py-2.5 px-2 -mx-2 rounded-lg hover:bg-brand-50 transition-colors group">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-800 group-hover:text-brand-700 transition-colors truncate">{school?.name ?? 'Escola'}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">
-                          {c.name}{start && end && ` · ${start} – ${end}`}
-                        </p>
-                      </div>
-                      <span className="ml-2 shrink-0 text-xs bg-green-50 text-green-700 border border-green-100 px-2 py-0.5 rounded-full font-medium">
-                        ativa
-                      </span>
-                    </Link>
-                  )
-                })}
-              </div>
-            )}
-          </SectionCard>
-
-          <PersonalAccountCard slug={slug} orgId={orgId} userId={user?.id ?? ''} laundryEnabled={laundryEnabled} />
-        </main>
-      </>
-    )
+    // Papel de escola mas ainda sem nenhuma escola vinculada.
+    return renderHome({
+      label: 'Escola',
+      content: (
+        <SectionCard title="Escola" href={`/${slug}/escolas`} linkLabel="Ver escolas">
+          <EmptyState icon={BookOpen} label="Você ainda não está vinculado a nenhuma escola" />
+        </SectionCard>
+      ),
+    })
   }
 
-  if (!isManagement) {
-    return (
-      <>
-        <Header title="Início" />
-        <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
-          <PersonalAccountCard slug={slug} orgId={orgId} userId={user?.id ?? ''} laundryEnabled={laundryEnabled} />
-        </main>
-      </>
-    )
-  }
+  // Papéis sem painel próprio: só as áreas acumuladas (se houver) + Minha conta.
+  if (!isManagement) return renderHome(null)
 
   // ── Main queries ────────────────────────────────────────────
   const sbAdmin = createAdminClient()
@@ -880,11 +738,10 @@ export default async function BaseDashboard({ params }: Props) {
     ? etedSchoolNames.length > 0 ? etedSchoolNames.join(', ') : 'Sua escola'
     : org?.name ?? 'Base'
 
-  return (
-    <>
-      <Header title="Início" />
-      <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
-
+  return renderHome({
+    label: 'Visão geral',
+    content: (
+      <>
         {/* ── Stat Cards ─────────────────────────────── */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 animate-stagger">
           <StatCard label="Pessoas" value={peopleCount ?? 0} icon={Users} href={`/${slug}/pessoas`} color="blue" />
@@ -1078,43 +935,12 @@ export default async function BaseDashboard({ params }: Props) {
             )}
           </SectionCard>
         </div>
-
-        <PersonalAccountCard slug={slug} orgId={orgId} userId={user?.id ?? ''} laundryEnabled={laundryEnabled} />
-
-      </main>
-    </>
-  )
+      </>
+    ),
+  })
 }
 
 // ── Sub-components ─────────────────────────────────────────
-
-const colorMap = {
-  blue:   { bg: 'bg-blue-50',    icon: 'text-blue-500',   num: 'text-blue-700',   label: 'text-blue-500'   },
-  green:  { bg: 'bg-green-50',   icon: 'text-green-500',  num: 'text-green-700',  label: 'text-green-500'  },
-  purple: { bg: 'bg-purple-50',  icon: 'text-purple-500', num: 'text-purple-700', label: 'text-purple-500' },
-  orange: { bg: 'bg-brand-50',   icon: 'text-brand-500',  num: 'text-brand-700',  label: 'text-brand-500'  },
-  pink:   { bg: 'bg-pink-50',    icon: 'text-pink-500',   num: 'text-pink-700',   label: 'text-pink-500'   },
-  teal:   { bg: 'bg-teal-50',    icon: 'text-teal-500',   num: 'text-teal-700',   label: 'text-teal-500'   },
-}
-
-function StatCard({ label, value, icon: Icon, href, color }: {
-  label: string; value: number; icon: LucideIcon; href: string; color: keyof typeof colorMap
-}) {
-  const c = colorMap[color]
-  return (
-    <Link
-      href={href}
-      title={label}
-      className={`${c.bg} rounded-xl p-2.5 flex items-center gap-2.5 min-w-0 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm`}
-    >
-      <Icon className={`size-5 shrink-0 ${c.icon}`} />
-      <div className="min-w-0">
-        <p className={`text-xl font-bold leading-none ${c.num}`}><AnimatedNumber value={value} /></p>
-        <p className={`text-[11px] font-semibold uppercase tracking-wide truncate ${c.label}`}>{label}</p>
-      </div>
-    </Link>
-  )
-}
 
 function VerseOfDayCard({ verse }: { verse: Awaited<ReturnType<typeof getVerseOfDay>> }) {
   return (
@@ -1130,27 +956,6 @@ function VerseOfDayCard({ verse }: { verse: Awaited<ReturnType<typeof getVerseOf
         <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-brand-600">{verse.reference}</p>
       </div>
     </a>
-  )
-}
-
-function SectionCard({ title, children, badge, href, linkLabel }: {
-  title: string; children: React.ReactNode; badge?: number; href?: string; linkLabel?: string
-}) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 flex flex-col">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-        <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-gray-700">{title}</h3>
-          {badge !== undefined && badge > 0 && (
-            <span className="text-xs font-bold bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full leading-none">{badge}</span>
-          )}
-        </div>
-        {href && linkLabel && (
-          <Link href={href} className="text-xs text-brand-600 hover:underline font-medium">{linkLabel} →</Link>
-        )}
-      </div>
-      <div className="p-4 flex-1">{children}</div>
-    </div>
   )
 }
 
@@ -1243,14 +1048,5 @@ function PendingRow({ icon: Icon, label, count, href }: { icon: LucideIcon; labe
       </div>
       <span className="text-xs font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded-full">{count}</span>
     </Link>
-  )
-}
-
-function EmptyState({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-6 gap-2 text-gray-400">
-      <Icon className="size-8 opacity-40" />
-      <p className="text-sm">{label}</p>
-    </div>
   )
 }

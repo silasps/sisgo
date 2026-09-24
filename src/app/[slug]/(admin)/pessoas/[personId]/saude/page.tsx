@@ -125,7 +125,7 @@ export default async function SaudePage({ params }: Props) {
   const hasAnyData = Object.values(health).some(Boolean)
 
   return (
-    <main className="p-4 md:p-6 space-y-4 max-w-xl">
+    <main className="p-4 md:p-6 space-y-4 max-w-xl mx-auto">
         {!hasAnyData ? (
           <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
             <Heart size={32} className="text-gray-200 mx-auto mb-3" />

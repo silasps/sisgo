@@ -507,7 +507,7 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
           </Link>
         }
       />
-      <main className="p-4 md:p-6 space-y-5 max-w-6xl">
+      <main className="p-4 md:p-6 space-y-5">
         {msg && msgInfo[msg] && (
           <div className="border rounded-lg px-4 py-3 text-sm bg-blue-50 border-blue-200 text-blue-700">
             {msgInfo[msg]}

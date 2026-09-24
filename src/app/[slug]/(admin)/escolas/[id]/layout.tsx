@@ -4,6 +4,7 @@ import { WorkspaceTabBar } from '@/components/layout/WorkspaceTabBar'
 import { redirect, notFound } from 'next/navigation'
 import { isManagementRole } from '@/lib/auth/permissions'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
+import { getSchoolLink } from '@/lib/auth/unit-access'
 
 type Props = {
   children: React.ReactNode
@@ -23,10 +24,6 @@ export default async function EscolaWorkspaceLayout({ children, params }: Props)
 
   const { role, preview } = await getCurrentOrganizationRole(supabase, user.id, orgId)
   const isManagement = isManagementRole(role)
-  const isLiderEted = role === 'lider_eted'
-  const isObreiroEted = role === 'obreiro_eted'
-
-  if (!isManagement && !isLiderEted && !isObreiroEted) notFound()
 
   const { data: escola } = await supabase
     .from('schools')
@@ -36,46 +33,12 @@ export default async function EscolaWorkspaceLayout({ children, params }: Props)
     .single()
   if (!escola) notFound()
 
-  if (isLiderEted) {
-    if (preview?.schoolId) {
-      if (preview.schoolId !== id) redirect(`/${slug}/escolas`)
-    } else {
-      const { data: lc } = await supabase
-        .from('school_leaders')
-        .select('id')
-        .eq('school_id', id)
-        .eq('user_id', user.id)
-        .single()
-      if (!lc) redirect(`/${slug}/escolas`)
-    }
-  }
+  // Fora da gestão, quem entra é quem tem vínculo com ESTA escola (líder ou
+  // obreiro), seja qual for o papel principal — ver lib/auth/unit-access.
+  const link = isManagement ? null : await getSchoolLink({ userId: user.id, orgId, role, preview }, id)
+  if (!isManagement && !link) redirect(`/${slug}/escolas`)
 
-  if (isObreiroEted) {
-    if (preview?.schoolId) {
-      if (preview.schoolId !== id) redirect(`/${slug}/escolas`)
-    } else {
-      const { data: staffProfile } = await supabase
-        .from('staff_profiles')
-        .select('person_id')
-        .eq('organization_id', orgId)
-        .eq('user_id', user.id)
-        .single()
-
-      const { data: staffLink } = staffProfile?.person_id
-        ? await supabase
-          .from('school_staff')
-          .select('id')
-          .eq('school_id', id)
-          .eq('person_id', staffProfile.person_id)
-          .eq('active', true)
-          .single()
-        : { data: null }
-
-      if (!staffLink) redirect(`/${slug}/escolas`)
-    }
-  }
-
-  const canConfigure = isManagement || isLiderEted
+  const canConfigure = isManagement || link === 'lider'
   const base = `/${slug}/escolas/${id}`
   const tabs = [
     { href: base, label: 'Geral', icon: 'geral' as const },

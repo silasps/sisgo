@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { getRolePreview } from '@/lib/role-preview'
+import { getSchoolLink } from '@/lib/auth/unit-access'
 import { FormularioInscricao } from '@/app/[slug]/formulario/[token]/FormularioInscricao'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
@@ -25,7 +26,10 @@ export default async function VisualizarFormularioPage({ params }: Props) {
   const realRole = superadminRow?.roles?.name ?? currentOrgRow?.roles?.name ?? ''
   const preview = await getRolePreview(realRole)
   const userRole = preview?.role ?? realRole
-  if (!['superadmin', 'admin_base', 'lider_base', 'lider_eted'].includes(userRole)) notFound()
+  // Gestão que edita formulário, ou o líder DESTA escola (vínculo) — ver lib/auth/unit-access.
+  const canEditForm = ['superadmin', 'admin_base', 'lider_base'].includes(userRole)
+    || (await getSchoolLink({ userId: user.id, orgId: org.id, role: userRole, preview }, id)) === 'lider'
+  if (!canEditForm) notFound()
 
   const { data: school } = await supabase
     .from('schools')

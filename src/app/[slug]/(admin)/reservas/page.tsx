@@ -628,7 +628,8 @@ export default async function ReservasPage({ params, searchParams }: Props) {
           )
         }
       />
-      <main className="p-4 md:p-6 space-y-6 max-w-3xl">
+      <main className="p-4 md:p-6 space-y-6">
+        <div className="max-w-3xl mx-auto space-y-6">
 
         {msg && msgInfo[msg] && (
           <div className="border rounded-lg px-4 py-3 text-sm bg-blue-50 border-blue-200 text-blue-700">
@@ -853,16 +854,19 @@ export default async function ReservasPage({ params, searchParams }: Props) {
             </form>
           </details>
         )}
+        </div>
 
         {/* Lista de reservas */}
-        <SearchBar placeholder="Buscar por nome da reserva ou do hóspede..." />
+        <div className="max-w-3xl mx-auto">
+          <SearchBar placeholder="Buscar por nome da reserva ou do hóspede..." />
+        </div>
 
         {displayList.length === 0 ? (
           <div className="text-center py-12 text-gray-400 text-sm">
             {q?.trim() ? `Nada encontrado para "${q}".` : tab === 'historico' ? 'Nada no período selecionado.' : isReviewer ? 'Nenhuma reserva encontrada.' : 'Você ainda não fez nenhuma solicitação.'}
           </div>
         ) : (
-          <ul className="space-y-3">
+          <ul className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
             {displayList.map(r => {
               const st       = STATUS_LABELS[r.status] ?? STATUS_LABELS.pendente
               const typeLabel = r.type === 'espaco' ? 'Espaço' : 'Quarto'

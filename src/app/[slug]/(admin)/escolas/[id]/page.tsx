@@ -2,8 +2,9 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
+import { isOperationalManager } from '@/lib/auth/permissions'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
+import { getSchoolLink } from '@/lib/auth/unit-access'
 import { Users, BookOpen, ClipboardList } from 'lucide-react'
 import { MuralClient } from '../../ministerios/[id]/mural/MuralClient'
 import { schoolDisplayType } from '@/lib/schools'
@@ -24,19 +25,9 @@ export default async function EscolaOverviewPage({ params }: Props) {
   if (!user || !org) notFound()
   const orgId = org.id
 
-  const { role } = await getCurrentOrganizationRole(supabase, user.id, orgId)
-  const isManagement = isManagementRole(role)
-  let canWrite = isOperationalManager(role)
-
-  if (!canWrite && role === 'lider_eted') {
-    const { data: leaderLink } = await supabase
-      .from('school_leaders')
-      .select('id')
-      .eq('school_id', id)
-      .eq('user_id', user.id)
-      .maybeSingle()
-    if (leaderLink) canWrite = true
-  }
+  const { role, preview } = await getCurrentOrganizationRole(supabase, user.id, orgId)
+  const canWrite = isOperationalManager(role)
+    || (await getSchoolLink({ userId: user.id, orgId, role, preview }, id)) === 'lider'
 
   const { data: escola } = await supabase
     .from('schools')

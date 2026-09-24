@@ -110,7 +110,7 @@ export default async function RelatoriosPage({ params }: Props) {
   return (
     <>
       <Header title="Relatórios" backHref={`/${slug}/pessoas`} />
-      <main className="p-4 md:p-6 space-y-5 max-w-3xl">
+      <main className="p-4 md:p-6 space-y-5">
         <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <StatCard value={totalPessoas ?? 0} label="Total de pessoas" href={`/${slug}/pessoas?tab=todos`} />
           <StatCard value={obreirosAtivos ?? 0} label="Obreiros ativos" tone="green" href={`/${slug}/pessoas?tab=obreiros&status=ativo`} />

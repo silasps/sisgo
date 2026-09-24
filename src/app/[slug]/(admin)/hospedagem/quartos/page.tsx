@@ -333,7 +333,7 @@ export default async function QuartosPage({ params, searchParams }: Props) {
   return (
     <>
       <Header title="Quartos" backHref={`/${slug}/hospedagem`} />
-      <main className="p-4 md:p-6 space-y-6 max-w-4xl">
+      <main className="p-4 md:p-6 space-y-6">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-medium text-gray-500">Visão geral</h2>
           <Link

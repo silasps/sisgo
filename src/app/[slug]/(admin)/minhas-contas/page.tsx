@@ -103,7 +103,7 @@ export default async function MinhasContasPage({ params }: Props) {
   return (
     <>
       <Header title="Minhas Contas" />
-      <main className="p-4 md:p-6 space-y-5 max-w-2xl">
+      <main className="p-4 md:p-6 space-y-5 max-w-2xl mx-auto">
 
         {/* Saudação */}
         <div>

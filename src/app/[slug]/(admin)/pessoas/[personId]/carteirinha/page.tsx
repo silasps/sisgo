@@ -32,7 +32,7 @@ export default async function CarteirinhaAdminPage({ params }: Props) {
 
   if (!org.id_card_enabled) {
     return (
-      <main className="p-4 md:p-6 max-w-lg">
+      <main className="p-4 md:p-6 max-w-lg mx-auto">
         <div className="rounded-xl border border-dashed border-gray-300 p-10 text-center">
           <p className="text-gray-500 font-medium text-sm">Carteirinha desativada para esta base</p>
           <p className="text-gray-400 text-xs mt-1">Um líder de base pode ativar em Configurações.</p>
@@ -54,7 +54,7 @@ export default async function CarteirinhaAdminPage({ params }: Props) {
   }
 
   return (
-    <main className="p-4 md:p-6 space-y-6 max-w-lg">
+    <main className="p-4 md:p-6 space-y-6 max-w-lg mx-auto">
       {qrDataUrl ? (
         <>
           <IdCard

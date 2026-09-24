@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { isManagementRole } from '@/lib/auth/permissions'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
+import { getMyMinistries } from '@/lib/auth/unit-access'
 import { createMinistry } from './[id]/actions'
 import { Music, Plus } from 'lucide-react'
 
@@ -28,12 +29,20 @@ export default async function MinistriosPage({ params }: Props) {
   const canWrite = isManagement
   let allowedMinistryIds: string[] | null = null
 
-  // Usuário vinculado a ministério → redireciona diretamente pro seu ministério,
-  // ou (se lidera mais de um) mostra a listagem filtrada só aos dele
-  if (role === 'lider_ministerio' && user) {
-    const ministryIds = preview?.ministryId
-      ? [preview.ministryId]
-      : ((await supabase.from('ministry_leaders').select('ministry_id').eq('user_id', user.id)).data ?? []).map(r => r.ministry_id)
+  // Fora da gestão: só os ministérios com que a pessoa tem vínculo (líder ou
+  // membro, seja qual for o papel principal — ver lib/auth/unit-access) + o
+  // ministério da própria função, pra papéis de departamento. Um só → abre
+  // direto; vários → listagem filtrada só aos dela.
+  const DEPT_ROLES = ['hospitalidade', 'secretaria', 'cozinha', 'manutencao']
+  if (!isManagement && user) {
+    const isDeptRole = DEPT_ROLES.includes(role)
+    const [linked, { data: deptMinistry }] = await Promise.all([
+      getMyMinistries({ userId: user.id, orgId, role, preview }),
+      isDeptRole
+        ? supabase.from('ministries').select('id').eq('organization_id', orgId).eq('linked_role', role).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ])
+    const ministryIds = [...new Set([...(deptMinistry?.id ? [deptMinistry.id] : []), ...linked.map(m => m.id)])]
 
     if (ministryIds.length === 1) redirect(`/${slug}/ministerios/${ministryIds[0]}`)
 
@@ -44,7 +53,9 @@ export default async function MinistriosPage({ params }: Props) {
           <main className="p-4 md:p-6">
             <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
               <Music className="size-8 mx-auto mb-3 text-gray-300" />
-              <p className="text-gray-500 text-sm">Nenhum ministério atribuído a você ainda.</p>
+              <p className="text-gray-500 text-sm">
+                {isDeptRole ? 'Nenhum ministério vinculado à sua função ainda.' : 'Nenhum ministério atribuído a você ainda.'}
+              </p>
               <p className="text-gray-400 text-xs mt-1">Entre em contato com o DH da sua base.</p>
             </div>
           </main>
@@ -53,70 +64,6 @@ export default async function MinistriosPage({ params }: Props) {
     }
 
     allowedMinistryIds = ministryIds
-  }
-
-  if (role === 'obreiro_ministerio' && user) {
-    if (preview?.ministryId) redirect(`/${slug}/ministerios/${preview.ministryId}`)
-
-    const { data: staffProfile } = await supabase
-      .from('staff_profiles')
-      .select('person_id')
-      .eq('organization_id', orgId)
-      .eq('user_id', user.id)
-      .single()
-
-    if (staffProfile?.person_id) {
-      const { data: memberRow } = await supabase
-        .from('ministry_members')
-        .select('ministry_id')
-        .eq('person_id', staffProfile.person_id)
-        .eq('active', true)
-        .limit(1)
-        .single()
-
-      if (memberRow?.ministry_id) {
-        redirect(`/${slug}/ministerios/${memberRow.ministry_id}`)
-      }
-    }
-
-    return (
-      <>
-        <Header title="Ministérios" />
-        <main className="p-4 md:p-6">
-          <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
-            <p className="text-gray-500 text-sm">Nenhum ministério atribuído a você ainda.</p>
-            <p className="text-gray-400 text-xs mt-1">Entre em contato com o DH da sua base.</p>
-          </div>
-        </main>
-      </>
-    )
-  }
-
-  const DEPT_ROLES = ['hospitalidade', 'secretaria', 'cozinha', 'manutencao']
-  if (DEPT_ROLES.includes(role) && user) {
-    const { data: linkedMinistry } = await supabase
-      .from('ministries')
-      .select('id')
-      .eq('organization_id', orgId)
-      .eq('linked_role', role)
-      .maybeSingle()
-
-    if (linkedMinistry?.id) {
-      redirect(`/${slug}/ministerios/${linkedMinistry.id}`)
-    }
-
-    return (
-      <>
-        <Header title="Ministérios" />
-        <main className="p-4 md:p-6">
-          <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
-            <Music className="size-8 mx-auto mb-3 text-gray-300" />
-            <p className="text-gray-500 text-sm">Nenhum ministério vinculado à sua função ainda.</p>
-            <p className="text-gray-400 text-xs mt-1">Entre em contato com o DH da sua base.</p>
-          </div>
-        </main>
-      </>
-    )
   }
 
   type MinistryRaw = {

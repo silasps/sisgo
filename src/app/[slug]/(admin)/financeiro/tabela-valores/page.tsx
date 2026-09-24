@@ -110,7 +110,7 @@ export default async function TabelaValoresPage({ params }: Props) {
           </Link>
         }
       />
-      <main className="p-4 md:p-6 space-y-6 max-w-5xl">
+      <main className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto">
 
         {/* Nova tabela */}
         <section className="rounded-xl border border-gray-200 bg-white overflow-hidden">

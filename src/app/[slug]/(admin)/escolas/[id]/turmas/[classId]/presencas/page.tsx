@@ -69,7 +69,7 @@ export default async function PresencasTurmaPage({ params, searchParams }: Props
   return (
     <>
       <Header title={`Presenças — ${turma.name}`} />
-      <main className="p-4 md:p-6 space-y-4 max-w-xl">
+      <main className="p-4 md:p-6 space-y-4 max-w-xl mx-auto">
 
         <nav className="text-xs text-gray-400 flex items-center gap-1 flex-wrap">
           <Link href={`/${slug}/escolas`} className="hover:text-gray-700">Escolas</Link>

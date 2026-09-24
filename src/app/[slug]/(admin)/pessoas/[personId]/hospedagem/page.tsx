@@ -123,7 +123,7 @@ export default async function PessoaHospedagemPage({ params }: Props) {
   }, 0)
 
   return (
-    <main className="p-4 md:p-6 space-y-5 max-w-2xl">
+    <main className="p-4 md:p-6 space-y-5 max-w-2xl mx-auto">
       <section className="grid grid-cols-2 gap-3">
         <div className="rounded-xl border border-gray-100 bg-white p-4">
           <p className="text-xl font-bold text-gray-900">{totalDias}</p>

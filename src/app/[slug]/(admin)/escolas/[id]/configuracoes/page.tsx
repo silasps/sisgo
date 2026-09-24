@@ -14,6 +14,8 @@ import { EmbedCodeBox } from '@/components/ui/EmbedCodeBox'
 import { SearchableSelectModal } from '@/components/ui/SearchableSelectModal'
 
 import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
+import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
+import { getSchoolLink } from '@/lib/auth/unit-access'
 import { SCHOOL_TYPES } from '@/lib/schools'
 import { triggerSiteRevalidation } from '@/lib/revalidate-webhook'
 import { CheckCircle2, AlertTriangle, Settings } from 'lucide-react'
@@ -63,21 +65,9 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
   ])
   if (!user || !org) notFound()
 
-  const { data: orgUsers } = await supabase
-    .from('organization_users')
-    .select('organization_id, roles(name)')
-    .eq('user_id', user.id)
-    .eq('active', true)
-  const userOrgRows   = (orgUsers ?? []) as unknown as Array<{ organization_id: string | null; roles: { name: string } | null }>
-  const superadminRow = userOrgRows.find(row => row.roles?.name === 'superadmin')
-  const currentOrgRow = userOrgRows.find(row => row.organization_id === org.id)
-  const role          = superadminRow?.roles?.name ?? currentOrgRow?.roles?.name ?? ''
+  const { role, preview } = await getCurrentOrganizationRole(supabase, user.id, org.id)
   const isManagement  = isManagementRole(role)
   const canWrite      = isOperationalManager(role)
-  const isLiderEted   = role === 'lider_eted'
-  const isObreiroEted = role === 'obreiro_eted'
-
-  if (!isManagement && !isLiderEted && !isObreiroEted) notFound()
 
   const { data: escola } = await supabase
     .from('schools')
@@ -92,16 +82,12 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
   const { data: typeNameRows } = await supabase.from('schools').select('type_name').eq('organization_id', org.id)
   const existingTypeNames = [...new Set((typeNameRows ?? []).map(r => r.type_name).filter(Boolean))].sort()
 
-  // lider_eted só acessa a escola que lidera
-  if (isLiderEted) {
-    const { data: lc } = await supabase
-      .from('school_leaders')
-      .select('id')
-      .eq('school_id', id)
-      .eq('user_id', user.id)
-      .single()
-    if (!lc) redirect(`/${slug}/escolas`)
-  }
+  // Uma das três visões abaixo (gestão / líder / obreiro): gestão prevalece;
+  // fora dela, o vínculo com ESTA escola decide — ver lib/auth/unit-access.
+  const link = isManagement ? null : await getSchoolLink({ userId: user.id, orgId: org.id, role, preview }, id)
+  if (!isManagement && !link) redirect(`/${slug}/escolas`)
+  const isLiderEted   = link === 'lider'
+  const isObreiroEted = link === 'obreiro'
 
   const { data: turmas } = await supabase
     .from('school_classes')
@@ -406,7 +392,7 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
     <>
       {/* ════════ VISÃO MANAGEMENT ═══════════════════════════════════════════════ */}
       {isManagement && (
-        <main className="p-4 md:p-6 max-w-5xl overflow-y-auto flex-1">
+        <main className="p-4 md:p-6 overflow-y-auto flex-1">
           {msg && msgs[msg] && (
             <div className={`border rounded-lg px-4 py-3 text-sm mb-4 ${msgs[msg].cls}`}>
               {msgs[msg].text}
@@ -778,7 +764,7 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
 
       {/* ════════ VISÃO LÍDER DE ESCOLA ═══════════════════════════════════════════════ */}
       {isLiderEted && (
-        <main className="p-4 md:p-6 space-y-4 max-w-2xl overflow-y-auto flex-1">
+        <main className="p-4 md:p-6 space-y-4 max-w-2xl mx-auto overflow-y-auto flex-1">
 
           {/* Dados da escola — mesmo formulário da visão de gestão */}
           <form action={updateSchool} className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
@@ -1079,7 +1065,7 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
 
       {/* ════════ VISÃO OBREIRO DE ESCOLA ═══════════════════════════════════════════════ */}
       {isObreiroEted && (
-        <main className="p-4 md:p-6 space-y-4 max-w-2xl overflow-y-auto flex-1">
+        <main className="p-4 md:p-6 space-y-4 max-w-2xl mx-auto overflow-y-auto flex-1">
 
           {/* Info da escola */}
           <div className="bg-white rounded-xl border border-gray-200 p-5 flex items-start justify-between gap-3">

@@ -68,7 +68,7 @@ export default async function UsuariosPage({ params }: Props) {
           </Link>
         }
       />
-      <main className="p-4 md:p-6 space-y-8 max-w-4xl">
+      <main className="p-4 md:p-6 space-y-8 max-w-4xl mx-auto">
 
         {/* Lista de usuários */}
         <section>

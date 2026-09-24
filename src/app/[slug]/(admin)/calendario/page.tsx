@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/Header'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { getStudentSchoolIds } from '@/lib/school-scope'
+import { getMySchools, getMyMinistries } from '@/lib/auth/unit-access'
 import { notFound, redirect } from 'next/navigation'
 import {
   CalendarWorkspace,
@@ -40,36 +41,30 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
 
   const { role, preview } = await getCurrentOrganizationRole(supabase, user.id, orgId)
   const canManageBase = role === 'superadmin' || role === 'admin_base' || role === 'lider_base'
-  const canManageSchool = role === 'lider_eted'
-  const canManageMinistry = role === 'lider_ministerio'
-  const isObreiroMinisterio = role === 'obreiro_ministerio'
+  // Gerenciar eventos de escola/ministério vale pra quem LIDERA a unidade
+  // (vínculo), seja qual for o papel principal — ver lib/auth/unit-access.
+  // As actions abaixo continuam restringindo cada evento às ids lideradas.
+  const unitCtx = { userId, orgId, role, preview }
+  const [mySchools, myMinistries] = await Promise.all([getMySchools(unitCtx), getMyMinistries(unitCtx)])
+  const leaderSchoolIds = mySchools.filter(s => s.link === 'lider').map(s => s.id)
+  const leaderMinistryIds = myMinistries.filter(m => m.link === 'lider').map(m => m.id)
+  const canManageSchool = leaderSchoolIds.length > 0
+  const canManageMinistry = leaderMinistryIds.length > 0
   const canAddPrivateNote = true
 
-  const leaderSchoolIds = canManageSchool
-    ? preview?.schoolId
-      ? [preview.schoolId]
-      : ((await admin.from('school_leaders').select('school_id').eq('organization_id', orgId).eq('user_id', userId)).data ?? []).map(row => row.school_id as string)
-    : []
+  // Quem vê só as próprias unidades continua definido pelo papel (líder de
+  // escola, aluno, papéis de ministério); o que muda é que "as próprias" são
+  // todas as unidades com vínculo, não só as do papel principal.
   const studentSchoolIds = role === 'aluno'
     ? preview?.schoolId
       ? [preview.schoolId]
       : await getStudentSchoolIds(admin, orgId, userId, user.email ?? null)
     : []
-  const scopedSchoolIds = canManageSchool ? leaderSchoolIds : role === 'aluno' ? studentSchoolIds : []
-  const shouldScopeSchools = canManageSchool || role === 'aluno'
+  const scopedSchoolIds = role === 'lider_eted' ? mySchools.map(s => s.id) : role === 'aluno' ? studentSchoolIds : []
+  const shouldScopeSchools = role === 'lider_eted' || role === 'aluno'
 
-  const leaderMinistryIds = canManageMinistry
-    ? preview?.ministryId
-      ? [preview.ministryId]
-      : ((await admin.from('ministry_leaders').select('ministry_id').eq('organization_id', orgId).eq('user_id', userId)).data ?? []).map(row => row.ministry_id as string)
-    : []
-  const obreiroMinistryIds = isObreiroMinisterio
-    ? preview?.ministryId
-      ? [preview.ministryId]
-      : await getObreiroMinistryIds(admin, orgId, userId)
-    : []
-  const scopedMinistryIds = canManageMinistry ? leaderMinistryIds : isObreiroMinisterio ? obreiroMinistryIds : []
-  const shouldScopeMinistries = canManageMinistry || isObreiroMinisterio
+  const scopedMinistryIds = myMinistries.map(m => m.id)
+  const shouldScopeMinistries = role === 'lider_ministerio' || role === 'obreiro_ministerio'
 
   // Aluno só vê o que é da própria escola + notas pessoais + eventos de base
   // cuja audiência inclua "aluno" (ou seja "todos") — nada de ministério.
@@ -78,11 +73,10 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
   // Ministério de Comunicação (ministries.linked_role = 'comunicacao'): além de
   // admin_base/lider_base/superadmin, quem lidera ou participa desse ministério
   // também pode criar anúncios e eventos de base.
-  const myMinistryIdsForComms = role === 'lider_ministerio' ? leaderMinistryIds : role === 'obreiro_ministerio' ? obreiroMinistryIds : []
-  const comunicacaoMinistryIds = myMinistryIdsForComms.length > 0
+  const comunicacaoMinistryIds = myMinistries.length > 0
     ? ((await admin.from('ministries').select('id').eq('organization_id', orgId).eq('linked_role', 'comunicacao')).data ?? []).map(row => row.id as string)
     : []
-  const isComunicacaoMember = myMinistryIdsForComms.some(id => comunicacaoMinistryIds.includes(id))
+  const isComunicacaoMember = myMinistries.some(m => comunicacaoMinistryIds.includes(m.id))
 
   const start = `${year}-01-01`
   const end = `${year}-12-31`
@@ -521,29 +515,6 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
 
 function sortKey(event: CalendarEvent) {
   return event.starts_at ?? `${event.starts_on}T00:00:00`
-}
-
-async function getObreiroMinistryIds(
-  db: ReturnType<typeof createAdminClient>,
-  organizationId: string,
-  userId: string,
-) {
-  const { data: staffProfile } = await db
-    .from('staff_profiles')
-    .select('person_id')
-    .eq('organization_id', organizationId)
-    .eq('user_id', userId)
-    .single()
-
-  if (!staffProfile?.person_id) return []
-
-  const { data: memberships } = await db
-    .from('ministry_members')
-    .select('ministry_id')
-    .eq('person_id', staffProfile.person_id)
-    .eq('active', true)
-
-  return (memberships ?? []).map(row => row.ministry_id as string)
 }
 
 function localDateTimeToIso(value: string) {

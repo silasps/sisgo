@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import type { Database } from '@/types/database'
 import { schoolTypeGroup, schoolDisplayType } from '@/lib/schools'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
+import { getMySchools } from '@/lib/auth/unit-access'
 import { isManagementRole } from '@/lib/auth/permissions'
 import { deleteSchool } from './[id]/actions'
 import { triggerSiteRevalidation } from '@/lib/revalidate-webhook'
@@ -30,19 +31,12 @@ export default async function EscolasPage({ params }: Props) {
   if (user && orgId) {
     const { role, preview } = await getCurrentOrganizationRole(supabase, user.id, orgId)
     isManagement = isManagementRole(role)
-    if (role === 'lider_eted') {
-      const { data: leaderRows } = await supabase.from('school_leaders').select('school_id').eq('organization_id', orgId).eq('user_id', user.id)
-      const schoolIds = preview?.schoolId ? [preview.schoolId] : (leaderRows ?? []).map(r => r.school_id)
+    // Fora da gestão: só as escolas com que a pessoa tem vínculo (líder ou
+    // obreiro), seja qual for o papel principal — ver lib/auth/unit-access.
+    if (!isManagement) {
+      const schoolIds = (await getMySchools({ userId: user.id, orgId, role, preview })).map(s => s.id)
       if (schoolIds.length === 1) redirect(`/${slug}/escolas/${schoolIds[0]}`)
       allowedSchoolIds = schoolIds
-    }
-    if (role === 'obreiro_eted') {
-      const { data: sp } = await supabase.from('staff_profiles').select('person_id').eq('organization_id', orgId).eq('user_id', user.id).maybeSingle()
-      const { data: staff } = sp?.person_id
-        ? await supabase.from('school_staff').select('school_id').eq('person_id', sp.person_id).eq('active', true).limit(1).maybeSingle()
-        : { data: null }
-      if (staff?.school_id) redirect(`/${slug}/escolas/${staff.school_id}`)
-      allowedSchoolIds = []
     }
   }
 
