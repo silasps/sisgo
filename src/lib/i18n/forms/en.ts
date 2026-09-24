@@ -85,7 +85,7 @@ export const enDict: FormDict = {
   },
 
   s3: {
-    section: 'Section 3',
+    section: 'Section 2',
     title: 'Initial commitment terms',
     terms: [
       'I am aware of my financial responsibilities related to the school.',
@@ -103,7 +103,7 @@ export const enDict: FormDict = {
   },
 
   s4: {
-    section: 'Section 4',
+    section: 'Section 3',
     title: 'School information',
     escola: 'Desired school',
     turma: 'Class / Period',
@@ -128,7 +128,7 @@ export const enDict: FormDict = {
   },
 
   s5: {
-    section: 'Section 5',
+    section: 'Section 4',
     title: 'Personal information',
     nome: 'Full name',
     sexo: 'Gender',
@@ -139,6 +139,8 @@ export const enDict: FormDict = {
     is_brasileiro_nao: 'No',
     nacionalidade: 'Your nationality',
     fluencia_portugues: 'Portuguese proficiency level',
+    idioma_preferencia: 'Preferred language to communicate with the team',
+    idioma_preferencia_outro: 'Other',
     solteiro: 'Single',
     casado: 'Married',
     comprometido: 'Engaged / In a relationship',
@@ -192,7 +194,7 @@ export const enDict: FormDict = {
   },
 
   s6: {
-    section: 'Section 6',
+    section: 'Section 5',
     title: 'Personal background & life context',
     sobre_voce: 'Tell us a bit about yourself',
     processo_decisao: 'How did you make the decision to apply for this school?',
@@ -202,7 +204,7 @@ export const enDict: FormDict = {
   },
 
   s7: {
-    section: 'Section 7',
+    section: 'Section 6',
     title: 'Family information',
     nome_pai: 'Father\'s name',
     nome_mae: 'Mother\'s name',
@@ -236,7 +238,7 @@ export const enDict: FormDict = {
   },
 
   s8: {
-    section: 'Section 8',
+    section: 'Section 7',
     title: 'Local church & ministry involvement',
     igreja_nome: 'Your church name',
     igreja_cidade: 'Church city and state',
@@ -263,7 +265,7 @@ export const enDict: FormDict = {
   },
 
   s9: {
-    section: 'Section 9',
+    section: 'Section 8',
     title: 'Friend reference',
     infobox: 'Indicate a trusted friend who can speak about your character. This person will receive a separate reference form. They do not need to be a Christian, but should know you well.',
     ref_nome: 'Friend\'s / reference\'s name',
@@ -275,7 +277,7 @@ export const enDict: FormDict = {
   },
 
   s10: {
-    section: 'Section 10',
+    section: 'Section 9',
     title: 'History with this organization or others',
     teve_historico: 'Have you participated in a school, seminar, or missionary project?',
     hist_qual: 'Which school / project?',
@@ -285,11 +287,14 @@ export const enDict: FormDict = {
     hist_lider_nome: 'Responsible leader',
     hist_lider_email: 'Leader\'s email',
     hist_lider_tel: 'Leader\'s phone',
+    hist_contagem: '{count} experience(s)',
+    hist_add: '+ Add another experience',
+    hist_remove: 'Remove',
     infobox: 'The team may contact the previous leadership to request personal references.',
   },
 
   s11: {
-    section: 'Section 11',
+    section: 'Section 10',
     title: 'Personal, spiritual & emotional assessment',
     autoaval_title: 'Self-assessment — rate each area:',
     autoaval_areas: [
@@ -324,7 +329,7 @@ export const enDict: FormDict = {
   },
 
   s12: {
-    section: 'Section 12',
+    section: 'Section 11',
     title: 'Physical health & medications',
     saude_geral: 'Health conditions the team should know about',
     alergias: 'Allergies',
@@ -342,7 +347,7 @@ export const enDict: FormDict = {
   },
 
   s13: {
-    section: 'Section 13',
+    section: 'Section 12',
     title: 'Legal matters & responsibility',
     antecedente: 'Do you have any criminal record?',
     antecedente_descricao: 'Please explain:',
@@ -356,7 +361,7 @@ export const enDict: FormDict = {
   },
 
   s14: {
-    section: 'Section 14',
+    section: 'Section 13',
     title: 'Financial information',
     infobox: 'Participation in the school involves costs related to registration, accommodation, meals, classes, materials, and transportation. Check with the responsible team for specific amounts.',
     apoio_tipo: 'Type of financial support',
@@ -382,7 +387,7 @@ export const enDict: FormDict = {
   },
 
   s15: {
-    section: 'Section 15',
+    section: 'Section 14',
     title: 'Document upload',
     infobox: 'Attach the documents requested below. Accepted formats: JPG, PNG, PDF (max. 10MB each).',
     doc_foto: 'Recent photo (face visible)',
@@ -398,7 +403,7 @@ export const enDict: FormDict = {
   },
 
   s16: {
-    section: 'Section 16',
+    section: 'Section 15',
     title: 'Final acceptance & declarations',
     maior_18: 'I declare that I am 18 years of age or older. *',
     finals: [

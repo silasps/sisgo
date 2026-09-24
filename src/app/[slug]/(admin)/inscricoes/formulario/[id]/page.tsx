@@ -16,7 +16,7 @@ import { RefreshOnFocus } from '@/components/ui/RefreshOnFocus'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
-type FormSection = { title: string; fields: { label: string; key: string; type?: 'textarea' | 'radio' | 'date_anos' | 'children' }[] }
+type FormSection = { title: string; fields: { label: string; key: string; type?: 'textarea' | 'radio' | 'date_anos' | 'children' | 'historico_lista' }[] }
 
 const SECTIONS: FormSection[] = [
   {
@@ -48,6 +48,7 @@ const SECTIONS: FormSection[] = [
       { label: 'Brasileiro(a)?', key: 'is_brasileiro' },
       { label: 'Nacionalidade', key: 'nacionalidade' },
       { label: 'Fluência em português', key: 'fluencia_portugues' },
+      { label: 'Idioma de comunicação preferido', key: 'idioma_preferencia_comunicacao' },
       { label: 'Formação', key: 'formacao' },
       { label: 'Estudando atualmente?', key: 'estudando' },
       { label: 'Curso atual', key: 'curso_atual' },
@@ -150,6 +151,7 @@ const SECTIONS: FormSection[] = [
     title: 'Histórico com organizações',
     fields: [
       { label: 'Participou de escola/projeto?', key: 'teve_historico' },
+      { label: 'Experiências anteriores', key: 'hist_lista', type: 'historico_lista' },
       { label: 'Qual escola/projeto', key: 'hist_qual' },
       { label: 'Organização/base', key: 'hist_org' },
       { label: 'Duração', key: 'hist_duracao' },
@@ -278,7 +280,31 @@ function parseChildren(value: unknown): ChildRow[] {
   return [{ nome: value, sexo: '', data_nascimento: '' }]
 }
 
-function FieldRow({ label, value, type }: { label: string; value: unknown; type?: 'textarea' | 'radio' | 'date_anos' | 'children' }) {
+type HistoricoOrgRow = {
+  qual: string; org: string; duracao: string; quando: string
+  lider_nome: string; lider_email: string; lider_tel: string
+}
+
+function parseHistoricoLista(value: unknown): HistoricoOrgRow[] {
+  if (typeof value !== 'string' || !value.trim()) return []
+  try {
+    const parsed = JSON.parse(value)
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((r: unknown) => {
+          const row = (r ?? {}) as Partial<HistoricoOrgRow>
+          return {
+            qual: row.qual ?? '', org: row.org ?? '', duracao: row.duracao ?? '', quando: row.quando ?? '',
+            lider_nome: row.lider_nome ?? '', lider_email: row.lider_email ?? '', lider_tel: row.lider_tel ?? '',
+          }
+        })
+        .filter(r => r.qual.trim())
+    }
+  } catch { /* inscrição no formato antigo (campos flat), sem hist_lista — nada a mostrar aqui */ }
+  return []
+}
+
+function FieldRow({ label, value, type }: { label: string; value: unknown; type?: 'textarea' | 'radio' | 'date_anos' | 'children' | 'historico_lista' }) {
   if (type === 'date_anos') {
     const str = typeof value === 'string' ? value.trim() : ''
     if (!str) return <EmptyFieldRow label={label} />
@@ -303,6 +329,27 @@ function FieldRow({ label, value, type }: { label: string; value: unknown; type?
             const nascimento = r.data_nascimento ? new Date(r.data_nascimento + 'T00:00:00').toLocaleDateString('pt-BR') : ''
             const details = [sexoLabel, nascimento].filter(Boolean).join(' · ')
             return <p key={i}>{r.nome}{details ? ` — ${details}` : ''}</p>
+          })}
+        </div>
+      </div>
+    )
+  }
+  if (type === 'historico_lista') {
+    const rows = parseHistoricoLista(value)
+    if (!rows.length) return <EmptyFieldRow label={label} />
+    return (
+      <div className="col-span-full py-2.5 border-b border-gray-50 last:border-0">
+        <p className="text-xs font-medium text-gray-400 mb-0.5">{label} <span className="text-indigo-700 font-semibold">({rows.length})</span></p>
+        <div className="text-sm text-gray-800 space-y-2">
+          {rows.map((r, i) => {
+            const detalhes = [r.org, r.duracao, r.quando].filter(Boolean).join(' · ')
+            const lider = [r.lider_nome, r.lider_email, r.lider_tel].filter(Boolean).join(' · ')
+            return (
+              <div key={i}>
+                <p>{r.qual}{detalhes ? ` — ${detalhes}` : ''}</p>
+                {lider && <p className="text-xs text-gray-500">Líder: {lider}</p>}
+              </div>
+            )
           })}
         </div>
       </div>

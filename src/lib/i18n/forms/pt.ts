@@ -85,7 +85,7 @@ export const ptDict: FormDict = {
   },
 
   s3: {
-    section: 'Seção 3',
+    section: 'Seção 2',
     title: 'Termo inicial de compromisso',
     terms: [
       'Estou ciente das minhas responsabilidades financeiras relacionadas à escola.',
@@ -103,7 +103,7 @@ export const ptDict: FormDict = {
   },
 
   s4: {
-    section: 'Seção 4',
+    section: 'Seção 3',
     title: 'Informações da escola de interesse',
     escola: 'Escola desejada',
     turma: 'Turma / Período',
@@ -128,7 +128,7 @@ export const ptDict: FormDict = {
   },
 
   s5: {
-    section: 'Seção 5',
+    section: 'Seção 4',
     title: 'Informações pessoais',
     nome: 'Nome completo',
     sexo: 'Sexo',
@@ -139,6 +139,8 @@ export const ptDict: FormDict = {
     is_brasileiro_nao: 'Não',
     nacionalidade: 'Sua nacionalidade',
     fluencia_portugues: 'Nível de fluência em português',
+    idioma_preferencia: 'Idioma de preferência para se comunicar com a equipe',
+    idioma_preferencia_outro: 'Outro',
     solteiro: 'Solteiro(a)',
     casado: 'Casado(a)',
     comprometido: 'Comprometido(a) / Noivo(a)',
@@ -192,7 +194,7 @@ export const ptDict: FormDict = {
   },
 
   s6: {
-    section: 'Seção 6',
+    section: 'Seção 5',
     title: 'Histórico pessoal e contexto de vida',
     sobre_voce: 'Conte um pouco sobre você',
     processo_decisao: 'Como foi seu processo de decisão para esta escola?',
@@ -202,7 +204,7 @@ export const ptDict: FormDict = {
   },
 
   s7: {
-    section: 'Seção 7',
+    section: 'Seção 6',
     title: 'Informações familiares',
     nome_pai: 'Nome do pai',
     nome_mae: 'Nome da mãe',
@@ -236,7 +238,7 @@ export const ptDict: FormDict = {
   },
 
   s8: {
-    section: 'Seção 8',
+    section: 'Seção 7',
     title: 'Igreja local e envolvimento ministerial',
     igreja_nome: 'Nome da sua igreja',
     igreja_cidade: 'Cidade e estado da igreja',
@@ -263,7 +265,7 @@ export const ptDict: FormDict = {
   },
 
   s9: {
-    section: 'Seção 9',
+    section: 'Seção 8',
     title: 'Referência de um Amigo',
     infobox: 'Indique um amigo de confiança que possa falar sobre seu caráter. Esta pessoa receberá um formulário de referência separado. Não é necessário que seja cristão(ã), mas deve conhecer você bem.',
     ref_nome: 'Nome do amigo / referência',
@@ -275,7 +277,7 @@ export const ptDict: FormDict = {
   },
 
   s10: {
-    section: 'Seção 10',
+    section: 'Seção 9',
     title: 'Histórico com esta organização ou outras',
     teve_historico: 'Já participou de escola, seminário ou projeto missionário?',
     hist_qual: 'Qual escola / projeto?',
@@ -285,11 +287,14 @@ export const ptDict: FormDict = {
     hist_lider_nome: 'Líder responsável',
     hist_lider_email: 'E-mail do líder',
     hist_lider_tel: 'Telefone do líder',
+    hist_contagem: '{count} experiência(s)',
+    hist_add: '+ Adicionar outra experiência',
+    hist_remove: 'Remover',
     infobox: 'A equipe poderá entrar em contato com a liderança anterior para solicitar recomendações pessoais.',
   },
 
   s11: {
-    section: 'Seção 11',
+    section: 'Seção 10',
     title: 'Avaliação pessoal, espiritual e emocional',
     autoaval_title: 'Autoavaliação — avalie cada área:',
     autoaval_areas: [
@@ -324,7 +329,7 @@ export const ptDict: FormDict = {
   },
 
   s12: {
-    section: 'Seção 12',
+    section: 'Seção 11',
     title: 'Saúde física e medicamentos',
     saude_geral: 'Problemas de saúde que a equipe deveria saber',
     alergias: 'Alergias',
@@ -342,7 +347,7 @@ export const ptDict: FormDict = {
   },
 
   s13: {
-    section: 'Seção 13',
+    section: 'Seção 12',
     title: 'Questões legais e responsabilidade',
     antecedente: 'Tem algum antecedente criminal?',
     antecedente_descricao: 'Explique:',
@@ -356,7 +361,7 @@ export const ptDict: FormDict = {
   },
 
   s14: {
-    section: 'Seção 14',
+    section: 'Seção 13',
     title: 'Informações financeiras',
     infobox: 'A participação na escola envolve custos relacionados a inscrição, hospedagem, alimentação, aulas, materiais e deslocamentos. Confira os valores específicos com a equipe responsável.',
     apoio_tipo: 'Tipo de apoio financeiro',
@@ -382,7 +387,7 @@ export const ptDict: FormDict = {
   },
 
   s15: {
-    section: 'Seção 15',
+    section: 'Seção 14',
     title: 'Upload de documentos',
     infobox: 'Anexe os documentos solicitados abaixo. Formatos aceitos: JPG, PNG, PDF (máx. 10MB cada).',
     doc_foto: 'Foto recente (rosto visível)',
@@ -398,7 +403,7 @@ export const ptDict: FormDict = {
   },
 
   s16: {
-    section: 'Seção 16',
+    section: 'Seção 15',
     title: 'Aceite final e declarações',
     maior_18: 'Declaro que sou maior de 18 anos. *',
     finals: [

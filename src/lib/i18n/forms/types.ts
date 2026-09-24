@@ -136,6 +136,8 @@ export interface FormDict {
     is_brasileiro_nao: string
     nacionalidade: string
     fluencia_portugues: string
+    idioma_preferencia: string
+    idioma_preferencia_outro: string
     // Marital options
     solteiro: string; casado: string; comprometido: string; divorciado: string; viuvo: string
     // Sub-sections
@@ -286,6 +288,9 @@ export interface FormDict {
     hist_lider_nome: string
     hist_lider_email: string
     hist_lider_tel: string
+    hist_contagem: string
+    hist_add: string
+    hist_remove: string
     infobox: string
   }
 

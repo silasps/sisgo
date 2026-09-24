@@ -385,6 +385,14 @@ function S5Dados({ prefill, data, onNationalityChange }: {
               { value: 'avancado', label: d.opts.advanced },
               { value: 'fluente', label: d.opts.fluent },
             ]} />
+          <Select label={d.s5.idioma_preferencia} name="idioma_preferencia_comunicacao"
+            defaultValue={data?.idioma_preferencia_comunicacao}
+            options={[
+              { value: 'portugues', label: d.s5.idioma_portugues },
+              { value: 'ingles', label: d.s5.idioma_ingles },
+              { value: 'espanhol', label: d.s5.idioma_espanhol },
+              { value: 'outro', label: d.s5.idioma_preferencia_outro },
+            ]} />
         </>}
 
         {/* Formação */}
@@ -832,6 +840,114 @@ function S9Referencia({ data }: { data?: Record<string, string> }) {
   )
 }
 
+type HistoricoOrgEntry = {
+  qual: string; org: string; duracao: string; quando: string
+  lider_nome: string; lider_email: string; lider_tel: string
+}
+
+const HISTORICO_ORG_VAZIO: HistoricoOrgEntry = {
+  qual: '', org: '', duracao: '', quando: '', lider_nome: '', lider_email: '', lider_tel: '',
+}
+
+function parseHistoricoOrg(data?: Record<string, string>): HistoricoOrgEntry[] {
+  const raw = data?.hist_lista
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed) && parsed.length) {
+        return parsed.map((r: unknown) => {
+          const row = (r ?? {}) as Partial<HistoricoOrgEntry>
+          return {
+            qual: row.qual ?? '', org: row.org ?? '', duracao: row.duracao ?? '', quando: row.quando ?? '',
+            lider_nome: row.lider_nome ?? '', lider_email: row.lider_email ?? '', lider_tel: row.lider_tel ?? '',
+          }
+        })
+      }
+    } catch { /* segue pro fallback legado abaixo */ }
+  }
+  // Compatibilidade: inscrição começada antes desse campo virar lista —
+  // sintetiza uma linha a partir dos campos antigos (hist_qual etc.), senão
+  // quem já tinha preenchido perde o que digitou ao reabrir o link.
+  const legacy: HistoricoOrgEntry = {
+    qual: data?.hist_qual ?? '', org: data?.hist_org ?? '', duracao: data?.hist_duracao ?? '', quando: data?.hist_quando ?? '',
+    lider_nome: data?.hist_lider_nome ?? '', lider_email: data?.hist_lider_email ?? '', lider_tel: data?.hist_lider_tel ?? '',
+  }
+  return [Object.values(legacy).some(v => v.trim()) ? legacy : HISTORICO_ORG_VAZIO]
+}
+
+function HistoricoOrgField({ data }: { data?: Record<string, string> }) {
+  const d = useContext(DictCtx)
+  const [rows, setRows] = useState<HistoricoOrgEntry[]>(() => parseHistoricoOrg(data))
+
+  function updateRow(i: number, patch: Partial<HistoricoOrgEntry>) {
+    setRows(prev => prev.map((r, idx) => idx === i ? { ...r, ...patch } : r))
+  }
+  function addRow() {
+    setRows(prev => [...prev, { ...HISTORICO_ORG_VAZIO }])
+  }
+  function removeRow(i: number) {
+    setRows(prev => prev.filter((_, idx) => idx !== i))
+  }
+
+  const filled = rows.filter(r => r.qual.trim())
+  const serialized = JSON.stringify(filled)
+  const inputClass = "w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-gray-50"
+
+  return (
+    <div className="sm:col-span-2 space-y-2">
+      <div className="flex items-center justify-between">
+        <label className="block text-sm font-medium text-gray-700">{d.s10.hist_qual}</label>
+        <span className="text-xs font-medium text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">
+          {t(d.s10.hist_contagem, { count: String(filled.length) })}
+        </span>
+      </div>
+      {rows.map((row, i) => (
+        <div key={i} className="relative rounded-xl border border-gray-200 bg-white p-3 space-y-2">
+          {rows.length > 1 && (
+            <button type="button" onClick={() => removeRow(i)} aria-label={d.s10.hist_remove}
+              className="absolute top-2 right-2 text-gray-400 hover:text-red-500 text-sm">✕</button>
+          )}
+          <div data-field="hist_qual">
+            <input type="text" value={row.qual} onChange={e => updateRow(i, { qual: e.target.value })}
+              placeholder={d.s10.hist_qual} className={`${inputClass} pr-8`} />
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <div data-field="hist_org">
+              <label className="block text-xs text-gray-500 mb-0.5">{d.s10.hist_org}</label>
+              <input type="text" value={row.org} onChange={e => updateRow(i, { org: e.target.value })} className={inputClass} />
+            </div>
+            <div data-field="hist_duracao">
+              <label className="block text-xs text-gray-500 mb-0.5">{d.s10.hist_duracao}</label>
+              <input type="text" value={row.duracao} onChange={e => updateRow(i, { duracao: e.target.value })} className={inputClass} />
+            </div>
+            <div data-field="hist_quando">
+              <label className="block text-xs text-gray-500 mb-0.5">{d.s10.hist_quando}</label>
+              <input type="text" value={row.quando} onChange={e => updateRow(i, { quando: e.target.value })} className={inputClass} />
+            </div>
+            <div data-field="hist_lider_nome">
+              <label className="block text-xs text-gray-500 mb-0.5">{d.s10.hist_lider_nome}</label>
+              <input type="text" value={row.lider_nome} onChange={e => updateRow(i, { lider_nome: e.target.value })} className={inputClass} />
+            </div>
+            <div data-field="hist_lider_email">
+              <label className="block text-xs text-gray-500 mb-0.5">{d.s10.hist_lider_email}</label>
+              <input type="email" value={row.lider_email} onChange={e => updateRow(i, { lider_email: e.target.value })} className={inputClass} />
+            </div>
+            <div data-field="hist_lider_tel">
+              <label className="block text-xs text-gray-500 mb-0.5">{d.s10.hist_lider_tel}</label>
+              <input type="tel" value={row.lider_tel} onChange={e => updateRow(i, { lider_tel: e.target.value })} className={inputClass} />
+            </div>
+          </div>
+        </div>
+      ))}
+      <button type="button" onClick={addRow}
+        className="text-xs font-semibold text-indigo-600 hover:text-indigo-800">
+        {d.s10.hist_add}
+      </button>
+      <input type="hidden" name="hist_lista" value={serialized} readOnly />
+    </div>
+  )
+}
+
 function S10Historico({ data }: { data?: Record<string, string> }) {
   const d = useContext(DictCtx)
   const [teve, setTeve] = useState(data?.teve_historico === 'sim')
@@ -847,16 +963,7 @@ function S10Historico({ data }: { data?: Record<string, string> }) {
             ]} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setTeve(e.target.value === 'sim')} />
         </div>
         {teve && <>
-          <div className="sm:col-span-2">
-            <Field label={d.s10.hist_qual} name="hist_qual" defaultValue={data?.hist_qual} />
-          </div>
-          <Field label={d.s10.hist_org} name="hist_org" defaultValue={data?.hist_org} />
-          <Field label={d.s10.hist_duracao} name="hist_duracao" defaultValue={data?.hist_duracao} />
-          <Field label={d.s10.hist_quando} name="hist_quando" defaultValue={data?.hist_quando} />
-          <Field label={d.s10.hist_lider_nome} name="hist_lider_nome" defaultValue={data?.hist_lider_nome} />
-          <Field label={d.s10.hist_lider_email} name="hist_lider_email" type="email" defaultValue={data?.hist_lider_email} />
-          <InternationalPhoneField phoneName="hist_lider_tel" countryName="hist_lider_tel_country"
-            label={d.s10.hist_lider_tel} defaultCountryIso="BR" defaultPhone={data?.hist_lider_tel} />
+          <HistoricoOrgField data={data} />
           <div className="sm:col-span-2">
             <InfoBox>{d.s10.infobox}</InfoBox>
           </div>

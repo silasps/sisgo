@@ -85,7 +85,7 @@ export const esDict: FormDict = {
   },
 
   s3: {
-    section: 'Sección 3',
+    section: 'Sección 2',
     title: 'Términos iniciales de compromiso',
     terms: [
       'Estoy al tanto de mis responsabilidades financieras relacionadas con la escuela.',
@@ -103,7 +103,7 @@ export const esDict: FormDict = {
   },
 
   s4: {
-    section: 'Sección 4',
+    section: 'Sección 3',
     title: 'Información de la escuela',
     escola: 'Escuela deseada',
     turma: 'Clase / Período',
@@ -128,7 +128,7 @@ export const esDict: FormDict = {
   },
 
   s5: {
-    section: 'Sección 5',
+    section: 'Sección 4',
     title: 'Información personal',
     nome: 'Nombre completo',
     sexo: 'Género',
@@ -139,6 +139,8 @@ export const esDict: FormDict = {
     is_brasileiro_nao: 'No',
     nacionalidade: 'Tu nacionalidad',
     fluencia_portugues: 'Nivel de dominio del portugués',
+    idioma_preferencia: 'Idioma de preferencia para comunicarse con el equipo',
+    idioma_preferencia_outro: 'Otro',
     solteiro: 'Soltero(a)',
     casado: 'Casado(a)',
     comprometido: 'Comprometido(a) / Novio(a)',
@@ -192,7 +194,7 @@ export const esDict: FormDict = {
   },
 
   s6: {
-    section: 'Sección 6',
+    section: 'Sección 5',
     title: 'Historia personal y contexto de vida',
     sobre_voce: 'Cuéntanos un poco sobre ti',
     processo_decisao: '¿Cómo fue tu proceso de decisión para esta escuela?',
@@ -202,7 +204,7 @@ export const esDict: FormDict = {
   },
 
   s7: {
-    section: 'Sección 7',
+    section: 'Sección 6',
     title: 'Información familiar',
     nome_pai: 'Nombre del padre',
     nome_mae: 'Nombre de la madre',
@@ -236,7 +238,7 @@ export const esDict: FormDict = {
   },
 
   s8: {
-    section: 'Sección 8',
+    section: 'Sección 7',
     title: 'Iglesia local e involucramiento ministerial',
     igreja_nome: 'Nombre de tu iglesia',
     igreja_cidade: 'Ciudad y estado de la iglesia',
@@ -263,7 +265,7 @@ export const esDict: FormDict = {
   },
 
   s9: {
-    section: 'Sección 9',
+    section: 'Sección 8',
     title: 'Referencia de un Amigo',
     infobox: 'Indica a un amigo de confianza que pueda hablar sobre tu carácter. Esta persona recibirá un formulario de referencia por separado. No es necesario que sea cristiano(a), pero debe conocerte bien.',
     ref_nome: 'Nombre del amigo / referencia',
@@ -275,7 +277,7 @@ export const esDict: FormDict = {
   },
 
   s10: {
-    section: 'Sección 10',
+    section: 'Sección 9',
     title: 'Historial con esta organización u otras',
     teve_historico: '¿Has participado en alguna escuela, seminario o proyecto misionero?',
     hist_qual: '¿Cuál escuela / proyecto?',
@@ -285,11 +287,14 @@ export const esDict: FormDict = {
     hist_lider_nome: 'Líder responsable',
     hist_lider_email: 'Correo electrónico del líder',
     hist_lider_tel: 'Teléfono del líder',
+    hist_contagem: '{count} experiencia(s)',
+    hist_add: '+ Agregar otra experiencia',
+    hist_remove: 'Eliminar',
     infobox: 'El equipo podrá ponerse en contacto con el liderazgo anterior para solicitar referencias personales.',
   },
 
   s11: {
-    section: 'Sección 11',
+    section: 'Sección 10',
     title: 'Evaluación personal, espiritual y emocional',
     autoaval_title: 'Autoevaluación — califica cada área:',
     autoaval_areas: [
@@ -324,7 +329,7 @@ export const esDict: FormDict = {
   },
 
   s12: {
-    section: 'Sección 12',
+    section: 'Sección 11',
     title: 'Salud física y medicamentos',
     saude_geral: 'Condiciones de salud que el equipo debería saber',
     alergias: 'Alergias',
@@ -342,7 +347,7 @@ export const esDict: FormDict = {
   },
 
   s13: {
-    section: 'Sección 13',
+    section: 'Sección 12',
     title: 'Asuntos legales y responsabilidad',
     antecedente: '¿Tienes algún antecedente penal?',
     antecedente_descricao: 'Por favor, explica:',
@@ -356,7 +361,7 @@ export const esDict: FormDict = {
   },
 
   s14: {
-    section: 'Sección 14',
+    section: 'Sección 13',
     title: 'Información financiera',
     infobox: 'La participación en la escuela implica costos relacionados con inscripción, alojamiento, alimentación, clases, materiales y transporte. Consulta con el equipo responsable los montos específicos.',
     apoio_tipo: 'Tipo de apoyo financiero',
@@ -382,7 +387,7 @@ export const esDict: FormDict = {
   },
 
   s15: {
-    section: 'Sección 15',
+    section: 'Sección 14',
     title: 'Subida de documentos',
     infobox: 'Adjunta los documentos solicitados a continuación. Formatos aceptados: JPG, PNG, PDF (máx. 10MB cada uno).',
     doc_foto: 'Foto reciente (rostro visible)',
@@ -398,7 +403,7 @@ export const esDict: FormDict = {
   },
 
   s16: {
-    section: 'Sección 16',
+    section: 'Sección 15',
     title: 'Aceptación final y declaraciones',
     maior_18: 'Declaro que soy mayor de 18 años. *',
     finals: [

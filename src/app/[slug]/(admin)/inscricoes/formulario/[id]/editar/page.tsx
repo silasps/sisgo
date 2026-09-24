@@ -126,6 +126,7 @@ const SECTION_FIELDS: { key: string; title: string; fields: { label: string; nam
     key: 's10', title: 'Histórico com organizações',
     fields: [
       { label: 'Participou de escola/projeto?', name: 'teve_historico', type: 'select', options: ['sim', 'nao'] },
+      { label: 'Experiências anteriores (JSON)', name: 'hist_lista', type: 'textarea' },
       { label: 'Qual escola/projeto', name: 'hist_qual' },
       { label: 'Organização/base', name: 'hist_org' },
       { label: 'Duração', name: 'hist_duracao' },
