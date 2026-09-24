@@ -69,7 +69,7 @@ export async function getMySchools(ctx: UnitAccessContext): Promise<LinkedSchool
 
   const personIds = await staffPersonIds(db, ctx.orgId, ctx.userId)
   type Row = { school_id: string; schools: { name: string; organization_id: string } | null }
-  const [{ data: leaderRows }, { data: staffRows }] = await Promise.all([
+  const [{ data: leaderRows }, { data: staffRows }, { data: createdRows }] = await Promise.all([
     db.from('school_leaders')
       .select('school_id, schools(name, organization_id)')
       .eq('organization_id', ctx.orgId)
@@ -80,6 +80,13 @@ export async function getMySchools(ctx: UnitAccessContext): Promise<LinkedSchool
         .in('person_id', personIds)
         .eq('active', true)
       : Promise.resolve({ data: [] }),
+    // Criador da escola (ver escolas/nova/page.tsx, migration 138) tem
+    // acesso equivalente a líder — mas não é um vínculo em school_leaders:
+    // não aparece em "Liderança da Escola" nem conta pro alerta de "sem
+    // líder". É só pra quem criou continuar conseguindo achar/editar a
+    // escola sem precisar de um papel de gestão.
+    db.from('schools').select('id, name, organization_id')
+      .eq('organization_id', ctx.orgId).eq('created_by', ctx.userId),
   ])
 
   const schools = new Map<string, LinkedSchool>()
@@ -90,6 +97,10 @@ export async function getMySchools(ctx: UnitAccessContext): Promise<LinkedSchool
     }
   }
   add(leaderRows, 'lider') // liderança primeiro: líder e obreiro ao mesmo tempo vale "líder"
+  for (const row of (createdRows ?? []) as Array<{ id: string; name: string; organization_id: string }>) {
+    if (row.organization_id !== ctx.orgId || schools.has(row.id)) continue
+    schools.set(row.id, { id: row.id, name: row.name, link: 'lider' })
+  }
   add(staffRows, 'obreiro')
   return [...schools.values()].sort(leadersFirstThenName)
 }

@@ -67,19 +67,11 @@ export default async function NovaEscolaPage({ params }: Props) {
       subtitle: (formData.get('subtitle') as string)?.trim() || null,
       form_config: formConfig,
       active: true,
+      created_by: actionUser.id,
     }).select('id').single()
 
     if (error) console.error('createSchool', error)
     if (!escola) return
-
-    // Delegado (não-gestão) que cria a escola precisa continuar acessando
-    // ela depois — sem isso, a própria página da escola bloqueia quem não é
-    // gestão e não lidera aquela escola especificamente (ver escolas/[id]/
-    // layout.tsx). Gestão já acessa tudo, não precisa disso.
-    if (!isManagementCreator) {
-      await sb.from('school_leaders').insert({ organization_id: orgRow.id, school_id: escola.id, user_id: actionUser.id })
-    }
-
     redirect(`/${slug}/escolas/${escola.id}`)
   }
 
