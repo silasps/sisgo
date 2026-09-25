@@ -1,9 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { Pin } from 'lucide-react'
+import Link from 'next/link'
+import { Pin, Pencil, Trash2 } from 'lucide-react'
 import { AnnouncementDetailModal } from './AnnouncementDetailModal'
+import { ConfirmSubmitButton } from './ConfirmSubmitButton'
 import { CATEGORY_STYLES } from '@/lib/announcement-categories'
+import { focalImageStyle } from '@/lib/image-focal'
 
 export type AnnouncementListItem = {
   id: string
@@ -14,6 +17,7 @@ export type AnnouncementListItem = {
   image_url: string | null
   image_focal_x: number
   image_focal_y: number
+  image_zoom: number
   link_url: string | null
   link_label: string | null
   author_name: string
@@ -29,90 +33,111 @@ function Thumb({ announcement, className }: { announcement: AnnouncementListItem
         src={announcement.image_url}
         alt=""
         className="w-full h-full object-cover"
-        style={{ objectPosition: `${announcement.image_focal_x}% ${announcement.image_focal_y}%` }}
+        style={focalImageStyle(announcement.image_focal_x, announcement.image_focal_y, announcement.image_zoom)}
       />
     </div>
   )
 }
 
 /**
- * Lista clicável de anúncios — cada item abre AnnouncementDetailModal.
- * Reaproveitada em 3 lugares com pesos visuais diferentes: cards do Início
- * (`default`), banner de área/AreaHero (`hero`) e histórico completo em
- * `/anuncios` (`grid`).
+ * Passe pra habilitar editar/excluir nos cards do `grid` (só faz sentido pra
+ * quem gerencia anúncios — `/anuncios` decide isso, não este componente).
+ * `editHrefBase` é string, não função: uma função comum não atravessa a
+ * fronteira Server → Client Component (só Server Actions passam assim), o
+ * componente monta o link concatenando o id.
  */
-export function AnnouncementList({ announcements, variant = 'default' }: {
+export type AnnouncementManage = {
+  editHrefBase: string
+  deleteAction: (formData: FormData) => void | Promise<void>
+  organizationId: string
+  redirectTo: string
+}
+
+function GridCardContent({ announcement: a }: { announcement: AnnouncementListItem }) {
+  const cat = CATEGORY_STYLES[a.category] ?? CATEGORY_STYLES.aviso
+  return (
+    <>
+      {a.image_url && (
+        <div className="w-full bg-gray-100 overflow-hidden" style={{ aspectRatio: '16 / 9' }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={a.image_url}
+            alt=""
+            className="w-full h-full object-cover"
+            style={focalImageStyle(a.image_focal_x, a.image_focal_y, a.image_zoom)}
+          />
+        </div>
+      )}
+      <div className="p-4">
+        <div className="flex items-center gap-1.5 flex-wrap mb-1">
+          {a.pinned && <Pin size={12} className="text-brand-500 shrink-0" />}
+          <span className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${cat.className}`}>
+            {cat.label}
+          </span>
+        </div>
+        <p className="text-sm font-semibold text-gray-900">{a.title}</p>
+        <p className="text-sm text-gray-600 mt-0.5 line-clamp-3">{a.body}</p>
+        <p className="text-xs text-gray-400 mt-2">{new Date(a.created_at).toLocaleDateString('pt-BR')}</p>
+      </div>
+    </>
+  )
+}
+
+/**
+ * Lista clicável de anúncios — cada item abre AnnouncementDetailModal.
+ * Reaproveitada em 2 lugares com pesos visuais diferentes: cards do Início
+ * (`default`) e histórico completo em `/anuncios` (`grid`). O banner de área
+ * (AreaHero) usa `AnnouncementCarousel` em vez desta lista.
+ */
+export function AnnouncementList({ announcements, variant = 'default', manage }: {
   announcements: AnnouncementListItem[]
-  variant?: 'default' | 'hero' | 'grid'
+  variant?: 'default' | 'grid'
+  manage?: AnnouncementManage
 }) {
   const [openId, setOpenId] = useState<string | null>(null)
   const opened = announcements.find(a => a.id === openId) ?? null
-
-  if (variant === 'hero') {
-    return (
-      <>
-        <div className="mt-3 space-y-2">
-          {announcements.map(a => (
-            <button
-              key={a.id}
-              type="button"
-              onClick={() => setOpenId(a.id)}
-              className="w-full text-left flex items-start gap-2.5 bg-white/10 hover:bg-white/15 rounded-lg px-3 py-2 transition-colors"
-            >
-              <Thumb announcement={a} className="w-10 h-10" />
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5">
-                  {a.pinned && <Pin size={13} className="shrink-0" />}
-                  <p className="text-sm font-semibold">{a.title}</p>
-                </div>
-                <p className="text-xs text-white/80 line-clamp-2">{a.body}</p>
-              </div>
-            </button>
-          ))}
-        </div>
-        {opened && <AnnouncementDetailModal announcement={opened} onClose={() => setOpenId(null)} />}
-      </>
-    )
-  }
 
   if (variant === 'grid') {
     return (
       <>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {announcements.map(a => {
-            const cat = CATEGORY_STYLES[a.category] ?? CATEGORY_STYLES.aviso
-            return (
-              <button
-                key={a.id}
-                type="button"
-                onClick={() => setOpenId(a.id)}
-                className="text-left bg-white rounded-xl border border-gray-200 overflow-hidden transition-all hover:shadow-md hover:-translate-y-0.5"
-              >
-                {a.image_url && (
-                  <div className="w-full bg-gray-100" style={{ aspectRatio: '16 / 9' }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={a.image_url}
-                      alt=""
-                      className="w-full h-full object-cover"
-                      style={{ objectPosition: `${a.image_focal_x}% ${a.image_focal_y}%` }}
-                    />
-                  </div>
-                )}
-                <div className="p-4">
-                  <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                    {a.pinned && <Pin size={12} className="text-brand-500 shrink-0" />}
-                    <span className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${cat.className}`}>
-                      {cat.label}
-                    </span>
-                  </div>
-                  <p className="text-sm font-semibold text-gray-900">{a.title}</p>
-                  <p className="text-sm text-gray-600 mt-0.5 line-clamp-3">{a.body}</p>
-                  <p className="text-xs text-gray-400 mt-2">{new Date(a.created_at).toLocaleDateString('pt-BR')}</p>
+          {announcements.map(a => (
+            <div key={a.id} className="relative bg-white rounded-xl border border-gray-200 overflow-hidden transition-all hover:shadow-md hover:-translate-y-0.5">
+              {manage ? (
+                <Link href={`${manage.editHrefBase}${a.id}#anuncio-form`} className="block text-left">
+                  <GridCardContent announcement={a} />
+                </Link>
+              ) : (
+                <button type="button" onClick={() => setOpenId(a.id)} className="w-full block text-left">
+                  <GridCardContent announcement={a} />
+                </button>
+              )}
+              {manage && (
+                <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
+                  <Link
+                    href={`${manage.editHrefBase}${a.id}#anuncio-form`}
+                    title="Editar"
+                    aria-label="Editar anúncio"
+                    className="p-1.5 rounded-lg bg-white/90 hover:bg-white text-gray-500 hover:text-brand-600 shadow-sm transition-colors"
+                  >
+                    <Pencil size={14} />
+                  </Link>
+                  <form action={manage.deleteAction}>
+                    <input type="hidden" name="announcement_id" value={a.id} />
+                    <input type="hidden" name="organization_id" value={manage.organizationId} />
+                    <input type="hidden" name="redirect_to" value={manage.redirectTo} />
+                    <ConfirmSubmitButton
+                      confirmMessage={`Excluir o anúncio "${a.title}"? Essa ação não pode ser desfeita.`}
+                      title="Excluir"
+                      className="p-1.5 rounded-lg bg-white/90 hover:bg-white text-gray-500 hover:text-red-600 shadow-sm transition-colors"
+                    >
+                      <Trash2 size={14} />
+                    </ConfirmSubmitButton>
+                  </form>
                 </div>
-              </button>
-            )
-          })}
+              )}
+            </div>
+          ))}
         </div>
         {opened && <AnnouncementDetailModal announcement={opened} onClose={() => setOpenId(null)} />}
       </>

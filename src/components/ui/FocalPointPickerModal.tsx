@@ -2,31 +2,39 @@
 
 import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Loader2 } from 'lucide-react'
+import { Loader2, ZoomIn } from 'lucide-react'
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock'
+import { focalImageStyle } from '@/lib/image-focal'
 
 function clampPct(v: number) {
   return Math.min(100, Math.max(0, Math.round(v)))
 }
 
 // Em vez de recortar pixels (como PhotoCropperModal/AvatarCropperModal),
-// marca só um ponto de destaque (0-100%, dois números) sobre a imagem
-// inteira — o mesmo arquivo é reaproveitado em qualquer proporção via CSS
-// `object-position`, sem gerar um recorte por formato. Por isso ajustar o
-// foco de uma imagem já salva não passa arquivo nenhum de novo, só os dois
-// números. As mini-prévias ao lado usam exatamente esse mecanismo, então
-// mostram fielmente como o anúncio aparece em cada lugar do sistema.
+// marca um ponto de destaque (0-100%, dois números) + um zoom (1x-3x) sobre
+// a imagem inteira — o mesmo arquivo é reaproveitado em qualquer proporção
+// via CSS `object-position`/`transform: scale`, sem gerar um recorte por
+// formato. Por isso ajustar foco/zoom de uma imagem já salva não reenvia
+// arquivo nenhum, só os três números. O zoom existe porque um ponto focal
+// sozinho não evita cortar demais uma foto quadrada/vertical num espaço bem
+// largo (o carrossel do banner de área) — ele só escolhe ONDE focar, não
+// QUANTO aproximar antes. As mini-prévias usam `focalImageStyle`, a mesma
+// função usada nos lugares reais do sistema, então mostram fielmente como o
+// anúncio vai aparecer.
 export function FocalPointPickerModal({
-  imageSrc, initialFocalX = 50, initialFocalY = 50, saving, onCancel, onConfirm,
+  imageSrc, initialFocalX = 50, initialFocalY = 50, initialZoom = 1, saving, onCancel, onConfirm,
 }: {
   imageSrc: string
   initialFocalX?: number
   initialFocalY?: number
+  /** 1 a 3 (1x a 3x) — mesma escala de zoom já usada em AvatarCropperModal. */
+  initialZoom?: number
   saving?: boolean
   onCancel: () => void
-  onConfirm: (focalX: number, focalY: number) => void
+  onConfirm: (focalX: number, focalY: number, zoom: number) => void
 }) {
   const [focal, setFocal] = useState({ x: initialFocalX, y: initialFocalY })
+  const [zoom, setZoom] = useState(initialZoom)
   const containerRef = useRef<HTMLDivElement>(null)
   const draggingRef = useRef(false)
 
@@ -58,7 +66,7 @@ export function FocalPointPickerModal({
     draggingRef.current = false
   }
 
-  const objectPosition = `${focal.x}% ${focal.y}%`
+  const previewStyle = focalImageStyle(focal.x, focal.y, Math.round(zoom * 100))
 
   const modal = (
     <div className="fixed inset-0 z-[200] bg-black/70 flex items-center justify-center p-4" onClick={onCancel}>
@@ -68,7 +76,7 @@ export function FocalPointPickerModal({
       >
         <h2 className="text-sm font-semibold text-gray-900 mb-1">Ajustar ponto de destaque</h2>
         <p className="text-xs text-gray-400 mb-4">
-          Clique ou arraste sobre a imagem para marcar o ponto mais importante — ele continua visível em qualquer formato de tela, sem precisar recortar a imagem de novo.
+          Clique ou arraste sobre a imagem para marcar o ponto mais importante, e use o zoom pra controlar o quanto aproximar antes — ele continua visível em qualquer formato de tela, sem precisar recortar a imagem de novo.
         </p>
 
         <div
@@ -80,6 +88,10 @@ export function FocalPointPickerModal({
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
         >
+          {/* Imagem inteira sempre visível aqui (object-contain, sem zoom) —
+              é a superfície de marcação, precisa mostrar tudo pra poder
+              clicar em qualquer parte. O efeito do zoom só aparece nas
+              mini-prévias abaixo, que são o que de fato será exibido. */}
           {/* eslint-disable-next-line @next/next/no-img-element -- object URL local ou pública do bucket, não passa pelo otimizador */}
           <img src={imageSrc} alt="" draggable={false} className="absolute inset-0 w-full h-full object-contain pointer-events-none" />
           <div
@@ -88,11 +100,24 @@ export function FocalPointPickerModal({
           />
         </div>
 
+        <div className="flex items-center gap-3 mt-3">
+          <ZoomIn size={15} className="text-gray-400 shrink-0" />
+          <input
+            type="range"
+            min={1}
+            max={3}
+            step={0.01}
+            value={zoom}
+            onChange={e => setZoom(Number(e.target.value))}
+            className="w-full accent-brand-500"
+            aria-label="Zoom"
+          />
+        </div>
+
         <p className="text-xs font-medium text-gray-500 mt-4 mb-2">Como fica em cada lugar do sistema</p>
-        <div className="grid grid-cols-3 gap-3">
-          <PreviewBox label="Card do Início" ratio="4 / 3" imageSrc={imageSrc} objectPosition={objectPosition} />
-          <PreviewBox label="Banner de área" ratio="21 / 9" imageSrc={imageSrc} objectPosition={objectPosition} />
-          <PreviewBox label="Modal de detalhes" ratio="16 / 9" imageSrc={imageSrc} objectPosition={objectPosition} />
+        <div className="grid grid-cols-2 gap-3">
+          <PreviewBox label="Card compacto (listas)" ratio="4 / 3" imageSrc={imageSrc} style={previewStyle} />
+          <PreviewBox label="Banner / modal de detalhes" ratio="16 / 9" imageSrc={imageSrc} style={previewStyle} />
         </div>
 
         <div className="flex items-center justify-end gap-2 mt-5">
@@ -106,7 +131,7 @@ export function FocalPointPickerModal({
           </button>
           <button
             type="button"
-            onClick={() => onConfirm(focal.x, focal.y)}
+            onClick={() => onConfirm(focal.x, focal.y, zoom)}
             disabled={saving}
             className="flex items-center gap-2 rounded-lg bg-brand-500 hover:bg-brand-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
           >
@@ -121,14 +146,14 @@ export function FocalPointPickerModal({
   return createPortal(modal, document.body)
 }
 
-function PreviewBox({ label, ratio, imageSrc, objectPosition }: {
-  label: string; ratio: string; imageSrc: string; objectPosition: string
+function PreviewBox({ label, ratio, imageSrc, style }: {
+  label: string; ratio: string; imageSrc: string; style: React.CSSProperties
 }) {
   return (
     <div>
       <div className="w-full rounded-lg overflow-hidden bg-gray-100 border border-gray-200" style={{ aspectRatio: ratio }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={imageSrc} alt="" className="w-full h-full object-cover" style={{ objectPosition }} />
+        <img src={imageSrc} alt="" className="w-full h-full object-cover" style={style} />
       </div>
       <p className="text-[10px] text-gray-400 mt-1 text-center">{label}</p>
     </div>

@@ -102,7 +102,7 @@ export function Sidebar({ items, isOpen = false, onClose, user, collapsed = fals
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
       className={[
-        'fixed inset-y-0 z-30 w-64 bg-dark-950 flex flex-col',
+        'fixed inset-y-0 z-30 w-64 bg-dark-950 flex flex-col overflow-x-hidden',
         'left-0 border-r border-dark-800',
         'pt-[env(safe-area-inset-top)] pb-20 md:pb-0',
         'transition-[transform,width] duration-200 ease-in-out',
@@ -138,7 +138,7 @@ export function Sidebar({ items, isOpen = false, onClose, user, collapsed = fals
             return (
               <div key={`div-${idx}`} className="pt-3 pb-1 mx-1">
                 <div className="border-t border-dark-800 mb-2" />
-                <span className={`px-2 text-[10px] font-semibold uppercase tracking-widest text-gray-600 select-none ${!expanded ? 'md:hidden' : ''}`}>
+                <span className={`px-2 text-[10px] font-semibold uppercase tracking-widest text-gray-600 select-none whitespace-nowrap ${!expanded ? 'md:hidden' : ''}`}>
                   {item.label}
                 </span>
               </div>
@@ -163,7 +163,7 @@ export function Sidebar({ items, isOpen = false, onClose, user, collapsed = fals
                 <span className="absolute inset-0 rounded-lg bg-red-500/30 animate-pulse" />
               )}
               <NavIcon name={item.icon} className="relative shrink-0" size={20} />
-              <span className={`relative ${!expanded ? 'md:hidden' : ''}`}>{item.label}</span>
+              <span className={`relative whitespace-nowrap ${!expanded ? 'md:hidden' : ''}`}>{item.label}</span>
               {item.alert && !active && (
                 <span className={`relative ml-auto w-2 h-2 rounded-full bg-red-500 ring-2 ring-dark-950 animate-pulse ${!expanded ? 'md:hidden' : ''}`} />
               )}
@@ -209,7 +209,7 @@ function LogoutButton({ expanded }: { expanded?: boolean }) {
         className={`flex items-center gap-3 px-3 py-2.5 w-full rounded-lg text-sm text-gray-500 hover:bg-dark-800 hover:text-white transition-colors ${!expanded ? 'md:justify-center md:px-0' : ''}`}
       >
         <LogOut size={16} aria-hidden className="shrink-0" />
-        <span className={!expanded ? 'md:hidden' : ''}>Sair</span>
+        <span className={`whitespace-nowrap ${!expanded ? 'md:hidden' : ''}`}>Sair</span>
       </button>
     </div>
   )

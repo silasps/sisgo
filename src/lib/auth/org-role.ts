@@ -59,17 +59,41 @@ export async function getCurrentOrganizationRole(
   const extraRoles: string[] = (orgUserData?.extra_roles as string[] | null) ?? []
 
   // Papéis vindos de ministério com `linked_role` (Hospitalidade/Secretaria/
-  // DH/Cozinha/Manutenção) — mesmo cálculo de `linkedRoles` já usado em
-  // layout.tsx pro menu, agora disponível pra qualquer página que precise
-  // checar permissão da mesma forma (nunca só pelo papel principal, senão
-  // quem tem esse acesso só por acumulação cai em notFound()).
+  // DH/Cozinha/Manutenção/Comunicação) — mesmo cálculo de `linkedRoles` já
+  // usado em layout.tsx pro menu, agora disponível pra qualquer página que
+  // precise checar permissão da mesma forma (nunca só pelo papel principal,
+  // senão quem tem esse acesso só por acumulação cai em notFound()).
   const personId = staffProfile?.person_id
-  const [{ data: leaderLinkedData }, { data: memberLinkedData }] = await Promise.all([
-    db.from('ministry_leaders').select('ministry_id, ministries(linked_role)').eq('user_id', userId).eq('organization_id', organizationId),
-    personId
-      ? db.from('ministry_members').select('ministry_id, ministries(linked_role)').eq('person_id', personId).eq('active', true)
-      : Promise.resolve({ data: [] as Array<{ ministry_id: string; ministries: { linked_role: string | null } | null }> }),
-  ])
+
+  // Superadmin com preview preso a um ministério específico (cookie de
+  // /{slug}/configuracoes → "Visualizar como"): os vínculos reais do
+  // próprio superadmin não valem — só a unidade escolhida importa, mesmo
+  // princípio de `previewPinsUnit` em lib/auth/unit-access.ts. Sem isso,
+  // toda página que usa `allRoles`/`linkedRoles` pra liberar acesso
+  // ministério-scoped (ex. comunicacao/page.tsx) dava notFound() durante o
+  // preview, porque a query original ignorava a unidade escolhida e olhava
+  // só os vínculos reais do superadmin logado.
+  const previewMinistryId = (preview?.role === 'lider_ministerio' || preview?.role === 'obreiro_ministerio')
+    ? preview.ministryId
+    : null
+
+  const [{ data: leaderLinkedData }, { data: memberLinkedData }] = previewMinistryId
+    ? await (async () => {
+      const { data } = await db
+        .from('ministries')
+        .select('id, linked_role')
+        .eq('id', previewMinistryId)
+        .eq('organization_id', organizationId)
+        .maybeSingle()
+      const rows = data ? [{ ministry_id: data.id, ministries: { linked_role: data.linked_role } }] : []
+      return [{ data: rows }, { data: [] as typeof rows }]
+    })()
+    : await Promise.all([
+      db.from('ministry_leaders').select('ministry_id, ministries(linked_role)').eq('user_id', userId).eq('organization_id', organizationId),
+      personId
+        ? db.from('ministry_members').select('ministry_id, ministries(linked_role)').eq('person_id', personId).eq('active', true)
+        : Promise.resolve({ data: [] as Array<{ ministry_id: string; ministries: { linked_role: string | null } | null }> }),
+    ])
   const linkedRoles = [...(leaderLinkedData ?? []), ...(memberLinkedData ?? [])]
     .map(r => (r.ministries as { linked_role: string | null } | null)?.linked_role)
     .filter((r): r is string => !!r)

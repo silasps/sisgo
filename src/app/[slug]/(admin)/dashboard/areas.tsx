@@ -13,7 +13,9 @@ import { StatCard, SectionCard, EmptyState } from './ui'
 import type { AreaTab } from './AreaTabs'
 import { MiniCalendar } from './MiniCalendar'
 import { PersonalAccountCard } from './PersonalAccountCard'
-import { AnnouncementList, type AnnouncementListItem } from '@/components/ui/AnnouncementList'
+import type { AnnouncementListItem } from '@/components/ui/AnnouncementList'
+import { AnnouncementCarousel } from '@/components/ui/AnnouncementCarousel'
+import { matchesAudience } from '@/lib/audience-roles'
 
 type ServerClient = Awaited<ReturnType<typeof createClient>>
 type AdminClient = ReturnType<typeof createAdminClient>
@@ -46,7 +48,7 @@ export async function buildAreaTabs({ supabase, sbAdmin, slug, orgId, userId, ro
   const [{ data: announcementsRaw }, { count: myReservations }, ministryData, schoolData] = await Promise.all([
     sbAdmin
       .from('base_announcements')
-      .select('id, title, body, pinned, category, image_url, image_focal_x, image_focal_y, link_url, link_label, visible_to_roles, publish_at, author_name, created_at')
+      .select('id, title, body, pinned, category, image_url, image_focal_x, image_focal_y, image_zoom, link_url, link_label, visible_to_roles, publish_at, author_name, created_at')
       .eq('organization_id', orgId)
       .or(`expires_at.is.null,expires_at.gte.${todayDate}`)
       .order('pinned', { ascending: false })
@@ -118,8 +120,7 @@ export async function buildAreaTabs({ supabase, sbAdmin, slug, orgId, userId, ro
   ])
 
   const announcements = ((announcementsRaw ?? []) as Array<Announcement & { visible_to_roles: string[] | null; publish_at: string | null }>)
-    .filter(a => (!a.visible_to_roles || a.visible_to_roles.length === 0 || a.visible_to_roles.includes(role))
-      && (!a.publish_at || new Date(a.publish_at).getTime() <= Date.now()))
+    .filter(a => matchesAudience(role, a.visible_to_roles) && (!a.publish_at || new Date(a.publish_at).getTime() <= Date.now()))
     .slice(0, 3)
 
   return [
@@ -161,19 +162,18 @@ export async function buildAreaTabs({ supabase, sbAdmin, slug, orgId, userId, ro
 // ── Painéis ─────────────────────────────────────────────────
 
 function AreaHero({ kicker, title, announcements }: { kicker: string; title: string; announcements: Announcement[] }) {
-  return (
-    <div className="rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 text-white p-4 md:p-5">
-      <p className="text-xs uppercase tracking-wide text-white/70">{kicker}</p>
-      <p className="text-lg font-bold leading-tight">{title}</p>
-      {announcements.length > 0 ? (
-        <AnnouncementList announcements={announcements} variant="hero" />
-      ) : (
+  if (announcements.length === 0) {
+    return (
+      <div className="rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 text-white p-4 md:p-5">
+        <p className="text-xs uppercase tracking-wide text-white/70">{kicker}</p>
+        <p className="text-lg font-bold leading-tight">{title}</p>
         <p className="text-xs text-white/70 mt-2 flex items-center gap-1">
           <Megaphone size={12} /> Nenhum anúncio da Comunicação no momento.
         </p>
-      )}
-    </div>
-  )
+      </div>
+    )
+  }
+  return <AnnouncementCarousel announcements={announcements} kicker={kicker} title={title} />
 }
 
 function QuickLink({ href, title, description }: { href: string; title: string; description: string }) {

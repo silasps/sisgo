@@ -5,6 +5,8 @@ import { Header } from '@/components/layout/Header'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { notFound, redirect } from 'next/navigation'
 import { AnnouncementList, type AnnouncementListItem } from '@/components/ui/AnnouncementList'
+import { matchesAudience } from '@/lib/audience-roles'
+import { deleteAnnouncement } from '../comunicacao/actions'
 import { EmptyState } from '../dashboard/ui'
 import { Megaphone } from 'lucide-react'
 
@@ -27,11 +29,12 @@ export default async function AnunciosPage({ params, searchParams }: Props) {
   const { data: org } = await supabase.from('organizations').select('id').eq('slug', slug).single()
   if (!org) notFound()
 
-  const { role } = await getCurrentOrganizationRole(supabase, user.id, org.id)
+  const { role, linkedRoles } = await getCurrentOrganizationRole(supabase, user.id, org.id)
+  const canManage = role === 'superadmin' || role === 'lider_base' || linkedRoles.includes('comunicacao')
 
   const { data: rows } = await admin
     .from('base_announcements')
-    .select('id, title, body, pinned, category, image_url, image_focal_x, image_focal_y, link_url, link_label, visible_to_roles, expires_at, publish_at, author_name, created_at')
+    .select('id, title, body, pinned, category, image_url, image_focal_x, image_focal_y, image_zoom, link_url, link_label, visible_to_roles, expires_at, publish_at, author_name, created_at')
     .eq('organization_id', org.id)
     .order('pinned', { ascending: false })
     .order('created_at', { ascending: false })
@@ -39,7 +42,7 @@ export default async function AnunciosPage({ params, searchParams }: Props) {
 
   const now = Date.now()
   const visible = ((rows ?? []) as Row[]).filter(a => {
-    const rolesOk = !a.visible_to_roles || a.visible_to_roles.length === 0 || a.visible_to_roles.includes(role)
+    const rolesOk = matchesAudience(role, a.visible_to_roles)
     const publishOk = !a.publish_at || new Date(a.publish_at).getTime() <= now
     const expiresOk = !a.expires_at || new Date(a.expires_at).getTime() >= now
     return rolesOk && publishOk && expiresOk
@@ -55,7 +58,16 @@ export default async function AnunciosPage({ params, searchParams }: Props) {
         {pageItems.length === 0 ? (
           <EmptyState icon={Megaphone} label="Nenhum anúncio encontrado" />
         ) : (
-          <AnnouncementList announcements={pageItems} variant="grid" />
+          <AnnouncementList
+            announcements={pageItems}
+            variant="grid"
+            manage={canManage ? {
+              editHrefBase: `/${slug}/comunicacao?edit=`,
+              deleteAction: deleteAnnouncement,
+              organizationId: org.id,
+              redirectTo: `/${slug}/anuncios${page > 1 ? `?page=${page}` : ''}`,
+            } : undefined}
+          />
         )}
         {totalPages > 1 && (
           <div className="flex items-center justify-center gap-3 pt-2">

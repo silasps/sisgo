@@ -3,24 +3,29 @@
 import { useRef, useState } from 'react'
 import { ImageIcon, RotateCw, Trash2, CheckCircle2, Crosshair } from 'lucide-react'
 import { FocalPointPickerModal } from './FocalPointPickerModal'
+import { focalImageStyle } from '@/lib/image-focal'
 
-// Campo de imagem do anúncio: dropzone + ponto focal, sem crop de pixels
-// (ver FocalPointPickerModal). `name="image"` vira 3 campos no FormData de
-// quem usa este componente: `image` (o arquivo), `image_focal_x`/
-// `image_focal_y` (0-100, sempre presentes) e `remove_image=1` só quando uma
-// imagem já salva foi removida sem escolher uma nova.
+// Campo de imagem do anúncio: dropzone + ponto focal + zoom, sem crop de
+// pixels (ver FocalPointPickerModal). `name="image"` vira 4 campos no
+// FormData de quem usa este componente: `image` (o arquivo), `image_focal_x`/
+// `image_focal_y` (0-100), `image_zoom` (100-300, = 1x-3x — mesma escala
+// salva no banco) e `remove_image=1` só quando uma imagem já salva foi
+// removida sem escolher uma nova.
 export function FocalPointImageField({
-  name, existingImageUrl, existingFocalX = 50, existingFocalY = 50,
+  name, existingImageUrl, existingFocalX = 50, existingFocalY = 50, existingZoom = 100,
 }: {
   name: string
   existingImageUrl?: string | null
   existingFocalX?: number
   existingFocalY?: number
+  /** 100-300 (= 1x-3x). */
+  existingZoom?: number
 }) {
   const [file, setFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [removedExisting, setRemovedExisting] = useState(false)
   const [focal, setFocal] = useState({ x: existingFocalX, y: existingFocalY })
+  const [zoom, setZoom] = useState(existingZoom / 100)
   const [pickerOpen, setPickerOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -42,6 +47,7 @@ export function FocalPointImageField({
         inputRef.current.files = dt.files
       }
       setFocal({ x: 50, y: 50 })
+      setZoom(1)
       setPickerOpen(true)
     } else if (inputRef.current) {
       inputRef.current.value = ''
@@ -66,6 +72,7 @@ export function FocalPointImageField({
       />
       <input type="hidden" name={`${name}_focal_x`} value={focal.x} />
       <input type="hidden" name={`${name}_focal_y`} value={focal.y} />
+      <input type="hidden" name={`${name}_zoom`} value={Math.round(zoom * 100)} />
       {removedExisting && <input type="hidden" name={`remove_${name}`} value="1" />}
 
       {showingSomething ? (
@@ -76,7 +83,7 @@ export function FocalPointImageField({
               src={displayUrl!}
               alt=""
               className="w-full h-full object-cover"
-              style={{ objectPosition: `${focal.x}% ${focal.y}%` }}
+              style={focalImageStyle(focal.x, focal.y, Math.round(zoom * 100))}
             />
           </div>
           <div className="min-w-0 flex-1">
@@ -88,7 +95,7 @@ export function FocalPointImageField({
               onClick={() => setPickerOpen(true)}
               className="text-[11px] text-brand-600 hover:underline flex items-center gap-1 mt-0.5"
             >
-              <Crosshair size={11} /> Ajustar ponto de destaque
+              <Crosshair size={11} /> Ajustar ponto de destaque e zoom
             </button>
           </div>
           <button
@@ -126,8 +133,9 @@ export function FocalPointImageField({
           imageSrc={displayUrl}
           initialFocalX={focal.x}
           initialFocalY={focal.y}
+          initialZoom={zoom}
           onCancel={() => setPickerOpen(false)}
-          onConfirm={(x, y) => { setFocal({ x, y }); setPickerOpen(false) }}
+          onConfirm={(x, y, z) => { setFocal({ x, y }); setZoom(z); setPickerOpen(false) }}
         />
       )}
     </div>

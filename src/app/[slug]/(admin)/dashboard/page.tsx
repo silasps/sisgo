@@ -13,6 +13,7 @@ import { AreaTabs } from './AreaTabs'
 import { getMyAreas, buildAreaTabs } from './areas'
 import { PersonalAccountCard } from './PersonalAccountCard'
 import { AnnouncementList, type AnnouncementListItem } from '@/components/ui/AnnouncementList'
+import { matchesAudience } from '@/lib/audience-roles'
 import type { LucideIcon } from 'lucide-react'
 import {
   Users, Briefcase, GraduationCap, BookOpen, Music, Home,
@@ -94,7 +95,7 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
       getVerseOfDay(),
       admin
         .from('base_announcements')
-        .select('id, title, body, pinned, category, image_url, image_focal_x, image_focal_y, link_url, link_label, visible_to_roles, expires_at, publish_at, author_name, created_at')
+        .select('id, title, body, pinned, category, image_url, image_focal_x, image_focal_y, image_zoom, link_url, link_label, visible_to_roles, expires_at, publish_at, author_name, created_at')
         .eq('organization_id', orgId)
         .or(`expires_at.is.null,expires_at.gte.${today}`)
         .order('pinned', { ascending: false })
@@ -119,17 +120,16 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
         .limit(20),
     ])
 
-    const isVisibleToAluno = (roles: string[] | null) => !roles || roles.length === 0 || roles.includes('aluno')
     const isPublished = (publishAt: string | null) => !publishAt || new Date(publishAt).getTime() <= Date.now()
 
     const announcements: AnnouncementListItem[] = ((announcementsRaw ?? []) as Array<
       AnnouncementListItem & { visible_to_roles: string[] | null; publish_at: string | null }
     >)
-      .filter(a => isVisibleToAluno(a.visible_to_roles) && isPublished(a.publish_at))
+      .filter(a => matchesAudience('aluno', a.visible_to_roles) && isPublished(a.publish_at))
       .slice(0, 3)
 
     const baseEvents = ((baseEventsRaw ?? []) as Array<{ id: string; title: string; starts_on: string; visible_to_roles: string[] | null }>)
-      .filter(e => isVisibleToAluno(e.visible_to_roles))
+      .filter(e => matchesAudience('aluno', e.visible_to_roles))
       .map(e => ({ id: e.id, title: e.title, date: new Date(`${e.starts_on}T12:00:00`) }))
 
     const schoolEvents = ((schoolEventsRaw ?? []) as Array<{ id: string; title: string; starts_at: string }>)

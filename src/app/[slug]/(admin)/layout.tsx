@@ -47,6 +47,7 @@ function splitNavByMode(navItems: NavItem[]) {
 const NAV_SECTION_BY_ICON: Record<string, string> = {
   pessoas: 'Pessoas & Times', presenca: 'Pessoas & Times', obreiros: 'Pessoas & Times',
   escolas: 'Pessoas & Times', inscricoes: 'Pessoas & Times', ministerios: 'Pessoas & Times',
+  comunicacao: 'Pessoas & Times',
   reservas: 'Hospedagem', hospedagem: 'Hospedagem', quartos: 'Hospedagem', lavanderia: 'Hospedagem',
   cozinha: 'Cozinha', estoque: 'Cozinha', receitas: 'Cozinha',
   'estoque-manutencao': 'Manutenção',
@@ -354,20 +355,48 @@ export default async function SlugLayout({ children, params }: Props) {
     if (rascunhoObreiro?.token) pendingProfileCompletion = { tipo: 'obreiro', token: rascunhoObreiro.token }
   }
 
-  const [{ data: leaderLinkedData }, { data: memberLinkedData }] = await Promise.all([
-    sbAdmin
-      .from('ministry_leaders')
-      .select('ministry_id, ministries(linked_role)')
-      .eq('user_id', user.id)
-      .eq('organization_id', org.id),
-    personIdForLinked
-      ? sbAdmin
-        .from('ministry_members')
+  const previewMinistryId = (preview?.role === 'lider_ministerio' || preview?.role === 'obreiro_ministerio')
+    ? preview.ministryId
+    : null
+
+  // Superadmin com preview preso a um ministério específico: os vínculos
+  // reais do próprio superadmin (que pode não ter nenhum) não valem pro
+  // menu — só a unidade escolhida importa, mesmo princípio de
+  // `previewPinsUnit` em lib/auth/unit-access.ts (getMyMinistries),
+  // replicado aqui porque esta consulta monta linkedRoles/myMinistryIds
+  // pro nav sem passar por unit-access. Sem isso, itens do menu que
+  // dependem de `linked_role` (ex. "Comunicação") ficavam escondidos
+  // durante o preview — a query original ignorava a unidade escolhida e
+  // olhava só os vínculos reais do superadmin logado. `ministries` como
+  // objeto puro (não array) porque é assim que o PostgREST resolve esse
+  // embed de verdade em runtime (FK de muitos-pra-um) — o `.map()` logo
+  // abaixo já faz `as {...} | null` em cima disso, mesmo se o supabase-js
+  // tipar como array por falta de schema gerado.
+  const [{ data: leaderLinkedData }, { data: memberLinkedData }] = previewMinistryId
+    ? await (async () => {
+      const { data } = await sbAdmin
+        .from('ministries')
+        .select('id, linked_role')
+        .eq('id', previewMinistryId)
+        .eq('organization_id', org.id)
+        .maybeSingle()
+      const rows = data ? [{ ministry_id: data.id, ministries: { linked_role: data.linked_role } }] : []
+      return [{ data: rows }, { data: [] as typeof rows }]
+    })()
+    : await Promise.all([
+      sbAdmin
+        .from('ministry_leaders')
         .select('ministry_id, ministries(linked_role)')
-        .eq('person_id', personIdForLinked)
-        .eq('active', true)
-      : Promise.resolve({ data: [] as Array<{ ministry_id: string; ministries: { linked_role: string | null } | null }> }),
-  ])
+        .eq('user_id', user.id)
+        .eq('organization_id', org.id),
+      personIdForLinked
+        ? sbAdmin
+          .from('ministry_members')
+          .select('ministry_id, ministries(linked_role)')
+          .eq('person_id', personIdForLinked)
+          .eq('active', true)
+        : Promise.resolve({ data: [] as Array<{ ministry_id: string; ministries: { linked_role: string | null } | null }> }),
+    ])
 
   const linkedRoles = [
     ...(leaderLinkedData ?? []),
