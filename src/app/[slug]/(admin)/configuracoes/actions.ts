@@ -197,3 +197,38 @@ export async function updateInstitutionRulesText(orgId: string, slug: string, fo
   await admin.from('organizations').update({ institution_rules_text: text }).eq('id', orgId)
   revalidatePath(`/${slug}/configuracoes`)
 }
+
+// ── Chat institucional: política de quem pode iniciar com quem + bloqueios ──
+export async function updateChatPolicy(orgId: string, slug: string, formData: FormData) {
+  const admin = await verifyAccess(orgId)
+  if (!admin) return
+  const { data: { user } } = await (await createClient()).auth.getUser()
+  await admin.from('chat_policies').upsert({
+    organization_id: orgId,
+    aluno_pode_iniciar: formData.get('aluno_pode_iniciar') === 'on',
+    aluno_escopo: (formData.get('aluno_escopo') as string) || 'qualquer_um',
+    updated_at: new Date().toISOString(),
+    updated_by: user?.id ?? null,
+  }, { onConflict: 'organization_id' })
+  revalidatePath(`/${slug}/configuracoes`)
+}
+
+export async function blockChatUser(orgId: string, slug: string, formData: FormData) {
+  const admin = await verifyAccess(orgId)
+  if (!admin) return
+  const { data: { user } } = await (await createClient()).auth.getUser()
+  const blockedUserId = formData.get('user_id') as string
+  const reason = (formData.get('reason') as string)?.trim() || null
+  if (!blockedUserId || !user) return
+  await admin.from('chat_blocks').insert({ organization_id: orgId, blocked_user_id: blockedUserId, reason, created_by: user.id })
+  revalidatePath(`/${slug}/configuracoes`)
+}
+
+export async function unblockChatUser(orgId: string, slug: string, formData: FormData) {
+  const admin = await verifyAccess(orgId)
+  if (!admin) return
+  const blockId = formData.get('block_id') as string
+  if (!blockId) return
+  await admin.from('chat_blocks').delete().eq('id', blockId).eq('organization_id', orgId)
+  revalidatePath(`/${slug}/configuracoes`)
+}

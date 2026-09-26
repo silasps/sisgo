@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/Header'
@@ -214,7 +215,7 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
 
   const renderHome = (principal: { label: string; content: React.ReactNode } | null) => {
     const items = [
-      ...(principal ? [{ tab: { key: 'geral', label: principal.label, kind: 'principal' as const }, panel: principal.content }] : []),
+      ...(principal ? [{ tab: { key: 'geral', label: principal.label, kind: 'principal' as const }, panel: <Fragment key="geral">{principal.content}</Fragment> }] : []),
       ...areaItems,
     ]
     return (

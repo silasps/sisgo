@@ -135,6 +135,7 @@ export async function buildAreaTabs({ supabase, sbAdmin, slug, orgId, userId, ro
         },
         panel: (
           <MinistryPanel
+            key={`ministerio-${m.id}`}
             slug={slug}
             orgId={orgId}
             userId={userId}
@@ -153,7 +154,7 @@ export async function buildAreaTabs({ supabase, sbAdmin, slug, orgId, userId, ro
       const d = schoolData[i]
       return {
         tab: { key: `escola-${s.id}`, label: s.name, kind: 'escola' as const, badge: d.applications },
-        panel: <SchoolPanel slug={slug} orgId={orgId} userId={userId} laundryEnabled={laundryEnabled} school={s} announcements={announcements} {...d} />,
+        panel: <SchoolPanel key={`escola-${s.id}`} slug={slug} orgId={orgId} userId={userId} laundryEnabled={laundryEnabled} school={s} announcements={announcements} {...d} />,
       }
     }),
   ]

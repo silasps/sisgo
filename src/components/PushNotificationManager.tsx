@@ -37,7 +37,9 @@ async function registerPush() {
 
     PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
       const data = action.notification.data
-      if (data?.organization_id) {
+      if (data?.url) {
+        window.location.href = data.url
+      } else if (data?.organization_id) {
         window.location.href = `/${data.organization_id}/pendentes`
       }
     })

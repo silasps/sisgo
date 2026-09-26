@@ -1,12 +1,10 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import { redirect, notFound } from 'next/navigation'
-import { Suspense } from 'react'
 import { updateMinistry } from './actions'
 import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
 import { getOrgAndUser, getWorkspaceRole, getWorkspaceMinistry, getWorkspaceMinistryLink } from './_data'
 import { Users, ClipboardList } from 'lucide-react'
-import { MuralClient } from './mural/MuralClient'
 import { LeaderPanel } from './LeaderPanel'
 import { LocaleContentTabs } from '@/components/ui/LocaleContentTabs'
 
@@ -15,6 +13,10 @@ type Props = {
   searchParams: Promise<{ msg?: string }>
 }
 
+// O chat do ministério (antes embutido aqui, na aba "Chat") virou um dos
+// tipos de conversa do Chat institucional (/[slug]/chat) — esta aba
+// "Geral" (mesmo nome que a escola já usa) fica só com o resumo/config do
+// ministério, sem o mural embutido.
 export default async function MinisterioOverviewPage({ params, searchParams }: Props) {
   const { slug, id } = await params
   const { msg } = await searchParams
@@ -32,57 +34,15 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
   const ministry = await getWorkspaceMinistry(orgId, id)
   if (!ministry) notFound()
 
-  // ── Data ──────────────────────────────────────────────────────────────────────
-  const { data: profile } = await sbAdmin
-    .from('staff_profiles')
-    .select('person_id, people(full_name)')
-    .eq('organization_id', orgId)
-    .eq('user_id', user.id)
-    .single()
-  const authorName = (profile?.people as unknown as { full_name: string } | null)?.full_name ?? user.email ?? 'Anônimo'
-
-  const [{ count: memberCount }, { count: pendingCount }, { data: messagesRaw }, { data: membersRaw }] = await Promise.all([
+  const [{ count: memberCount }, { count: pendingCount }] = await Promise.all([
     sbAdmin.from('ministry_members').select('*', { count: 'exact', head: true }).eq('ministry_id', id).eq('active', true),
     // Só gestão/líder vê pendências (mesmo recorte da RLS). Admin porque a RLS
     // exige o papel lider_ministerio, e aqui quem decide é o vínculo.
     isManagement || canWrite
       ? sbAdmin.from('ministry_pending_requests').select('*', { count: 'exact', head: true }).eq('ministry_id', id).eq('status', 'pendente')
       : Promise.resolve({ count: 0 }),
-    sbAdmin.from('ministry_messages')
-      .select('id, author_name, author_id, content, mentions, color, font, text_color, font_size, created_at, edited_at')
-      .eq('ministry_id', id)
-      .order('created_at', { ascending: true })
-      .limit(30),
-    sbAdmin.from('ministry_members')
-      .select('person_id, people(full_name)')
-      .eq('ministry_id', id)
-      .eq('active', true),
   ])
 
-  const messages = (messagesRaw ?? []).map(m => ({
-    ...m,
-    mentions: (m.mentions as string[] | null) ?? [],
-    font: (m as unknown as { font: number }).font ?? 0,
-    text_color: (m as unknown as { text_color: number }).text_color ?? 0,
-    font_size: (m as unknown as { font_size: number }).font_size ?? 1,
-  }))
-
-  const members = (membersRaw ?? []).map(m => ({
-    person_id: m.person_id,
-    name: (m.people as unknown as { full_name: string } | null)?.full_name ?? '—',
-  }))
-
-  let nextColor = 0
-  if (messages.length > 0) {
-    nextColor = (messages[messages.length - 1].color + 1) % 6
-  }
-
-  await sbAdmin.from('ministry_message_reads').upsert(
-    { user_id: user.id, ministry_id: id, last_read_at: new Date().toISOString() },
-    { onConflict: 'user_id,ministry_id' }
-  )
-
-  // ── Actions ───────────────────────────────────────────────────────────────────
   const handleUpdate = async (formData: FormData) => {
     'use server'
     const parseTranslations = (key: string) => {
@@ -103,57 +63,6 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
     redirect(`/${slug}/ministerios/${id}?msg=atualizado`)
   }
 
-  async function postMessage(formData: FormData) {
-    'use server'
-    if (!user) return
-    const content = (formData.get('content') as string).trim()
-    if (!content) return
-    const mentionMatches = content.match(/@[\w\s]+/g) ?? []
-    const mentionedIds: string[] = []
-    for (const match of mentionMatches) {
-      const name = match.slice(1).trim().toLowerCase()
-      const member = members.find(m => m.name.toLowerCase().startsWith(name))
-      if (member) mentionedIds.push(member.person_id)
-    }
-    const db = createAdminClient()
-    await db.from('ministry_messages').insert({
-      organization_id: orgId, ministry_id: id, author_id: user.id,
-      author_name: authorName, content, mentions: mentionedIds,
-      color: Number(formData.get('color') ?? nextColor),
-      font: Number(formData.get('font') ?? 0),
-      text_color: Number(formData.get('text_color') ?? 0),
-      font_size: Number(formData.get('font_size') ?? 1),
-    })
-    const { data: excess } = await db.from('ministry_messages')
-      .select('id').eq('ministry_id', id)
-      .order('created_at', { ascending: false })
-      .range(30, 999)
-    if (excess?.length) {
-      await db.from('ministry_messages').delete().in('id', excess.map(e => e.id))
-    }
-  }
-
-  async function deleteMessage(formData: FormData) {
-    'use server'
-    const messageId = formData.get('message_id') as string
-    if (!messageId) return
-    const db = createAdminClient()
-    await db.from('ministry_messages').delete().eq('id', messageId).eq('ministry_id', id)
-  }
-
-  async function editMessage(formData: FormData) {
-    'use server'
-    const messageId = formData.get('message_id') as string
-    const content = (formData.get('content') as string)?.trim()
-    if (!messageId || !content || !user) return
-    const db = createAdminClient()
-    await db.from('ministry_messages')
-      .update({ content, edited_at: new Date().toISOString() })
-      .eq('id', messageId)
-      .eq('ministry_id', id)
-      .eq('author_id', user.id)
-  }
-
   const msgs: Record<string, { text: string; cls: string }> = {
     criado:           { text: 'Ministério criado com sucesso.', cls: 'bg-green-50 border-green-200 text-green-700' },
     atualizado:       { text: 'Informações atualizadas.', cls: 'bg-green-50 border-green-200 text-green-700' },
@@ -164,33 +73,36 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
   const base = `/${slug}/ministerios/${id}`
 
   return (
-    <main className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
-      {/* Sidebar — mobile: faixa horizontal no topo / desktop: coluna direita */}
-      <aside className="order-first lg:order-last w-full lg:w-72 shrink-0 border-b lg:border-b-0 lg:border-l border-gray-200 bg-gray-50/50 overflow-y-auto p-3 lg:p-4 space-y-2 lg:space-y-3">
-        {/* Stats */}
-        <div className="flex lg:grid lg:grid-cols-2 gap-2">
-          <Link href={`${base}/equipe`} className="flex-1 group bg-white rounded-xl border border-gray-200 p-2.5 lg:p-3 transition-all hover:shadow-md hover:-translate-y-0.5">
+    <main className="flex-1 overflow-y-auto p-3 md:p-6">
+      <div className="max-w-2xl mx-auto space-y-3">
+        {msgInfo && (
+          <div className={`border rounded-lg px-4 py-3 text-sm ${msgInfo.cls}`}>
+            {msgInfo.text}
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-3">
+          <Link href={`${base}/equipe`} className="group bg-white rounded-xl border border-gray-200 p-3 transition-all hover:shadow-md hover:-translate-y-0.5">
             <div className="flex items-center gap-2">
               <div className="rounded-lg bg-brand-50 p-1.5"><Users size={14} className="text-brand-600" /></div>
               <div>
-                <p className="text-base lg:text-lg font-bold text-gray-900 leading-none">{memberCount ?? 0}</p>
+                <p className="text-lg font-bold text-gray-900 leading-none">{memberCount ?? 0}</p>
                 <p className="text-[10px] text-gray-500">Membros</p>
               </div>
             </div>
           </Link>
-          <Link href={`/${slug}/pendentes`} className="flex-1 group bg-white rounded-xl border border-gray-200 p-2.5 lg:p-3 transition-all hover:shadow-md hover:-translate-y-0.5">
+          <Link href={`/${slug}/pendentes`} className="group bg-white rounded-xl border border-gray-200 p-3 transition-all hover:shadow-md hover:-translate-y-0.5">
             <div className="flex items-center gap-2">
               <div className="rounded-lg bg-amber-50 p-1.5"><ClipboardList size={14} className="text-amber-600" /></div>
               <div>
-                <p className="text-base lg:text-lg font-bold text-gray-900 leading-none">{pendingCount ?? 0}</p>
+                <p className="text-lg font-bold text-gray-900 leading-none">{pendingCount ?? 0}</p>
                 <p className="text-[10px] text-gray-500">Pendências</p>
               </div>
             </div>
           </Link>
         </div>
 
-        {/* Info — hidden on mobile, shown on desktop */}
-        <div className="hidden lg:block bg-white rounded-xl border border-gray-200 p-4">
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
           {canWrite ? (
             <>
               <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Informações</h3>
@@ -254,33 +166,14 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
           )}
         </div>
 
-        {/* Líder — hidden on mobile; carrega à parte (lista de usuários da
-            organização é a consulta mais cara da tela e não bloqueia o chat) */}
-        {isManagement && (
-          <Suspense fallback={<div className="hidden lg:block bg-white rounded-xl border border-gray-200 p-4 h-24 animate-pulse" />}>
-            <LeaderPanel slug={slug} ministryId={id} orgId={orgId} />
-          </Suspense>
-        )}
-      </aside>
-
-      {/* Coluna principal — Mural */}
-      <div className="flex-1 flex flex-col min-h-0 min-w-0 order-last lg:order-first">
-        {msgInfo && (
-          <div className={`border rounded-lg px-4 py-3 text-sm mx-3 mt-3 md:mx-6 md:mt-6 ${msgInfo.cls}`}>
-            {msgInfo.text}
-          </div>
-        )}
-        <MuralClient
-          messages={messages}
-          members={members}
-          currentUserId={user.id}
-          currentUserName={authorName}
-          canDelete={canWrite}
-          nextColor={nextColor}
-          postAction={postMessage}
-          deleteAction={deleteMessage}
-          editAction={editMessage}
-        />
+        {/* Sem Suspense de propósito: isso existia pra não bloquear o mural
+            (a consulta mais lenta da tela era o listUsers deste painel, e o
+            mural precisava aparecer rápido). Sem mural aqui (mudou pro
+            Chat), manter isso como streaming só fazia a tela "pipocar" um
+            card a mais alguns instantes depois de já ter carregado — daí o
+            usuário ver a página carregar 2 vezes. Uma única carga direta
+            (mesmo que espere o listUsers) é o resultado que ele pediu. */}
+        {isManagement && <LeaderPanel slug={slug} ministryId={id} orgId={orgId} />}
       </div>
     </main>
   )

@@ -4,11 +4,13 @@ import { Header } from '@/components/layout/Header'
 import { notFound, redirect } from 'next/navigation'
 import { BrandingForm } from './BrandingForm'
 import { ConfigForm } from './ConfigForm'
-import { updateAreaCashScopes, updateRoleAccumulations, updateIdCardEnabled, updateStaffCommunicationLanguages, updateStudentCommunicationLanguages, updateInstitutionRulesText, addSchoolCreationDelegate, removeSchoolCreationDelegate } from './actions'
+import { updateAreaCashScopes, updateRoleAccumulations, updateIdCardEnabled, updateStaffCommunicationLanguages, updateStudentCommunicationLanguages, updateInstitutionRulesText, addSchoolCreationDelegate, removeSchoolCreationDelegate, updateChatPolicy, blockChatUser, unblockChatUser } from './actions'
 import { asLooseClient } from '@/lib/supabase/loose-client'
 import { schoolDisplayType } from '@/lib/schools'
 import { LANGUAGES } from '@/lib/i18n/phoneCountries'
 import { SearchableSelectModal } from '@/components/ui/SearchableSelectModal'
+import { ChatBlocksSection } from './ChatBlocksSection'
+import { resolveNames } from '../chat/_data'
 
 type Props = { params: Promise<{ slug: string }> }
 
@@ -16,6 +18,7 @@ const BRANDING_ROLES = ['superadmin', 'lider_base']
 const CASH_SCOPE_ROLES = ['superadmin', 'lider_base']
 const ACCUMULATION_ROLES = ['superadmin', 'lider_base']
 const SCHOOL_DELEGATE_ROLES = ['superadmin', 'lider_base']
+const CHAT_CONFIG_ROLES = ['superadmin', 'lider_base']
 
 const ACCUMULATION_OPTIONS = [
   { role: 'dh',           label: 'DH',           canAccumulate: ['secretaria', 'hospitalidade', 'cozinha'] },
@@ -62,6 +65,7 @@ export default async function ConfiguracoesPage({ params }: Props) {
   const canConfigureCashScopes = CASH_SCOPE_ROLES.includes(roleName)
   const canConfigureAccumulations = ACCUMULATION_ROLES.includes(roleName)
   const canManageSchoolDelegates = SCHOOL_DELEGATE_ROLES.includes(roleName)
+  const canConfigureChat = CHAT_CONFIG_ROLES.includes(roleName)
   const currentAccumulations = (org?.role_accumulations as Record<string, string[]> | null) ?? {}
   const currentStaffLanguages = ((org?.staff_communication_languages as string[] | null) ?? [])
   const currentStudentLanguages = ((org?.student_communication_languages as string[] | null) ?? [])
@@ -105,6 +109,24 @@ export default async function ConfiguracoesPage({ params }: Props) {
   }>)
     .filter(scope => scope.enabled)
     .map(scope => scope.entity_type === 'school' ? `school:${scope.school_id}` : `ministry:${scope.ministry_id}`))
+
+  let chatPolicy = { aluno_pode_iniciar: true, aluno_escopo: 'qualquer_um' }
+  let chatBlocked: Array<{ id: string; name: string; reason: string | null }> = []
+  if (canConfigureChat) {
+    const sbAdmin = createAdminClient()
+    const [{ data: policyRow }, { data: blockRows }] = await Promise.all([
+      supabase.from('chat_policies').select('aluno_pode_iniciar, aluno_escopo').eq('organization_id', org.id).maybeSingle(),
+      supabase.from('chat_blocks').select('id, blocked_user_id, reason').eq('organization_id', org.id).not('blocked_user_id', 'is', null),
+    ])
+    if (policyRow) chatPolicy = policyRow
+    const blockedUserIds = (blockRows ?? []).map(b => b.blocked_user_id).filter((id): id is string => !!id)
+    const nameByUserId = await resolveNames(sbAdmin, org.id, blockedUserIds)
+    chatBlocked = (blockRows ?? []).map(b => ({
+      id: b.id,
+      name: nameByUserId.get(b.blocked_user_id ?? '') ?? 'Pessoa',
+      reason: b.reason,
+    }))
+  }
 
   return (
     <>
@@ -346,6 +368,54 @@ export default async function ConfiguracoesPage({ params }: Props) {
               </div>
             </ConfigForm>
           </div>
+        )}
+
+        {canConfigureChat && (
+          <>
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <h2 className="font-semibold text-gray-900 mb-1">Chat institucional — quem pode falar com quem</h2>
+              <p className="text-sm text-gray-500 mb-5">
+                Por padrão, todo mundo (obreiro ou aluno com conta) tem acesso a todo mundo. Restrinja aqui se
+                fizer sentido pra sua base.
+              </p>
+              <ConfigForm action={updateChatPolicy.bind(null, org.id, slug)} buttonLabel="Salvar política" className="space-y-4">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="aluno_pode_iniciar"
+                    defaultChecked={chatPolicy.aluno_pode_iniciar}
+                    className="mt-1 h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-400"
+                  />
+                  <span>
+                    <span className="block text-sm font-medium text-gray-900">Alunos podem iniciar conversa</span>
+                    <span className="block text-xs text-gray-400 mt-0.5">Se desativado, um aluno só responde quando um obreiro chama primeiro — nunca inicia.</span>
+                  </span>
+                </label>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Com quem um aluno pode iniciar conversa</label>
+                  <select
+                    name="aluno_escopo"
+                    defaultValue={chatPolicy.aluno_escopo}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                  >
+                    <option value="qualquer_um">Qualquer obreiro ou aluno da base</option>
+                    <option value="proprio_grupo">Só quem está no mesmo ministério ou turma</option>
+                    <option value="ninguem">Ninguém (só responde)</option>
+                  </select>
+                </div>
+              </ConfigForm>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <h2 className="font-semibold text-gray-900 mb-4">Chat institucional — bloqueios</h2>
+              <ChatBlocksSection
+                orgId={org.id}
+                blocked={chatBlocked}
+                blockAction={blockChatUser.bind(null, org.id, slug)}
+                unblockAction={unblockChatUser.bind(null, org.id, slug)}
+              />
+            </div>
+          </>
         )}
 
       </main>
