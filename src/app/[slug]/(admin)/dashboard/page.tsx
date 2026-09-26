@@ -183,11 +183,27 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
   }
 
   if (isAssociado) {
-    const { count: myReservations } = await supabase
-      .from('reservations')
-      .select('*', { count: 'exact', head: true })
-      .eq('organization_id', orgId)
-      .eq('requested_by', user?.id ?? '')
+    const admin = createAdminClient()
+    const [{ count: myReservations }, { data: announcementsRaw }] = await Promise.all([
+      supabase.from('reservations')
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', orgId)
+        .eq('requested_by', user?.id ?? ''),
+      admin.from('base_announcements')
+        .select('id, title, body, pinned, category, image_url, image_focal_x, image_focal_y, image_zoom, link_url, link_label, visible_to_roles, expires_at, publish_at, author_name, created_at')
+        .eq('organization_id', orgId)
+        .or(`expires_at.is.null,expires_at.gte.${today}`)
+        .order('pinned', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(20),
+    ])
+
+    const isPublished = (publishAt: string | null) => !publishAt || new Date(publishAt).getTime() <= Date.now()
+    const announcements: AnnouncementListItem[] = ((announcementsRaw ?? []) as Array<
+      AnnouncementListItem & { visible_to_roles: string[] | null; publish_at: string | null }
+    >)
+      .filter(a => matchesAudience('associado', a.visible_to_roles) && isPublished(a.publish_at))
+      .slice(0, 3)
 
     return (
       <>
@@ -196,6 +212,14 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 animate-stagger">
             <StatCard label="Reservas" value={myReservations ?? 0} icon={Home} href={`/${slug}/reservas`} color="orange" />
           </div>
+
+          <SectionCard title="Anúncios" href={`/${slug}/anuncios`} linkLabel="Ver todos">
+            {announcements.length === 0 ? (
+              <EmptyState icon={Megaphone} label="Nenhum anúncio no momento" />
+            ) : (
+              <AnnouncementList announcements={announcements} variant="default" />
+            )}
+          </SectionCard>
 
           <PersonalAccountCard slug={slug} orgId={orgId} userId={user?.id ?? ''} laundryEnabled={laundryEnabled} />
         </main>
@@ -208,10 +232,31 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
   // área; papéis com painel próprio (gestão, DH, hospitalidade...) ganham a
   // aba "principal" + as abas das áreas que acumulam.
   const sbAreas = createAdminClient()
-  const myAreas = await getMyAreas({ orgId, userId: user?.id ?? '', role: userRole, preview })
+  // Anúncios independem de myAreas/areaItems — roda em paralelo, não depois.
+  const [myAreas, { data: homeAnnouncementsRaw }] = await Promise.all([
+    getMyAreas({ orgId, userId: user?.id ?? '', role: userRole, preview }),
+    sbAreas.from('base_announcements')
+      .select('id, title, body, pinned, category, image_url, image_focal_x, image_focal_y, image_zoom, link_url, link_label, visible_to_roles, expires_at, publish_at, author_name, created_at')
+      .eq('organization_id', orgId)
+      .or(`expires_at.is.null,expires_at.gte.${today}`)
+      .order('pinned', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(20),
+  ])
   const areaItems = await buildAreaTabs({
     supabase, sbAdmin: sbAreas, slug, orgId, userId: user?.id ?? '', role: userRole, areas: myAreas, laundryEnabled,
   })
+
+  // Mesmo filtro de público-alvo que a Início do aluno já usa — só que
+  // aqui vale pra QUALQUER papel com painel próprio (hospitalidade,
+  // cozinha, secretaria, DH, gestão...), que antes não viam anúncio
+  // nenhum aqui, nem quando o anúncio era marcado como "todos".
+  const isHomeAnnouncementPublished = (publishAt: string | null) => !publishAt || new Date(publishAt).getTime() <= Date.now()
+  const homeAnnouncements: AnnouncementListItem[] = ((homeAnnouncementsRaw ?? []) as Array<
+    AnnouncementListItem & { visible_to_roles: string[] | null; publish_at: string | null }
+  >)
+    .filter(a => matchesAudience(userRole, a.visible_to_roles) && isHomeAnnouncementPublished(a.publish_at))
+    .slice(0, 3)
 
   const renderHome = (principal: { label: string; content: React.ReactNode } | null) => {
     const items = [
@@ -222,6 +267,18 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
       <>
         <Header title="Início" />
         <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
+          {/* Só quando há painel próprio — quem só tem áreas (renderHome(null))
+              já vê os anúncios dentro de cada painel de ministério/escola
+              (AreaHero), mostrar aqui de novo seria duplicar. */}
+          {principal && (
+            <SectionCard title="Anúncios" href={`/${slug}/anuncios`} linkLabel="Ver todos">
+              {homeAnnouncements.length === 0 ? (
+                <EmptyState icon={Megaphone} label="Nenhum anúncio no momento" />
+              ) : (
+                <AnnouncementList announcements={homeAnnouncements} variant="default" />
+              )}
+            </SectionCard>
+          )}
           <AreaTabs tabs={items.map(i => i.tab)} panels={items.map(i => i.panel)} initialKey={initialArea} />
           {/* Sem "principal" é só área (ministério/escola) — cada painel já
               traz o próprio "Minha conta" na posição certa (antes do
