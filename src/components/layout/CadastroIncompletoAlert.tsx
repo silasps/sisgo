@@ -5,49 +5,40 @@ import Link from 'next/link'
 import { AlertTriangle, Loader2, X } from 'lucide-react'
 
 const DISMISS_KEY = 'sisgo:cadastro-incompleto-dismissed'
-const COUNT_KEY_PREFIX = 'sisgo:cadastro-incompleto-count:'
 
-// Quantas vezes a pessoa pode clicar "Depois" (por navegador/dispositivo,
-// persistido em localStorage) antes do aviso virar bloqueante — sem X, sem
-// "Depois", só resta completar o cadastro pra seguir usando o sistema.
+// Quantas vezes a pessoa pode clicar "Depois" antes do aviso virar
+// bloqueante — sem X, sem "Depois", só resta completar o cadastro pra
+// seguir usando o sistema.
 const BLOCK_AFTER = 5
 
 // Fechável até estourar BLOCK_AFTER (a pessoa pode adiar e seguir usando o
 // sistema), mas volta a aparecer a cada novo login/sessão — por isso
-// sessionStorage pro "já vi nesta sessão", não localStorage (que aqui só
-// guarda a contagem de quantas vezes já adiou, entre sessões).
-export function CadastroIncompletoAlert({ href }: { href: string }) {
+// sessionStorage só controla "já vi nesta sessão"; a contagem de quantas
+// vezes já adiou (`skipsUsed`) vem do banco, vinculada à candidatura da
+// pessoa (não ao navegador), pra não se perder ao trocar de dispositivo.
+export function CadastroIncompletoAlert({ href, skipsUsed, onSkip }: {
+  href: string
+  skipsUsed: number
+  onSkip: () => Promise<void>
+}) {
   const [visible, setVisible] = useState(false)
-  const [blocking, setBlocking] = useState(false)
-  const [skipsUsed, setSkipsUsed] = useState(0)
   const [navigating, setNavigating] = useState(false)
 
-  const countKey = `${COUNT_KEY_PREFIX}${href}`
+  const blocking = skipsUsed >= BLOCK_AFTER
 
   useEffect(() => {
-    let dismissedThisSession = false
-    try {
-      dismissedThisSession = sessionStorage.getItem(DISMISS_KEY) === '1'
-    } catch { /* sessionStorage indisponível — mostra normalmente */ }
-
-    let storedCount = 0
-    try {
-      storedCount = Number(localStorage.getItem(countKey) ?? '0') || 0
-    } catch { /* localStorage indisponível — nunca bloqueia, só não conta */ }
-
-    const isBlocking = storedCount >= BLOCK_AFTER
-    if (!isBlocking && dismissedThisSession) return
-
-    setSkipsUsed(storedCount)
-    setBlocking(isBlocking)
+    if (!blocking) {
+      try {
+        if (sessionStorage.getItem(DISMISS_KEY) === '1') return
+      } catch { /* sessionStorage indisponível — mostra normalmente */ }
+    }
     setVisible(true)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [blocking])
 
   function dismiss() {
-    try { localStorage.setItem(countKey, String(skipsUsed + 1)) } catch { /* ok ignorar */ }
     try { sessionStorage.setItem(DISMISS_KEY, '1') } catch { /* ok ignorar */ }
     setVisible(false)
+    void onSkip()
   }
 
   if (!visible) return null

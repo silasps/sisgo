@@ -340,24 +340,46 @@ export default async function SlugLayout({ children, params }: Props) {
 
   // Cadastro em etapas (import em massa): candidatura própria ainda em
   // rascunho -> mostra o aviso "complete seu cadastro" no shell inteiro.
-  let pendingProfileCompletion: { tipo: 'aluno' | 'obreiro'; token: string } | null = null
+  // `reminder_skips` (migration 146) conta quantas vezes a pessoa já clicou
+  // "Depois" — vinculado à candidatura (banco), não ao navegador, pra não se
+  // perder ao trocar de dispositivo (a pessoa já está logada nessa hora).
+  let pendingProfileCompletion: { tipo: 'aluno' | 'obreiro'; table: 'school_applications' | 'staff_applications'; id: string; token: string; skipsUsed: number } | null = null
   if (studentPersonId) {
     const { data: rascunhoAluno } = await sbAdmin
       .from('school_applications')
-      .select('token')
+      .select('id, token, reminder_skips')
       .eq('person_id', studentPersonId)
       .eq('status', 'rascunho')
       .maybeSingle()
-    if (rascunhoAluno?.token) pendingProfileCompletion = { tipo: 'aluno', token: rascunhoAluno.token }
+    if (rascunhoAluno?.token) {
+      pendingProfileCompletion = {
+        tipo: 'aluno', table: 'school_applications', id: rascunhoAluno.id,
+        token: rascunhoAluno.token, skipsUsed: rascunhoAluno.reminder_skips ?? 0,
+      }
+    }
   }
   if (!pendingProfileCompletion && personIdForLinked) {
     const { data: rascunhoObreiro } = await sbAdmin
       .from('staff_applications')
-      .select('token')
+      .select('id, token, reminder_skips')
       .eq('person_id', personIdForLinked)
       .eq('status', 'rascunho')
       .maybeSingle()
-    if (rascunhoObreiro?.token) pendingProfileCompletion = { tipo: 'obreiro', token: rascunhoObreiro.token }
+    if (rascunhoObreiro?.token) {
+      pendingProfileCompletion = {
+        tipo: 'obreiro', table: 'staff_applications', id: rascunhoObreiro.id,
+        token: rascunhoObreiro.token, skipsUsed: rascunhoObreiro.reminder_skips ?? 0,
+      }
+    }
+  }
+
+  async function skipProfileCompletionReminder() {
+    'use server'
+    if (!pendingProfileCompletion) return
+    const db = createAdminClient()
+    const { table, id } = pendingProfileCompletion
+    const { data: current } = await db.from(table).select('reminder_skips').eq('id', id).maybeSingle()
+    await db.from(table).update({ reminder_skips: (current?.reminder_skips ?? 0) + 1 }).eq('id', id)
   }
 
   const previewMinistryId = (preview?.role === 'lider_ministerio' || preview?.role === 'obreiro_ministerio')
@@ -805,6 +827,8 @@ export default async function SlugLayout({ children, params }: Props) {
           href={pendingProfileCompletion.tipo === 'aluno'
             ? `/${slug}/formulario/${pendingProfileCompletion.token}`
             : `/${slug}/formulario-obreiro/${pendingProfileCompletion.token}`}
+          skipsUsed={pendingProfileCompletion.skipsUsed}
+          onSkip={skipProfileCompletionReminder}
         />
       )}
     </div>
