@@ -13,6 +13,7 @@ import { StatCard, SectionCard, EmptyState } from './ui'
 import { AreaTabs } from './AreaTabs'
 import { getMyAreas, buildAreaTabs } from './areas'
 import { PersonalAccountCard } from './PersonalAccountCard'
+import { VerseOfDayCard } from './VerseOfDayCard'
 import type { AnnouncementListItem } from '@/components/ui/AnnouncementList'
 import { AnnouncementCarousel } from '@/components/ui/AnnouncementCarousel'
 import { matchesAudience } from '@/lib/audience-roles'
@@ -21,7 +22,6 @@ import {
   Users, Briefcase, GraduationCap, BookOpen, Music, Home,
   CalendarDays, AlertTriangle, ClipboardList, CheckCircle2,
   Wallet, LayoutDashboard, MessageSquare, Wrench, UtensilsCrossed, BedDouble,
-  BookMarked,
 } from 'lucide-react'
 
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ area?: string }> }
@@ -990,23 +990,6 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
 }
 
 // ── Sub-components ─────────────────────────────────────────
-
-function VerseOfDayCard({ verse }: { verse: Awaited<ReturnType<typeof getVerseOfDay>> }) {
-  return (
-    <a
-      href={verse.youversionUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex items-start gap-3 rounded-xl bg-brand-50 p-4 transition-colors hover:bg-brand-100"
-    >
-      <BookMarked className="size-5 shrink-0 text-brand-500 mt-0.5" />
-      <div className="min-w-0">
-        <p className="text-sm text-gray-700 italic">&ldquo;{verse.text}&rdquo;</p>
-        <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-brand-600">{verse.reference}</p>
-      </div>
-    </a>
-  )
-}
 
 function PendingRow({ icon: Icon, label, count, href }: { icon: LucideIcon; label: string; count: number; href: string }) {
   return (
