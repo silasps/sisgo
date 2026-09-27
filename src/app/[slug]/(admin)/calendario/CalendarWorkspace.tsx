@@ -97,7 +97,7 @@ const EVENT_DOT: Record<CalendarEventType, string> = {
 
 const LAYER_LABEL: Record<CalendarLayer, string> = {
   base:       'Base',
-  escola:     'ETED',
+  escola:     'Escola',
   ministerio: 'Ministério',
   pessoal:    'Privado',
   auto:       'Auto',
@@ -235,7 +235,7 @@ export function CalendarWorkspace({ year, slug, events, schoolOptions, ministryO
           {view === 'month' && (
             <div className="hidden flex-wrap gap-1.5 text-xs sm:flex">
               {presentLayers.has('base')       && <Legend label="Base"       type="evento"  active={layerFilter === 'base'}       onClick={() => setLayerFilter(f => f === 'base' ? null : 'base')} />}
-              {presentLayers.has('escola')     && <Legend label="ETED"       type="aula"    active={layerFilter === 'escola'}     onClick={() => setLayerFilter(f => f === 'escola' ? null : 'escola')} />}
+              {presentLayers.has('escola')     && <Legend label="Escola"     type="aula"    active={layerFilter === 'escola'}     onClick={() => setLayerFilter(f => f === 'escola' ? null : 'escola')} />}
               {presentLayers.has('ministerio') && <Legend label="Ministério" type="reuniao" active={layerFilter === 'ministerio'} onClick={() => setLayerFilter(f => f === 'ministerio' ? null : 'ministerio')} />}
               {presentLayers.has('pessoal')    && <Legend label="Privado"    type="nota"    active={layerFilter === 'pessoal'}    onClick={() => setLayerFilter(f => f === 'pessoal' ? null : 'pessoal')} />}
               {hasFeriado                      && <Legend label="Feriado"    type="feriado" active={layerFilter === 'auto'}       onClick={() => setLayerFilter(f => f === 'auto' ? null : 'auto')} />}
@@ -251,16 +251,6 @@ export function CalendarWorkspace({ year, slug, events, schoolOptions, ministryO
           )}
         </div>
       </div>
-
-      {/* School schedule helper — month view only */}
-      {permissions.canManageSchool && view === 'month' && (
-        <SchoolWeekSchedule
-          initialDate={selectedDate}
-          eventsByDay={eventsByDay}
-          schools={schoolOptions}
-          actions={actions}
-        />
-      )}
 
       {/* Views */}
       {view === 'month' && (
@@ -300,6 +290,16 @@ export function CalendarWorkspace({ year, slug, events, schoolOptions, ministryO
           onEditEvent={openEdit}
           onAddNew={() => openCreate()}
           canCreate={canCreate}
+        />
+      )}
+
+      {/* Agenda escolar da semana — abaixo do calendário, colapsada por padrão */}
+      {permissions.canManageSchool && view === 'month' && (
+        <SchoolWeekSchedule
+          initialDate={selectedDate}
+          eventsByDay={eventsByDay}
+          schools={schoolOptions}
+          actions={actions}
         />
       )}
 
@@ -685,10 +685,15 @@ function SchoolWeekSchedule({
   initialDate: string; eventsByDay: Map<string, CalendarEvent[]>
   schools: SchoolOption[]; actions: Props['actions']
 }) {
+  const [expanded, setExpanded]     = useState(false)
   const [anchorDate, setAnchorDate] = useState(() => getWeekDays(initialDate)[0])
   const [openDay, setOpenDay]       = useState<string | null>(null)
   const weekDays = getWeekDays(anchorDate)
   const today    = toDateKeyFromDate(new Date())
+
+  // Nome genérico (aplicável a qualquer instituição, não só JOCUM/ETED) —
+  // mostra o nome da escola quando há só uma, senão um rótulo neutro.
+  const title = schools.length === 1 ? `Agenda da semana — ${schools[0].name}` : 'Agenda escolar da semana'
 
   function shiftWeek(dir: number) {
     const d = new Date(`${anchorDate}T12:00:00`)
@@ -698,27 +703,36 @@ function SchoolWeekSchedule({
 
   return (
     <section className="rounded-xl border border-indigo-100 bg-white p-4">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="flex w-full flex-wrap items-center justify-between gap-3 text-left"
+      >
         <h2 className="flex items-center gap-2 text-base font-semibold text-gray-900">
           <Clock size={18} className="text-indigo-600" />
-          Semana da ETED
+          {title}
         </h2>
-        {/* Week navigation */}
-        <div className="flex items-center gap-1">
-          <button onClick={() => shiftWeek(-1)} className={NAV_BTN} title="Semana anterior"><ChevronLeft size={15} /></button>
-          <span className={`${NAV_LABEL} min-w-40 text-center text-xs`}>
-            {formatShortDate(weekDays[0])} – {formatShortDate(weekDays[weekDays.length - 1])}
-          </span>
-          <button onClick={() => shiftWeek(1)} className={NAV_BTN} title="Próxima semana"><ChevronRight size={15} /></button>
-        </div>
-      </div>
+        <ChevronRight size={18} className={`text-gray-400 transition-transform ${expanded ? 'rotate-90' : ''}`} />
+      </button>
 
-      {schools.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-indigo-200 bg-indigo-50/60 px-3 py-4 text-sm text-indigo-800">
-          Este usuário está como líder de ETED, mas ainda não há escola vinculada.
-        </p>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+      {expanded && (
+        <div className="mt-4">
+          <div className="mb-4 flex justify-end">
+            {/* Week navigation */}
+            <div className="flex items-center gap-1">
+              <button onClick={() => shiftWeek(-1)} className={NAV_BTN} title="Semana anterior"><ChevronLeft size={15} /></button>
+              <span className={`${NAV_LABEL} min-w-40 text-center text-xs`}>
+                {formatShortDate(weekDays[0])} – {formatShortDate(weekDays[weekDays.length - 1])}
+              </span>
+              <button onClick={() => shiftWeek(1)} className={NAV_BTN} title="Próxima semana"><ChevronRight size={15} /></button>
+            </div>
+          </div>
+
+          {schools.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-indigo-200 bg-indigo-50/60 px-3 py-4 text-sm text-indigo-800">
+              Este usuário está como líder de escola, mas ainda não há escola vinculada.
+            </p>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
           {weekDays.map(day => {
             const schoolEvents = (eventsByDay.get(day) ?? [])
               .filter(e => e.layer === 'escola')
@@ -764,6 +778,8 @@ function SchoolWeekSchedule({
               </button>
             )
           })}
+            </div>
+          )}
         </div>
       )}
 
@@ -901,7 +917,7 @@ function SchoolDayModal({
           <FieldSelect name="event_type" defaultValue="aula" options={[
             { value: 'aula',   label: 'Aula' },
             { value: 'tema',   label: 'Tema da semana' },
-            { value: 'evento', label: 'Evento da ETED' },
+            { value: 'evento', label: 'Evento da escola' },
             { value: 'outro',  label: 'Outro' },
           ]} />
           <div className="grid grid-cols-2 gap-2">
@@ -1182,7 +1198,7 @@ function EventModal({
 
   const availableLayers: Array<{ key: 'base' | 'escola' | 'ministerio' | 'pessoal'; label: string }> = [
     ...(permissions.canManageBase || permissions.canManageComunicacao ? [{ key: 'base' as const, label: 'Base' }] : []),
-    ...(permissions.canManageSchool || permissions.canManageBase ? [{ key: 'escola' as const, label: 'ETED' }] : []),
+    ...(permissions.canManageSchool || permissions.canManageBase ? [{ key: 'escola' as const, label: 'Escola' }] : []),
     ...(permissions.canManageMinistry || permissions.canManageBase ? [{ key: 'ministerio' as const, label: 'Ministério' }] : []),
     { key: 'pessoal' as const, label: 'Privado' },
   ]
@@ -1255,7 +1271,7 @@ function EventModal({
               <FieldSelect name="event_type" defaultValue="aula" options={[
                 { value: 'aula',   label: 'Aula' },
                 { value: 'tema',   label: 'Tema da semana' },
-                { value: 'evento', label: 'Evento da ETED' },
+                { value: 'evento', label: 'Evento da escola' },
                 { value: 'outro',  label: 'Outro' },
               ]} />
               <div className="grid grid-cols-2 gap-2">
@@ -1394,7 +1410,7 @@ function EditEventForm({ event, schools, ministries = [], updateAction, deleteAc
           <FieldSelect name="event_type" defaultValue={event.event_type} options={[
             { value: 'aula',   label: 'Aula' },
             { value: 'tema',   label: 'Tema da semana' },
-            { value: 'evento', label: 'Evento da ETED' },
+            { value: 'evento', label: 'Evento da escola' },
             { value: 'outro',  label: 'Outro' },
           ]} />
           <div className="grid grid-cols-2 gap-2">

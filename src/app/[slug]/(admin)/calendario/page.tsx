@@ -48,8 +48,12 @@ export default async function CalendarioPage({ params, searchParams }: Props) {
   const [mySchools, myMinistries] = await Promise.all([getMySchools(unitCtx), getMyMinistries(unitCtx)])
   const leaderSchoolIds = mySchools.filter(s => s.link === 'lider').map(s => s.id)
   const leaderMinistryIds = myMinistries.filter(m => m.link === 'lider').map(m => m.id)
-  const canManageSchool = leaderSchoolIds.length > 0
-  const canManageMinistry = leaderMinistryIds.length > 0
+  // Aluno nunca gerencia calendário de escola/ministério, mesmo que tenha um
+  // vínculo de liderança residual (ex: obreiro que virou aluno) — mesmo
+  // tratamento que já existia pra ministério (linhas abaixo), agora também
+  // pra escola, senão a agenda escolar aparece pra quem só é aluno.
+  const canManageSchool = role !== 'aluno' && leaderSchoolIds.length > 0
+  const canManageMinistry = role !== 'aluno' && leaderMinistryIds.length > 0
   const canAddPrivateNote = true
 
   // Quem vê só as próprias unidades continua definido pelo papel (líder de

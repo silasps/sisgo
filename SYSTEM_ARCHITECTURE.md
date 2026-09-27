@@ -915,6 +915,18 @@ Autosserviço com pagamento por tempo. Cada máquina tem um relé Wi-Fi
   Ambos tratam o digest `NEXT_REDIRECT` (não é erro de verdade, é o
   `redirect()` da Server Action se propagando) e mostram `toast.error` pra
   falhas reais.
+- **Naming genérico (não-JOCUM):** o SISGO é um SaaS multi-instituição — a
+  JOCUM é só o primeiro cliente. Termos de jargão específico da JOCUM (ex.:
+  "ETED" para escola bíblica) nunca devem aparecer hardcoded em texto de UI,
+  nome de variável/tipo ou rótulo — sempre trocar por um nome genérico que
+  faça sentido pra qualquer instituição (escola, curso, turma...). Quando o
+  contexto tem uma única escola/turma/etc. concreta, prefira usar o nome
+  cadastrado dela (`schools.name`) em vez de um rótulo de categoria (ex.:
+  "Agenda da semana — {nome da escola}" em vez de "Semana da ETED"); com mais
+  de uma, use um rótulo neutro ("Agenda escolar da semana"). Identificadores
+  internos (`layer: 'escola'`, chaves de tipo) podem continuar em português
+  genérico — o problema é a sigla/jargão específico da instituição vazando
+  pra fora.
 - **`SearchableSelectModal`** (`@/components/ui/SearchableSelectModal`):
   substitui `<select>` nativo pra escolher usuário/pessoa numa lista —
   abre `Modal` com busca (mesmo critério tolerante a acento/cedilha/

@@ -54,6 +54,9 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
     ?? { hospitalidade: 'hospitalidade', secretaria: 'secretaria' }
   const laundryEnabled = (org as { laundry_enabled?: boolean } | null)?.laundry_enabled ?? false
   const today = new Date().toISOString()
+  // Versículo do dia — mesmo card pra qualquer papel, sempre logo abaixo dos
+  // anúncios (ver renderHome e os blocos de aluno/associado abaixo).
+  const verse = await getVerseOfDay()
 
   // ── Discover current user role ──────────────────────────────
   const { data: { user } } = await supabase.auth.getUser()
@@ -92,8 +95,7 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
       ? [preview.schoolId]
       : await getStudentSchoolIds(admin, orgId, user?.id ?? '', user?.email ?? null)
 
-    const [verse, { data: announcementsRaw }, { data: schoolEventsRaw }, { data: baseEventsRaw }] = await Promise.all([
-      getVerseOfDay(),
+    const [{ data: announcementsRaw }, { data: schoolEventsRaw }, { data: baseEventsRaw }] = await Promise.all([
       admin
         .from('base_announcements')
         .select('id, title, body, pinned, category, image_url, image_focal_x, image_focal_y, image_zoom, link_url, link_label, visible_to_roles, expires_at, publish_at, author_name, created_at')
@@ -144,10 +146,6 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
       <>
         <Header title="Início" />
         <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
-          <VerseOfDayCard verse={verse} />
-
-          <PersonalAccountCard slug={slug} orgId={orgId} userId={user?.id ?? ''} laundryEnabled={laundryEnabled} />
-
           <SectionCard title="Anúncios" href={`/${slug}/anuncios`} linkLabel="Ver todos">
             {announcements.length === 0 ? (
               <EmptyState icon={Megaphone} label="Nenhum anúncio no momento" />
@@ -155,6 +153,10 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
               <AnnouncementList announcements={announcements} variant="default" />
             )}
           </SectionCard>
+
+          <VerseOfDayCard verse={verse} />
+
+          <PersonalAccountCard slug={slug} orgId={orgId} userId={user?.id ?? ''} laundryEnabled={laundryEnabled} />
 
           <SectionCard title="Próximos eventos" href={`/${slug}/calendario`} linkLabel="Ver calendário">
             {upcomingEvents.length === 0 ? (
@@ -209,10 +211,6 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
       <>
         <Header title="Início" />
         <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 animate-stagger">
-            <StatCard label="Reservas" value={myReservations ?? 0} icon={Home} href={`/${slug}/reservas`} color="orange" />
-          </div>
-
           <SectionCard title="Anúncios" href={`/${slug}/anuncios`} linkLabel="Ver todos">
             {announcements.length === 0 ? (
               <EmptyState icon={Megaphone} label="Nenhum anúncio no momento" />
@@ -220,6 +218,12 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
               <AnnouncementList announcements={announcements} variant="default" />
             )}
           </SectionCard>
+
+          <VerseOfDayCard verse={verse} />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 animate-stagger">
+            <StatCard label="Reservas" value={myReservations ?? 0} icon={Home} href={`/${slug}/reservas`} color="orange" />
+          </div>
 
           <PersonalAccountCard slug={slug} orgId={orgId} userId={user?.id ?? ''} laundryEnabled={laundryEnabled} />
         </main>
@@ -279,6 +283,7 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
               )}
             </SectionCard>
           )}
+          <VerseOfDayCard verse={verse} />
           <AreaTabs tabs={items.map(i => i.tab)} panels={items.map(i => i.panel)} initialKey={initialArea} />
           {/* Sem "principal" é só área (ministério/escola) — cada painel já
               traz o próprio "Minha conta" na posição certa (antes do
