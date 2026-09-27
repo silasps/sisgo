@@ -34,6 +34,7 @@ export function WorkspaceTabBar({ tabs }: { tabs: Tab[] }) {
           <Link
             key={tab.href}
             href={tab.href}
+            prefetch={false}
             className={`flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors ${
               active
                 ? 'border-brand-500 text-brand-600'

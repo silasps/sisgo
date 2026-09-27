@@ -42,85 +42,98 @@ export default async function EquipePage({ params, searchParams }: Props) {
   const { user, orgId } = await getOrgAndUser(slug)
   if (!user || !orgId) notFound()
 
-  const ministry = await getWorkspaceMinistry(orgId, id)
-  const ministryName = ministry?.name ?? 'este ministério'
-
-  const { role, preview } = await getWorkspaceRole(user.id, orgId)
-  const isManagement = isManagementRole(role)
-  const canWrite = isOperationalManager(role)
-  // Líder DESTE ministério (vínculo), não "tem papel lider_ministerio" — quem
-  // lidera outro ministério e é só membro deste não ganha poderes aqui. Quem
-  // já escreve direto (canWrite) não passa pelo fluxo de solicitação ao DH.
-  const isLiderMinisterio = !canWrite
-    && (await getWorkspaceMinistryLink(user.id, orgId, role, preview, id)) === 'lider'
-
   type MemberRaw = {
     id: string; person_id: string; joined_at: string | null
     people: { full_name: string } | null
     ministry_roles: { id: string; name: string } | null
   }
-  const { data: membersData } = await supabase
-    .from('ministry_members')
-    .select('id, person_id, joined_at, people(full_name), ministry_roles(id, name)')
-    .eq('ministry_id', id)
-    .eq('active', true)
-    .order('joined_at', { ascending: true })
-  const members = (membersData ?? []) as unknown as MemberRaw[]
+  type TransferRow = {
+    id: string; person_id: string; from_ministry_id: string; to_ministry_id: string
+    reason: string | null; status: string; created_at: string
+    dest_notes: string | null; dh_notes: string | null
+  }
+
+  // As 5 consultas abaixo não dependem uma da outra (nenhuma usa o resultado
+  // de outra) — rodar em paralelo em vez de uma cadeia de awaits sequenciais
+  // foi o que mais reduziu o tempo de troca de aba nesta tela: cada await
+  // sequencial é uma ida a mais ao banco antes da próxima começar.
+  const [ministry, { role, preview }, membersRes, ministryRolesRes, transfersRes] = await Promise.all([
+    getWorkspaceMinistry(orgId, id),
+    getWorkspaceRole(user.id, orgId),
+    supabase
+      .from('ministry_members')
+      .select('id, person_id, joined_at, people(full_name), ministry_roles(id, name)')
+      .eq('ministry_id', id)
+      .eq('active', true)
+      .order('joined_at', { ascending: true }),
+    supabase.from('ministry_roles').select('id, name').eq('ministry_id', id),
+    sbAdmin.from('ministry_transfers')
+      .select('id, person_id, from_ministry_id, to_ministry_id, reason, status, created_at, dest_notes, dh_notes')
+      .eq('organization_id', orgId)
+      .or(`from_ministry_id.eq.${id},to_ministry_id.eq.${id}`)
+      .order('created_at', { ascending: false })
+      .limit(30),
+  ])
+
+  const ministryName = ministry?.name ?? 'este ministério'
+  const isManagement = isManagementRole(role)
+  const canWrite = isOperationalManager(role)
+  const members = (membersRes.data ?? []) as unknown as MemberRaw[]
+  const ministryRoles = ministryRolesRes.data ?? []
+  const transfers = (transfersRes.data ?? []) as TransferRow[]
+
+  const transferPersonIds = [...new Set(transfers.map(t => t.person_id))]
+  const transferMinistryIds = [...new Set(transfers.flatMap(t => [t.from_ministry_id, t.to_ministry_id]))]
+  const dhTransferPersonIds = [...new Set(transfers.filter(t => t.status === 'aceito_destino').map(t => t.person_id))]
 
   // Quem também serve ativamente em outra escola/ministério — mostra como
   // tag "também em" (sem bloquear nada, só pra ficar visível pro DH onde
   // essa pessoa está "emprestada"). Independe do fluxo de aprovação de
   // staff_loans: cobre também quem entrou via "Solicitar adição" (líder
   // pede → DH aprova), que não passa pela checagem de empréstimo.
-  const otherUnitByPerson = new Map<string, string>()
-  if (members.length > 0) {
+  async function loadOtherUnitByPerson(): Promise<Map<string, string>> {
+    const map = new Map<string, string>()
+    if (members.length === 0) return map
     const personIds = members.map(m => m.person_id)
     const [{ data: otherMinistryRows }, { data: otherSchoolRows }] = await Promise.all([
       sbAdmin.from('ministry_members').select('person_id, ministries(name)').in('person_id', personIds).eq('active', true).neq('ministry_id', id),
       sbAdmin.from('school_staff').select('person_id, schools(name)').in('person_id', personIds).eq('active', true),
     ])
     for (const r of (otherMinistryRows ?? []) as unknown as Array<{ person_id: string; ministries: { name: string } | null }>) {
-      if (r.ministries?.name) otherUnitByPerson.set(r.person_id, r.ministries.name)
+      if (r.ministries?.name) map.set(r.person_id, r.ministries.name)
     }
     for (const r of (otherSchoolRows ?? []) as unknown as Array<{ person_id: string; schools: { name: string } | null }>) {
-      if (r.schools?.name && !otherUnitByPerson.has(r.person_id)) otherUnitByPerson.set(r.person_id, r.schools.name)
+      if (r.schools?.name && !map.has(r.person_id)) map.set(r.person_id, r.schools.name)
+    }
+    return map
+  }
+
+  async function loadTransferMaps(): Promise<{ personMap: Map<string, string>; ministryMap: Map<string, string> }> {
+    const [pRes, mRes] = await Promise.all([
+      transferPersonIds.length > 0
+        ? sbAdmin.from('people').select('id, full_name').in('id', transferPersonIds)
+        : Promise.resolve({ data: [] as Array<{ id: string; full_name: string }> }),
+      transferMinistryIds.length > 0
+        ? sbAdmin.from('ministries').select('id, name').in('id', transferMinistryIds)
+        : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+    ])
+    return {
+      personMap: new Map((pRes.data ?? []).map(p => [p.id, p.full_name])),
+      ministryMap: new Map((mRes.data ?? []).map(m => [m.id, m.name])),
     }
   }
 
-  const { data: ministryRolesData } = await supabase
-    .from('ministry_roles')
-    .select('id, name')
-    .eq('ministry_id', id)
-  const ministryRoles = ministryRolesData ?? []
-
-  type TransferRow = {
-    id: string; person_id: string; from_ministry_id: string; to_ministry_id: string
-    reason: string | null; status: string; created_at: string
-    dest_notes: string | null; dh_notes: string | null
-  }
-  const { data: transfersRaw } = await sbAdmin.from('ministry_transfers')
-    .select('id, person_id, from_ministry_id, to_ministry_id, reason, status, created_at, dest_notes, dh_notes')
-    .eq('organization_id', orgId)
-    .or(`from_ministry_id.eq.${id},to_ministry_id.eq.${id}`)
-    .order('created_at', { ascending: false })
-    .limit(30)
-  const transfers = (transfersRaw ?? []) as TransferRow[]
-
-  const transferPersonIds = [...new Set(transfers.map(t => t.person_id))]
-  const transferMinistryIds = [...new Set(transfers.flatMap(t => [t.from_ministry_id, t.to_ministry_id]))]
-  let transferPersonMap = new Map<string, string>()
-  let transferMinistryMap = new Map<string, string>()
-  if (transferPersonIds.length > 0) {
-    const { data: pData } = await sbAdmin.from('people').select('id, full_name').in('id', transferPersonIds)
-    transferPersonMap = new Map((pData ?? []).map(p => [p.id, p.full_name]))
-  }
-  if (transferMinistryIds.length > 0) {
-    const { data: mData } = await sbAdmin.from('ministries').select('id, name').in('id', transferMinistryIds)
-    transferMinistryMap = new Map((mData ?? []).map(m => [m.id, m.name]))
-  }
-
-  const dhTransferPersonIds = [...new Set(transfers.filter(t => t.status === 'aceito_destino').map(t => t.person_id))]
-  const transferFinanceMap = await getPeopleFinanceSummaries(orgId, dhTransferPersonIds)
+  // Líder DESTE ministério (vínculo), não "tem papel lider_ministerio" — quem
+  // lidera outro ministério e é só membro deste não ganha poderes aqui. Quem
+  // já escreve direto (canWrite) não passa pelo fluxo de solicitação ao DH.
+  const [ministryLink, otherUnitByPerson, transferMaps, transferFinanceMap] = await Promise.all([
+    canWrite ? Promise.resolve(null) : getWorkspaceMinistryLink(user.id, orgId, role, preview, id),
+    loadOtherUnitByPerson(),
+    loadTransferMaps(),
+    getPeopleFinanceSummaries(orgId, dhTransferPersonIds),
+  ])
+  const isLiderMinisterio = !canWrite && ministryLink === 'lider'
+  const { personMap: transferPersonMap, ministryMap: transferMinistryMap } = transferMaps
 
   // Empréstimos de saída: obreiros DESTE ministério que alguém quis
   // adicionar em outra escola/ministério — precisam da aprovação do líder daqui.
