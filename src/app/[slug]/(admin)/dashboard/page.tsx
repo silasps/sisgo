@@ -272,17 +272,20 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
       <>
         <Header title="Início" />
         <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
-          {/* Mesma ordem da Início do aluno pra qualquer papel: Anúncios
-              primeiro, depois versículo — mesmo quem só tem áreas
-              (renderHome(null)) e já vê o anúncio fixado em destaque dentro
-              do painel de ministério/escola (AreaHero); aqui é a lista geral. */}
-          <SectionCard title="Anúncios" href={`/${slug}/anuncios`} linkLabel="Ver todos">
-            {homeAnnouncements.length === 0 ? (
-              <EmptyState icon={Megaphone} label="Nenhum anúncio no momento" />
-            ) : (
-              <AnnouncementCarousel announcements={homeAnnouncements} />
-            )}
-          </SectionCard>
+          {/* Só quando há painel próprio — quem só tem áreas (renderHome(null))
+              já vê o anúncio em destaque dentro do painel de cada
+              ministério/escola (AreaHero, logo abaixo das abas); mostrar
+              aqui de novo seria duplicar a mesma foto/anúncio na tela toda,
+              antes mesmo de escolher uma aba. */}
+          {principal && (
+            <SectionCard title="Anúncios" href={`/${slug}/anuncios`} linkLabel="Ver todos">
+              {homeAnnouncements.length === 0 ? (
+                <EmptyState icon={Megaphone} label="Nenhum anúncio no momento" />
+              ) : (
+                <AnnouncementCarousel announcements={homeAnnouncements} />
+              )}
+            </SectionCard>
+          )}
           <VerseOfDayCard verse={verse} />
           <AreaTabs tabs={items.map(i => i.tab)} panels={items.map(i => i.panel)} initialKey={initialArea} />
           {/* Sem "principal" é só área (ministério/escola) — cada painel já
