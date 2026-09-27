@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, Pin } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Pin, X } from 'lucide-react'
 import { AnnouncementDetailModal } from './AnnouncementDetailModal'
 import { CATEGORY_STYLES } from '@/lib/announcement-categories'
 import { focalImageStyle } from '@/lib/image-focal'
@@ -18,17 +18,21 @@ const CLICK_SUPPRESS_PX = 6
 // de texto — kicker/título viram uma legenda fixa por cima da imagem (não
 // deslizam com o slide), pra sempre indicar em qual ministério/escola a
 // pessoa está, não importa qual anúncio está em exibição.
-export function AnnouncementCarousel({ announcements, kicker, title }: {
+export function AnnouncementCarousel({ announcements, kicker, title, dismissible = false }: {
   announcements: AnnouncementListItem[]
   /** Legenda fixa (ex.: nome do ministério/escola) — omitida quando o carrossel
    * não está preso a uma área específica (ex.: "Anúncios" geral da Início). */
   kicker?: string
   title?: string
+  /** Mostra um X pra fechar o card na sessão atual — sem persistir (localStorage
+   * etc.): é só estado local, então reabrir o app mostra de novo. */
+  dismissible?: boolean
 }) {
   const total = announcements.length
   const [current, setCurrent] = useState(0)
   const [dragDelta, setDragDelta] = useState(0)
   const [openId, setOpenId] = useState<string | null>(null)
+  const [dismissed, setDismissed] = useState(false)
   const pausedRef = useRef(false)
   const draggingRef = useRef(false)
   const startXRef = useRef(0)
@@ -77,6 +81,8 @@ export function AnnouncementCarousel({ announcements, kicker, title }: {
     if (movedRef.current > CLICK_SUPPRESS_PX) return
     setOpenId(id)
   }
+
+  if (dismissed) return null
 
   const slidePercent = (current / total) * 100
   const opened = announcements.find(a => a.id === openId) ?? null
@@ -147,6 +153,17 @@ export function AnnouncementCarousel({ announcements, kicker, title }: {
             <p className="text-base font-bold text-white leading-tight">{title}</p>
           </div>
         </>
+      )}
+
+      {dismissible && (
+        <button
+          type="button"
+          onClick={() => setDismissed(true)}
+          aria-label="Fechar anúncios"
+          className="absolute top-2 right-2 z-20 bg-black/40 hover:bg-black/60 text-white rounded-full p-1 transition-colors"
+        >
+          <X size={14} />
+        </button>
       )}
 
       {total > 1 && (

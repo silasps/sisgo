@@ -21,7 +21,7 @@ import {
   Users, Briefcase, GraduationCap, BookOpen, Music, Home,
   CalendarDays, AlertTriangle, ClipboardList, CheckCircle2,
   Wallet, LayoutDashboard, MessageSquare, Wrench, UtensilsCrossed, BedDouble,
-  Megaphone, BookMarked,
+  BookMarked,
 } from 'lucide-react'
 
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ area?: string }> }
@@ -147,13 +147,9 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
       <>
         <Header title="Início" />
         <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
-          <SectionCard title="Anúncios" href={`/${slug}/anuncios`} linkLabel="Ver todos">
-            {announcements.length === 0 ? (
-              <EmptyState icon={Megaphone} label="Nenhum anúncio no momento" />
-            ) : (
-              <AnnouncementCarousel announcements={announcements} />
-            )}
-          </SectionCard>
+          {announcements.length > 0 && (
+            <AnnouncementCarousel announcements={announcements} dismissible />
+          )}
 
           <VerseOfDayCard verse={verse} />
 
@@ -212,13 +208,9 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
       <>
         <Header title="Início" />
         <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
-          <SectionCard title="Anúncios" href={`/${slug}/anuncios`} linkLabel="Ver todos">
-            {announcements.length === 0 ? (
-              <EmptyState icon={Megaphone} label="Nenhum anúncio no momento" />
-            ) : (
-              <AnnouncementCarousel announcements={announcements} />
-            )}
-          </SectionCard>
+          {announcements.length > 0 && (
+            <AnnouncementCarousel announcements={announcements} dismissible />
+          )}
 
           <VerseOfDayCard verse={verse} />
 
@@ -277,14 +269,8 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
               ministério/escola (AreaHero, logo abaixo das abas); mostrar
               aqui de novo seria duplicar a mesma foto/anúncio na tela toda,
               antes mesmo de escolher uma aba. */}
-          {principal && (
-            <SectionCard title="Anúncios" href={`/${slug}/anuncios`} linkLabel="Ver todos">
-              {homeAnnouncements.length === 0 ? (
-                <EmptyState icon={Megaphone} label="Nenhum anúncio no momento" />
-              ) : (
-                <AnnouncementCarousel announcements={homeAnnouncements} />
-              )}
-            </SectionCard>
+          {principal && homeAnnouncements.length > 0 && (
+            <AnnouncementCarousel announcements={homeAnnouncements} dismissible />
           )}
           <VerseOfDayCard verse={verse} />
           <AreaTabs tabs={items.map(i => i.tab)} panels={items.map(i => i.panel)} initialKey={initialArea} />
