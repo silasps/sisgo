@@ -13,7 +13,8 @@ import { StatCard, SectionCard, EmptyState } from './ui'
 import { AreaTabs } from './AreaTabs'
 import { getMyAreas, buildAreaTabs } from './areas'
 import { PersonalAccountCard } from './PersonalAccountCard'
-import { AnnouncementList, type AnnouncementListItem } from '@/components/ui/AnnouncementList'
+import type { AnnouncementListItem } from '@/components/ui/AnnouncementList'
+import { AnnouncementCarousel } from '@/components/ui/AnnouncementCarousel'
 import { matchesAudience } from '@/lib/audience-roles'
 import type { LucideIcon } from 'lucide-react'
 import {
@@ -150,7 +151,7 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
             {announcements.length === 0 ? (
               <EmptyState icon={Megaphone} label="Nenhum anúncio no momento" />
             ) : (
-              <AnnouncementList announcements={announcements} variant="default" />
+              <AnnouncementCarousel announcements={announcements} />
             )}
           </SectionCard>
 
@@ -215,7 +216,7 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
             {announcements.length === 0 ? (
               <EmptyState icon={Megaphone} label="Nenhum anúncio no momento" />
             ) : (
-              <AnnouncementList announcements={announcements} variant="default" />
+              <AnnouncementCarousel announcements={announcements} />
             )}
           </SectionCard>
 
@@ -279,7 +280,7 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
             {homeAnnouncements.length === 0 ? (
               <EmptyState icon={Megaphone} label="Nenhum anúncio no momento" />
             ) : (
-              <AnnouncementList announcements={homeAnnouncements} variant="default" />
+              <AnnouncementCarousel announcements={homeAnnouncements} />
             )}
           </SectionCard>
           <VerseOfDayCard verse={verse} />

@@ -20,8 +20,10 @@ const CLICK_SUPPRESS_PX = 6
 // pessoa está, não importa qual anúncio está em exibição.
 export function AnnouncementCarousel({ announcements, kicker, title }: {
   announcements: AnnouncementListItem[]
-  kicker: string
-  title: string
+  /** Legenda fixa (ex.: nome do ministério/escola) — omitida quando o carrossel
+   * não está preso a uma área específica (ex.: "Anúncios" geral da Início). */
+  kicker?: string
+  title?: string
 }) {
   const total = announcements.length
   const [current, setCurrent] = useState(0)
@@ -136,12 +138,16 @@ export function AnnouncementCarousel({ announcements, kicker, title }: {
         })}
       </div>
 
-      {/* Legenda fixa (não desliza com o track) — identifica o ministério/escola independente de qual anúncio está em exibição. */}
-      <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/55 to-transparent pointer-events-none z-10" />
-      <div className="absolute top-3 left-3 z-20 pointer-events-none">
-        <p className="text-[10px] uppercase tracking-wide text-white/85">{kicker}</p>
-        <p className="text-base font-bold text-white leading-tight">{title}</p>
-      </div>
+      {/* Legenda fixa (não desliza com o track) — identifica o ministério/escola independente de qual anúncio está em exibição. Omitida fora de uma área específica. */}
+      {kicker && title && (
+        <>
+          <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/55 to-transparent pointer-events-none z-10" />
+          <div className="absolute top-3 left-3 z-20 pointer-events-none">
+            <p className="text-[10px] uppercase tracking-wide text-white/85">{kicker}</p>
+            <p className="text-base font-bold text-white leading-tight">{title}</p>
+          </div>
+        </>
+      )}
 
       {total > 1 && (
         <>
