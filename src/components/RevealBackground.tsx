@@ -17,13 +17,64 @@ const SAMPLE_GAP    = 4
 const LERP          = 0.18
 const MASK_EVERY    = 3
 const COVERAGE_TICK = 60
-const COVERAGE_TICK_AUTO = 100 // menos leituras de pixel/seg quando é auto-reveal (mobile)
-const AUTO_RADIUS   = 220
-const AUTO_SPEED_X  = 0.011
-const AUTO_SPEED_Y  = 0.019
-const TOUCH_IDLE_MS = 1400 // depois de tocar, espera antes de retomar o auto-reveal
+const SLIDE_MS      = 5000 // troca de imagem no fallback simples (mobile)
 
-export function RevealBackground() {
+const imgBase: React.CSSProperties = {
+  position: 'absolute', top: 0, left: 0, right: 0,
+  height: '88vh',
+  backgroundSize: 'cover',
+  filter: 'brightness(0.8) saturate(0.8)',
+}
+
+function BackgroundShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden" aria-hidden>
+      <div className="absolute inset-0" style={{
+        background: 'radial-gradient(ellipse 110% 70% at 50% 15%, rgba(10,32,31,0.95) 0%, #081716 60%, #06120f 100%)',
+      }} />
+      {children}
+      <div className="absolute inset-0" style={{
+        background: 'linear-gradient(to bottom, transparent 55vh, #081716 88vh)',
+      }} />
+    </div>
+  )
+}
+
+// Fallback pra quem não tem mouse (mobile/touch) — o efeito de "raspar a
+// foto" (DesktopReveal, abaixo) simula isso com uma varredura automática,
+// mas depende de leitura de canvas (getImageData/toDataURL) a cada poucos
+// frames, pesado demais e instável em Safari mobile. Aqui é só um crossfade
+// simples entre as imagens de tempos em tempos — um slide, por hora.
+function SimpleSlideBackground() {
+  const [index, setIndex] = useState(0)
+
+  useEffect(() => {
+    const id = setInterval(() => setIndex(i => (i + 1) % IMAGES.length), SLIDE_MS)
+    return () => clearInterval(id)
+  }, [])
+
+  return (
+    <BackgroundShell>
+      {IMAGES.map((img, i) => (
+        <div
+          key={img.src}
+          style={{
+            ...imgBase,
+            backgroundPosition: img.pos,
+            backgroundImage: `url(${img.src})`,
+            opacity: i === index ? 1 : 0,
+            transition: 'opacity 1.5s ease-in-out',
+          }}
+        />
+      ))}
+    </BackgroundShell>
+  )
+}
+
+// Efeito completo — só pra quem tem mouse de verdade (desktop): o cursor
+// "rasga" a foto atual (máscara de canvas com destination-out) até revelar
+// ~85% da imagem, aí transiciona pra próxima.
+function DesktopReveal() {
   const curRef = useRef<HTMLDivElement>(null)
   const [current, setCurrent] = useState(0)
   const [next,    setNext]    = useState(1)
@@ -57,9 +108,6 @@ export function RevealBackground() {
     curEl.style.maskRepeat       = 'no-repeat'
     curEl.style.webkitMaskRepeat = 'no-repeat'
 
-    const canHover = typeof window.matchMedia === 'function'
-      && window.matchMedia('(hover: hover) and (pointer: fine)').matches
-
     const st = {
       mouse:  { x: -9999, y: -9999 },
       paint:  { x: -9999, y: -9999 },
@@ -67,21 +115,7 @@ export function RevealBackground() {
       fading: false,
       idx:    0,
       ticker: 0,
-      frame:  0,
       vel:    0,
-      usingAutoReveal: !canHover,
-      lastTouchAt: 0,
-    }
-
-    // Em telas touch não há mousemove — simula uma varredura circular lenta
-    // alimentando st.mouse, reaproveitando o mesmo paintAt/getCoverage/transition.
-    const autoPosition = (frame: number) => {
-      const cx = window.innerWidth * 0.5
-      const cy = window.innerHeight * 0.38
-      return {
-        x: cx + Math.cos(frame * AUTO_SPEED_X) * AUTO_RADIUS,
-        y: cy + Math.sin(frame * AUTO_SPEED_Y) * AUTO_RADIUS * 0.6,
-      }
     }
 
     const paintAt = (x: number, y: number, speed: number) => {
@@ -130,13 +164,10 @@ export function RevealBackground() {
     }
 
     let raf: number
+    let frame = 0
 
     const tick = () => {
-      st.frame++
-
-      if (st.usingAutoReveal && Date.now() - st.lastTouchAt > TOUCH_IDLE_MS) {
-        st.mouse = autoPosition(st.frame)
-      }
+      frame++
 
       if (st.mouse.x > -1000) {
         if (st.paint.x < -1000) st.paint = { ...st.mouse }
@@ -161,12 +192,11 @@ export function RevealBackground() {
 
       st.vel *= 0.90
 
-      const coverageTick = st.usingAutoReveal ? COVERAGE_TICK_AUTO : COVERAGE_TICK
-      if (!st.fading && ++st.ticker % coverageTick === 0 && getCoverage() <= (1 - COVERAGE_GOAL)) {
+      if (!st.fading && ++st.ticker % COVERAGE_TICK === 0 && getCoverage() <= (1 - COVERAGE_GOAL)) {
         transition()
       }
 
-      if (st.frame % MASK_EVERY === 0) applyMask()
+      if (frame % MASK_EVERY === 0) applyMask()
 
       raf = requestAnimationFrame(tick)
     }
@@ -176,22 +206,12 @@ export function RevealBackground() {
       st.mouse = { x: e.clientX, y: e.clientY }
     }
 
-    const onTouch = (e: TouchEvent) => {
-      const t = e.touches[0]
-      if (!t) return
-      st.lastTouchAt = Date.now()
-      if (st.mouse.x < -1000) st.prev = { x: t.clientX, y: t.clientY }
-      st.mouse = { x: t.clientX, y: t.clientY }
-    }
-
     window.addEventListener('mousemove', onMove, { passive: true })
-    window.addEventListener('touchmove', onTouch, { passive: true })
     raf = requestAnimationFrame(tick)
 
     return () => {
       window.removeEventListener('resize', setup)
       window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('touchmove', onTouch)
       cancelAnimationFrame(raf)
     }
   }, [])
@@ -199,19 +219,8 @@ export function RevealBackground() {
   const curImg  = IMAGES[current]
   const nextImg = IMAGES[next]
 
-  const imgBase: React.CSSProperties = {
-    position: 'absolute', top: 0, left: 0, right: 0,
-    height: '88vh',
-    backgroundSize: 'cover',
-    filter: 'brightness(0.8) saturate(0.8)',
-  }
-
   return (
-    <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden" aria-hidden>
-      <div className="absolute inset-0" style={{
-        background: 'radial-gradient(ellipse 110% 70% at 50% 15%, rgba(10,32,31,0.95) 0%, #081716 60%, #06120f 100%)',
-      }} />
-
+    <BackgroundShell>
       {/* Próxima imagem — estática embaixo */}
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '88vh' }}>
         <div style={{ ...imgBase, backgroundPosition: nextImg.pos, backgroundImage: `url(${nextImg.src})` }} />
@@ -222,10 +231,19 @@ export function RevealBackground() {
         ref={curRef}
         style={{ ...imgBase, backgroundPosition: curImg.pos, backgroundImage: `url(${curImg.src})` }}
       />
-
-      <div className="absolute inset-0" style={{
-        background: 'linear-gradient(to bottom, transparent 55vh, #081716 88vh)',
-      }} />
-    </div>
+    </BackgroundShell>
   )
+}
+
+// Detecta mouse de verdade (hover + ponteiro fino) só depois de montar —
+// até lá (e em qualquer dispositivo touch) usa o slide simples.
+export function RevealBackground() {
+  const [canHover, setCanHover] = useState(false)
+
+  useEffect(() => {
+    setCanHover(typeof window.matchMedia === 'function'
+      && window.matchMedia('(hover: hover) and (pointer: fine)').matches)
+  }, [])
+
+  return canHover ? <DesktopReveal /> : <SimpleSlideBackground />
 }
