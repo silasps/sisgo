@@ -201,6 +201,7 @@ export interface StaffFormDict {
     filhos_add: string
     filhos_remove: string
     filhos_virao: string
+    filhos_moram_com_voce: string
   }
 
   // ── S4: Igreja e Vida Espiritual ───────────────────────────────────────

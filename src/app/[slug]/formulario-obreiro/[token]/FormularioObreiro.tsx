@@ -50,6 +50,10 @@ type Props = {
    * CadastroIncompletoAlert) — nesse ponto o formulário não pode mais ser
    * abandonado, precisa ser concluído pra liberar o resto do sistema. */
   canExit?: boolean
+  /** Já tem staff_profiles ativo — está só confirmando/atualizando cadastro
+   * (ex.: importado em massa), já mora na base. Muda perguntas que
+   * pressupõem alguém ainda chegando (ex.: "os filhos virão junto?"). */
+  isUpdatingExisting?: boolean
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -630,7 +634,7 @@ function ChildrenField({ data }: { data?: string }) {
   )
 }
 
-function S3Familia({ data, estadoCivilS2 }: { data?: Record<string, string>; estadoCivilS2?: string }) {
+function S3Familia({ data, estadoCivilS2, isUpdatingExisting }: { data?: Record<string, string>; estadoCivilS2?: string; isUpdatingExisting?: boolean }) {
   const d = useContext(DictCtx)
   const estadoCivil = data?.estado_civil_atual ?? estadoCivilS2 ?? ''
   const [temFilhos, setTemFilhos] = useState(data?.tem_filhos === 'sim')
@@ -684,9 +688,15 @@ function S3Familia({ data, estadoCivilS2 }: { data?: Record<string, string>; est
         </div>
         {temFilhos && <>
           <ChildrenField data={data?.filhos_dados} />
-          <Select label={d.s3.filhos_virao} name="filhos_virao" defaultValue={data?.filhos_virao} options={[
-            { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
-          ]} />
+          {isUpdatingExisting ? (
+            <Select label={d.s3.filhos_moram_com_voce} name="filhos_moram_com_voce" defaultValue={data?.filhos_moram_com_voce} options={[
+              { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
+            ]} />
+          ) : (
+            <Select label={d.s3.filhos_virao} name="filhos_virao" defaultValue={data?.filhos_virao} options={[
+              { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
+            ]} />
+          )}
         </>}
       </div>
     </div>
@@ -1485,7 +1495,7 @@ type SectionDef = { id: number; component: React.ReactNode }
 export function FormularioObreiro({
   slug, token, applicationId, orgName, ministryId, ministries,
   prefill, initialSection = 1, initialData, initialLang, printMode, institutionRulesText, documentUrls,
-  canExit = true,
+  canExit = true, isUpdatingExisting = false,
 }: Props) {
   const router = useRouter()
   const pathname = usePathname()
@@ -1541,7 +1551,7 @@ export function FormularioObreiro({
   const sections: SectionDef[] = [
     { id: 1, component: <S1Email prefill={prefill} data={localData.s1} /> },
     { id: 2, component: <S2Dados prefill={prefill} data={localData.s2} onNationalityChange={setIsBrazilian} orgName={orgName} /> },
-    { id: 3, component: <S3Familia data={localData.s3} estadoCivilS2={localData.s2?.estado_civil} /> },
+    { id: 3, component: <S3Familia data={localData.s3} estadoCivilS2={localData.s2?.estado_civil} isUpdatingExisting={isUpdatingExisting} /> },
     { id: 4, component: <S4Igreja data={localData.s4} /> },
     { id: 5, component: <S5Experiencia data={localData.s5} /> },
     { id: 6, component: <S6ServirBase data={localData.s6} ministries={ministries} ministryId={ministryId} /> },

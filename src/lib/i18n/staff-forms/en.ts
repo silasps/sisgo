@@ -188,6 +188,7 @@ export const enDict: StaffFormDict = {
     filhos_add: '+ Add child',
     filhos_remove: 'Remove',
     filhos_virao: 'Will your children be joining you?',
+    filhos_moram_com_voce: 'Do your children live with you?',
   },
 
   // ── S4: Church & Spiritual Life ──────────────────────────────────────────

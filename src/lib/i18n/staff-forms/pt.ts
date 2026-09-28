@@ -188,6 +188,7 @@ export const ptDict: StaffFormDict = {
     filhos_add: '+ Adicionar filho',
     filhos_remove: 'Remover',
     filhos_virao: 'Os filhos virão junto?',
+    filhos_moram_com_voce: 'Os filhos moram com você?',
   },
 
   // ── S4: Igreja e Vida Espiritual ───────────────────────────────────────

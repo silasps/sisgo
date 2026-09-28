@@ -175,6 +175,7 @@ export default async function FormularioObreiroPage({ params, searchParams }: Pr
             institutionRulesText={(org as { institution_rules_text?: string | null }).institution_rules_text ?? null}
             documentUrls={documentUrls}
             canExit={(app.reminder_skips ?? 0) < PROFILE_COMPLETION_BLOCK_AFTER}
+            isUpdatingExisting={isUpdatingExisting}
           />
         </div>
 

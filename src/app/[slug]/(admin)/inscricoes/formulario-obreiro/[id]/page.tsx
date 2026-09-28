@@ -81,6 +81,7 @@ const SECTIONS: FormSection[] = [
       { label: 'Tem filhos?', key: 'tem_filhos' },
       { label: 'Filhos', key: 'filhos_dados', type: 'children' },
       { label: 'Filhos virão?', key: 'filhos_virao' },
+      { label: 'Filhos moram com a pessoa?', key: 'filhos_moram_com_voce' },
     ],
   },
   {

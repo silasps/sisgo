@@ -188,6 +188,7 @@ export const esDict: StaffFormDict = {
     filhos_add: '+ Agregar hijo',
     filhos_remove: 'Eliminar',
     filhos_virao: '¿Los hijos vendrán también?',
+    filhos_moram_com_voce: '¿Los hijos viven contigo?',
   },
 
   // ── S4: Iglesia y vida espiritual ───────────────────────────────────────
