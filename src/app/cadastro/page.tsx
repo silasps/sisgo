@@ -20,7 +20,7 @@ export default async function CadastroPage({ searchParams }: Props) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-50 via-white to-gray-50">
-      <header className="bg-white border-b border-gray-100 px-4 sm:px-6 py-4">
+      <header className="bg-white border-b border-gray-100 px-4 sm:px-6 pb-4 pt-[calc(1rem+env(safe-area-inset-top))]">
         <div className="max-w-2xl mx-auto flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 text-gray-900">
             <SisgoSymbol size={24} />

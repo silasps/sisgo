@@ -119,7 +119,7 @@ export default async function FormularioObreiroPage({ params, searchParams }: Pr
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-orange-50">
 
-      <header className="bg-white border-b border-gray-100 px-4 sm:px-6 py-4">
+      <header className="bg-white border-b border-gray-100 px-4 sm:px-6 pb-4 pt-[calc(1rem+env(safe-area-inset-top))]">
         <div className="max-w-2xl mx-auto">
           <p className="text-xs font-bold text-amber-600 uppercase tracking-widest">
             {org.name}
