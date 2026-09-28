@@ -339,6 +339,7 @@ export interface StaffFormDict {
     apoio_qual_ph: string
     situacao_financeira: string
     situacao_financeira_ph: string
+    situacao_financeira_ph_update: string
     tem_dividas: string
   }
 

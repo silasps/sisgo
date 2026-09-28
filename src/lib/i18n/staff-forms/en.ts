@@ -326,6 +326,7 @@ export const enDict: StaffFormDict = {
     apoio_qual_ph: 'E.g.: church, family, sponsors, personal savings…',
     situacao_financeira: 'Describe your current financial situation',
     situacao_financeira_ph: 'How do you plan to support yourself while serving here?',
+    situacao_financeira_ph_update: 'How have you been supporting yourself while serving here?',
     tem_dividas: 'Do you have any debts?',
   },
 

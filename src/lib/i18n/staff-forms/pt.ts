@@ -326,6 +326,7 @@ export const ptDict: StaffFormDict = {
     apoio_qual_ph: 'Ex: igreja, família, mantenedores, recursos próprios…',
     situacao_financeira: 'Descreva sua situação financeira atual',
     situacao_financeira_ph: 'Como você planeja se sustentar durante o período de serviço aqui?',
+    situacao_financeira_ph_update: 'Como você tem se mantido financeiramente durante o período de serviço aqui?',
     tem_dividas: 'Possui dívidas?',
   },
 

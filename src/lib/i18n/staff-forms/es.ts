@@ -326,6 +326,7 @@ export const esDict: StaffFormDict = {
     apoio_qual_ph: 'Ej.: iglesia, familia, patrocinadores, recursos propios…',
     situacao_financeira: 'Describa su situación financiera actual',
     situacao_financeira_ph: '¿Cómo planea sostenerse durante el período de servicio aquí?',
+    situacao_financeira_ph_update: '¿Cómo te has mantenido económicamente durante tu tiempo sirviendo aquí?',
     tem_dividas: '¿Tiene deudas?',
   },
 

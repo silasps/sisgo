@@ -1127,7 +1127,7 @@ function S8Legal({ data, institutionRulesText, candidateEmail, slug, token, lang
   )
 }
 
-function S9Financeiro({ data }: { data?: Record<string, string> }) {
+function S9Financeiro({ data, isUpdatingExisting }: { data?: Record<string, string>; isUpdatingExisting?: boolean }) {
   const d = useContext(DictCtx)
   const [temApoio, setTemApoio] = useState(data?.tem_apoio_financeiro === 'sim')
   return (
@@ -1151,7 +1151,7 @@ function S9Financeiro({ data }: { data?: Record<string, string> }) {
         <div className="sm:col-span-2">
           <TextArea label={d.s9.situacao_financeira} name="situacao_financeira"
             defaultValue={data?.situacao_financeira} required rows={4}
-            placeholder={d.s9.situacao_financeira_ph} />
+            placeholder={isUpdatingExisting ? d.s9.situacao_financeira_ph_update : d.s9.situacao_financeira_ph} />
         </div>
         <div className="sm:col-span-2">
           <Select label={d.s9.tem_dividas} name="tem_dividas" defaultValue={data?.tem_dividas} options={[
@@ -1584,7 +1584,7 @@ export function FormularioObreiro({
         candidateEmail={localData.s1?.email ?? prefill?.email}
         slug={slug} token={token} lang={lang} />,
     },
-    { id: 9, component: <S9Financeiro data={localData.s9} /> },
+    { id: 9, component: <S9Financeiro data={localData.s9} isUpdatingExisting={isUpdatingExisting} /> },
     {
       id: 10, component: <S10DocumentosAceite data={localData.s10}
         isBrazilian={isBrazilian}
