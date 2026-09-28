@@ -31,6 +31,11 @@ export const ptDict: FormDict = {
     crop_cancel_label: 'Cancelar',
     crop_error_label: 'Não foi possível ajustar a foto. Tente novamente.',
     crop_edit_label: 'Ajustar recorte',
+    exit: 'Sair',
+    exit_confirm_title: 'Sair do formulário?',
+    exit_confirm_message: 'Seu progresso já está salvo. Você pode continuar de onde parou quando quiser, usando o mesmo link.',
+    exit_confirm_confirm: 'Sair',
+    exit_confirm_cancel: 'Continuar preenchendo',
   },
 
   langSwitcher: { label: 'Idioma do formulário:' },

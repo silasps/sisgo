@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { FormularioInscricao } from './FormularioInscricao'
 import { CheckCircle2 } from 'lucide-react'
 import { getFormDict, normalizeLang } from '@/lib/i18n/forms'
+import { PROFILE_COMPLETION_BLOCK_AFTER } from '@/lib/profile-completion'
 
 type Props = {
   params: Promise<{ slug: string; token: string }>
@@ -19,7 +20,7 @@ export default async function FormularioPage({ params, searchParams }: Props) {
     .from('school_applications')
     .select(`
       id, status, current_section, form_data, token_expires_at,
-      organization_id,
+      organization_id, reminder_skips,
       schools(id, name, organization_id),
       school_classes(name),
       school_interest_forms(full_name, email, phone, language)
@@ -166,6 +167,7 @@ export default async function FormularioPage({ params, searchParams }: Props) {
             initialLang={pageLang}
             printMode={printMode}
             documentUrls={documentUrls}
+            canExit={(app.reminder_skips ?? 0) < PROFILE_COMPLETION_BLOCK_AFTER}
           />
         </div>
 

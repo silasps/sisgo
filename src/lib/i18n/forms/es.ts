@@ -31,6 +31,11 @@ export const esDict: FormDict = {
     crop_cancel_label: 'Cancelar',
     crop_error_label: 'No se pudo ajustar la foto. Inténtalo de nuevo.',
     crop_edit_label: 'Ajustar recorte',
+    exit: 'Salir',
+    exit_confirm_title: '¿Salir del formulario?',
+    exit_confirm_message: 'Tu progreso ya está guardado. Puedes continuar donde lo dejaste cuando quieras, usando el mismo enlace.',
+    exit_confirm_confirm: 'Salir',
+    exit_confirm_cancel: 'Seguir completando',
   },
 
   langSwitcher: { label: 'Idioma del formulario:' },

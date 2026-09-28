@@ -13,6 +13,7 @@ import { FileInputField } from '@/components/ui/FileInputField'
 import { PhotoFramingGuide } from '@/components/ui/PhotoFramingGuide'
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock'
 import { LangSwitcher } from '@/components/ui/LangSwitcher'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { getStaffFormDict, normalizeStaffLang, tStaff, ptDict } from '@/lib/i18n/staff-forms'
 import type { StaffFormDict, StaffLang } from '@/lib/i18n/staff-forms'
 import { orgShortName } from '@/lib/orgShortName'
@@ -45,6 +46,10 @@ type Props = {
   printMode?: boolean
   institutionRulesText?: string | null
   documentUrls?: DocumentUrls
+  /** Falso quando a pessoa já adiou o cadastro vezes demais (ver
+   * CadastroIncompletoAlert) — nesse ponto o formulário não pode mais ser
+   * abandonado, precisa ser concluído pra liberar o resto do sistema. */
+  canExit?: boolean
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -1471,7 +1476,8 @@ type SectionDef = { id: number; component: React.ReactNode }
 
 export function FormularioObreiro({
   slug, token, applicationId, orgName, ministryId, ministries,
-  prefill, initialSection = 1, initialData, initialLang, printMode, institutionRulesText, documentUrls
+  prefill, initialSection = 1, initialData, initialLang, printMode, institutionRulesText, documentUrls,
+  canExit = true,
 }: Props) {
   const router = useRouter()
   const pathname = usePathname()
@@ -1657,7 +1663,23 @@ export function FormularioObreiro({
             </span>
             {tStaff(d.nav.section_of, { n: String(currentIndex + 1), total: String(sections.length) })}
           </span>
-          <LangSwitcher lang={lang} onChange={l => setLang(l as StaffLang)} tone="amber" />
+          <div className="flex items-center gap-3">
+            <LangSwitcher lang={lang} onChange={l => setLang(l as StaffLang)} tone="amber" />
+            {canExit && (
+              <ConfirmDialog
+                title={d.nav.exit_confirm_title}
+                message={d.nav.exit_confirm_message}
+                confirmLabel={d.nav.exit_confirm_confirm}
+                cancelLabel={d.nav.exit_confirm_cancel}
+                variant="warning"
+                onConfirm={() => router.push(`/${slug}`)}
+              >
+                <button type="button" className="text-xs font-semibold text-gray-400 hover:text-gray-600 transition-colors">
+                  {d.nav.exit}
+                </button>
+              </ConfirmDialog>
+            )}
+          </div>
         </div>
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-[11px] text-gray-400">{d.langSwitcher.label}</span>

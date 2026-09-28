@@ -3,15 +3,11 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, Loader2, X } from 'lucide-react'
+import { PROFILE_COMPLETION_BLOCK_AFTER } from '@/lib/profile-completion'
 
 const DISMISS_KEY = 'sisgo:cadastro-incompleto-dismissed'
 
-// Quantas vezes a pessoa pode clicar "Depois" antes do aviso virar
-// bloqueante — sem X, sem "Depois", só resta completar o cadastro pra
-// seguir usando o sistema.
-const BLOCK_AFTER = 5
-
-// Fechável até estourar BLOCK_AFTER (a pessoa pode adiar e seguir usando o
+// Fechável até estourar PROFILE_COMPLETION_BLOCK_AFTER (a pessoa pode adiar e seguir usando o
 // sistema), mas volta a aparecer a cada novo login/sessão — por isso
 // sessionStorage só controla "já vi nesta sessão"; a contagem de quantas
 // vezes já adiou (`skipsUsed`) vem do banco, vinculada à candidatura da
@@ -24,7 +20,7 @@ export function CadastroIncompletoAlert({ href, skipsUsed, onSkip }: {
   const [visible, setVisible] = useState(false)
   const [navigating, setNavigating] = useState(false)
 
-  const blocking = skipsUsed >= BLOCK_AFTER
+  const blocking = skipsUsed >= PROFILE_COMPLETION_BLOCK_AFTER
 
   useEffect(() => {
     if (!blocking) {
@@ -43,7 +39,7 @@ export function CadastroIncompletoAlert({ href, skipsUsed, onSkip }: {
 
   if (!visible) return null
 
-  const lastChance = !blocking && skipsUsed === BLOCK_AFTER - 1
+  const lastChance = !blocking && skipsUsed === PROFILE_COMPLETION_BLOCK_AFTER - 1
 
   return (
     <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/50 p-4">

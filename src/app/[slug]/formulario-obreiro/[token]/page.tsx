@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { FormularioObreiro } from './FormularioObreiro'
 import { CheckCircle2 } from 'lucide-react'
 import { getStaffFormDict, normalizeStaffLang } from '@/lib/i18n/staff-forms'
+import { PROFILE_COMPLETION_BLOCK_AFTER } from '@/lib/profile-completion'
 
 type Props = {
   params: Promise<{ slug: string; token: string }>
@@ -19,7 +20,7 @@ export default async function FormularioObreiroPage({ params, searchParams }: Pr
     .from('staff_applications')
     .select(`
       id, status, current_section, form_data, token_expires_at,
-      organization_id, ministry_id,
+      organization_id, ministry_id, reminder_skips,
       staff_interest_forms(full_name, email, phone, language),
       ministries(name)
     `)
@@ -157,6 +158,7 @@ export default async function FormularioObreiroPage({ params, searchParams }: Pr
             printMode={printMode}
             institutionRulesText={(org as { institution_rules_text?: string | null }).institution_rules_text ?? null}
             documentUrls={documentUrls}
+            canExit={(app.reminder_skips ?? 0) < PROFILE_COMPLETION_BLOCK_AFTER}
           />
         </div>
 

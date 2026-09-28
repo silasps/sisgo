@@ -8,6 +8,7 @@ import { HeartHandshake, Camera, IdCard, FileText } from 'lucide-react'
 import { ptDict } from '@/lib/i18n/forms'
 import { orgShortName } from '@/lib/orgShortName'
 import { LangSwitcher } from '@/components/ui/LangSwitcher'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { PhotoFramingGuide } from '@/components/ui/PhotoFramingGuide'
 
 // ── Contexts ────────────────────────────────────────────────────────────────
@@ -62,6 +63,10 @@ type Props = {
   initialLang?: string
   printMode?: boolean
   documentUrls?: DocumentUrls
+  /** Falso quando a pessoa já adiou o cadastro vezes demais (ver
+   * CadastroIncompletoAlert) — nesse ponto o formulário não pode mais ser
+   * abandonado, precisa ser concluído pra liberar o resto do sistema. */
+  canExit?: boolean
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -1492,7 +1497,8 @@ function SubmittedScreen({ slug, applicationId, schoolName, hiddenSet, d }: {
 type SectionDef = { id: number; component: React.ReactNode }
 
 export function FormularioInscricao({
-  slug, token, applicationId, schoolName, orgName, className, prefill, initialSection = 1, initialData, hiddenFields, paymentInfo, initialLang, printMode, documentUrls
+  slug, token, applicationId, schoolName, orgName, className, prefill, initialSection = 1, initialData, hiddenFields, paymentInfo, initialLang, printMode, documentUrls,
+  canExit = true,
 }: Props) {
   const hiddenSet = useMemo(() => new Set(hiddenFields ?? []), [hiddenFields])
   const router = useRouter()
@@ -1793,7 +1799,23 @@ export function FormularioInscricao({
             </span>
             {t(d.nav.section_of, { n: String(currentIndex + 1), total: String(visibleSections.length) })}
           </span>
-          <LangSwitcher lang={lang} onChange={setLang} tone="indigo" />
+          <div className="flex items-center gap-3">
+            <LangSwitcher lang={lang} onChange={setLang} tone="indigo" />
+            {canExit && (
+              <ConfirmDialog
+                title={d.nav.exit_confirm_title}
+                message={d.nav.exit_confirm_message}
+                confirmLabel={d.nav.exit_confirm_confirm}
+                cancelLabel={d.nav.exit_confirm_cancel}
+                variant="warning"
+                onConfirm={() => router.push(`/${slug}`)}
+              >
+                <button type="button" className="text-xs font-semibold text-gray-400 hover:text-gray-600 transition-colors">
+                  {d.nav.exit}
+                </button>
+              </ConfirmDialog>
+            )}
+          </div>
         </div>
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-[11px] text-gray-400">{d.langSwitcher.label}</span>

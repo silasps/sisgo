@@ -32,6 +32,11 @@ export interface FormDict {
     crop_cancel_label: string
     crop_error_label: string
     crop_edit_label: string
+    exit: string
+    exit_confirm_title: string
+    exit_confirm_message: string
+    exit_confirm_confirm: string
+    exit_confirm_cancel: string
   }
 
   // ── Lang switcher ──────────────────────────────────────────────────────

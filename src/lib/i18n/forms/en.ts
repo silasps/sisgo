@@ -31,6 +31,11 @@ export const enDict: FormDict = {
     crop_cancel_label: 'Cancel',
     crop_error_label: 'Could not adjust the photo. Please try again.',
     crop_edit_label: 'Adjust crop',
+    exit: 'Exit',
+    exit_confirm_title: 'Exit the form?',
+    exit_confirm_message: 'Your progress is already saved. You can pick up where you left off anytime, using the same link.',
+    exit_confirm_confirm: 'Exit',
+    exit_confirm_cancel: 'Keep filling out',
   },
 
   langSwitcher: { label: 'Form language:' },
