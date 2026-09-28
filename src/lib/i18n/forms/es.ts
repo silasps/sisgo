@@ -246,7 +246,7 @@ export const esDict: FormDict = {
   s8: {
     section: 'Sección 7',
     title: 'Iglesia local e involucramiento ministerial',
-    igreja_nome: 'Nombre de tu iglesia',
+    igreja_nome: 'Nombre de la iglesia a la que asistes actualmente',
     igreja_cidade: 'Ciudad y estado de la iglesia',
     tempo_igreja: '¿Cuánto tiempo llevas asistiendo?',
     membro_oficial: '¿Eres miembro oficial?',

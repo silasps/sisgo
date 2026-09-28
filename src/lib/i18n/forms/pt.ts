@@ -246,7 +246,7 @@ export const ptDict: FormDict = {
   s8: {
     section: 'Seção 7',
     title: 'Igreja local e envolvimento ministerial',
-    igreja_nome: 'Nome da sua igreja',
+    igreja_nome: 'Nome da igreja onde você congrega atualmente',
     igreja_cidade: 'Cidade e estado da igreja',
     tempo_igreja: 'Há quanto tempo frequenta?',
     membro_oficial: 'Membro oficial da igreja?',

@@ -195,7 +195,7 @@ export const esDict: StaffFormDict = {
   s4: {
     section: 'Sección 4',
     title: 'Iglesia y vida espiritual',
-    igreja_nome: 'Nombre de la iglesia',
+    igreja_nome: 'Nombre de la iglesia a la que asistes actualmente',
     igreja_cidade: 'Ciudad de la iglesia',
     tempo_igreja: '¿Hace cuánto tiempo asiste a esta iglesia?',
     membro: '¿Es miembro oficial?',

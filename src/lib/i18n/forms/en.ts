@@ -246,7 +246,7 @@ export const enDict: FormDict = {
   s8: {
     section: 'Section 7',
     title: 'Local church & ministry involvement',
-    igreja_nome: 'Your church name',
+    igreja_nome: 'Name of the church you currently attend',
     igreja_cidade: 'Church city and state',
     tempo_igreja: 'How long have you attended?',
     membro_oficial: 'Are you an official member?',

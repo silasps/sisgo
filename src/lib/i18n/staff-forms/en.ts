@@ -195,7 +195,7 @@ export const enDict: StaffFormDict = {
   s4: {
     section: 'Section 4',
     title: 'Church & spiritual life',
-    igreja_nome: 'Church name',
+    igreja_nome: 'Name of the church you currently attend',
     igreja_cidade: "Church's city",
     tempo_igreja: 'How long have you attended this church?',
     membro: 'Are you an official member?',

@@ -195,7 +195,7 @@ export const ptDict: StaffFormDict = {
   s4: {
     section: 'Seção 4',
     title: 'Igreja e vida espiritual',
-    igreja_nome: 'Nome da igreja',
+    igreja_nome: 'Nome da igreja onde congrega atualmente',
     igreja_cidade: 'Cidade da igreja',
     tempo_igreja: 'Há quanto tempo congrega?',
     membro: 'É membro oficial?',
