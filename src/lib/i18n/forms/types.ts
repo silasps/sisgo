@@ -578,6 +578,8 @@ export interface FormDict {
     welcome_title: string
     welcome_body_print: string
     welcome_body_online: string
+    welcome_title_update: string
+    welcome_body_update: string
     footer_contact: string
   }
 }

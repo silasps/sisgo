@@ -379,6 +379,8 @@ export const enDict: StaffFormDict = {
     welcome_title: 'Welcome to the application form!',
     welcome_body_print: 'This is the blank version for filling out by hand, in case filling it out online is not possible.',
     welcome_body_online: 'This form is part of the evaluation process for serving at this institution. Please answer thoughtfully and honestly. Your progress is saved automatically after each section. Estimated time: 20 to 30 minutes.',
+    welcome_title_update: 'Confirm your information',
+    welcome_body_update: "You're already part of the institution — use this form just to review and, if needed, update your information. Check each section and, if everything looks right, click Next all the way through.",
     footer_contact: 'Questions? Contact the responsible team.',
   },
 }

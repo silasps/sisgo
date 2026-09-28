@@ -20,7 +20,7 @@ export default async function FormularioPage({ params, searchParams }: Props) {
     .from('school_applications')
     .select(`
       id, status, current_section, form_data, token_expires_at,
-      organization_id, reminder_skips,
+      organization_id, reminder_skips, person_id,
       schools(id, name, organization_id),
       school_classes(name),
       school_interest_forms(full_name, email, phone, language)
@@ -29,6 +29,18 @@ export default async function FormularioPage({ params, searchParams }: Props) {
     .single()
 
   if (!app) notFound()
+
+  // Quem já tem perfil ativo de aluno tá só confirmando/atualizando o
+  // cadastro (ex.: importado em massa, ver CadastroIncompletoAlert) — não é
+  // uma inscrição nova, então o texto de boas-vindas muda (ver banner
+  // abaixo).
+  const { data: existingProfile } = await sb
+    .from('student_profiles')
+    .select('id')
+    .eq('person_id', app.person_id)
+    .eq('active', true)
+    .maybeSingle()
+  const isUpdatingExisting = !!existingProfile
 
   const { data: org } = await sb
     .from('organizations')
@@ -142,9 +154,11 @@ export default async function FormularioPage({ params, searchParams }: Props) {
       {/* Orientação */}
       <div className="print:hidden max-w-2xl mx-auto px-4 sm:px-6 pt-5 sm:pt-6">
         <div className="bg-indigo-600 text-white rounded-2xl p-5 mb-6">
-          <h2 className="font-bold text-base mb-1">{d.welcome_title}</h2>
+          <h2 className="font-bold text-base mb-1">
+            {isUpdatingExisting ? d.welcome_title_update : d.welcome_title}
+          </h2>
           <p className="text-sm text-indigo-100 leading-relaxed">
-            {printMode ? d.welcome_body_print : d.welcome_body_online}
+            {printMode ? d.welcome_body_print : isUpdatingExisting ? d.welcome_body_update : d.welcome_body_online}
           </p>
         </div>
       </div>

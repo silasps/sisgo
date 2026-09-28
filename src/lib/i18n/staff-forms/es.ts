@@ -379,6 +379,8 @@ export const esDict: StaffFormDict = {
     welcome_title: '¡Bienvenido(a) al formulario de inscripción!',
     welcome_body_print: 'Esta es la versión en blanco para completar a mano, en caso de que no sea posible completarla por internet.',
     welcome_body_online: 'Este formulario es parte del proceso de evaluación para servir en esta institución. Responda con atención y sinceridad. Su progreso se guarda automáticamente en cada sección. Tiempo estimado: 20 a 30 minutos.',
+    welcome_title_update: 'Confirma tus datos',
+    welcome_body_update: 'Ya formas parte de la institución — usa este formulario solo para revisar y, si es necesario, actualizar tu información. Revisa cada sección y, si todo está correcto, haz clic en Siguiente hasta el final.',
     footer_contact: '¿Dudas? Ponte en contacto con el equipo responsable.',
   },
 }

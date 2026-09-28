@@ -589,6 +589,8 @@ export const ptDict: FormDict = {
     welcome_title: 'Bem-vindo(a) ao formulário de inscrição!',
     welcome_body_print: 'Esta é a versão em branco para preenchimento à mão, caso não seja possível preencher pela internet.',
     welcome_body_online: 'Este formulário faz parte do processo seletivo. Responda com atenção e sinceridade. Seu progresso é salvo automaticamente a cada seção. Tempo estimado: 30 a 45 minutos.',
+    welcome_title_update: 'Confirme seus dados',
+    welcome_body_update: 'Você já faz parte da instituição — use este formulário só para conferir e, se for o caso, atualizar suas informações. Revise cada seção e, se estiver tudo certo, clique em Avançar até o fim.',
     footer_contact: 'Dúvidas? Entre em contato com a equipe responsável pela escola.',
   },
 }
