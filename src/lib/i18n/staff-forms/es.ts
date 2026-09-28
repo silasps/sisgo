@@ -224,6 +224,7 @@ export const esDict: StaffFormDict = {
     tipo_escola: 'Hice una escuela de esta institución',
     tipo_missao: 'Serví en un proyecto misionero',
     tipo_nenhuma: 'Ninguna de las dos',
+    tipo_ja_sirvo: 'Ya sirvo/estudio en esta institución — solo completando mi registro',
     escola_nome: 'Nombre de la escuela',
     escola_periodo: 'Periodo / Grupo',
     escola_lideranca_section: 'Contacto del liderazgo de la escuela',

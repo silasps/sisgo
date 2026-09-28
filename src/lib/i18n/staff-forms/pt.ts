@@ -224,6 +224,7 @@ export const ptDict: StaffFormDict = {
     tipo_escola: 'Fiz uma escola desta instituição',
     tipo_missao: 'Servi em um projeto missionário',
     tipo_nenhuma: 'Nenhuma das duas',
+    tipo_ja_sirvo: 'Já sirvo/estudo nesta instituição — só completando o cadastro',
     escola_nome: 'Nome da escola',
     escola_periodo: 'Período / Turma',
     escola_lideranca_section: 'Contato da liderança da escola',

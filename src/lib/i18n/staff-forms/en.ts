@@ -224,6 +224,7 @@ export const enDict: StaffFormDict = {
     tipo_escola: 'I completed a school at this institution',
     tipo_missao: 'I served in a missionary project',
     tipo_nenhuma: 'Neither of the two',
+    tipo_ja_sirvo: "I'm already serving/studying here — just completing my registration",
     escola_nome: 'School name',
     escola_periodo: 'Term / Class',
     escola_lideranca_section: "School leadership's contact",

@@ -776,7 +776,7 @@ function S4Igreja({ data, isUpdatingExisting }: { data?: Record<string, string>;
   )
 }
 
-function S5Experiencia({ data }: { data?: Record<string, string> }) {
+function S5Experiencia({ data, isUpdatingExisting }: { data?: Record<string, string>; isUpdatingExisting?: boolean }) {
   const d = useContext(DictCtx)
   const [tipo, setTipo] = useState(data?.experiencia_recente_tipo ?? '')
   const [conhece, setConhece] = useState(data?.conhece_alguem === 'sim')
@@ -788,6 +788,7 @@ function S5Experiencia({ data }: { data?: Record<string, string> }) {
           <Select label={d.s5.tipo_label} name="experiencia_recente_tipo" required
             defaultValue={data?.experiencia_recente_tipo}
             options={[
+              ...(isUpdatingExisting ? [{ value: 'ja_sirvo', label: d.s5.tipo_ja_sirvo }] : []),
               { value: 'escola', label: d.s5.tipo_escola },
               { value: 'missao', label: d.s5.tipo_missao },
               { value: 'nenhuma', label: d.s5.tipo_nenhuma },
@@ -1559,7 +1560,7 @@ export function FormularioObreiro({
     { id: 2, component: <S2Dados prefill={prefill} data={localData.s2} onNationalityChange={setIsBrazilian} orgName={orgName} /> },
     { id: 3, component: <S3Familia data={localData.s3} estadoCivilS2={localData.s2?.estado_civil} isUpdatingExisting={isUpdatingExisting} /> },
     { id: 4, component: <S4Igreja data={localData.s4} isUpdatingExisting={isUpdatingExisting} /> },
-    { id: 5, component: <S5Experiencia data={localData.s5} /> },
+    { id: 5, component: <S5Experiencia data={localData.s5} isUpdatingExisting={isUpdatingExisting} /> },
     { id: 6, component: <S6ServirBase data={localData.s6} ministries={ministries} ministryId={ministryId} /> },
     { id: 7, component: <S7Saude data={localData.s7} documentUrls={documentUrls} /> },
     {

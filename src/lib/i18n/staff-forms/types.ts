@@ -237,6 +237,7 @@ export interface StaffFormDict {
     tipo_escola: string
     tipo_missao: string
     tipo_nenhuma: string
+    tipo_ja_sirvo: string
     escola_nome: string
     escola_periodo: string
     escola_lideranca_section: string
