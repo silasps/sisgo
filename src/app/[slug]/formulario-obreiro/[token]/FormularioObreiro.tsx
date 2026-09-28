@@ -1083,9 +1083,9 @@ function S8Legal({ data, institutionRulesText, candidateEmail, slug, token, lang
   const [pendencia, setPendencia] = useState(data?.pendencia_judicial === 'sim')
   const [showRules, setShowRules] = useState(false)
   const decls = [
-    { name: 'decl_verdadeiro', text: d.s8.decl_verdadeiro },
-    { name: 'decl_compromisso', text: d.s8.decl_respeito },
     { name: 'decl_sem_condenacao_menor', text: d.s8.decl_sem_condenacao_menor },
+    { name: 'decl_compromisso', text: d.s8.decl_respeito },
+    { name: 'decl_verdadeiro', text: d.s8.decl_verdadeiro },
   ]
   return (
     <div className="space-y-4">
