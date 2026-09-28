@@ -1460,6 +1460,12 @@ function SubmittedScreen({ slug, applicationId, orgName, d, isUpdatingExisting }
         <p className="text-gray-600 max-w-md mx-auto text-base leading-relaxed">
           {isUpdatingExisting ? d.submitted.body_update : tStaff(d.submitted.body, { org: orgName })}
         </p>
+        {isUpdatingExisting && (
+          <Link href={`/${slug}`}
+            className="inline-block mt-6 py-3 px-8 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-xl transition-colors text-sm">
+            {d.submitted.back_to_home}
+          </Link>
+        )}
       </div>
 
       {!isUpdatingExisting && (

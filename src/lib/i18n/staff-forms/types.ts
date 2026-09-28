@@ -64,6 +64,7 @@ export interface StaffFormDict {
     body: string              // {org} placeholder
     title_update: string
     body_update: string
+    back_to_home: string
     next_title: string
     next_body: string
     gen_pastor: string

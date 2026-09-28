@@ -60,6 +60,7 @@ export const ptDict: StaffFormDict = {
     body: 'Obrigado por preencher sua ficha de obreiro para {org}. A equipe entrará em contato com os próximos passos.',
     title_update: 'Cadastro atualizado!',
     body_update: 'Suas informações foram salvas com sucesso. Obrigado por manter seu cadastro em dia.',
+    back_to_home: 'Voltar para o Início',
     next_title: 'Próximos passos: Referências',
     next_body: 'Já enviamos por e-mail o pedido de recomendação ao seu pastor (e à liderança da sua experiência recente, se informada). Se preferir agilizar por WhatsApp ou outro meio, gere o link abaixo e envie você mesmo.',
     gen_pastor: 'Copiar link — Referência do Pastor',

@@ -60,6 +60,7 @@ export const esDict: StaffFormDict = {
     body: 'Gracias por completar su ficha de obrero para {org}. El equipo se pondrá en contacto con los próximos pasos.',
     title_update: '¡Registro actualizado!',
     body_update: 'Tu información se guardó correctamente. Gracias por mantener tu registro al día.',
+    back_to_home: 'Volver al Inicio',
     next_title: 'Próximos pasos: Referencias',
     next_body: 'Ya enviamos por correo la solicitud de recomendación a su pastor (y al liderazgo de su experiencia reciente, si la indicó). Si prefiere agilizar por WhatsApp u otro medio, genere el enlace a continuación y envíelo usted mismo.',
     gen_pastor: 'Copiar enlace — Referencia del Pastor',
