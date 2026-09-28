@@ -61,16 +61,27 @@ export async function getMySchools(ctx: UnitAccessContext): Promise<LinkedSchool
   const db = createAdminClient()
 
   if (previewPinsUnit(ctx.preview)) {
-    const link = PREVIEW_SCHOOL_LINK[ctx.role]
-    if (!ctx.preview?.schoolId || !link) return []
-    const { data } = await db.from('schools').select('id, name')
-      .eq('id', ctx.preview.schoolId).eq('organization_id', ctx.orgId).maybeSingle()
-    return data ? [{ id: data.id, name: data.name, link }] : []
+    if (ctx.preview?.schoolId) {
+      const link = PREVIEW_SCHOOL_LINK[ctx.role]
+      if (!link) return []
+      const { data } = await db.from('schools').select('id, name')
+        .eq('id', ctx.preview.schoolId).eq('organization_id', ctx.orgId).maybeSingle()
+      return data ? [{ id: data.id, name: data.name, link }] : []
+    }
+    // Preview de líder de ministério pinado numa unidade: se esse
+    // ministério tem escola vinculada (linked_ministry_id, migration 147),
+    // a pessoa também lidera essa escola — mesma regra do caso real abaixo.
+    if (ctx.preview?.ministryId && PREVIEW_MINISTRY_LINK[ctx.role] === 'lider') {
+      const { data } = await db.from('schools').select('id, name')
+        .eq('linked_ministry_id', ctx.preview.ministryId).eq('organization_id', ctx.orgId).maybeSingle()
+      return data ? [{ id: data.id, name: data.name, link: 'lider' }] : []
+    }
+    return []
   }
 
   const personIds = await staffPersonIds(db, ctx.orgId, ctx.userId)
   type Row = { school_id: string; schools: { name: string; organization_id: string } | null }
-  const [{ data: leaderRows }, { data: staffRows }, { data: createdRows }] = await Promise.all([
+  const [{ data: leaderRows }, { data: staffRows }, { data: createdRows }, { data: ledMinistryRows }] = await Promise.all([
     db.from('school_leaders')
       .select('school_id, schools(name, organization_id)')
       .eq('organization_id', ctx.orgId)
@@ -88,6 +99,10 @@ export async function getMySchools(ctx: UnitAccessContext): Promise<LinkedSchool
     // escola sem precisar de um papel de gestão.
     db.from('schools').select('id, name, organization_id')
       .eq('organization_id', ctx.orgId).eq('created_by', ctx.userId),
+    // Ministérios que a pessoa lidera (ministry_leaders) — usado abaixo pra
+    // achar escolas vinculadas a eles (linked_ministry_id, migration 147).
+    db.from('ministry_leaders').select('ministry_id')
+      .eq('organization_id', ctx.orgId).eq('user_id', ctx.userId),
   ])
 
   const schools = new Map<string, LinkedSchool>()
@@ -102,6 +117,19 @@ export async function getMySchools(ctx: UnitAccessContext): Promise<LinkedSchool
     if (row.organization_id !== ctx.orgId || schools.has(row.id)) continue
     schools.set(row.id, { id: row.id, name: row.name, link: 'lider' })
   }
+
+  const ledMinistryIds = (ledMinistryRows ?? []).map(r => r.ministry_id as string)
+  if (ledMinistryIds.length > 0) {
+    const { data: linkedSchoolRows } = await db.from('schools')
+      .select('id, name')
+      .eq('organization_id', ctx.orgId)
+      .in('linked_ministry_id', ledMinistryIds)
+    for (const row of (linkedSchoolRows ?? []) as Array<{ id: string; name: string }>) {
+      if (schools.has(row.id)) continue
+      schools.set(row.id, { id: row.id, name: row.name, link: 'lider' })
+    }
+  }
+
   add(staffRows, 'obreiro')
   return [...schools.values()].sort(leadersFirstThenName)
 }

@@ -4,7 +4,7 @@ import { redirect, notFound } from 'next/navigation'
 import { updateMinistry } from './actions'
 import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
 import { getOrgAndUser, getWorkspaceRole, getWorkspaceMinistry, getWorkspaceMinistryLink } from './_data'
-import { Users, ClipboardList } from 'lucide-react'
+import { Users, ClipboardList, GraduationCap } from 'lucide-react'
 import { LeaderPanel } from './LeaderPanel'
 import { LocaleContentTabs } from '@/components/ui/LocaleContentTabs'
 
@@ -33,6 +33,12 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
 
   const ministry = await getWorkspaceMinistry(orgId, id)
   if (!ministry) notFound()
+
+  // Escola vinculada a este ministério (ver lib/auth/unit-access.ts,
+  // migration 147) — alguns ministérios (ex.: ETED Louvor, Seminário SOS)
+  // também gerenciam uma escola de verdade (turmas, matrícula).
+  const { data: linkedSchool } = await sbAdmin.from('schools').select('id, name')
+    .eq('linked_ministry_id', id).eq('organization_id', orgId).maybeSingle()
 
   const [{ count: memberCount }, { count: pendingCount }] = await Promise.all([
     sbAdmin.from('ministry_members').select('*', { count: 'exact', head: true }).eq('ministry_id', id).eq('active', true),
@@ -101,6 +107,23 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
             </div>
           </Link>
         </div>
+
+        {linkedSchool ? (
+          <Link href={`/${slug}/escolas/${linkedSchool.id}`}
+            className="group flex items-center gap-3 bg-white rounded-xl border border-gray-200 p-3 transition-all hover:shadow-md hover:-translate-y-0.5">
+            <div className="rounded-lg bg-indigo-50 p-1.5"><GraduationCap size={14} className="text-indigo-600" /></div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-gray-900 truncate">{linkedSchool.name}</p>
+              <p className="text-[10px] text-gray-500">Escola vinculada a este ministério — turmas e matrícula</p>
+            </div>
+          </Link>
+        ) : isManagement ? (
+          <Link href={`/${slug}/escolas/nova?ministry_id=${id}`}
+            className="flex items-center gap-3 bg-white rounded-xl border border-dashed border-gray-300 p-3 text-gray-500 transition-all hover:border-indigo-300 hover:text-indigo-600">
+            <div className="rounded-lg bg-gray-50 p-1.5"><GraduationCap size={14} /></div>
+            <p className="text-xs font-medium">Criar escola vinculada a este ministério</p>
+          </Link>
+        ) : null}
 
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           {canWrite ? (

@@ -7,10 +7,14 @@ import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { canCreateSchool } from '@/lib/auth/school-access'
 import { SubmitButton } from '@/components/ui/SubmitButton'
 
-type Props = { params: Promise<{ slug: string }> }
+type Props = {
+  params: Promise<{ slug: string }>
+  searchParams: Promise<{ ministry_id?: string }>
+}
 
-export default async function NovaEscolaPage({ params }: Props) {
+export default async function NovaEscolaPage({ params, searchParams }: Props) {
   const { slug } = await params
+  const { ministry_id: ministryId } = await searchParams
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -21,6 +25,17 @@ export default async function NovaEscolaPage({ params }: Props) {
 
   const { role } = await getCurrentOrganizationRole(supabase, user.id, org.id)
   if (!(await canCreateSchool(supabase, user.id, org.id, role))) redirect(`/${slug}/escolas`)
+
+  // Escola "vinculada" a um ministério (ver unit-access.ts, migration 147) —
+  // o ministério continua existindo como está, mas passa a gerenciar
+  // também uma escola de verdade (turmas, matrícula). Chega aqui pelo botão
+  // "Criar escola vinculada" em /ministerios/[id].
+  let linkedMinistry: { id: string; name: string } | null = null
+  if (ministryId) {
+    const { data } = await supabase.from('ministries').select('id, name')
+      .eq('id', ministryId).eq('organization_id', org.id).maybeSingle()
+    linkedMinistry = data
+  }
 
   // Nomes de tipo já usados nessa organização — vira sugestão (datalist) no
   // campo abaixo, pra não perder o nome digitado numa escola anterior.
@@ -59,6 +74,17 @@ export default async function NovaEscolaPage({ params }: Props) {
       ? { hidden_fields: ['s8.pastor_bloco', 's9.oculto', 's11.oculto', 's13.oculto', 's14.oculto'] }
       : {}
 
+    // Se veio de "Criar escola vinculada" (/ministerios/[id]), confirma que
+    // o ministério é desta mesma organização antes de vincular — não confia
+    // só no formData.
+    const ministryIdRaw = (formData.get('ministry_id') as string | null)?.trim() || null
+    let linkedMinistryId: string | null = null
+    if (ministryIdRaw) {
+      const { data: ministryRow } = await sb.from('ministries').select('id')
+        .eq('id', ministryIdRaw).eq('organization_id', orgRow.id).maybeSingle()
+      linkedMinistryId = ministryRow?.id ?? null
+    }
+
     const { data: escola, error } = await sb.from('schools').insert({
       organization_id: orgRow.id,
       name: formData.get('name') as string,
@@ -68,6 +94,7 @@ export default async function NovaEscolaPage({ params }: Props) {
       form_config: formConfig,
       active: true,
       created_by: actionUser.id,
+      linked_ministry_id: linkedMinistryId,
     }).select('id').single()
 
     if (error) console.error('createSchool', error)
@@ -82,9 +109,17 @@ export default async function NovaEscolaPage({ params }: Props) {
         <form action={createSchool} className="bg-white rounded-xl border border-gray-200 p-6 max-w-lg mx-auto space-y-4">
           <p className="text-sm text-gray-500">Preencha os dados básicos para criar a escola. Você poderá editar todos os detalhes na próxima etapa.</p>
 
+          {linkedMinistry && (
+            <div className="bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2 text-xs text-indigo-700">
+              Esta escola será vinculada ao ministério <strong>{linkedMinistry.name}</strong> —
+              quem lidera o ministério passa a liderar essa escola também.
+              <input type="hidden" name="ministry_id" value={linkedMinistry.id} />
+            </div>
+          )}
+
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Nome da escola *</label>
-            <input name="name" required placeholder="Ex: Escola de Treinamento e Discipulado"
+            <input name="name" required defaultValue={linkedMinistry?.name ?? ''} placeholder="Ex: Escola de Treinamento e Discipulado"
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
           </div>
 
