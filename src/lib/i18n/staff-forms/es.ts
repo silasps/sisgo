@@ -10,6 +10,7 @@ export const esDict: StaffFormDict = {
     submit: 'Enviar formulario ✓',
     saving: 'Guardando…',
     error_save: 'No se pudo guardar. Inténtalo de nuevo.',
+    error_required_field: 'Completa los campos resaltados en rojo antes de continuar.',
     select_placeholder: 'Selecciona…',
     loading_cep: 'Buscando dirección…',
     choose_file: 'Elegir archivo',

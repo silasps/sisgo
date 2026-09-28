@@ -10,6 +10,7 @@ export const esDict: FormDict = {
     submit: 'Enviar formulario ✓',
     saving: 'Guardando…',
     error_save: 'No se pudo guardar. Por favor, inténtalo de nuevo.',
+    error_required_field: 'Completa los campos resaltados en rojo antes de continuar.',
     select_placeholder: 'Selecciona…',
     loading_cep: 'Buscando dirección…',
     choose_file: 'Elegir archivo',

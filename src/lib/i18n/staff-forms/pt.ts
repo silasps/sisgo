@@ -10,6 +10,7 @@ export const ptDict: StaffFormDict = {
     submit: 'Enviar formulário ✓',
     saving: 'Salvando…',
     error_save: 'Não foi possível salvar. Tente novamente.',
+    error_required_field: 'Preencha os campos destacados em vermelho antes de continuar.',
     select_placeholder: 'Selecione…',
     loading_cep: 'Buscando endereço…',
     choose_file: 'Escolher arquivo',

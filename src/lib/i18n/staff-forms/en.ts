@@ -10,6 +10,7 @@ export const enDict: StaffFormDict = {
     submit: 'Submit form ✓',
     saving: 'Saving…',
     error_save: 'Could not save. Please try again.',
+    error_required_field: 'Fill in the fields highlighted in red before continuing.',
     select_placeholder: 'Select…',
     loading_cep: 'Looking up address…',
     choose_file: 'Choose file',

@@ -11,6 +11,7 @@ export interface StaffFormDict {
     submit: string
     saving: string
     error_save: string
+    error_required_field: string
     select_placeholder: string
     loading_cep: string
     choose_file: string

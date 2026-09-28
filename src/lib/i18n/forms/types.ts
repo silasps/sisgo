@@ -11,6 +11,7 @@ export interface FormDict {
     submit: string            // "Enviar formulário ✓"
     saving: string            // "Salvando…"
     error_save: string
+    error_required_field: string
     select_placeholder: string // "Selecione…"
     loading_cep: string
     choose_file: string

@@ -1518,6 +1518,7 @@ export function FormularioInscricao({
   const [saving, setSaving] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState('')
+  const [validationAttempted, setValidationAttempted] = useState(false)
   const formRef = useRef<HTMLFormElement>(null)
 
   const [localData, setLocalData] = useState<Record<string, Record<string, string>>>(
@@ -1652,11 +1653,29 @@ export function FormularioInscricao({
       await salvarSecao(slug, token, visibleSections[currentIndex].id, dataRecord, target).catch(() => {})
     }
     setCurrent(target)
+    setValidationAttempted(false)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   async function handleNext(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    const form = e.currentTarget
+
+    // Validação nativa (`required`) sem o balão do navegador — sem
+    // tradução (segue o idioma do SO, não o do formulário) e sem indicar
+    // qual campo é. Em vez de reportValidity() (que mostraria o balão),
+    // rolamos até o primeiro campo inválido e destacamos todos em
+    // vermelho via CSS (:invalid, ver classe validate-attempted no form).
+    if (!form.checkValidity()) {
+      setValidationAttempted(true)
+      setError(d.nav.error_required_field)
+      const firstInvalid = form.querySelector<HTMLElement>(':invalid')
+      firstInvalid?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      firstInvalid?.focus({ preventScroll: true })
+      return
+    }
+    setValidationAttempted(false)
+
     setSaving(true)
     setError('')
     try {
@@ -1827,7 +1846,18 @@ export function FormularioInscricao({
         </div>
       </div>
 
-      <form ref={formRef} onSubmit={handleNext} className="space-y-6 pb-24">
+      <form
+        ref={formRef}
+        onSubmit={handleNext}
+        noValidate
+        className={`space-y-6 pb-24 ${validationAttempted ? 'validate-attempted' : ''}`}
+      >
+        <style jsx global>{`
+          form.validate-attempted :invalid {
+            border-color: #ef4444 !important;
+            background-color: #fef2f2;
+          }
+        `}</style>
         {visibleSections[currentIndex].component}
 
         {error && (
