@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useContext, createContext, useMemo } from 'react'
+import { useRef, useState, useEffect, useContext, createContext, useMemo } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { getFormDict, normalizeLang, t } from '@/lib/i18n/forms'
 import type { FormDict, Lang } from '@/lib/i18n/forms'
@@ -1521,6 +1521,28 @@ export function FormularioInscricao({
   const [validationAttempted, setValidationAttempted] = useState(false)
   const formRef = useRef<HTMLFormElement>(null)
 
+  // Some sozinho assim que os campos ficam todos válidos de novo — sem
+  // isso, quem corrige o campo errado mas não clica em "Avançar" de novo
+  // (ou corrige um campo que não era o problema) fica vendo a mensagem
+  // antiga, achando que nada mudou.
+  useEffect(() => {
+    if (!validationAttempted) return
+    const form = formRef.current
+    if (!form) return
+    const recheck = () => {
+      if (form.checkValidity()) {
+        setValidationAttempted(false)
+        setError('')
+      }
+    }
+    form.addEventListener('input', recheck)
+    form.addEventListener('change', recheck)
+    return () => {
+      form.removeEventListener('input', recheck)
+      form.removeEventListener('change', recheck)
+    }
+  }, [validationAttempted])
+
   const [localData, setLocalData] = useState<Record<string, Record<string, string>>>(
     (initialData ?? {}) as Record<string, Record<string, string>>
   )
@@ -1671,7 +1693,10 @@ export function FormularioInscricao({
       setError(d.nav.error_required_field)
       const firstInvalid = form.querySelector<HTMLElement>(':invalid')
       firstInvalid?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      firstInvalid?.focus({ preventScroll: true })
+      // Atraso pra não brigar com a rolagem suave em andamento — focar no
+      // meio da animação interrompe o scrollIntoView em alguns navegadores
+      // mobile, dando a impressão de que o clique não fez nada.
+      setTimeout(() => firstInvalid?.focus({ preventScroll: true }), 400)
       return
     }
     setValidationAttempted(false)
