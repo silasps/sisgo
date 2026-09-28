@@ -172,6 +172,7 @@ export const enDict: StaffFormDict = {
     data_casamento_anos: '{anos} year(s) married.',
     conjuge_vira: 'Will your spouse be joining you as well?',
     certidao_casamento: 'Marriage certificate',
+    certidao_casamento_notice: "You'll need to submit your marriage certificate (or equivalent union document) — this will be requested in the documents step, at the end of the form.",
     certidao_casamento_skip_label: "I don't have the certificate on hand right now",
     certidao_casamento_skip_reason: "Why aren't you sending the certificate now?",
     certidao_casamento_skip_reason_ph: 'E.g.: getting a replacement copy, currently with spouse in another city...',

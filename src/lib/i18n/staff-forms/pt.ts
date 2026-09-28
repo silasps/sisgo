@@ -172,6 +172,7 @@ export const ptDict: StaffFormDict = {
     data_casamento_anos: 'São {anos} ano(s) de casados.',
     conjuge_vira: 'O(a) cônjuge também virá?',
     certidao_casamento: 'Certidão de casamento',
+    certidao_casamento_notice: 'Você vai precisar enviar a certidão de casamento (ou documento equivalente de união) — isso será pedido na etapa de documentos, no final do formulário.',
     certidao_casamento_skip_label: 'Não tenho a certidão em mãos agora',
     certidao_casamento_skip_reason: 'Por que não está enviando a certidão agora?',
     certidao_casamento_skip_reason_ph: 'Ex: documento em processo de segunda via, está com o cônjuge em outra cidade...',

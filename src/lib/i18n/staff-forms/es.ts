@@ -172,6 +172,7 @@ export const esDict: StaffFormDict = {
     data_casamento_anos: '{anos} año(s) de casados.',
     conjuge_vira: '¿El/la cónyuge también vendrá?',
     certidao_casamento: 'Acta de matrimonio',
+    certidao_casamento_notice: 'Vas a necesitar enviar el acta de matrimonio (o documento equivalente de unión) — esto se pedirá en la etapa de documentos, al final del formulario.',
     certidao_casamento_skip_label: 'No tengo el acta a mano ahora',
     certidao_casamento_skip_reason: '¿Por qué no estás enviando el acta ahora?',
     certidao_casamento_skip_reason_ph: 'Ej.: documento en trámite de reposición, está con el cónyuge en otra ciudad...',

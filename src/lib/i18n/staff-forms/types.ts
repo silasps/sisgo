@@ -184,6 +184,7 @@ export interface StaffFormDict {
     data_casamento_anos: string
     conjuge_vira: string
     certidao_casamento: string
+    certidao_casamento_notice: string
     certidao_casamento_skip_label: string
     certidao_casamento_skip_reason: string
     certidao_casamento_skip_reason_ph: string

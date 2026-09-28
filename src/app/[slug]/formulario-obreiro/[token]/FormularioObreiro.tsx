@@ -630,11 +630,10 @@ function ChildrenField({ data }: { data?: string }) {
   )
 }
 
-function S3Familia({ data, estadoCivilS2, documentUrls }: { data?: Record<string, string>; estadoCivilS2?: string; documentUrls?: DocumentUrls }) {
+function S3Familia({ data, estadoCivilS2 }: { data?: Record<string, string>; estadoCivilS2?: string }) {
   const d = useContext(DictCtx)
   const estadoCivil = data?.estado_civil_atual ?? estadoCivilS2 ?? ''
   const [temFilhos, setTemFilhos] = useState(data?.tem_filhos === 'sim')
-  const [certidaoSkipped, setCertidaoSkipped] = useState(!!data?.certidao_casamento_skip_reason)
   const [dataCasamento, setDataCasamento] = useState(data?.data_casamento ?? '')
   const anosCasados = anosDesde(dataCasamento)
 
@@ -673,30 +672,8 @@ function S3Familia({ data, estadoCivilS2, documentUrls }: { data?: Record<string
           <Select label={d.s3.conjuge_vira} name="conjuge_vira" defaultValue={data?.conjuge_vira} options={[
             { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
           ]} />
-          <div className="sm:col-span-2">
-            {!certidaoSkipped && (
-              <FileInputField name="doc_certidao_casamento" accept="image/jpeg,image/png,image/webp,application/pdf"
-                required tone="amber" icon={<IdCard size={16} aria-hidden />}
-                title={d.s3.certidao_casamento} badgeLabel={d.nav.doc_required} readyLabel={d.nav.doc_ready}
-                dropLabel={d.nav.doc_drop_generic} dropHint={d.nav.doc_drop_hint} attachedLabel={d.nav.doc_attached}
-                changeLabel={d.nav.change_file} removeLabel={d.nav.remove_file}
-                existingFileUrl={documentUrls?.doc_certidao_casamento?.url}
-                existingFileName={documentUrls?.doc_certidao_casamento?.name}
-                existingFileType={documentUrls?.doc_certidao_casamento?.type}
-                existingFileSize={documentUrls?.doc_certidao_casamento?.size} />
-            )}
-            <label className="flex items-start gap-2 mt-2 text-xs text-gray-600">
-              <input type="checkbox" className="mt-0.5" checked={certidaoSkipped}
-                onChange={e => setCertidaoSkipped(e.target.checked)} />
-              {d.s3.certidao_casamento_skip_label}
-            </label>
-            {certidaoSkipped && (
-              <div className="mt-2">
-                <TextArea label={d.s3.certidao_casamento_skip_reason} name="certidao_casamento_skip_reason"
-                  defaultValue={data?.certidao_casamento_skip_reason} required rows={2}
-                  placeholder={d.s3.certidao_casamento_skip_reason_ph} />
-              </div>
-            )}
+          <div className="sm:col-span-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 leading-relaxed">
+            {d.s3.certidao_casamento_notice}
           </div>
         </>}
 
@@ -1172,6 +1149,11 @@ function S10DocumentosAceite({ data, isBrazilian, estadoCivil, temPassaporte, se
   const [hasRgFrente, setHasRgFrente] = useState(!!documentUrls?.doc_rg_frente)
   const [hasRgVerso, setHasRgVerso] = useState(!!documentUrls?.doc_rg_verso)
   const [hasCnh, setHasCnh] = useState(!!documentUrls?.doc_cnh)
+  // Certidão de casamento agora só é pedida aqui (não mais na Seção 3 —
+  // lá só avisa que vai ser pedida aqui). Mesmo padrão de "não tenho em
+  // mãos agora" que existia lá: skip com motivo obrigatório em vez de
+  // bloquear o avanço da última seção.
+  const [certidaoSkipped, setCertidaoSkipped] = useState(!!data?.certidao_casamento_skip_reason)
   const rgCompleta = hasRgFrente && hasRgVerso
   const rgObrigatoria = !hasCnh
   const cnhObrigatoria = !rgCompleta
@@ -1207,9 +1189,6 @@ function S10DocumentosAceite({ data, isBrazilian, estadoCivil, temPassaporte, se
     ...(!isBrazilian ? [
       { name: 'doc_passaporte', label: d.s10.doc_passaporte, required: true, icon: 'id' as const },
       { name: 'doc_id_outro', label: d.s10.doc_id_outro, required: false, icon: 'id' as const, hint: d.s10.doc_id_outro_hint },
-    ] : []),
-    ...(estadoCivil === 'casado' ? [
-      { name: 'doc_certidao_casamento_s10', label: d.s3.certidao_casamento, required: true, icon: 'id' as const },
     ] : []),
     ...(isMinor ? [
       { name: 'doc_autorizacao_responsavel', label: d.s10.doc_autorizacao_responsavel, required: false, icon: 'id' as const, hint: d.s10.doc_autorizacao_responsavel_hint },
@@ -1283,6 +1262,35 @@ function S10DocumentosAceite({ data, isBrazilian, estadoCivil, temPassaporte, se
           </div>
         )}
         {docsOutros.map(renderDoc)}
+
+        {estadoCivil === 'casado' && (
+          <div className="min-w-0">
+            {!certidaoSkipped && (
+              <FileInputField name="doc_certidao_casamento" accept="image/jpeg,image/png,image/webp,application/pdf"
+                required tone="amber" icon={<IdCard size={16} aria-hidden />}
+                title={d.s3.certidao_casamento} badgeLabel={d.nav.doc_required} readyLabel={d.nav.doc_ready}
+                dropLabel={d.nav.doc_drop_generic} dropHint={d.nav.doc_drop_hint} attachedLabel={d.nav.doc_attached}
+                changeLabel={d.nav.change_file} removeLabel={d.nav.remove_file}
+                existingFileUrl={documentUrls?.doc_certidao_casamento?.url}
+                existingFileName={documentUrls?.doc_certidao_casamento?.name}
+                existingFileType={documentUrls?.doc_certidao_casamento?.type}
+                existingFileSize={documentUrls?.doc_certidao_casamento?.size} />
+            )}
+            <label className="flex items-start gap-2 mt-2 text-xs text-gray-600">
+              <input type="checkbox" className="mt-0.5" checked={certidaoSkipped}
+                onChange={e => setCertidaoSkipped(e.target.checked)} />
+              {d.s3.certidao_casamento_skip_label}
+            </label>
+            {certidaoSkipped && (
+              <div className="mt-2">
+                <TextArea label={d.s3.certidao_casamento_skip_reason} name="certidao_casamento_skip_reason"
+                  defaultValue={data?.certidao_casamento_skip_reason} required rows={2}
+                  placeholder={d.s3.certidao_casamento_skip_reason_ph} />
+              </div>
+            )}
+          </div>
+        )}
+
         {renderDoc({ name: 'doc_outro_extra', label: d.s10.doc_outro_extra, required: false, icon: 'id' })}
 
         <p className="text-xs text-gray-400 -mt-1">{d.s10.doc_hint_generic}</p>
@@ -1533,7 +1541,7 @@ export function FormularioObreiro({
   const sections: SectionDef[] = [
     { id: 1, component: <S1Email prefill={prefill} data={localData.s1} /> },
     { id: 2, component: <S2Dados prefill={prefill} data={localData.s2} onNationalityChange={setIsBrazilian} orgName={orgName} /> },
-    { id: 3, component: <S3Familia data={localData.s3} estadoCivilS2={localData.s2?.estado_civil} documentUrls={documentUrls} /> },
+    { id: 3, component: <S3Familia data={localData.s3} estadoCivilS2={localData.s2?.estado_civil} /> },
     { id: 4, component: <S4Igreja data={localData.s4} /> },
     { id: 5, component: <S5Experiencia data={localData.s5} /> },
     { id: 6, component: <S6ServirBase data={localData.s6} ministries={ministries} ministryId={ministryId} /> },
