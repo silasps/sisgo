@@ -51,7 +51,7 @@ export function AnnouncementCompactCard({ announcement: a, createAction, updateA
         <p className="mt-1.5 truncate text-xs font-medium text-gray-700">{a.title}</p>
       </button>
 
-      <div className="absolute top-1 right-1 z-10 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+      <div className="absolute top-1 right-1 z-10 flex items-center gap-1">
         <button
           type="button"
           onClick={() => setOpen(true)}
