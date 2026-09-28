@@ -4,7 +4,7 @@ import { Header } from '@/components/layout/Header'
 import { notFound, redirect } from 'next/navigation'
 import { BrandingForm } from './BrandingForm'
 import { ConfigForm } from './ConfigForm'
-import { updateAreaCashScopes, updateRoleAccumulations, updateIdCardEnabled, updateStaffCommunicationLanguages, updateStudentCommunicationLanguages, updateInstitutionRulesText, addSchoolCreationDelegate, removeSchoolCreationDelegate, updateChatPolicy, blockChatUser, unblockChatUser } from './actions'
+import { updateAreaCashScopes, updateRoleAccumulations, updateIdCardEnabled, updateStaffCommunicationLanguages, updateStudentCommunicationLanguages, updateInstitutionRulesText, addSchoolCreationDelegate, removeSchoolCreationDelegate, updateChatPolicy, blockChatUser, unblockChatUser, updateOrgEmail } from './actions'
 import { asLooseClient } from '@/lib/supabase/loose-client'
 import { schoolDisplayType } from '@/lib/schools'
 import { LANGUAGES } from '@/lib/i18n/phoneCountries'
@@ -15,6 +15,7 @@ import { resolveNames } from '../chat/_data'
 type Props = { params: Promise<{ slug: string }> }
 
 const BRANDING_ROLES = ['superadmin', 'lider_base']
+const ORG_EMAIL_ROLES = ['superadmin', 'lider_base', 'admin_base']
 const CASH_SCOPE_ROLES = ['superadmin', 'lider_base']
 const ACCUMULATION_ROLES = ['superadmin', 'lider_base']
 const SCHOOL_DELEGATE_ROLES = ['superadmin', 'lider_base']
@@ -62,6 +63,7 @@ export default async function ConfiguracoesPage({ params }: Props) {
   const roleLabel = roles?.label ?? ''
 
   const canBrand = BRANDING_ROLES.includes(roleName)
+  const canEditOrgEmail = ORG_EMAIL_ROLES.includes(roleName)
   const canConfigureCashScopes = CASH_SCOPE_ROLES.includes(roleName)
   const canConfigureAccumulations = ACCUMULATION_ROLES.includes(roleName)
   const canManageSchoolDelegates = SCHOOL_DELEGATE_ROLES.includes(roleName)
@@ -141,8 +143,35 @@ export default async function ConfiguracoesPage({ params }: Props) {
         <Section title="Base">
           <Row label="Nome"        value={org.name} />
           <Row label="Slug"        value={org.slug} />
-          <Row label="E-mail"      value={org.email} />
           <Row label="Localização" value={[org.city, org.state].filter(Boolean).join(', ')} />
+
+          {canEditOrgEmail ? (
+            <div className="pt-2">
+              {!org.email && (
+                <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  <strong className="font-semibold">Pendência:</strong> cadastre um e-mail de
+                  contato da base — ele aparece como contato na Política de Privacidade
+                  mostrada a alunos e obreiros nos formulários de inscrição.
+                </div>
+              )}
+              <ConfigForm
+                action={async (formData) => { 'use server'; await updateOrgEmail(org.id, slug, formData) }}
+                buttonLabel="Salvar e-mail"
+                className="space-y-2"
+              >
+                <label className="block text-xs font-medium text-gray-500 mb-1">E-mail de contato</label>
+                <input
+                  type="email"
+                  name="email"
+                  defaultValue={org.email ?? ''}
+                  placeholder="contato@suabase.org"
+                  className="w-full max-w-sm rounded-lg border border-gray-300 px-3 py-2 text-sm mb-2"
+                />
+              </ConfigForm>
+            </div>
+          ) : (
+            <Row label="E-mail" value={org.email} />
+          )}
         </Section>
 
         {canBrand ? (

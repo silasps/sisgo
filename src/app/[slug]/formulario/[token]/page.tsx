@@ -190,7 +190,7 @@ export default async function FormularioPage({ params, searchParams }: Props) {
           {d.footer_contact}
         </p>
         <p className="text-center text-xs text-gray-400 mt-1.5">
-          <Link href="/privacidade" target="_blank" className="underline hover:text-gray-600">{d.privacy_notice}</Link>
+          <Link href={`/${slug}/privacidade`} target="_blank" className="underline hover:text-gray-600">{d.privacy_notice}</Link>
         </p>
       </main>
     </div>
