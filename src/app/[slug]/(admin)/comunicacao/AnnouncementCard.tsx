@@ -46,15 +46,15 @@ export function AnnouncementCard({ announcement: a, createAction, updateAction, 
               </span>
             )}
           </div>
-          <p className="font-semibold text-gray-900 text-sm">{a.title}</p>
+          <p className="font-semibold text-gray-900 text-sm truncate">{a.title}</p>
           <p className="text-sm text-gray-600 mt-0.5 line-clamp-2">{a.body}</p>
-          <div className="flex flex-wrap items-center gap-1.5 mt-2 text-[11px] text-gray-400">
-            <span>{a.author_name}</span>
-            <span>·</span>
-            <span>{new Date(a.created_at).toLocaleDateString('pt-BR')}</span>
+          <div className="flex items-center gap-1.5 mt-2 text-[11px] text-gray-400 whitespace-nowrap overflow-hidden">
+            <span className="shrink-0">{a.author_name}</span>
+            <span className="shrink-0">·</span>
+            <span className="shrink-0">{new Date(a.created_at).toLocaleDateString('pt-BR')}</span>
             {a.visible_to_roles && a.visible_to_roles.length > 0 && (
               <>
-                <span>·</span>
+                <span className="shrink-0">·</span>
                 <span className="truncate">{a.visible_to_roles.map(r => AUDIENCE_ROLES.find(o => o.value === r)?.label ?? r).join(', ')}</span>
               </>
             )}

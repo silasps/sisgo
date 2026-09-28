@@ -8,7 +8,7 @@ import Link from 'next/link'
 import { CalendarPlus } from 'lucide-react'
 import { deleteAnnouncement } from './actions'
 import { AnnouncementForm } from './AnnouncementForm'
-import { AnnouncementCard } from './AnnouncementCard'
+import { AnnouncementsBoard } from './AnnouncementsBoard'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -205,23 +205,15 @@ export default async function ComunicacaoPage({ params, searchParams }: Props) {
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-start">
-          {announcements.length === 0 && (
-            <p className="text-sm text-gray-400 text-center py-6 sm:col-span-2 lg:col-span-3">Nenhum anúncio publicado ainda.</p>
-          )}
-          {announcements.map(a => (
-            <AnnouncementCard
-              key={a.id}
-              announcement={a}
-              createAction={createAnnouncement}
-              updateAction={updateAnnouncement}
-              deleteAction={deleteAnnouncement}
-              organizationId={orgId}
-              path={path}
-              defaultOpen={a.id === editId}
-            />
-          ))}
-        </div>
+        <AnnouncementsBoard
+          announcements={announcements}
+          createAction={createAnnouncement}
+          updateAction={updateAnnouncement}
+          deleteAction={deleteAnnouncement}
+          organizationId={orgId}
+          path={path}
+          editId={editId}
+        />
       </main>
     </>
   )
