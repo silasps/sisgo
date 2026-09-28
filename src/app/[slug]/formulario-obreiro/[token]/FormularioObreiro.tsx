@@ -14,6 +14,7 @@ import { PhotoFramingGuide } from '@/components/ui/PhotoFramingGuide'
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock'
 import { LangSwitcher } from '@/components/ui/LangSwitcher'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { SearchableSelectModal } from '@/components/ui/SearchableSelectModal'
 import { getStaffFormDict, normalizeStaffLang, tStaff, ptDict } from '@/lib/i18n/staff-forms'
 import type { StaffFormDict, StaffLang } from '@/lib/i18n/staff-forms'
 import { orgShortName } from '@/lib/orgShortName'
@@ -892,9 +893,18 @@ function S6ServirBase({ data, ministries, ministryId, isUpdatingExisting }: {
         )}
         {ministries.length > 0 && (
           <div className="sm:col-span-2">
-            <Select label={isUpdatingExisting ? d.s6.qual_ministerio_update : d.s6.qual_ministerio} name="ministerio_escolhido"
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {isUpdatingExisting ? d.s6.qual_ministerio_update : d.s6.qual_ministerio}
+            </label>
+            <SearchableSelectModal
+              name="ministerio_escolhido"
               defaultValue={data?.ministerio_escolhido ?? ministryId ?? ''}
-              options={ministries.map(m => ({ value: m.id, label: m.name }))} />
+              options={ministries.map(m => ({ id: m.id, label: m.name }))}
+              placeholder={d.s6.ministerio_placeholder}
+              searchPlaceholder={d.s6.ministerio_search_placeholder}
+              title={d.s6.ministerio_modal_title}
+              emptyLabel={d.s6.ministerio_empty}
+            />
           </div>
         )}
         <div className="sm:col-span-2">

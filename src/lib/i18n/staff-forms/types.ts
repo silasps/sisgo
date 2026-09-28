@@ -274,6 +274,10 @@ export interface StaffFormDict {
     quanto_tempo_ph: string
     qual_ministerio: string
     qual_ministerio_update: string
+    ministerio_placeholder: string
+    ministerio_search_placeholder: string
+    ministerio_modal_title: string
+    ministerio_empty: string
     data_chegada: string
     data_inicio: string
     data_fim: string
