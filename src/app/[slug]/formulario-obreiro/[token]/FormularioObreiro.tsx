@@ -703,7 +703,7 @@ function S3Familia({ data, estadoCivilS2, isUpdatingExisting }: { data?: Record<
   )
 }
 
-function S4Igreja({ data }: { data?: Record<string, string> }) {
+function S4Igreja({ data, isUpdatingExisting }: { data?: Record<string, string>; isUpdatingExisting?: boolean }) {
   const d = useContext(DictCtx)
   const [conversou, setConversou] = useState(data?.conversou_pastor === 'sim')
   const [participa, setParticipa] = useState(data?.tem_ministerio === 'sim')
@@ -734,7 +734,7 @@ function S4Igreja({ data }: { data?: Record<string, string> }) {
         <SubSection title={d.s4.pastor_section} />
         <Field label={d.s4.pastor_nome} name="pastor_nome" defaultValue={data?.pastor_nome} required />
         <Field label={d.s4.pastor_cargo} name="pastor_cargo" defaultValue={data?.pastor_cargo} />
-        <Field label={d.s4.pastor_email} name="pastor_email" type="email" defaultValue={data?.pastor_email} />
+        <Field label={d.s4.pastor_email} name="pastor_email" type="email" defaultValue={data?.pastor_email} required={!isUpdatingExisting} />
         <InternationalPhoneField phoneName="pastor_telefone" countryName="pastor_telefone_country"
           label={d.s4.pastor_telefone} defaultCountryIso="BR"
           defaultPhone={data?.pastor_telefone} />
@@ -764,11 +764,13 @@ function S4Igreja({ data }: { data?: Record<string, string> }) {
               { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no }, { value: 'parcialmente', label: d.opts.partially },
             ]} />
         </div>
-        <div className="sm:col-span-2">
-          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-            {d.s4.pastor_hint}
-          </p>
-        </div>
+        {!isUpdatingExisting && (
+          <div className="sm:col-span-2">
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+              {d.s4.pastor_hint}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -1399,8 +1401,8 @@ function CredentialsScreen({ orgName, credentials, d }: {
   )
 }
 
-function SubmittedScreen({ slug, applicationId, orgName, d }: {
-  slug: string; applicationId: string; orgName: string; d: StaffFormDict
+function SubmittedScreen({ slug, applicationId, orgName, d, isUpdatingExisting }: {
+  slug: string; applicationId: string; orgName: string; d: StaffFormDict; isUpdatingExisting?: boolean
 }) {
   const [pastorLink, setPastorLink] = useState<string | null>(null)
   const [amigoLink, setAmigoLink] = useState<string | null>(null)
@@ -1436,12 +1438,15 @@ function SubmittedScreen({ slug, applicationId, orgName, d }: {
     <div className="text-center py-12 px-4 space-y-8">
       <div>
         <HeartHandshake className="size-14 mx-auto mb-4 text-amber-500" />
-        <h2 className="text-3xl font-black text-gray-900 mb-3">{d.submitted.title}</h2>
+        <h2 className="text-3xl font-black text-gray-900 mb-3">
+          {isUpdatingExisting ? d.submitted.title_update : d.submitted.title}
+        </h2>
         <p className="text-gray-600 max-w-md mx-auto text-base leading-relaxed">
-          {tStaff(d.submitted.body, { org: orgName })}
+          {isUpdatingExisting ? d.submitted.body_update : tStaff(d.submitted.body, { org: orgName })}
         </p>
       </div>
 
+      {!isUpdatingExisting && (
       <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-left max-w-md mx-auto space-y-4">
         <h3 className="font-bold text-gray-900 text-center">{d.submitted.next_title}</h3>
         <p className="text-sm text-gray-600 text-center">
@@ -1484,6 +1489,7 @@ function SubmittedScreen({ slug, applicationId, orgName, d }: {
 
         <p className="text-xs text-gray-400 text-center">{d.submitted.link_hint}</p>
       </div>
+      )}
     </div>
   )
 }
@@ -1552,7 +1558,7 @@ export function FormularioObreiro({
     { id: 1, component: <S1Email prefill={prefill} data={localData.s1} /> },
     { id: 2, component: <S2Dados prefill={prefill} data={localData.s2} onNationalityChange={setIsBrazilian} orgName={orgName} /> },
     { id: 3, component: <S3Familia data={localData.s3} estadoCivilS2={localData.s2?.estado_civil} isUpdatingExisting={isUpdatingExisting} /> },
-    { id: 4, component: <S4Igreja data={localData.s4} /> },
+    { id: 4, component: <S4Igreja data={localData.s4} isUpdatingExisting={isUpdatingExisting} /> },
     { id: 5, component: <S5Experiencia data={localData.s5} /> },
     { id: 6, component: <S6ServirBase data={localData.s6} ministries={ministries} ministryId={ministryId} /> },
     { id: 7, component: <S7Saude data={localData.s7} documentUrls={documentUrls} /> },
@@ -1653,16 +1659,6 @@ export function FormularioObreiro({
         setIsBrazilian(fd.get('is_brasileiro') !== 'nao')
       }
 
-      if (sections[currentIndex].id === 4) {
-        const email = (fd.get('pastor_email') as string)?.trim()
-        const tel = (fd.get('pastor_telefone') as string)?.trim()
-        if (!email && (!tel || tel === '+55')) {
-          setError(d.s4.pastor_hint)
-          setSaving(false)
-          return
-        }
-      }
-
       if (sections[currentIndex].id === 10 && isBrazilian) {
         // RG (frente + verso) OU CNH — pelo menos um dos dois completo,
         // seja porque veio nesse envio (fd) ou já estava salvo de uma
@@ -1711,7 +1707,7 @@ export function FormularioObreiro({
 
   if (submitted) {
     if (credentials) return <CredentialsScreen orgName={orgName} credentials={credentials} d={d} />
-    return <SubmittedScreen slug={slug} applicationId={applicationId} orgName={orgName} d={d} />
+    return <SubmittedScreen slug={slug} applicationId={applicationId} orgName={orgName} d={d} isUpdatingExisting={isUpdatingExisting} />
   }
 
   return (

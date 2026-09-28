@@ -62,6 +62,8 @@ export interface StaffFormDict {
   submitted: {
     title: string
     body: string              // {org} placeholder
+    title_update: string
+    body_update: string
     next_title: string
     next_body: string
     gen_pastor: string

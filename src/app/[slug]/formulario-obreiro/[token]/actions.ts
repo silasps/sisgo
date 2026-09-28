@@ -219,6 +219,18 @@ export async function enviarFormularioObreiro(slug: string, token: string): Prom
     )
   }
 
+  // Já é obreiro ativo com login de verdade (não candidatura nova — só
+  // confirmando/atualizando cadastro, ver CadastroIncompletoAlert/
+  // isUpdatingExisting). Sem esteira de aprovação: o pastor já deu
+  // referência quando essa pessoa entrou, não faz sentido pedir de novo, e
+  // "em_analise" ficaria errado pra alguém que já está aprovado e ativo.
+  if (staffProfile?.active && staffProfile.user_id) {
+    await sb.from('staff_applications')
+      .update({ status: 'aprovado', reviewed_at: new Date().toISOString() })
+      .eq('id', app.id)
+    return { success: true }
+  }
+
   // Vai direto para 'em_analise' — a partir do envio do formulário definitivo,
   // o acompanhamento é do DH (o líder passa a só visualizar), conforme
   // FLUXO_INSCRICAO_OBREIROS.md fase 3. Não precisa de um "enviar ao DH" manual.

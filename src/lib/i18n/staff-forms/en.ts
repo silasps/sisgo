@@ -58,6 +58,8 @@ export const enDict: StaffFormDict = {
   submitted: {
     title: 'Form submitted!',
     body: 'Thank you for filling out your staff application for {org}. The team will reach out with the next steps.',
+    title_update: 'Registration updated!',
+    body_update: 'Your information was saved successfully. Thanks for keeping your registration up to date.',
     next_title: 'Next steps: References',
     next_body: "We've already emailed the reference request to your pastor (and to the leadership of your recent experience, if provided). If you'd rather speed things up via WhatsApp or another channel, generate the link below and send it yourself.",
     gen_pastor: 'Copy link — Pastor reference',
