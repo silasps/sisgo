@@ -381,6 +381,7 @@ export const esDict: StaffFormDict = {
     welcome_body_online: 'Este formulario es parte del proceso de evaluación para servir en esta institución. Responda con atención y sinceridad. Su progreso se guarda automáticamente en cada sección. Tiempo estimado: 20 a 30 minutos.',
     welcome_title_update: 'Confirma tus datos',
     welcome_body_update: 'Ya formas parte de la institución — usa este formulario solo para revisar y, si es necesario, actualizar tu información. Revisa cada sección y, si todo está correcto, haz clic en Siguiente hasta el final.',
+    privacy_notice: 'Tus datos se tratan según nuestra Política de Privacidad.',
     footer_contact: '¿Dudas? Ponte en contacto con el equipo responsable.',
   },
 }

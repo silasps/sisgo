@@ -11,6 +11,7 @@ export function MarketingFooter() {
         </div>
         <div className="flex items-center gap-5 text-xs text-zinc-600">
           <Link href="/bases" className="hover:text-zinc-400 transition-colors">Bases</Link>
+          <Link href="/privacidade" className="hover:text-zinc-400 transition-colors">Privacidade</Link>
           <Link href="/login" className="hover:text-zinc-400 transition-colors">Entrar</Link>
           <Link href="/cadastro" className="hover:text-zinc-400 transition-colors">Criar conta</Link>
         </div>

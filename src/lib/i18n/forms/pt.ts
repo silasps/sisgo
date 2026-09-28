@@ -591,6 +591,7 @@ export const ptDict: FormDict = {
     welcome_body_online: 'Este formulário faz parte do processo seletivo. Responda com atenção e sinceridade. Seu progresso é salvo automaticamente a cada seção. Tempo estimado: 30 a 45 minutos.',
     welcome_title_update: 'Confirme seus dados',
     welcome_body_update: 'Você já faz parte da instituição — use este formulário só para conferir e, se for o caso, atualizar suas informações. Revise cada seção e, se estiver tudo certo, clique em Avançar até o fim.',
+    privacy_notice: 'Seus dados são tratados conforme a nossa Política de Privacidade.',
     footer_contact: 'Dúvidas? Entre em contato com a equipe responsável pela escola.',
   },
 }

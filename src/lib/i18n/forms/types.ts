@@ -580,6 +580,7 @@ export interface FormDict {
     welcome_body_online: string
     welcome_title_update: string
     welcome_body_update: string
+    privacy_notice: string
     footer_contact: string
   }
 }

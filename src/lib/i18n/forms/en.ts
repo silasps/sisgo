@@ -591,6 +591,7 @@ export const enDict: FormDict = {
     welcome_body_online: 'This form is part of the selection process. Please answer thoughtfully and honestly. Your progress is saved automatically after each section. Estimated time: 30 to 45 minutes.',
     welcome_title_update: 'Confirm your information',
     welcome_body_update: "You're already part of the institution — use this form just to review and, if needed, update your information. Check each section and, if everything looks right, click Next all the way through.",
+    privacy_notice: 'Your data is handled according to our Privacy Policy.',
     footer_contact: 'Questions? Contact the team responsible for the school.',
   },
 }

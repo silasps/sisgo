@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { notFound } from 'next/navigation'
+import Link from 'next/link'
 import { FormularioObreiro } from './FormularioObreiro'
 import { CheckCircle2 } from 'lucide-react'
 import { getStaffFormDict, normalizeStaffLang } from '@/lib/i18n/staff-forms'
@@ -179,6 +180,9 @@ export default async function FormularioObreiroPage({ params, searchParams }: Pr
 
         <p className="text-center text-xs text-gray-400 mt-6">
           {d.footer_contact}
+        </p>
+        <p className="text-center text-xs text-gray-400 mt-1.5">
+          <Link href="/privacidade" target="_blank" className="underline hover:text-gray-600">{d.privacy_notice}</Link>
         </p>
       </main>
     </div>
