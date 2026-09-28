@@ -265,16 +265,22 @@ export interface StaffFormDict {
     section: string
     title: string
     como_servir: string
+    como_servir_update: string
     integral: string
     parcial: string
     temporario: string
     quanto_tempo: string
+    quanto_tempo_update: string
     quanto_tempo_ph: string
     qual_ministerio: string
+    qual_ministerio_update: string
     data_chegada: string
     data_inicio: string
     data_fim: string
     motivacao: string
+    motivacao_update: string
+    motivacao_update_ph: string
+    projeto_hint_update: string
     motivacao_ph: string
     projeto: string
     projeto_ph: string

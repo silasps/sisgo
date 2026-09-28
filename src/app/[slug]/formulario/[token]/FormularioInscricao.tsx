@@ -1654,29 +1654,34 @@ export function FormularioInscricao({
   async function handleBack() {
     if (currentIndex === 0) return
     const target = visibleSections[currentIndex - 1].id
-    // Seção 15 é só arquivo — salvarSecao apagaria os documentos já enviados
-    // (viraria {} no jsonb). Usa a mesma action de upload do "Avançar" pra
-    // não perder arquivos escolhidos nessa visita mas ainda não enviados —
-    // sem isso, quem escolhia os arquivos e clicava em "Voltar" (em vez de
-    // avançar) via-los sumirem ao retornar pra seção 15, já que eles nunca
-    // tinham de fato subido pro Storage.
-    if (visibleSections[currentIndex].id === 15) {
-      if (formRef.current) {
+    setSaving(true)
+    try {
+      // Seção 15 é só arquivo — salvarSecao apagaria os documentos já enviados
+      // (viraria {} no jsonb). Usa a mesma action de upload do "Avançar" pra
+      // não perder arquivos escolhidos nessa visita mas ainda não enviados —
+      // sem isso, quem escolhia os arquivos e clicava em "Voltar" (em vez de
+      // avançar) via-los sumirem ao retornar pra seção 15, já que eles nunca
+      // tinham de fato subido pro Storage.
+      if (visibleSections[currentIndex].id === 15) {
+        if (formRef.current) {
+          const fd = new FormData(formRef.current)
+          await anexarDocumentos(slug, token, fd, target).catch(() => {})
+        } else {
+          await atualizarSecaoAtual(slug, token, target).catch(() => {})
+        }
+      } else if (formRef.current) {
         const fd = new FormData(formRef.current)
-        await anexarDocumentos(slug, token, fd, target).catch(() => {})
-      } else {
-        await atualizarSecaoAtual(slug, token, target).catch(() => {})
+        const dataRecord: Record<string, string> = {}
+        fd.forEach((v, k) => { if (typeof v === 'string') dataRecord[k] = v })
+        setLocalData(prev => ({ ...prev, [`s${visibleSections[currentIndex].id}`]: dataRecord }))
+        await salvarSecao(slug, token, visibleSections[currentIndex].id, dataRecord, target).catch(() => {})
       }
-    } else if (formRef.current) {
-      const fd = new FormData(formRef.current)
-      const dataRecord: Record<string, string> = {}
-      fd.forEach((v, k) => { if (typeof v === 'string') dataRecord[k] = v })
-      setLocalData(prev => ({ ...prev, [`s${visibleSections[currentIndex].id}`]: dataRecord }))
-      await salvarSecao(slug, token, visibleSections[currentIndex].id, dataRecord, target).catch(() => {})
+      setCurrent(target)
+      setValidationAttempted(false)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } finally {
+      setSaving(false)
     }
-    setCurrent(target)
-    setValidationAttempted(false)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   async function handleNext(e: React.FormEvent<HTMLFormElement>) {
@@ -1899,9 +1904,9 @@ export function FormularioInscricao({
       <div className="fixed inset-x-0 bottom-0 z-30 bg-white/95 backdrop-blur-sm border-t border-gray-100">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           {currentIndex > 0 ? (
-            <button type="button" onClick={handleBack}
-              className="px-5 py-2.5 text-sm font-semibold text-gray-600 hover:text-gray-900 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-center shrink-0">
-              {d.nav.back}
+            <button type="button" onClick={handleBack} disabled={saving}
+              className="px-5 py-2.5 text-sm font-semibold text-gray-600 hover:text-gray-900 border border-gray-200 rounded-xl hover:bg-gray-50 disabled:opacity-60 transition-colors text-center shrink-0">
+              {saving ? d.nav.saving : d.nav.back}
             </button>
           ) : <div className="hidden sm:block" />}
 

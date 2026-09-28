@@ -843,8 +843,8 @@ function S5Experiencia({ data, isUpdatingExisting }: { data?: Record<string, str
   )
 }
 
-function S6ServirBase({ data, ministries, ministryId }: {
-  data?: Record<string, string>; ministries: MinistryOption[]; ministryId?: string | null
+function S6ServirBase({ data, ministries, ministryId, isUpdatingExisting }: {
+  data?: Record<string, string>; ministries: MinistryOption[]; ministryId?: string | null; isUpdatingExisting?: boolean
 }) {
   const d = useContext(DictCtx)
   const [modalidade, setModalidade] = useState(data?.modalidade_servico ?? '')
@@ -856,7 +856,7 @@ function S6ServirBase({ data, ministries, ministryId }: {
       <SectionTitle number={d.s6.section} title={d.s6.title} />
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
-          <Select label={d.s6.como_servir} name="modalidade_servico" required
+          <Select label={isUpdatingExisting ? d.s6.como_servir_update : d.s6.como_servir} name="modalidade_servico" required
             defaultValue={data?.modalidade_servico}
             options={[
               { value: 'integral', label: d.s6.integral },
@@ -881,29 +881,34 @@ function S6ServirBase({ data, ministries, ministryId }: {
           </>
         ) : (
           <>
-            <Field label={d.s6.quanto_tempo} name="tempo_servico"
+            <Field label={isUpdatingExisting ? d.s6.quanto_tempo_update : d.s6.quanto_tempo} name="tempo_servico"
               defaultValue={data?.tempo_servico} required
               placeholder={d.s6.quanto_tempo_ph} />
-            <Field label={d.s6.data_chegada} name="data_chegada" type="date"
-              defaultValue={data?.data_chegada} min={DATE_MAX} max="2100-12-31" />
+            {!isUpdatingExisting && (
+              <Field label={d.s6.data_chegada} name="data_chegada" type="date"
+                defaultValue={data?.data_chegada} min={DATE_MAX} max="2100-12-31" />
+            )}
           </>
         )}
         {ministries.length > 0 && (
           <div className="sm:col-span-2">
-            <Select label={d.s6.qual_ministerio} name="ministerio_escolhido"
+            <Select label={isUpdatingExisting ? d.s6.qual_ministerio_update : d.s6.qual_ministerio} name="ministerio_escolhido"
               defaultValue={data?.ministerio_escolhido ?? ministryId ?? ''}
               options={ministries.map(m => ({ value: m.id, label: m.name }))} />
           </div>
         )}
         <div className="sm:col-span-2">
-          <TextArea label={d.s6.motivacao} name="motivacao"
+          <TextArea label={isUpdatingExisting ? d.s6.motivacao_update : d.s6.motivacao} name="motivacao"
             defaultValue={data?.motivacao} required rows={4}
-            placeholder={d.s6.motivacao_ph} />
+            placeholder={isUpdatingExisting ? d.s6.motivacao_update_ph : d.s6.motivacao_ph} />
         </div>
         <div className="sm:col-span-2">
           <label className="block text-sm font-medium text-gray-700 mb-1">
             {d.s6.projeto}{!semProjeto && <span className="text-red-500 ml-0.5">*</span>}
           </label>
+          {isUpdatingExisting && (
+            <p className="text-xs text-gray-400 mb-1.5">{d.s6.projeto_hint_update}</p>
+          )}
           {!semProjeto && (
             <textarea name="projeto_comunidade" defaultValue={data?.projeto_comunidade} required rows={4}
               placeholder={d.s6.projeto_ph}
@@ -1561,7 +1566,7 @@ export function FormularioObreiro({
     { id: 3, component: <S3Familia data={localData.s3} estadoCivilS2={localData.s2?.estado_civil} isUpdatingExisting={isUpdatingExisting} /> },
     { id: 4, component: <S4Igreja data={localData.s4} isUpdatingExisting={isUpdatingExisting} /> },
     { id: 5, component: <S5Experiencia data={localData.s5} isUpdatingExisting={isUpdatingExisting} /> },
-    { id: 6, component: <S6ServirBase data={localData.s6} ministries={ministries} ministryId={ministryId} /> },
+    { id: 6, component: <S6ServirBase data={localData.s6} ministries={ministries} ministryId={ministryId} isUpdatingExisting={isUpdatingExisting} /> },
     { id: 7, component: <S7Saude data={localData.s7} documentUrls={documentUrls} /> },
     {
       id: 8, component: <S8Legal data={localData.s8}
@@ -1613,20 +1618,25 @@ export function FormularioObreiro({
   async function handleBack() {
     if (currentIndex === 0) return
     const target = sections[currentIndex - 1].id
-    if (formRef.current) {
-      const fd = new FormData(formRef.current)
-      const dataRecord: Record<string, string> = {}
-      fd.forEach((v, k) => { if (typeof v === 'string') dataRecord[k] = v })
-      setLocalData(prev => ({ ...prev, [`s${sections[currentIndex].id}`]: dataRecord }))
-      if (SECTIONS_COM_ARQUIVO.has(sections[currentIndex].id)) {
-        await salvarSecaoObreiroComArquivos(slug, token, sections[currentIndex].id, fd, target).catch(() => {})
-      } else {
-        await salvarSecaoObreiro(slug, token, sections[currentIndex].id, dataRecord, target).catch(() => {})
+    setSaving(true)
+    try {
+      if (formRef.current) {
+        const fd = new FormData(formRef.current)
+        const dataRecord: Record<string, string> = {}
+        fd.forEach((v, k) => { if (typeof v === 'string') dataRecord[k] = v })
+        setLocalData(prev => ({ ...prev, [`s${sections[currentIndex].id}`]: dataRecord }))
+        if (SECTIONS_COM_ARQUIVO.has(sections[currentIndex].id)) {
+          await salvarSecaoObreiroComArquivos(slug, token, sections[currentIndex].id, fd, target).catch(() => {})
+        } else {
+          await salvarSecaoObreiro(slug, token, sections[currentIndex].id, dataRecord, target).catch(() => {})
+        }
       }
+      setCurrent(target)
+      setValidationAttempted(false)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } finally {
+      setSaving(false)
     }
-    setCurrent(target)
-    setValidationAttempted(false)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   async function handleNext(e: React.FormEvent<HTMLFormElement>) {
@@ -1778,9 +1788,9 @@ export function FormularioObreiro({
       <div className="fixed inset-x-0 bottom-0 z-30 bg-white/95 backdrop-blur-sm border-t border-gray-100">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           {currentIndex > 0 ? (
-            <button type="button" onClick={handleBack}
-              className="px-5 py-2.5 text-sm font-semibold text-gray-600 hover:text-gray-900 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-center shrink-0">
-              {d.nav.back}
+            <button type="button" onClick={handleBack} disabled={saving}
+              className="px-5 py-2.5 text-sm font-semibold text-gray-600 hover:text-gray-900 border border-gray-200 rounded-xl hover:bg-gray-50 disabled:opacity-60 transition-colors text-center shrink-0">
+              {saving ? d.nav.saving : d.nav.back}
             </button>
           ) : <div className="hidden sm:block" />}
 
