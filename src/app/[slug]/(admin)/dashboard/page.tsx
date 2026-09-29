@@ -248,11 +248,24 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
   // aqui vale pra QUALQUER papel com painel próprio (hospitalidade,
   // cozinha, secretaria, DH, gestão...), que antes não viam anúncio
   // nenhum aqui, nem quando o anúncio era marcado como "todos".
+  //
+  // Quem acumula ministério/escola (myAreas) também conta como audiência
+  // "obreiro"/"líder" daquela área, mesmo com outro papel principal — ex.:
+  // um DH que também serve numa banda é "obreiro" pra fins de anúncio,
+  // então um aviso voltado a obreiro/líder precisa aparecer pra ele aqui
+  // também, não só pra quem tem obreiro_ministerio/lider_ministerio como
+  // papel principal.
+  const areaAudienceRoles = [
+    ...(myAreas.ministries.length > 0 || myAreas.schools.length > 0 ? ['obreiro'] : []),
+    ...(myAreas.ministries.some(m => m.link === 'lider') || myAreas.schools.some(s => s.link === 'lider') ? ['lider'] : []),
+  ]
   const isHomeAnnouncementPublished = (publishAt: string | null) => !publishAt || new Date(publishAt).getTime() <= Date.now()
   const homeAnnouncements: AnnouncementListItem[] = ((homeAnnouncementsRaw ?? []) as Array<
     AnnouncementListItem & { visible_to_roles: string[] | null; publish_at: string | null }
   >)
-    .filter(a => matchesAudience(userRole, a.visible_to_roles) && isHomeAnnouncementPublished(a.publish_at))
+    .filter(a =>
+      (matchesAudience(userRole, a.visible_to_roles) || areaAudienceRoles.some(r => matchesAudience(r, a.visible_to_roles)))
+      && isHomeAnnouncementPublished(a.publish_at))
     .slice(0, 3)
 
   const renderHome = (principal: { label: string; content: React.ReactNode } | null) => {
