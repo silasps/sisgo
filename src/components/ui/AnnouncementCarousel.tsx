@@ -37,6 +37,7 @@ export function AnnouncementCarousel({ announcements, kicker, title, dismissible
   const draggingRef = useRef(false)
   const startXRef = useRef(0)
   const movedRef = useRef(0)
+  const capturedRef = useRef(false)
 
   useEffect(() => {
     if (total <= 1) return
@@ -52,10 +53,15 @@ export function AnnouncementCarousel({ announcements, kicker, title, dismissible
     setCurrent(((i % total) + total) % total)
   }
 
+  // Arraste só na faixa dos slides (não no contêiner): setas, bolinhas, X e o
+  // modal (portal, mas o evento React sobe até aqui) ficam de fora. E a
+  // captura do ponteiro só começa quando a pessoa de fato arrasta — capturar
+  // já no pointerdown faz o navegador entregar o `click` ao elemento
+  // capturado em vez do slide, e aí tocar no anúncio não abria nada.
   function handlePointerDown(e: React.PointerEvent) {
-    if (total <= 1) return
-    e.currentTarget.setPointerCapture(e.pointerId)
+    if (total <= 1 || e.button !== 0) return
     draggingRef.current = true
+    capturedRef.current = false
     pausedRef.current = true
     startXRef.current = e.clientX
     movedRef.current = 0
@@ -65,12 +71,17 @@ export function AnnouncementCarousel({ announcements, kicker, title, dismissible
     if (!draggingRef.current) return
     const delta = e.clientX - startXRef.current
     movedRef.current = Math.max(movedRef.current, Math.abs(delta))
+    if (!capturedRef.current && movedRef.current > CLICK_SUPPRESS_PX) {
+      e.currentTarget.setPointerCapture(e.pointerId)
+      capturedRef.current = true
+    }
     setDragDelta(delta)
   }
 
   function handlePointerUp() {
     if (!draggingRef.current) return
     draggingRef.current = false
+    capturedRef.current = false
     pausedRef.current = false
     if (dragDelta < -DRAG_THRESHOLD_PX) goTo(current + 1)
     else if (dragDelta > DRAG_THRESHOLD_PX) goTo(current - 1)
@@ -89,17 +100,18 @@ export function AnnouncementCarousel({ announcements, kicker, title, dismissible
 
   return (
     <div
-      className="relative w-full rounded-xl overflow-hidden bg-gray-900 select-none touch-none"
+      className="relative w-full rounded-xl overflow-hidden bg-gray-900 select-none"
       style={{ aspectRatio: '16 / 9', maxHeight: 420 }}
       onMouseEnter={() => { pausedRef.current = true }}
       onMouseLeave={() => { pausedRef.current = false }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
     >
+      {/* touch-pan-y: arraste horizontal fica com o carrossel, rolagem vertical da página continua funcionando no celular */}
       <div
-        className="flex h-full"
+        className="flex h-full touch-pan-y"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
         style={{
           width: `${total * 100}%`,
           transform: `translateX(calc(-${slidePercent}% + ${dragDelta}px))`,
