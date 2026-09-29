@@ -566,6 +566,45 @@ async function PessoasTabContent({
         genero: p.gender,
       }))
     }
+
+    const personIds = rows.map(r => r.id)
+    if (personIds.length > 0) {
+      const [{ data: staffRows }, { data: studentRows }, { data: statusRows }] = await Promise.all([
+        supabase.from('staff_profiles').select('person_id, active').eq('organization_id', orgId).in('person_id', personIds),
+        supabase.from('student_profiles').select('person_id, active').eq('organization_id', orgId).in('person_id', personIds),
+        supabase.from('person_status_history').select('person_id, status').in('person_id', personIds).is('ended_at', null),
+      ])
+
+      const staffActiveByPerson = new Map<string, boolean>()
+      for (const s of (staffRows ?? []) as { person_id: string; active: boolean }[]) {
+        if (s.active || !staffActiveByPerson.has(s.person_id)) staffActiveByPerson.set(s.person_id, s.active)
+      }
+      const studentActiveByPerson = new Map<string, boolean>()
+      for (const s of (studentRows ?? []) as { person_id: string; active: boolean }[]) {
+        if (s.active || !studentActiveByPerson.has(s.person_id)) studentActiveByPerson.set(s.person_id, s.active)
+      }
+      const currentStatusByPerson = new Map<string, string>()
+      for (const s of (statusRows ?? []) as { person_id: string; status: string }[]) {
+        currentStatusByPerson.set(s.person_id, s.status)
+      }
+
+      const OTHER_STATUS_BADGE: Record<string, { label: string; color: string }> = {
+        voluntario: { label: 'Voluntário', color: 'bg-indigo-50 text-indigo-700' },
+        associado: { label: 'Associado', color: 'bg-indigo-50 text-indigo-700' },
+        visitante: { label: 'Visitante', color: 'bg-purple-50 text-purple-700' },
+      }
+
+      rows = rows.map(r => {
+        const staffActive = staffActiveByPerson.get(r.id)
+        const studentActive = studentActiveByPerson.get(r.id)
+        let badge: PessoaRow['badge'] = null
+        if (staffActive === true) badge = { label: 'Obreiro', color: 'bg-green-50 text-green-700' }
+        else if (studentActive === true) badge = { label: 'Aluno', color: 'bg-blue-50 text-blue-700' }
+        else if (currentStatusByPerson.has(r.id)) badge = OTHER_STATUS_BADGE[currentStatusByPerson.get(r.id)!] ?? null
+        else if (staffActive === false || studentActive === false) badge = { label: 'Inativo', color: 'bg-gray-100 text-gray-500' }
+        return { ...r, badge }
+      })
+    }
   }
 
   if (tab === 'obreiros') {

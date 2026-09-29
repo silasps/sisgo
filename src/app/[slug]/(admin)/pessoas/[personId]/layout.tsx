@@ -39,6 +39,18 @@ export default async function PessoaWorkspaceLayout({ children, params }: Props)
   if (!person) notFound()
 
   if (!PROFILE_ROLES.includes(role as never)) {
+    // Hospitalidade não tem acesso ao perfil completo, só à aba de
+    // Hospedagem (onde a pessoa está hospedada) — sem tab bar, é a única
+    // tela que esse papel pode abrir.
+    if (role === 'hospitalidade') {
+      return (
+        <>
+          <Header title={person.full_name} backHref={`/${slug}/pessoas`} />
+          {children}
+        </>
+      )
+    }
+
     // Sem acesso ao perfil completo (isso é do DH) — só líder de
     // ministério/escola pode abrir um acesso de emergência limitado;
     // qualquer outro papel continua barrado, como já era.

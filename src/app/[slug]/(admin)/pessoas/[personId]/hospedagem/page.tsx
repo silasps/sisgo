@@ -2,7 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { notFound, redirect } from 'next/navigation'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
-import { PROFILE_ROLES } from '@/lib/auth/permissions'
+import { PROFILE_ROLES, HOSPEDAGEM_ROLES } from '@/lib/auth/permissions'
+import { Home, MapPin } from 'lucide-react'
 
 type Props = { params: Promise<{ slug: string; personId: string }> }
 
@@ -95,13 +96,13 @@ export default async function PessoaHospedagemPage({ params }: Props) {
   if (!org) notFound()
 
   const { role } = await getCurrentOrganizationRole(supabase, user.id, org.id)
-  if (!PROFILE_ROLES.includes(role as never)) redirect(`/${slug}/pessoas`)
+  if (!PROFILE_ROLES.includes(role as never) && !HOSPEDAGEM_ROLES.includes(role as never)) redirect(`/${slug}/pessoas`)
 
   const db = createAdminClient()
   const { data: person } = await db.from('people').select('id').eq('id', personId).eq('organization_id', org.id).single()
   if (!person) notFound()
 
-  const [{ data: allocationsData }, { data: absencesData }] = await Promise.all([
+  const [{ data: allocationsData }, { data: absencesData }, { data: addressRows }] = await Promise.all([
     db.from('room_allocations')
       .select('id, check_in, check_out, actual_check_in, actual_check_out, status, notes, rooms(name, floors(name)), beds(label)')
       .eq('organization_id', org.id)
@@ -111,10 +112,15 @@ export default async function PessoaHospedagemPage({ params }: Props) {
       .select('id, start_date, end_date, reason_type, reason_notes')
       .eq('person_id', personId)
       .order('start_date', { ascending: false }),
+    db.from('person_contacts')
+      .select('value, label')
+      .eq('person_id', personId)
+      .eq('type', 'address'),
   ])
 
   const allocations = ((allocationsData ?? []) as unknown) as AllocationRow[]
   const absences = ((absencesData ?? []) as unknown) as AbsenceRow[]
+  const addresses = (addressRows ?? []) as { value: string; label: string | null }[]
 
   const efetivadas = allocations.filter(a => a.actual_check_in)
   const totalDias = efetivadas.reduce((sum, a) => {
@@ -122,8 +128,37 @@ export default async function PessoaHospedagemPage({ params }: Props) {
     return sum + diasEntre(a.actual_check_in!, fim)
   }, 0)
 
+  const estadiaAtual = allocations.find(a => a.status === 'checkin' && !a.actual_check_out)
+  const localAtual = estadiaAtual?.rooms
+    ? `${estadiaAtual.rooms.name}${estadiaAtual.rooms.floors ? ` · ${estadiaAtual.rooms.floors.name}` : ''}${estadiaAtual.beds ? ` · ${estadiaAtual.beds.label}` : ''}`
+    : null
+
   return (
     <main className="p-4 md:p-6 space-y-5 max-w-2xl mx-auto">
+      <section className={`rounded-xl border p-4 flex items-start gap-3 ${estadiaAtual ? 'border-green-200 bg-green-50/60' : 'border-amber-200 bg-amber-50/60'}`}>
+        {estadiaAtual ? (
+          <Home className="size-5 text-green-600 shrink-0 mt-0.5" />
+        ) : (
+          <MapPin className="size-5 text-amber-600 shrink-0 mt-0.5" />
+        )}
+        <div className="text-sm">
+          <p className={`font-semibold ${estadiaAtual ? 'text-green-900' : 'text-amber-900'}`}>
+            {estadiaAtual ? 'Hospedado dentro da base' : 'Fora da base'}
+          </p>
+          {estadiaAtual ? (
+            <p className="text-green-800 mt-0.5">{localAtual}</p>
+          ) : addresses.length > 0 ? (
+            <div className="text-amber-800 mt-0.5 space-y-0.5">
+              {addresses.map((a, i) => (
+                <p key={i}>{a.label ? `${a.label}: ` : ''}{a.value}</p>
+              ))}
+            </div>
+          ) : (
+            <p className="text-amber-700 mt-0.5">Nenhum endereço cadastrado para esta pessoa.</p>
+          )}
+        </div>
+      </section>
+
       <section className="grid grid-cols-2 gap-3">
         <div className="rounded-xl border border-gray-100 bg-white p-4">
           <p className="text-xl font-bold text-gray-900">{totalDias}</p>
