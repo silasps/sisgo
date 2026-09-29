@@ -148,7 +148,7 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
         <Header title="Início" />
         <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
           {announcements.length > 0 && (
-            <AnnouncementCarousel announcements={announcements} dismissible />
+            <AnnouncementCarousel announcements={announcements} />
           )}
 
           <VerseOfDayCard verse={verse} />
@@ -209,7 +209,7 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
         <Header title="Início" />
         <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
           {announcements.length > 0 && (
-            <AnnouncementCarousel announcements={announcements} dismissible />
+            <AnnouncementCarousel announcements={announcements} />
           )}
 
           <VerseOfDayCard verse={verse} />
@@ -264,13 +264,14 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
       <>
         <Header title="Início" />
         <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
-          {/* Só quando há painel próprio — quem só tem áreas (renderHome(null))
-              já vê o anúncio em destaque dentro do painel de cada
-              ministério/escola (AreaHero, logo abaixo das abas); mostrar
-              aqui de novo seria duplicar a mesma foto/anúncio na tela toda,
-              antes mesmo de escolher uma aba. */}
-          {principal && homeAnnouncements.length > 0 && (
-            <AnnouncementCarousel announcements={homeAnnouncements} dismissible />
+          {/* Sempre no topo, pra todo mundo — mesma posição relativa (antes
+              do versículo) em qualquer perfil, com ou sem painel próprio.
+              Quem só tem áreas ainda vê o anúncio de novo dentro do painel
+              de ministério/escola (AreaHero) — repete, mas evita a
+              inconsistência de sumir o card pra uns perfis e não pra
+              outros. */}
+          {homeAnnouncements.length > 0 && (
+            <AnnouncementCarousel announcements={homeAnnouncements} />
           )}
           <VerseOfDayCard verse={verse} />
           <AreaTabs tabs={items.map(i => i.tab)} panels={items.map(i => i.panel)} initialKey={initialArea} />

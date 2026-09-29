@@ -20,6 +20,10 @@ export function VerseOfDayCard({ verse }: { verse: VerseOfDay }) {
   const movedRef = useRef(0)
 
   function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    // Gesto começando em cima do X: não trava o ponteiro pro arraste, senão
+    // o setPointerCapture atrapalha o clique nativo do botão (o X parece
+    // "não funcionar" e o clique cai pro link por baixo).
+    if ((e.target as HTMLElement).closest('button')) return
     e.currentTarget.setPointerCapture(e.pointerId)
     draggingRef.current = true
     startXRef.current = e.clientX
