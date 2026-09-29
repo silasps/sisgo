@@ -3,7 +3,6 @@
 import { Pin, ExternalLink } from 'lucide-react'
 import { Modal } from './Modal'
 import { CATEGORY_STYLES } from '@/lib/announcement-categories'
-import { focalImageStyle } from '@/lib/image-focal'
 import type { AnnouncementListItem } from './AnnouncementList'
 
 export function AnnouncementDetailModal({ announcement, onClose }: {
@@ -15,13 +14,14 @@ export function AnnouncementDetailModal({ announcement, onClose }: {
   return (
     <Modal open onClose={onClose} title={announcement.title} hideFooter>
       {announcement.image_url && (
-        <div className="w-full bg-gray-100 overflow-hidden" style={{ aspectRatio: '16 / 9' }}>
+        // Imagem inteira, na proporção original — o recorte por ponto focal/zoom
+        // é só pros cards (carrossel/lista); aqui a pessoa abriu pra ver tudo.
+        <div className="w-full bg-gray-100 flex justify-center">
           {/* eslint-disable-next-line @next/next/no-img-element -- imagem pública do bucket, não passa pelo otimizador */}
           <img
             src={announcement.image_url}
             alt=""
-            className="w-full h-full object-cover"
-            style={focalImageStyle(announcement.image_focal_x, announcement.image_focal_y, announcement.image_zoom)}
+            className="block w-auto max-w-full h-auto max-h-[60vh] object-contain"
           />
         </div>
       )}
