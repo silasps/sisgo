@@ -31,11 +31,15 @@ export async function getMyAreas(ctx: UnitAccessContext): Promise<MyAreas> {
   return { ministries, schools }
 }
 
-/** Uma aba + painel por ministério/escola, com os dados de cada um já carregados. */
+/**
+ * Uma aba + faixa (hero) + painel por ministério/escola, com os dados de
+ * cada um já carregados. A faixa vem separada do painel pra poder subir
+ * pro topo da Início (antes dos anúncios), acompanhando a aba ativa.
+ */
 export async function buildAreaTabs({ supabase, sbAdmin, slug, orgId, userId, areas, laundryEnabled }: {
   supabase: ServerClient; sbAdmin: AdminClient; slug: string; orgId: string; userId: string; areas: MyAreas
   laundryEnabled: boolean
-}): Promise<Array<{ tab: AreaTab; panel: ReactNode }>> {
+}): Promise<Array<{ tab: AreaTab; hero: ReactNode; panel: ReactNode }>> {
   if (areas.ministries.length === 0 && areas.schools.length === 0) return []
 
   const now = new Date().toISOString()
@@ -129,6 +133,14 @@ export async function buildAreaTabs({ supabase, sbAdmin, slug, orgId, userId, ar
           kind: 'ministerio' as const,
           badge: m.link === 'lider' ? d.pending : undefined,
         },
+        hero: (
+          <AreaHero
+            key={`ministerio-hero-${m.id}`}
+            kicker={`Ministério · ${m.link === 'lider' ? 'Líder' : 'Membro'}`}
+            title={m.longName || m.name}
+            heroImageUrl={heroByMinistry.get(m.id) ?? null}
+          />
+        ),
         panel: (
           <MinistryPanel
             key={`ministerio-${m.id}`}
@@ -137,7 +149,6 @@ export async function buildAreaTabs({ supabase, sbAdmin, slug, orgId, userId, ar
             userId={userId}
             laundryEnabled={laundryEnabled}
             ministry={m}
-            heroImageUrl={heroByMinistry.get(m.id) ?? null}
             pending={d.pending}
             members={d.members}
             events={d.events}
@@ -150,7 +161,15 @@ export async function buildAreaTabs({ supabase, sbAdmin, slug, orgId, userId, ar
       const d = schoolData[i]
       return {
         tab: { key: `escola-${s.id}`, label: s.name, kind: 'escola' as const, badge: d.applications },
-        panel: <SchoolPanel key={`escola-${s.id}`} slug={slug} orgId={orgId} userId={userId} laundryEnabled={laundryEnabled} school={s} heroImageUrl={heroBySchool.get(s.id) ?? null} {...d} />,
+        hero: (
+          <AreaHero
+            key={`escola-hero-${s.id}`}
+            kicker={`Escola · ${s.link === 'lider' ? 'Líder' : 'Obreiro'}`}
+            title={s.name}
+            heroImageUrl={heroBySchool.get(s.id) ?? null}
+          />
+        ),
+        panel: <SchoolPanel key={`escola-${s.id}`} slug={slug} orgId={orgId} userId={userId} laundryEnabled={laundryEnabled} school={s} {...d} />,
       }
     }),
   ]
@@ -192,20 +211,15 @@ function QuickLink({ href, title, description }: { href: string; title: string; 
   )
 }
 
-function MinistryPanel({ slug, orgId, userId, laundryEnabled, ministry, heroImageUrl, pending, members, events, reservations }: {
+function MinistryPanel({ slug, orgId, userId, laundryEnabled, ministry, pending, members, events, reservations }: {
   slug: string; orgId: string; userId: string; laundryEnabled: boolean
-  ministry: LinkedMinistry; heroImageUrl: string | null
+  ministry: LinkedMinistry
   pending: number; members: number; events: CalendarEventRow[]; reservations: number
 }) {
   const base = `/${slug}/ministerios/${ministry.id}`
   const isLeader = ministry.link === 'lider'
   return (
     <>
-      <AreaHero
-        kicker={`Ministério · ${isLeader ? 'Líder' : 'Membro'}`}
-        title={ministry.longName || ministry.name}
-        heroImageUrl={heroImageUrl}
-      />
       <div className={`grid grid-cols-2 gap-3 animate-stagger ${isLeader ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
         <StatCard label="Membros" value={members} icon={Users} href={`${base}/equipe`} color="teal" />
         {isLeader && <StatCard label="Pendências" value={pending} icon={AlertTriangle} href={`${base}/equipe`} color="pink" />}
@@ -223,20 +237,15 @@ function MinistryPanel({ slug, orgId, userId, laundryEnabled, ministry, heroImag
 
 type ClassRow = { id: string; name: string; starts_at: string | null; ends_at: string | null }
 
-function SchoolPanel({ slug, orgId, userId, laundryEnabled, school, heroImageUrl, classes, interests, applications, activeClasses }: {
+function SchoolPanel({ slug, orgId, userId, laundryEnabled, school, classes, interests, applications, activeClasses }: {
   slug: string; orgId: string; userId: string; laundryEnabled: boolean
-  school: LinkedSchool; heroImageUrl: string | null
+  school: LinkedSchool
   classes: number; interests: number; applications: number; activeClasses: ClassRow[]
 }) {
   const base = `/${slug}/escolas/${school.id}`
   const monthYear = (d: string) => new Date(d).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })
   return (
     <>
-      <AreaHero
-        kicker={`Escola · ${school.link === 'lider' ? 'Líder' : 'Obreiro'}`}
-        title={school.name}
-        heroImageUrl={heroImageUrl}
-      />
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 animate-stagger">
         <StatCard label="Turmas ativas" value={classes} icon={BookOpen} href={base} color="orange" />
         <StatCard label="Pré-inscrições" value={interests} icon={ClipboardList} href={`/${slug}/inscricoes`} color="blue" />

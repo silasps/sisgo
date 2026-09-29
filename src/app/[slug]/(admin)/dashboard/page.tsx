@@ -270,24 +270,27 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
 
   const renderHome = (principal: { label: string; content: React.ReactNode } | null) => {
     const items = [
-      ...(principal ? [{ tab: { key: 'geral', label: principal.label, kind: 'principal' as const }, panel: <Fragment key="geral">{principal.content}</Fragment> }] : []),
+      ...(principal ? [{ tab: { key: 'geral', label: principal.label, kind: 'principal' as const }, hero: null as React.ReactNode, panel: <Fragment key="geral">{principal.content}</Fragment> }] : []),
       ...areaItems,
     ]
     return (
       <>
         <Header title="Início" />
         <main className="p-4 md:p-6 space-y-5 overflow-y-auto flex-1">
-          {/* Sempre no topo, pra todo mundo — mesma posição relativa (antes
-              do versículo) em qualquer perfil, com ou sem painel próprio.
-              Quem só tem áreas ainda vê o anúncio de novo dentro do painel
-              de ministério/escola (AreaHero) — repete, mas evita a
-              inconsistência de sumir o card pra uns perfis e não pra
-              outros. */}
-          {homeAnnouncements.length > 0 && (
-            <AnnouncementCarousel announcements={homeAnnouncements} />
-          )}
-          <VerseOfDayCard verse={verse} />
-          <AreaTabs tabs={items.map(i => i.tab)} panels={items.map(i => i.panel)} initialKey={initialArea} />
+          {/* Faixa da área ativa (AreaHero) sempre no topo — antes dos
+              anúncios e do versículo — mesma posição em qualquer perfil,
+              acompanhando a aba selecionada. */}
+          <AreaTabs
+            tabs={items.map(i => i.tab)}
+            heroes={items.map(i => i.hero)}
+            panels={items.map(i => i.panel)}
+            initialKey={initialArea}
+          >
+            {homeAnnouncements.length > 0 && (
+              <AnnouncementCarousel announcements={homeAnnouncements} />
+            )}
+            <VerseOfDayCard verse={verse} />
+          </AreaTabs>
           {/* Sem "principal" é só área (ministério/escola) — cada painel já
               traz o próprio "Minha conta" na posição certa (antes do
               calendário). Com "principal", o painel não inclui isso, então

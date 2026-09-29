@@ -19,16 +19,30 @@ const ICONS = { principal: LayoutDashboard, ministerio: Music, escola: Graduatio
  * trocar de aba só troca qual deles aparece, sem nova requisição. A aba ativa
  * vai pra `?area=` pra sobreviver a reload e poder ser compartilhada.
  * Com uma área só, não mostra barra nenhuma — fica igual ao dashboard simples.
+ *
+ * A faixa (hero) da área ativa sempre vem primeiro — antes de `children`
+ * (anúncios/versículo) — pra dar a ideia de topo da página em qualquer
+ * perfil, não só sumir dentro do painel da aba.
  */
-export function AreaTabs({ tabs, panels, initialKey }: {
+export function AreaTabs({ tabs, heroes, panels, initialKey, children }: {
   tabs: AreaTab[]
+  heroes: ReactNode[]
   panels: ReactNode[]
   initialKey?: string
+  children?: ReactNode
 }) {
   const [active, setActive] = useState(() => Math.max(0, tabs.findIndex(t => t.key === initialKey)))
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
 
-  if (tabs.length <= 1) return panels[0] ? <div className="space-y-5">{panels[0]}</div> : null
+  if (tabs.length <= 1) {
+    return (
+      <div className="space-y-5">
+        {heroes[0]}
+        {children}
+        {panels[0]}
+      </div>
+    )
+  }
 
   function select(index: number) {
     setActive(index)
@@ -50,6 +64,8 @@ export function AreaTabs({ tabs, panels, initialKey }: {
 
   return (
     <div className="space-y-4">
+      {heroes[active]}
+      {children}
       <div
         role="tablist"
         aria-label="Minhas áreas"
