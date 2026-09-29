@@ -37,15 +37,21 @@ export function ConversationList({ items, chatBasePath, orgId }: {
             const href = hrefFor(item, chatBasePath)
             const active = pathname === href
             const name = item.type === 'dm' ? item.otherName : item.name
+            const avatarUrl = item.type === 'dm' ? item.otherAvatarUrl : null
             return (
               <Link
                 key={`${item.type}-${item.id}`}
                 href={href}
                 className={`flex items-center gap-3 px-4 py-3 border-b border-gray-50 transition-colors ${active ? 'bg-brand-50' : 'hover:bg-gray-50'}`}
               >
-                <span className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold ${item.type === 'group' ? 'bg-brand-50 text-brand-600' : 'bg-gray-200 text-gray-600'}`}>
-                  {item.type === 'group' ? <Users size={16} /> : name.charAt(0).toUpperCase()}
-                </span>
+                {avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- foto de perfil do usuário, não passa pelo otimizador
+                  <img src={avatarUrl} alt="" className="shrink-0 w-9 h-9 rounded-full object-cover" />
+                ) : (
+                  <span className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold ${item.type === 'group' ? 'bg-brand-50 text-brand-600' : 'bg-gray-200 text-gray-600'}`}>
+                    {item.type === 'group' ? <Users size={16} /> : name.charAt(0).toUpperCase()}
+                  </span>
+                )}
                 <span className="flex-1 min-w-0">
                   <span className="flex items-center justify-between gap-2">
                     <span className={`text-sm truncate ${item.unread ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>{name}</span>

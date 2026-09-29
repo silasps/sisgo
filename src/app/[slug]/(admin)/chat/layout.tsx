@@ -6,7 +6,7 @@ import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { getMyMinistries, getMySchools } from '@/lib/auth/unit-access'
 import { ChatShell } from './ChatShell'
 import { ConversationList } from './ConversationList'
-import { resolveNames } from './_data'
+import { resolveNames, resolveAvatars } from './_data'
 import type { ChatListItem, ConversationSummary, GroupSummary } from './types'
 
 type Props = { params: Promise<{ slug: string }>; children: React.ReactNode }
@@ -67,7 +67,10 @@ async function loadConversations(db: Admin, orgId: string, userId: string): Prom
   const otherUserIdByConvo = new Map((otherParts ?? []).map(p => [p.conversation_id, p.user_id]))
   const otherUserIds = [...new Set(otherUserIdByConvo.values())]
 
-  const nameByUserId = await resolveNames(db, orgId, otherUserIds)
+  const [nameByUserId, avatarByUserId] = await Promise.all([
+    resolveNames(db, orgId, otherUserIds),
+    resolveAvatars(db, otherUserIds),
+  ])
 
   const lastMessageByConvo = new Map<string, { content: string; created_at: string; author_id: string }>()
   for (const m of recentMessages ?? []) {
@@ -86,6 +89,7 @@ async function loadConversations(db: Admin, orgId: string, userId: string): Prom
       id,
       otherUserId,
       otherName: nameByUserId.get(otherUserId) ?? 'Pessoa',
+      otherAvatarUrl: avatarByUserId.get(otherUserId) ?? null,
       lastMessagePreview: last ? last.content : null,
       lastMessageAt: lastMessageAtByConvo.get(id) ?? null,
       unread,

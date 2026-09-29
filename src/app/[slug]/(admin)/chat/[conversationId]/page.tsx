@@ -1,8 +1,8 @@
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { sendMessage, toggleReaction, markConversationRead } from '../actions'
-import { resolveNames } from '../_data'
+import { sendMessage, toggleReaction, editMessage, deleteMessage, markConversationRead } from '../actions'
+import { resolveNames, resolveAvatars } from '../_data'
 import { ChatThread } from '../ChatThread'
 import type { ChatMessage } from '../types'
 
@@ -27,8 +27,9 @@ export default async function ChatThreadPage({ params }: Props) {
     .select('user_id').eq('conversation_id', conversationId).neq('user_id', user.id)
   const otherUserId = others?.[0]?.user_id ?? ''
 
-  const [nameByUserId, { data: messagesRaw }] = await Promise.all([
+  const [nameByUserId, avatarByUserId, { data: messagesRaw }] = await Promise.all([
     resolveNames(db, convo.organization_id, [otherUserId]),
+    resolveAvatars(db, [otherUserId]),
     db.from('chat_messages')
       .select('id, author_id, content, created_at, edited_at')
       .eq('conversation_id', conversationId)
@@ -66,11 +67,14 @@ export default async function ChatThreadPage({ params }: Props) {
     <ChatThread
       conversationId={conversationId}
       otherName={nameByUserId.get(otherUserId) ?? 'Pessoa'}
+      otherAvatarUrl={avatarByUserId.get(otherUserId) ?? null}
       currentUserId={user.id}
       messages={messages}
       path={path}
       sendMessageAction={sendMessage}
       toggleReactionAction={toggleReaction}
+      editMessageAction={editMessage}
+      deleteMessageAction={deleteMessage}
     />
   )
 }

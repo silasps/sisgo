@@ -133,48 +133,100 @@ export async function canMessage(
   return { allowed: true }
 }
 
+type PersonRow = { user_id: string | null; people: { id: string; full_name: string } | { id: string; full_name: string }[] | null }
+const toPerson = (row: PersonRow, kind: 'obreiro' | 'aluno'): ChatEligiblePerson | null => {
+  const person = Array.isArray(row.people) ? row.people[0] : row.people
+  if (!row.user_id || !person) return null
+  return { userId: row.user_id, personId: person.id, fullName: person.full_name, kind }
+}
+
+/** person_ids de quem serve num dos ministérios ou estuda numa das escolas dadas (vínculo ativo). */
+async function personIdsInUnits(db: Admin, ministryIds: string[], schoolIds: string[]): Promise<string[]> {
+  const [{ data: members }, { data: staff }, { data: classes }] = await Promise.all([
+    ministryIds.length > 0
+      ? db.from('ministry_members').select('person_id').in('ministry_id', ministryIds).eq('active', true)
+      : Promise.resolve({ data: [] }),
+    schoolIds.length > 0
+      ? db.from('school_staff').select('person_id').in('school_id', schoolIds).eq('active', true)
+      : Promise.resolve({ data: [] }),
+    schoolIds.length > 0
+      ? db.from('school_classes').select('id').in('school_id', schoolIds)
+      : Promise.resolve({ data: [] }),
+  ])
+  const classIds = (classes ?? []).map(c => c.id)
+  const { data: classStudents } = classIds.length > 0
+    ? await db.from('class_students').select('person_id').in('class_id', classIds).eq('status', 'ativo')
+    : { data: [] }
+  return [...new Set(
+    [...(members ?? []), ...(staff ?? []), ...(classStudents ?? [])]
+      .map(r => r.person_id).filter((id): id is string => !!id),
+  )]
+}
+
 /**
  * Lista pessoas obreiro/aluno-com-conta da organização que batem uma busca
  * por nome — usado no "nova conversa". Aceita um "@" opcional na frente
  * (o usuário pediu pra buscar "pelo arroba", tipo @mention) — "@joão" e
- * "joão" encontram a mesma pessoa.
+ * "joão" encontram a mesma pessoa. Também aceita nome de ministério/escola
+ * ("CM" traz quem serve na CM, não só gente com "CM" no nome) — quem lidera
+ * conta também, além de membro/obreiro/aluno matriculado.
  */
 export async function searchEligiblePeople(orgId: string, query: string, excludeUserId: string): Promise<ChatEligiblePerson[]> {
   const db = createAdminClient()
   const like = `%${query.replace(/^@+/, '')}%`
 
-  const [{ data: staffRows }, { data: studentRows }] = await Promise.all([
+  const results = new Map<string, ChatEligiblePerson>()
+  const addRows = (rows: unknown[] | null, kind: 'obreiro' | 'aluno') => {
+    for (const row of (rows ?? []) as PersonRow[]) {
+      const p = toPerson(row, kind)
+      if (p && p.userId !== excludeUserId && !results.has(p.userId)) results.set(p.userId, p)
+    }
+  }
+
+  const [{ data: staffRows }, { data: studentRows }, { data: matchingMinistries }, { data: matchingSchools }] = await Promise.all([
     db.from('staff_profiles')
       .select('user_id, people!inner(id, full_name)')
-      .eq('organization_id', orgId)
-      .eq('active', true)
-      .not('user_id', 'is', null)
-      .ilike('people.full_name', like)
-      .limit(10),
+      .eq('organization_id', orgId).eq('active', true).not('user_id', 'is', null)
+      .ilike('people.full_name', like).limit(10),
     db.from('student_profiles')
       .select('user_id, people!inner(id, full_name)')
-      .eq('organization_id', orgId)
-      .eq('active', true)
-      .not('user_id', 'is', null)
-      .ilike('people.full_name', like)
-      .limit(10),
+      .eq('organization_id', orgId).eq('active', true).not('user_id', 'is', null)
+      .ilike('people.full_name', like).limit(10),
+    db.from('ministries').select('id').eq('organization_id', orgId).ilike('name', like),
+    db.from('schools').select('id').eq('organization_id', orgId).ilike('name', like),
   ])
+  addRows(staffRows, 'obreiro')
+  addRows(studentRows, 'aluno')
 
-  type Row = { user_id: string | null; people: { id: string; full_name: string } | { id: string; full_name: string }[] | null }
-  const toPerson = (row: Row, kind: 'obreiro' | 'aluno'): ChatEligiblePerson | null => {
-    const person = Array.isArray(row.people) ? row.people[0] : row.people
-    if (!row.user_id || !person) return null
-    return { userId: row.user_id, personId: person.id, fullName: person.full_name, kind }
+  const ministryIds = (matchingMinistries ?? []).map(m => m.id)
+  const schoolIds = (matchingSchools ?? []).map(s => s.id)
+  if (ministryIds.length > 0 || schoolIds.length > 0) {
+    const [ministryLeaderRows, schoolLeaderRows, unitPersonIds] = await Promise.all([
+      ministryIds.length > 0
+        ? db.from('ministry_leaders').select('user_id').eq('organization_id', orgId).in('ministry_id', ministryIds).then(r => r.data ?? [])
+        : Promise.resolve([]),
+      schoolIds.length > 0
+        ? db.from('school_leaders').select('user_id').eq('organization_id', orgId).in('school_id', schoolIds).then(r => r.data ?? [])
+        : Promise.resolve([]),
+      personIdsInUnits(db, ministryIds, schoolIds),
+    ])
+    const leaderUserIds = [...new Set([...ministryLeaderRows, ...schoolLeaderRows].map(r => r.user_id).filter((id): id is string => !!id))]
+
+    const [{ data: unitStaffByPerson }, { data: unitStudentByPerson }, { data: leaderStaffRows }] = await Promise.all([
+      unitPersonIds.length > 0
+        ? db.from('staff_profiles').select('user_id, people!inner(id, full_name)').eq('organization_id', orgId).eq('active', true).not('user_id', 'is', null).in('person_id', unitPersonIds)
+        : Promise.resolve({ data: [] }),
+      unitPersonIds.length > 0
+        ? db.from('student_profiles').select('user_id, people!inner(id, full_name)').eq('organization_id', orgId).eq('active', true).not('user_id', 'is', null).in('person_id', unitPersonIds)
+        : Promise.resolve({ data: [] }),
+      leaderUserIds.length > 0
+        ? db.from('staff_profiles').select('user_id, people!inner(id, full_name)').eq('organization_id', orgId).eq('active', true).in('user_id', leaderUserIds)
+        : Promise.resolve({ data: [] }),
+    ])
+    addRows(unitStaffByPerson, 'obreiro')
+    addRows(unitStudentByPerson, 'aluno')
+    addRows(leaderStaffRows, 'obreiro')
   }
 
-  const results = new Map<string, ChatEligiblePerson>()
-  for (const row of (staffRows ?? []) as Row[]) {
-    const p = toPerson(row, 'obreiro')
-    if (p && p.userId !== excludeUserId) results.set(p.userId, p)
-  }
-  for (const row of (studentRows ?? []) as Row[]) {
-    const p = toPerson(row, 'aluno')
-    if (p && p.userId !== excludeUserId && !results.has(p.userId)) results.set(p.userId, p)
-  }
   return [...results.values()].sort((a, b) => a.fullName.localeCompare(b.fullName, 'pt-BR')).slice(0, 10)
 }

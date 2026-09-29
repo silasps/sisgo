@@ -7,6 +7,7 @@ import { canMessage, searchEligiblePeople } from '@/lib/auth/chat-access'
 import { sendPushToUsers } from '@/lib/notifications/push'
 import { REACTION_EMOJIS } from './emoji'
 import { resolveNames } from './_data'
+import { MESSAGE_EDIT_WINDOW_MS } from './config'
 import type { ChatPerson } from './types'
 
 // Retenção proposital baixa (o usuário foi explícito: não quer o Chat
@@ -108,6 +109,55 @@ export async function sendMessage(formData: FormData) {
       data: path ? { url: path } : undefined,
     })
   }
+
+  if (path) revalidatePath(path)
+}
+
+// Edita/exclui só a própria mensagem, só dentro da janela de tempo
+// (MESSAGE_EDIT_WINDOW_MS) — mesmo espírito do WhatsApp. A UI já esconde os
+// botões fora da janela, mas quem chama a action direto (ou com um clique
+// que já estava na tela há tempo) esbarra nessa checagem de verdade.
+export async function editMessage(formData: FormData) {
+  const { userId } = await requireUser()
+  const messageId = formData.get('message_id') as string
+  const content = (formData.get('content') as string)?.trim()
+  const path = formData.get('path') as string
+  if (!messageId || !content) return
+
+  const db = createAdminClient()
+  const { data: message } = await db.from('chat_messages')
+    .select('author_id, created_at').eq('id', messageId).single()
+  if (!message) throw new Error('Mensagem não encontrada.')
+  if (message.author_id !== userId) throw new Error('Você só pode editar suas próprias mensagens.')
+  if (Date.now() - new Date(message.created_at).getTime() > MESSAGE_EDIT_WINDOW_MS) {
+    throw new Error('O tempo pra editar essa mensagem já passou.')
+  }
+
+  const { error } = await db.from('chat_messages')
+    .update({ content, edited_at: new Date().toISOString() })
+    .eq('id', messageId)
+  if (error) throw new Error(error.message)
+
+  if (path) revalidatePath(path)
+}
+
+export async function deleteMessage(formData: FormData) {
+  const { userId } = await requireUser()
+  const messageId = formData.get('message_id') as string
+  const path = formData.get('path') as string
+  if (!messageId) return
+
+  const db = createAdminClient()
+  const { data: message } = await db.from('chat_messages')
+    .select('author_id, created_at').eq('id', messageId).single()
+  if (!message) throw new Error('Mensagem não encontrada.')
+  if (message.author_id !== userId) throw new Error('Você só pode excluir suas próprias mensagens.')
+  if (Date.now() - new Date(message.created_at).getTime() > MESSAGE_EDIT_WINDOW_MS) {
+    throw new Error('O tempo pra excluir essa mensagem já passou.')
+  }
+
+  const { error } = await db.from('chat_messages').delete().eq('id', messageId)
+  if (error) throw new Error(error.message)
 
   if (path) revalidatePath(path)
 }

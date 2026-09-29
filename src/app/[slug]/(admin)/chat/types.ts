@@ -3,6 +3,7 @@ export type ConversationSummary = {
   id: string
   otherUserId: string
   otherName: string
+  otherAvatarUrl: string | null
   lastMessagePreview: string | null
   lastMessageAt: string | null
   unread: boolean
