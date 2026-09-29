@@ -99,7 +99,7 @@ function dropEmptySections(items: NavItem[]): NavItem[] {
   return out
 }
 
-function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPending: boolean, hasReservationsPending: boolean, hasOwnCashScope: boolean, laundryEnabled: boolean, hasChatUnread: boolean, idCardEnabled: boolean, hasSchoolLinks = false, hasMinistryLinks = false, hasInscricoesScope = false, ministryCount = 0): NavItem[] {
+function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPending: boolean, hasReservationsPending: boolean, hasOwnCashScope: boolean, laundryEnabled: boolean, hasChatUnread: boolean, idCardEnabled: boolean, hasSchoolLinks = false, hasMinistryLinks = false, hasInscricoesScope = false, ministryCount = 0, hasMinistryMessages = false, hasSchoolMessages = false): NavItem[] {
   const allRoles = [role, ...accumulatedRoles]
   const is = (r: string) => allRoles.includes(r)
   const isManagement        = isManagementRole(role)
@@ -135,9 +135,9 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
     { href: `/${slug}/comunicacao`,  label: 'Comunicação',      icon: 'comunicacao',   show: role === 'lider_base' || role === 'superadmin' || is('comunicacao') },
     { href: `/${slug}/pessoas`,      label: 'Pessoas',          icon: 'pessoas',       show: canSeePessoas },
     { href: `/${slug}/presenca`,     label: 'Presença',         icon: 'presenca',      show: isManagement || is('secretaria') || is('hospitalidade') || isCozinha || is('lider_eted') || isObreiroEted || isLiderMinisterio || isObreiroMinisterio },
-    { href: `/${slug}/escolas`,      label: 'Escolas',          icon: 'escolas',       show: isManagement || is('lider_eted') || isObreiroEted || hasSchoolLinks },
+    { href: `/${slug}/escolas`,      label: 'Escolas',          icon: 'escolas',       show: isManagement || is('lider_eted') || isObreiroEted || hasSchoolLinks, alert: hasSchoolMessages },
     { href: `/${slug}/inscricoes`,   label: 'Inscrições',       icon: 'inscricoes',    show: isManagement || is('lider_eted') || isLiderMinisterio || hasInscricoesScope },
-    { href: `/${slug}/ministerios`,  label: ministeriosLabel,   icon: 'ministerios',   show: isManagement || isLiderMinisterio || isObreiroMinisterio || isHospitalidade || isCozinha || isManutencao || is('secretaria') || hasMinistryLinks },
+    { href: `/${slug}/ministerios`,  label: ministeriosLabel,   icon: 'ministerios',   show: isManagement || isLiderMinisterio || isObreiroMinisterio || isHospitalidade || isCozinha || isManutencao || is('secretaria') || hasMinistryLinks, alert: hasMinistryMessages },
     { href: `/${slug}/reservas`,     label: 'Reservas',         icon: 'reservas',      show: canSeeReservas, alert: hasReservationsPending },
     { href: `/${slug}/hospedagem`,   label: 'Hospedagem',       icon: 'hospedagem',    show: canSeeHospedagem },
     { href: `/${slug}/hospedagem/quartos`, label: 'Quartos',    icon: 'quartos',       show: canSeeHospedagem },
@@ -720,11 +720,9 @@ export default async function SlugLayout({ children, params }: Props) {
       return !lastRead || new Date(m.created_at) > new Date(lastRead)
     })
   }
-  // O badge de mensagem nova do mural de ministério/escola migrou pra cá —
-  // agora que os dois viraram "conversas" dentro do Chat institucional
-  // (/[slug]/chat), o alerta de "ministerios"/"escolas" não faz mais
-  // sentido carregar esse dado (ver plano).
-  const hasChatUnread = hasMinistryMessages || hasSchoolMessages || hasUnreadDM
+  // Mural de ministério/escola avisa no item do próprio ministério/escola
+  // (é lá que o mural mora); o Chat avisa só de conversa não lida.
+  const hasChatUnread = hasUnreadDM
 
   const idCardEnabled = (org as { id_card_enabled?: boolean }).id_card_enabled ?? false
   // Quem lidera/serve numa escola ou ministério por vínculo (não pelo papel
@@ -754,7 +752,7 @@ export default async function SlugLayout({ children, params }: Props) {
   ]).size
   // Mesmo recorte de /inscricoes: escola com qualquer vínculo ou ministério liderado.
   const hasInscricoesScope = hasSchoolLinks || myMinistryLinks.some(m => m.link === 'lider')
-  const navItems = buildNav(slug, role, [...accumulatedRoles, ...extraRoles, ...linkedRoles], hasPending, reservationsPending > 0, hasOwnCashScope, laundryEnabled, hasChatUnread, idCardEnabled, hasSchoolLinks, hasMinistryLinks, hasInscricoesScope, ministryCount)
+  const navItems = buildNav(slug, role, [...accumulatedRoles, ...extraRoles, ...linkedRoles], hasPending, reservationsPending > 0, hasOwnCashScope, laundryEnabled, hasChatUnread, idCardEnabled, hasSchoolLinks, hasMinistryLinks, hasInscricoesScope, ministryCount, hasMinistryMessages, hasSchoolMessages)
   const bottomItems = pickBottomBarItems(navItems, role)
 
   // ── Menu de conta: tudo somado, sem alternância entre Pessoal/Administração ──

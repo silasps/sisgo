@@ -1,70 +1,264 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Send, ChevronLeft, SmilePlus, Pencil, Trash2, Check, X } from 'lucide-react'
+import { Send, ChevronLeft, SmilePlus, Pencil, Trash2, Check, X, Clock, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
+import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { EmojiPicker } from './EmojiPicker'
 import { REACTION_EMOJIS, isStickerContent } from './emoji'
-import { ConfirmSubmitButton } from '@/components/ui/ConfirmSubmitButton'
 import { MESSAGE_EDIT_WINDOW_MS } from './config'
-import type { ChatMessage } from './types'
+import type { ChatActionResult } from './actions'
+import type { ChatMessage, MessageReaction } from './types'
 
-export function ChatThread({
-  conversationId, otherName, otherAvatarUrl, currentUserId, messages, path,
-  sendMessageAction, toggleReactionAction, editMessageAction, deleteMessageAction,
-}: {
+// Conversa no estilo WhatsApp: tudo o que a pessoa faz aparece na hora
+// (otimista) e o servidor confirma por trás — nada de esperar a action nem
+// recarregar a rota. O que a OUTRA pessoa faz chega pelo Realtime do
+// Supabase (migration 150), sem precisar atualizar a página.
+
+type LocalMessage = ChatMessage & {
+  /** Só em mensagem própria ainda não confirmada: 'sending' (relógio) ou 'failed' (tentar de novo). */
+  status?: 'sending' | 'failed'
+}
+
+type Props = {
   conversationId: string
   otherName: string
   otherAvatarUrl: string | null
   currentUserId: string
   messages: ChatMessage[]
   path: string
-  sendMessageAction: (formData: FormData) => Promise<void>
-  toggleReactionAction: (formData: FormData) => Promise<void>
-  editMessageAction: (formData: FormData) => Promise<void>
-  deleteMessageAction: (formData: FormData) => Promise<void>
-}) {
-  const [localMessages, setLocalMessages] = useState(messages)
+  sendMessageAction: (input: { conversationId: string; id: string; content: string; path?: string }) => Promise<ChatActionResult>
+  toggleReactionAction: (input: { messageId: string; emoji: string }) => Promise<ChatActionResult>
+  editMessageAction: (input: { messageId: string; content: string }) => Promise<ChatActionResult>
+  deleteMessageAction: (input: { messageId: string }) => Promise<ChatActionResult>
+  markReadAction: (conversationId: string) => Promise<void>
+}
+
+const OFFLINE: ChatActionResult = { error: 'Sem conexão com o servidor.' }
+const NEAR_BOTTOM_PX = 120
+
+// randomUUID só existe em contexto seguro (https/localhost) e navegadores
+// recentes; o fallback monta um UUID v4 com getRandomValues.
+function newMessageId(): string {
+  const c: Crypto = globalThis.crypto
+  if (typeof c.randomUUID === 'function') return c.randomUUID()
+  const b = c.getRandomValues(new Uint8Array(16))
+  b[6] = (b[6] & 0x0f) | 0x40
+  b[8] = (b[8] & 0x3f) | 0x80
+  const h = [...b].map(x => x.toString(16).padStart(2, '0')).join('')
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`
+}
+
+/** Uma reação por pessoa por mensagem (mesma regra do banco): tira a pessoa de onde estava e, se `emoji`, põe no novo. */
+function applyReaction(reactions: MessageReaction[], userId: string, emoji: string | null): MessageReaction[] {
+  const next = reactions
+    .map(r => ({ ...r, userIds: r.userIds.filter(id => id !== userId) }))
+    .filter(r => r.userIds.length > 0)
+  if (!emoji) return next
+  const existing = next.find(r => r.emoji === emoji)
+  if (existing) existing.userIds = [...existing.userIds, userId]
+  else next.push({ emoji, userIds: [userId] })
+  return next
+}
+
+const byCreatedAt = (a: ChatMessage, b: ChatMessage) => a.createdAt.localeCompare(b.createdAt)
+
+function dayLabel(iso: string): string {
+  const d = new Date(iso)
+  const today = new Date()
+  const yesterday = new Date(); yesterday.setDate(today.getDate() - 1)
+  const same = (x: Date, y: Date) => x.toDateString() === y.toDateString()
+  if (same(d, today)) return 'Hoje'
+  if (same(d, yesterday)) return 'Ontem'
+  return d.toLocaleDateString('pt-BR', {
+    day: '2-digit', month: 'short', ...(d.getFullYear() !== today.getFullYear() ? { year: 'numeric' } : {}),
+  }).replace('.', '')
+}
+
+export function ChatThread({
+  conversationId, otherName, otherAvatarUrl, currentUserId, messages, path,
+  sendMessageAction, toggleReactionAction, editMessageAction, deleteMessageAction, markReadAction,
+}: Props) {
+  const [list, setList] = useState<LocalMessage[]>(messages)
   const [draft, setDraft] = useState('')
   const [avatarOpen, setAvatarOpen] = useState(false)
-  const formRef = useRef<HTMLFormElement>(null)
-  const bottomRef = useRef<HTMLDivElement>(null)
-  // Ref, não state: precisa ser lido/travado na hora, dentro do mesmo tick
-  // do clique — um state só atualiza no próximo render, e cliques repetidos
-  // rápidos (duplo clique, dedo lento soltando) disparam todos antes disso,
-  // mandando a mesma mensagem várias vezes.
-  const sendingRef = useRef(false)
+  const [activeId, setActiveId] = useState<string | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const nearBottomRef = useRef(true)
+  const forceScrollRef = useRef(true)
+  // Apagada aqui mas ainda presente num snapshot do servidor que chegue
+  // atrasado (router.refresh da lista de conversas) — não pode "ressuscitar".
+  const deletedIdsRef = useRef(new Set<string>())
+  const markReadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Ref: a action chega do servidor e pode mudar de identidade a cada
+  // atualização da página — não pode derrubar e refazer a assinatura.
+  const markReadRef = useRef(markReadAction)
+  useEffect(() => { markReadRef.current = markReadAction }, [markReadAction])
 
-  useEffect(() => setLocalMessages(messages), [messages])
-  useEffect(() => { bottomRef.current?.scrollIntoView({ block: 'end' }) }, [localMessages.length])
+  // Snapshot novo do servidor: ele manda, mas o que ainda não foi confirmado
+  // (enviando/falhou) continua na tela.
+  useEffect(() => {
+    setList(prev => {
+      const serverIds = new Set(messages.map(m => m.id))
+      const pending = prev.filter(m => m.status && !serverIds.has(m.id))
+      return [...messages.filter(m => !deletedIdsRef.current.has(m.id)), ...pending].sort(byCreatedAt)
+    })
+  }, [messages])
 
-  async function submit(formData: FormData) {
-    if (sendingRef.current) return
-    const content = (formData.get('content') as string)?.trim()
-    if (!content) return
-    sendingRef.current = true
-    // Limpa o campo e mostra a mensagem na hora — só depois disso é que a
-    // action roda de verdade, igual WhatsApp: sem esperar o servidor pra
-    // sumir do input.
-    setDraft('')
-    setLocalMessages(prev => [...prev, {
-      id: `temp-${Date.now()}`, authorId: currentUserId, content,
-      createdAt: new Date().toISOString(), editedAt: null, reactions: [],
-    }])
-    try {
-      await sendMessageAction(formData)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Não foi possível enviar a mensagem.')
-    } finally {
-      sendingRef.current = false
+  // ── Realtime: o que a outra pessoa (ou eu, em outra aba) faz ─────────────
+  useEffect(() => {
+    const supabase = createClient()
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    let cancelled = false
+
+    const scheduleMarkRead = () => {
+      if (markReadTimerRef.current) clearTimeout(markReadTimerRef.current)
+      markReadTimerRef.current = setTimeout(() => {
+        if (document.visibilityState === 'visible') markReadRef.current(conversationId).catch(() => {})
+      }, 800)
     }
+
+    ;(async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) supabase.realtime.setAuth(session.access_token)
+      if (cancelled) return
+
+      type Row = { id: string; author_id: string; content: string; created_at: string; edited_at: string | null }
+      type ReactionRow = { message_id: string; user_id: string; emoji?: string }
+      const filter = `conversation_id=eq.${conversationId}`
+
+      channel = supabase.channel(`chat-thread-${conversationId}`)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter }, payload => {
+          const row = payload.new as Row
+          setList(prev => {
+            if (prev.some(m => m.id === row.id)) {
+              // Eco da minha própria mensagem: vira "enviada" com a hora do servidor.
+              return prev.map(m => m.id === row.id ? { ...m, createdAt: row.created_at, status: undefined } : m)
+            }
+            return [...prev, {
+              id: row.id, authorId: row.author_id, content: row.content,
+              createdAt: row.created_at, editedAt: row.edited_at, reactions: [],
+            }].sort(byCreatedAt)
+          })
+          if (row.author_id !== currentUserId) scheduleMarkRead()
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_messages', filter }, payload => {
+          const row = payload.new as Row
+          setList(prev => prev.map(m => m.id === row.id ? { ...m, content: row.content, editedAt: row.edited_at } : m))
+        })
+        // DELETE não aceita filtro no Realtime e só traz a chave (id) — basta
+        // tirar da tela se for desta conversa.
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'chat_messages' }, payload => {
+          const id = (payload.old as { id?: string }).id
+          if (id) setList(prev => prev.filter(m => m.id !== id))
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_message_reactions' }, payload => {
+          const row = (payload.eventType === 'DELETE' ? payload.old : payload.new) as ReactionRow
+          if (!row?.message_id || !row.user_id) return
+          const emoji = payload.eventType === 'DELETE' ? null : row.emoji ?? null
+          setList(prev => prev.map(m => m.id === row.message_id
+            ? { ...m, reactions: applyReaction(m.reactions, row.user_id, emoji) }
+            : m))
+        })
+        .subscribe()
+    })()
+
+    return () => {
+      cancelled = true
+      if (markReadTimerRef.current) clearTimeout(markReadTimerRef.current)
+      if (channel) supabase.removeChannel(channel)
+    }
+  }, [conversationId, currentUserId])
+
+  // ── Rolagem: desce sozinho só se a pessoa já estava no fim (ou acabou de mandar) ──
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    if (forceScrollRef.current || nearBottomRef.current) el.scrollTop = el.scrollHeight
+    forceScrollRef.current = false
+  }, [list.length])
+
+  function onScroll() {
+    const el = scrollRef.current
+    if (el) nearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX
+  }
+
+  // Campo cresce com o texto (até ~5 linhas), igual ao mural.
+  useEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 128)}px`
+  }, [draft])
+
+  // ── Envio ─────────────────────────────────────────────────────────────────
+  async function deliver(message: LocalMessage) {
+    const result = await sendMessageAction({ conversationId, id: message.id, content: message.content, path }).catch(() => OFFLINE)
+    setList(prev => prev.map(m => m.id === message.id ? { ...m, status: result.error ? 'failed' : undefined } : m))
+    if (result.error) toast.error(result.error)
+  }
+
+  function send() {
+    const content = draft.trim()
+    if (!content) return
+    const message: LocalMessage = {
+      id: newMessageId(), authorId: currentUserId, content,
+      createdAt: new Date().toISOString(), editedAt: null, reactions: [], status: 'sending',
+    }
+    forceScrollRef.current = true
+    setList(prev => [...prev, message])
+    setDraft('')
+    textareaRef.current?.focus()
+    // Sem trava: dá pra mandar outra em seguida. O Next executa as actions
+    // em fila, então a ordem de chegada no servidor é a ordem de envio.
+    void deliver(message)
+  }
+
+  function retry(message: LocalMessage) {
+    setList(prev => prev.map(m => m.id === message.id ? { ...m, status: 'sending' } : m))
+    void deliver(message)
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      formRef.current?.requestSubmit()
+      send()
+    }
+  }
+
+  // ── Editar / excluir / reagir: aplica na hora, desfaz se o servidor recusar ──
+  async function edit(message: LocalMessage, content: string) {
+    const before = message
+    setList(prev => prev.map(m => m.id === message.id ? { ...m, content, editedAt: new Date().toISOString() } : m))
+    const result = await editMessageAction({ messageId: message.id, content }).catch(() => OFFLINE)
+    if (result.error) {
+      setList(prev => prev.map(m => m.id === message.id ? before : m))
+      toast.error(result.error)
+    }
+  }
+
+  async function remove(message: LocalMessage) {
+    deletedIdsRef.current.add(message.id)
+    setList(prev => prev.filter(m => m.id !== message.id))
+    const result = await deleteMessageAction({ messageId: message.id }).catch(() => OFFLINE)
+    if (result.error) {
+      deletedIdsRef.current.delete(message.id)
+      setList(prev => [...prev, message].sort(byCreatedAt))
+      toast.error(result.error)
+    }
+  }
+
+  async function react(message: LocalMessage, emoji: string) {
+    const mine = message.reactions.find(r => r.userIds.includes(currentUserId))?.emoji ?? null
+    const target = mine === emoji ? null : emoji
+    setList(prev => prev.map(m => m.id === message.id ? { ...m, reactions: applyReaction(m.reactions, currentUserId, target) } : m))
+    const result = await toggleReactionAction({ messageId: message.id, emoji }).catch(() => OFFLINE)
+    if (result.error) {
+      setList(prev => prev.map(m => m.id === message.id ? { ...m, reactions: applyReaction(m.reactions, currentUserId, mine) } : m))
+      toast.error(result.error)
     }
   }
 
@@ -97,30 +291,41 @@ export function ChatThread({
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-        {localMessages.length === 0 && (
+      <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+        {list.length === 0 && (
           <p className="text-sm text-gray-400 text-center py-10">Nenhuma mensagem ainda. Diga oi!</p>
         )}
-        {localMessages.map(m => (
-          <MessageBubble
-            key={m.id}
-            message={m}
-            isOwn={m.authorId === currentUserId}
-            currentUserId={currentUserId}
-            path={path}
-            toggleReactionAction={toggleReactionAction}
-            editMessageAction={editMessageAction}
-            deleteMessageAction={deleteMessageAction}
-          />
-        ))}
-        <div ref={bottomRef} />
+        {list.map((m, i) => {
+          const showDay = i === 0 || dayLabel(list[i - 1].createdAt) !== dayLabel(m.createdAt)
+          return (
+            <Fragment key={m.id}>
+              {showDay && (
+                <div className="flex justify-center py-1">
+                  <span className="text-[11px] font-medium text-gray-500 bg-gray-100 rounded-full px-2.5 py-0.5">{dayLabel(m.createdAt)}</span>
+                </div>
+              )}
+              <MessageBubble
+                message={m}
+                isOwn={m.authorId === currentUserId}
+                currentUserId={currentUserId}
+                active={activeId === m.id}
+                onToggleActive={() => setActiveId(id => (id === m.id ? null : m.id))}
+                onRetry={() => retry(m)}
+                onEdit={content => edit(m, content)}
+                onDelete={() => remove(m)}
+                onReact={emoji => react(m, emoji)}
+              />
+            </Fragment>
+          )
+        })}
       </div>
 
-      <form ref={formRef} action={submit} className="flex items-end gap-2 px-3 py-2.5 border-t border-gray-100 shrink-0">
-        <input type="hidden" name="conversation_id" value={conversationId} />
-        <input type="hidden" name="path" value={path} />
+      <form
+        onSubmit={e => { e.preventDefault(); send() }}
+        className="flex items-end gap-2 px-3 py-2.5 border-t border-gray-100 shrink-0"
+      >
         <textarea
-          name="content"
+          ref={textareaRef}
           value={draft}
           onChange={e => setDraft(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -131,6 +336,9 @@ export function ChatThread({
         <EmojiPicker onSelect={emoji => setDraft(prev => `${prev}${emoji}`)} />
         <button
           type="submit"
+          // onMouseDown/preventDefault: tocar em Enviar não tira o foco do campo
+          // (no celular o teclado continua aberto, como no WhatsApp).
+          onMouseDown={e => e.preventDefault()}
           disabled={!draft.trim()}
           className="p-2 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-40 text-white transition-colors shrink-0"
           aria-label="Enviar"
@@ -142,48 +350,44 @@ export function ChatThread({
   )
 }
 
-function MessageBubble({ message, isOwn, currentUserId, path, toggleReactionAction, editMessageAction, deleteMessageAction }: {
-  message: ChatMessage
+function MessageBubble({ message, isOwn, currentUserId, active, onToggleActive, onRetry, onEdit, onDelete, onReact }: {
+  message: LocalMessage
   isOwn: boolean
   currentUserId: string
-  path: string
-  toggleReactionAction: (formData: FormData) => Promise<void>
-  editMessageAction: (formData: FormData) => Promise<void>
-  deleteMessageAction: (formData: FormData) => Promise<void>
+  active: boolean
+  onToggleActive: () => void
+  onRetry: () => void
+  onEdit: (content: string) => void
+  onDelete: () => void
+  onReact: (emoji: string) => void
 }) {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [editing, setEditing] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [editDraft, setEditDraft] = useState(message.content)
   const sticker = isStickerContent(message.content)
   const time = new Date(message.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-  // Mensagem "temp-..." (otimista, ainda sem confirmar no servidor) não tem
-  // id de verdade pra editar/excluir ainda — só entra na janela depois que
-  // a lista recarrega com o id real.
-  const isTemp = message.id.startsWith('temp-')
-  const withinEditWindow = !isTemp && (Date.now() - new Date(message.createdAt).getTime()) < MESSAGE_EDIT_WINDOW_MS
+  // Ainda não confirmada pelo servidor: sem editar/excluir/reagir até entrar.
+  const confirmed = !message.status
+  const withinEditWindow = confirmed && (Date.now() - new Date(message.createdAt).getTime()) < MESSAGE_EDIT_WINDOW_MS
   const canEditOrDelete = isOwn && withinEditWindow
 
-  async function submitEdit(formData: FormData) {
-    try {
-      await editMessageAction(formData)
-      setEditing(false)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Não foi possível editar a mensagem.')
-    }
+  function saveEdit() {
+    const content = editDraft.trim()
+    if (!content) return
+    setEditing(false)
+    if (content !== message.content) onEdit(content)
   }
 
   if (editing) {
     return (
       <div className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}>
-        <form action={submitEdit} className="max-w-[80%] w-full flex items-end gap-1.5">
-          <input type="hidden" name="message_id" value={message.id} />
-          <input type="hidden" name="path" value={path} />
+        <form onSubmit={e => { e.preventDefault(); saveEdit() }} className="max-w-[80%] w-full flex items-end gap-1.5">
           <textarea
-            name="content"
             value={editDraft}
             onChange={e => setEditDraft(e.target.value)}
             onKeyDown={e => {
-              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.currentTarget.form?.requestSubmit() }
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit() }
               if (e.key === 'Escape') setEditing(false)
             }}
             autoFocus
@@ -203,85 +407,100 @@ function MessageBubble({ message, isOwn, currentUserId, path, toggleReactionActi
 
   return (
     <div className={`group flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}>
-      {sticker ? (
-        <span className="text-4xl leading-none px-1">{message.content}</span>
-      ) : (
-        <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${isOwn ? 'bg-brand-500 text-white rounded-br-sm' : 'bg-gray-100 text-gray-800 rounded-bl-sm'}`}>
-          <p className="whitespace-pre-wrap break-words">{message.content}</p>
-        </div>
-      )}
+      {/* Tocar na mensagem mostra as ações (no celular não existe hover). */}
+      <button type="button" onClick={onToggleActive} className={`max-w-[80%] text-left ${isOwn ? 'self-end' : 'self-start'}`}>
+        {sticker ? (
+          <span className={`block text-4xl leading-none px-1 ${message.status ? 'opacity-60' : ''}`}>{message.content}</span>
+        ) : (
+          <span className={`block rounded-2xl px-3 py-2 text-sm transition-opacity ${isOwn ? 'bg-brand-500 text-white rounded-br-sm' : 'bg-gray-100 text-gray-800 rounded-bl-sm'} ${message.status === 'sending' ? 'opacity-70' : ''} ${message.status === 'failed' ? 'ring-2 ring-red-300' : ''}`}>
+            <span className="block whitespace-pre-wrap break-words">{message.content}</span>
+          </span>
+        )}
+      </button>
       <div className="flex items-center gap-1.5 mt-0.5 px-1">
-        <span className="text-[10px] text-gray-400">
+        <span className="flex items-center gap-1 text-[10px] text-gray-400">
           {time}{message.editedAt && ' · editado'}
+          {isOwn && message.status === 'sending' && <Clock size={10} aria-label="Enviando" />}
+          {isOwn && !message.status && <Check size={11} aria-label="Enviada" />}
         </span>
-        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-          {canEditOrDelete && (
-            <>
-              <button
-                type="button"
-                onClick={() => { setEditDraft(message.content); setEditing(true) }}
-                className="p-0.5 text-gray-300 hover:text-gray-500"
-                aria-label="Editar mensagem"
-              >
-                <Pencil size={13} />
-              </button>
-              <form action={deleteMessageAction}>
-                <input type="hidden" name="message_id" value={message.id} />
-                <input type="hidden" name="path" value={path} />
-                <ConfirmSubmitButton
-                  confirmMessage="Excluir esta mensagem? Essa ação não pode ser desfeita."
-                  title="Excluir mensagem"
+        {message.status === 'failed' && (
+          <button type="button" onClick={onRetry} className="flex items-center gap-1 text-[11px] font-medium text-red-600 hover:text-red-700">
+            <AlertCircle size={12} /> Não enviada · Tentar de novo
+          </button>
+        )}
+        {confirmed && (
+          <div className={`flex items-center gap-0.5 transition-opacity focus-within:opacity-100 ${active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+            {canEditOrDelete && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => { setEditDraft(message.content); setEditing(true) }}
+                  className="p-0.5 text-gray-300 hover:text-gray-500"
+                  aria-label="Editar mensagem"
+                >
+                  <Pencil size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(true)}
                   className="p-0.5 text-gray-300 hover:text-red-500"
+                  aria-label="Excluir mensagem"
                 >
                   <Trash2 size={13} />
-                </ConfirmSubmitButton>
-              </form>
-            </>
-          )}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setPickerOpen(o => !o)}
-              className="p-0.5 text-gray-300 hover:text-gray-500"
-              aria-label="Reagir"
-            >
-              <SmilePlus size={13} />
-            </button>
-            {pickerOpen && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setPickerOpen(false)} />
-                <div className="absolute bottom-full mb-1 left-0 z-20 flex items-center gap-0.5 bg-white border border-gray-200 rounded-full shadow-lg px-1.5 py-1">
-                  {REACTION_EMOJIS.map(emoji => (
-                    <form key={emoji} action={toggleReactionAction} onSubmit={() => setPickerOpen(false)}>
-                      <input type="hidden" name="message_id" value={message.id} />
-                      <input type="hidden" name="emoji" value={emoji} />
-                      <input type="hidden" name="path" value={path} />
-                      <button type="submit" className="text-base leading-none p-1 rounded-full hover:bg-gray-100">{emoji}</button>
-                    </form>
-                  ))}
-                </div>
+                </button>
               </>
             )}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setPickerOpen(o => !o)}
+                className="p-0.5 text-gray-300 hover:text-gray-500"
+                aria-label="Reagir"
+              >
+                <SmilePlus size={13} />
+              </button>
+              {pickerOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setPickerOpen(false)} />
+                  <div className={`absolute bottom-full mb-1 z-20 flex items-center gap-0.5 bg-white border border-gray-200 rounded-full shadow-lg px-1.5 py-1 ${isOwn ? 'right-0' : 'left-0'}`}>
+                    {REACTION_EMOJIS.map(emoji => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => { setPickerOpen(false); onReact(emoji) }}
+                        className="text-base leading-none p-1 rounded-full hover:bg-gray-100"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
       {message.reactions.length > 0 && (
         <div className="flex items-center gap-1 mt-1 flex-wrap">
           {message.reactions.map(r => (
-            <form key={r.emoji} action={toggleReactionAction}>
-              <input type="hidden" name="message_id" value={message.id} />
-              <input type="hidden" name="emoji" value={r.emoji} />
-              <input type="hidden" name="path" value={path} />
-              <button
-                type="submit"
-                className={`text-xs rounded-full px-1.5 py-0.5 border transition-colors ${r.userIds.includes(currentUserId) ? 'bg-brand-50 border-brand-200 text-brand-700' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
-              >
-                {r.emoji} {r.userIds.length}
-              </button>
-            </form>
+            <button
+              key={r.emoji}
+              type="button"
+              onClick={() => onReact(r.emoji)}
+              className={`text-xs rounded-full px-1.5 py-0.5 border transition-colors ${r.userIds.includes(currentUserId) ? 'bg-brand-50 border-brand-200 text-brand-700' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
+            >
+              {r.emoji} {r.userIds.length}
+            </button>
           ))}
         </div>
       )}
+      <ConfirmModal
+        open={confirmDelete}
+        message="Excluir esta mensagem? Essa ação não pode ser desfeita."
+        confirmLabel="Excluir"
+        onConfirm={() => { setConfirmDelete(false); onDelete() }}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </div>
   )
 }

@@ -75,6 +75,7 @@ export default async function ChatThreadPage({ params }: Props) {
       toggleReactionAction={toggleReaction}
       editMessageAction={editMessage}
       deleteMessageAction={deleteMessage}
+      markReadAction={markConversationRead}
     />
   )
 }

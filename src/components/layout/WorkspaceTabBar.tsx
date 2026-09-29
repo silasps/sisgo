@@ -2,9 +2,10 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Users, LayoutDashboard, Settings, Smile, Kanban } from 'lucide-react'
+import { MessageCircle, Users, LayoutDashboard, Settings, Smile, Kanban } from 'lucide-react'
 
 const ICON_MAP = {
+  chat: MessageCircle,
   equipe: Users,
   geral: LayoutDashboard,
   configuracoes: Settings,

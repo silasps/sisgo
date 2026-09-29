@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { revalidatePath } from 'next/cache'
+import { after } from 'next/server'
 import { canMessage, searchEligiblePeople } from '@/lib/auth/chat-access'
 import { sendPushToUsers } from '@/lib/notifications/push'
 import { REACTION_EMOJIS } from './emoji'
@@ -56,110 +56,122 @@ export async function getOrCreateDirectConversation(orgId: string, otherUserId: 
   return convo.id
 }
 
-export async function sendMessage(formData: FormData) {
+// Resultado das ações da conversa: nada de revalidatePath — a tela já
+// mostrou a mudança na hora (otimista, ver ChatThread.tsx) e a outra pessoa
+// recebe via Realtime (migration 150). Recarregar a rota inteira a cada
+// mensagem era o que deixava o chat lento. Erro volta como valor (não
+// throw) porque em produção o Next esconde a mensagem de erro lançada.
+export type ChatActionResult = { error?: string }
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+export async function sendMessage(input: {
+  conversationId: string
+  /** Gerado no navegador — a mensagem já aparece na tela com o id definitivo, e reenviar não duplica. */
+  id: string
+  content: string
+  /** Pra onde a notificação push leva quem receber. */
+  path?: string
+}): Promise<ChatActionResult> {
   const { userId } = await requireUser()
-  const conversationId = formData.get('conversation_id') as string
-  const content = (formData.get('content') as string)?.trim()
-  const path = formData.get('path') as string
-  if (!conversationId || !content) return
+  const content = input.content?.trim()
+  if (!input.conversationId || !content) return {}
+  if (!UUID_RE.test(input.id)) return { error: 'Mensagem inválida.' }
 
   const db = createAdminClient()
-  const { data: participant } = await db.from('chat_participants')
-    .select('conversation_id').eq('conversation_id', conversationId).eq('user_id', userId).maybeSingle()
-  if (!participant) throw new Error('Você não faz parte dessa conversa.')
+  const [{ data: participant }, { data: convo }, { data: others }] = await Promise.all([
+    db.from('chat_participants').select('conversation_id')
+      .eq('conversation_id', input.conversationId).eq('user_id', userId).maybeSingle(),
+    db.from('chat_conversations').select('organization_id').eq('id', input.conversationId).maybeSingle(),
+    db.from('chat_participants').select('user_id')
+      .eq('conversation_id', input.conversationId).neq('user_id', userId),
+  ])
+  if (!participant) return { error: 'Você não faz parte dessa conversa.' }
+  if (!convo) return { error: 'Conversa não encontrada.' }
 
-  const { data: convo } = await db.from('chat_conversations').select('organization_id').eq('id', conversationId).single()
-  if (!convo) throw new Error('Conversa não encontrada.')
-
-  const { data: others } = await db.from('chat_participants')
-    .select('user_id').eq('conversation_id', conversationId).neq('user_id', userId)
   const otherUserId = others?.[0]?.user_id
   if (otherUserId) {
     const result = await canMessage(convo.organization_id, userId, otherUserId, false)
-    if (!result.allowed) throw new Error(result.reason)
+    if (!result.allowed) return { error: result.reason }
   }
 
   const { error } = await db.from('chat_messages').insert({
-    conversation_id: conversationId,
+    id: input.id,
+    conversation_id: input.conversationId,
     organization_id: convo.organization_id,
     author_id: userId,
     content,
   })
-  if (error) throw new Error(error.message)
+  // 23505 = id já existe: é um reenvio de algo que já tinha entrado.
+  if (error && error.code !== '23505') return { error: 'Não foi possível enviar a mensagem.' }
 
-  await db.from('chat_conversations').update({ last_message_at: new Date().toISOString() }).eq('id', conversationId)
+  await db.from('chat_conversations').update({ last_message_at: new Date().toISOString() }).eq('id', input.conversationId)
 
-  const { data: excess } = await db.from('chat_messages')
-    .select('id').eq('conversation_id', conversationId)
-    .order('created_at', { ascending: false })
-    .range(MESSAGE_CAP, 999)
-  if (excess?.length) {
-    await db.from('chat_messages').delete().in('id', excess.map(e => e.id))
-  }
+  // Poda + push depois da resposta: quem enviou não espera por isso.
+  after(async () => {
+    const { data: excess } = await db.from('chat_messages')
+      .select('id').eq('conversation_id', input.conversationId)
+      .order('created_at', { ascending: false })
+      .range(MESSAGE_CAP, 999)
+    if (excess?.length) await db.from('chat_messages').delete().in('id', excess.map(e => e.id))
 
-  // Push nativo direto (sem passar pela fila notification_events/cron de
-  // 1 min — lenta demais pra "alguém te mandou mensagem agora"). Falha
-  // silenciosamente se a pessoa não tiver token nativo (só Capacitor tem
-  // push hoje, ver PushNotificationManager.tsx).
-  if (otherUserId) {
-    const senderName = (await resolveNames(db, convo.organization_id, [userId])).get(userId) ?? 'Alguém'
-    await sendPushToUsers([otherUserId], {
-      title: senderName,
-      body: content.length > 80 ? `${content.slice(0, 80)}…` : content,
-      data: path ? { url: path } : undefined,
-    })
-  }
+    // Push nativo direto (sem passar pela fila notification_events/cron de
+    // 1 min — lenta demais pra "alguém te mandou mensagem agora"). Falha
+    // silenciosamente se a pessoa não tiver token nativo (só Capacitor tem
+    // push hoje, ver PushNotificationManager.tsx).
+    if (otherUserId) {
+      const senderName = (await resolveNames(db, convo.organization_id, [userId])).get(userId) ?? 'Alguém'
+      await sendPushToUsers([otherUserId], {
+        title: senderName,
+        body: content.length > 80 ? `${content.slice(0, 80)}…` : content,
+        data: input.path ? { url: input.path } : undefined,
+      })
+    }
+  })
 
-  if (path) revalidatePath(path)
+  return {}
 }
 
 // Edita/exclui só a própria mensagem, só dentro da janela de tempo
 // (MESSAGE_EDIT_WINDOW_MS) — mesmo espírito do WhatsApp. A UI já esconde os
 // botões fora da janela, mas quem chama a action direto (ou com um clique
 // que já estava na tela há tempo) esbarra nessa checagem de verdade.
-export async function editMessage(formData: FormData) {
+async function ownMessageInWindow(db: ReturnType<typeof createAdminClient>, userId: string, messageId: string, verb: string) {
+  const { data: message } = await db.from('chat_messages')
+    .select('author_id, created_at').eq('id', messageId).maybeSingle()
+  if (!message) return 'Mensagem não encontrada.'
+  if (message.author_id !== userId) return `Você só pode ${verb} suas próprias mensagens.`
+  if (Date.now() - new Date(message.created_at).getTime() > MESSAGE_EDIT_WINDOW_MS) {
+    return `O tempo pra ${verb} essa mensagem já passou.`
+  }
+  return null
+}
+
+export async function editMessage(input: { messageId: string; content: string }): Promise<ChatActionResult> {
   const { userId } = await requireUser()
-  const messageId = formData.get('message_id') as string
-  const content = (formData.get('content') as string)?.trim()
-  const path = formData.get('path') as string
-  if (!messageId || !content) return
+  const content = input.content?.trim()
+  if (!input.messageId || !content) return {}
 
   const db = createAdminClient()
-  const { data: message } = await db.from('chat_messages')
-    .select('author_id, created_at').eq('id', messageId).single()
-  if (!message) throw new Error('Mensagem não encontrada.')
-  if (message.author_id !== userId) throw new Error('Você só pode editar suas próprias mensagens.')
-  if (Date.now() - new Date(message.created_at).getTime() > MESSAGE_EDIT_WINDOW_MS) {
-    throw new Error('O tempo pra editar essa mensagem já passou.')
-  }
+  const problem = await ownMessageInWindow(db, userId, input.messageId, 'editar')
+  if (problem) return { error: problem }
 
   const { error } = await db.from('chat_messages')
     .update({ content, edited_at: new Date().toISOString() })
-    .eq('id', messageId)
-  if (error) throw new Error(error.message)
-
-  if (path) revalidatePath(path)
+    .eq('id', input.messageId)
+  return error ? { error: 'Não foi possível editar a mensagem.' } : {}
 }
 
-export async function deleteMessage(formData: FormData) {
+export async function deleteMessage(input: { messageId: string }): Promise<ChatActionResult> {
   const { userId } = await requireUser()
-  const messageId = formData.get('message_id') as string
-  const path = formData.get('path') as string
-  if (!messageId) return
+  if (!input.messageId) return {}
 
   const db = createAdminClient()
-  const { data: message } = await db.from('chat_messages')
-    .select('author_id, created_at').eq('id', messageId).single()
-  if (!message) throw new Error('Mensagem não encontrada.')
-  if (message.author_id !== userId) throw new Error('Você só pode excluir suas próprias mensagens.')
-  if (Date.now() - new Date(message.created_at).getTime() > MESSAGE_EDIT_WINDOW_MS) {
-    throw new Error('O tempo pra excluir essa mensagem já passou.')
-  }
+  const problem = await ownMessageInWindow(db, userId, input.messageId, 'excluir')
+  if (problem) return { error: problem }
 
-  const { error } = await db.from('chat_messages').delete().eq('id', messageId)
-  if (error) throw new Error(error.message)
-
-  if (path) revalidatePath(path)
+  const { error } = await db.from('chat_messages').delete().eq('id', input.messageId)
+  return error ? { error: 'Não foi possível excluir a mensagem.' } : {}
 }
 
 export async function markConversationRead(conversationId: string) {
@@ -174,32 +186,28 @@ export async function markConversationRead(conversationId: string) {
 // Reação rápida numa mensagem ("joinha" etc.) — clicar de novo no mesmo
 // emoji remove; clicar num emoji diferente troca (1 reação por pessoa por
 // mensagem, ver migration 143).
-export async function toggleReaction(formData: FormData) {
+export async function toggleReaction(input: { messageId: string; emoji: string }): Promise<ChatActionResult> {
   const { userId } = await requireUser()
-  const messageId = formData.get('message_id') as string
-  const emoji = formData.get('emoji') as string
-  const path = formData.get('path') as string
-  if (!messageId || !REACTION_EMOJIS.includes(emoji)) return
+  if (!input.messageId || !REACTION_EMOJIS.includes(input.emoji)) return {}
 
   const db = createAdminClient()
-  const { data: message } = await db.from('chat_messages').select('conversation_id').eq('id', messageId).single()
-  if (!message) throw new Error('Mensagem não encontrada.')
-  const { data: participant } = await db.from('chat_participants')
-    .select('conversation_id').eq('conversation_id', message.conversation_id).eq('user_id', userId).maybeSingle()
-  if (!participant) throw new Error('Você não faz parte dessa conversa.')
+  const { data: message } = await db.from('chat_messages').select('conversation_id').eq('id', input.messageId).maybeSingle()
+  if (!message) return { error: 'Mensagem não encontrada.' }
+  const [{ data: participant }, { data: existing }] = await Promise.all([
+    db.from('chat_participants').select('conversation_id')
+      .eq('conversation_id', message.conversation_id).eq('user_id', userId).maybeSingle(),
+    db.from('chat_message_reactions').select('emoji')
+      .eq('message_id', input.messageId).eq('user_id', userId).maybeSingle(),
+  ])
+  if (!participant) return { error: 'Você não faz parte dessa conversa.' }
 
-  const { data: existing } = await db.from('chat_message_reactions')
-    .select('emoji').eq('message_id', messageId).eq('user_id', userId).maybeSingle()
-
-  if (existing?.emoji === emoji) {
-    await db.from('chat_message_reactions').delete().eq('message_id', messageId).eq('user_id', userId)
-  } else {
-    await db.from('chat_message_reactions').upsert(
-      { message_id: messageId, user_id: userId, emoji },
+  const { error } = existing?.emoji === input.emoji
+    ? await db.from('chat_message_reactions').delete().eq('message_id', input.messageId).eq('user_id', userId)
+    : await db.from('chat_message_reactions').upsert(
+      { message_id: input.messageId, user_id: userId, emoji: input.emoji },
       { onConflict: 'message_id,user_id' },
     )
-  }
-  if (path) revalidatePath(path)
+  return error ? { error: 'Não foi possível reagir.' } : {}
 }
 
 /** Busca de pessoa pro "nova conversa" — aceita "@nome" (ver chat-access.ts). */
