@@ -31,6 +31,19 @@
        e cortando os campos de formulário junto. */
     overflow-x: hidden;
   }
+  /* Causa raiz real do "campo estourando a tela no mobile": itens de grid
+     (`.grid`) têm min-width:auto por padrão — um `<select>`/input com
+     conteúdo largo (ex.: opção de texto longo) recusa encolher abaixo do
+     próprio conteúdo, mesmo com `w-full` nele, e força a grid (e a página
+     dentro dela) mais larga que a tela. `grid-cols-N` do Tailwind já
+     resolve isso via `minmax(0,1fr)` — mas uma grid sem colunas explícitas
+     no mobile (ex.: `grid sm:grid-cols-2`, 1 coluna implícita até o
+     breakpoint) fica sem essa proteção. Zera pra todo filho direto de
+     `.grid` — camada `base`, então qualquer `min-w-*` explícito no elemento
+     continua ganhando (utilities têm prioridade sobre base no Tailwind). */
+  .grid > * {
+    min-width: 0;
+  }
   .page-transition {
     /* Sem `forwards`/`both`: o `transform` do último frame não pode ficar
        aplicado pra sempre — isso torna este wrapper (que envolve TODA
