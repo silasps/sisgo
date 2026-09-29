@@ -4,12 +4,14 @@ import { useState, type ReactNode } from 'react'
 
 /** Duas abas simples (Escola / Turmas) — troca só visibilidade, sem desmontar,
  * pra formulários com estado (ex.: <details> aberto) não perderem contexto. */
-export function SchoolConfigTabs({ escola, turmas, turmasCount }: {
+export function SchoolConfigTabs({ escola, turmas, turmasCount, initialTab }: {
   escola: ReactNode
   turmas: ReactNode
   turmasCount: number
+  /** Abre direto na aba Turmas — usado por links tipo "0 Turmas" na Geral (?tab=turmas). */
+  initialTab?: 'escola' | 'turmas'
 }) {
-  const [tab, setTab] = useState<'escola' | 'turmas'>('escola')
+  const [tab, setTab] = useState<'escola' | 'turmas'>(initialTab ?? 'escola')
 
   return (
     <div>

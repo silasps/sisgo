@@ -26,7 +26,7 @@ import { HoursField } from '@/components/ui/HoursField'
 
 type Props = {
   params: Promise<{ slug: string; id: string }>
-  searchParams: Promise<{ msg?: string }>
+  searchParams: Promise<{ msg?: string; tab?: string }>
 }
 
 function whatsappDigits(value: string | null | undefined): string | null {
@@ -59,7 +59,8 @@ function WhatsAppButton({ phone }: { phone?: string | null }) {
 
 export default async function EditarEscolaPage({ params, searchParams }: Props) {
   const { slug, id } = await params
-  const { msg } = await searchParams
+  const { msg, tab } = await searchParams
+  const initialTab = tab === 'turmas' ? 'turmas' as const : 'escola' as const
   const supabase = await createClient()
   const sbAdmin  = createAdminClient()
 
@@ -425,14 +426,14 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
       formData.get('active') === 'true',
     )
     await triggerSiteRevalidation(org.id, 'events')
-    redirect(`/${slug}/escolas/${id}`)
+    redirect(`/${slug}/escolas/${id}/configuracoes?tab=turmas`)
   }
 
   const handleDeleteTurma = async (formData: FormData) => {
     'use server'
     await deleteTurma(formData.get('class_id') as string)
     await triggerSiteRevalidation(org.id, 'events')
-    redirect(`/${slug}/escolas/${id}`)
+    redirect(`/${slug}/escolas/${id}/configuracoes?tab=turmas`)
   }
 
   const publicUrl = (escola as unknown as { slug: string | null }).slug
@@ -458,6 +459,7 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
 
           <SchoolConfigTabs
             turmasCount={turmas?.length ?? 0}
+            initialTab={initialTab}
             turmas={
               <div>
                 <div className="flex items-center justify-between mb-3">
@@ -849,6 +851,7 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
         <main className="p-4 md:p-6 max-w-2xl mx-auto overflow-y-auto flex-1">
           <SchoolConfigTabs
             turmasCount={turmas?.length ?? 0}
+            initialTab={initialTab}
             turmas={
               <div>
                 <div className="flex items-center justify-between mb-3">
