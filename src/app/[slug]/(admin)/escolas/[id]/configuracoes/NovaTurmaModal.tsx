@@ -36,7 +36,7 @@ export function NovaTurmaModal({ action }: { action: Action }) {
             <input name="name" required placeholder="Ex: ETED Julho 2026" className={INPUT} />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Ano</label>
               <input name="year" type="number" placeholder="2026" className={INPUT} />
@@ -47,14 +47,14 @@ export function NovaTurmaModal({ action }: { action: Action }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Início</label>
-              <input name="starts_at" type="date" className={INPUT} />
+              <input name="starts_at" type="date" className={`${INPUT} min-w-0`} />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Fim</label>
-              <input name="ends_at" type="date" className={INPUT} />
+              <input name="ends_at" type="date" className={`${INPUT} min-w-0`} />
             </div>
           </div>
 
