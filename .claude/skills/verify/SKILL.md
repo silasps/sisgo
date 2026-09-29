@@ -24,10 +24,12 @@ rodar migrations ou inspecionar dados:
 set -a && source .env.local 2>/dev/null && set +a
 psql "$DATABASE_URL" -c "..."
 ```
-Migrations em `supabase/migrations/*.sql` não são aplicadas automaticamente
-— precisam ser rodadas manualmente (psql ou SQL Editor do Supabase) antes
-de qualquer feature nova poder funcionar. **Sempre confirmar com o usuário
-antes de rodar uma migration em produção**, mesmo que seja aditiva.
+Migrations em `supabase/migrations/*.sql` são aplicadas com
+`npm run db:migrate -- --apply` (ver CLAUDE.md → "Migrations do banco") —
+nunca à mão. O usuário pediu (2026-09-29) que isso rode automaticamente:
+depois de `git pull` com migration nova e logo após criar uma. Rode antes
+`npm run db:migrate` (status) e leia o que ele diz; se parar com "já existe"
+ou "parcial", investigue antes de `--mark-applied`.
 
 ## Testar rotas autenticadas sem login
 A maioria das rotas fica em `/[slug]/(admin)/...` e exige sessão (Supabase
