@@ -710,7 +710,10 @@ export default async function SlugLayout({ children, params }: Props) {
   // Mensagem direta não-lida (Chat institucional) — mesmo critério de
   // last_read_at vs. mensagem de outra pessoa que o mural já usa acima.
   let hasUnreadDM = false
-  const { data: myChatParts } = await sbAdmin.from('chat_participants').select('conversation_id, last_read_at').eq('user_id', user.id)
+  const [{ data: myChatParts }, { data: geralConversation }] = await Promise.all([
+    sbAdmin.from('chat_participants').select('conversation_id, last_read_at').eq('user_id', user.id),
+    sbAdmin.from('chat_conversations').select('id').eq('organization_id', org.id).eq('kind', 'geral').maybeSingle(),
+  ])
   if ((myChatParts ?? []).length > 0) {
     const convoIds = (myChatParts ?? []).map(p => p.conversation_id)
     const { data: dmMsgs } = await sbAdmin.from('chat_messages')
@@ -821,7 +824,7 @@ export default async function SlugLayout({ children, params }: Props) {
         <FlashToast />
       </Suspense>
       <PushNotificationManager />
-      <ChatDeliveryListener />
+      <ChatDeliveryListener geralConversationId={geralConversation?.id ?? null} />
       {pendingProfileCompletion && (
         <CadastroIncompletoAlert
           href={pendingProfileCompletion.tipo === 'aluno'

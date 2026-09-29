@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { MessageCircle } from 'lucide-react'
+import { MessageCircle, Users } from 'lucide-react'
 import { NewConversationModal } from './NewConversationModal'
 import type { ChatListItem } from './types'
 
@@ -77,8 +77,8 @@ export function ConversationList({ items, chatBasePath, orgId }: {
           items.map(item => {
             const href = `${chatBasePath}/${item.id}`
             const active = pathname === href
-            const name = item.otherName
-            const avatarUrl = item.otherAvatarUrl
+            const name = item.title
+            const avatarUrl = item.avatarUrl
             return (
               <Link
                 key={item.id}
@@ -89,8 +89,8 @@ export function ConversationList({ items, chatBasePath, orgId }: {
                   // eslint-disable-next-line @next/next/no-img-element -- foto de perfil do usuário, não passa pelo otimizador
                   <img src={avatarUrl} alt="" className="shrink-0 w-9 h-9 rounded-full object-cover" />
                 ) : (
-                  <span className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold bg-gray-200 text-gray-600">
-                    {name.charAt(0).toUpperCase()}
+                  <span className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold ${item.kind === 'geral' ? 'bg-brand-50 text-brand-600' : 'bg-gray-200 text-gray-600'}`}>
+                    {item.kind === 'geral' ? <Users size={16} /> : name.charAt(0).toUpperCase()}
                   </span>
                 )}
                 <span className="flex-1 min-w-0">
@@ -98,7 +98,7 @@ export function ConversationList({ items, chatBasePath, orgId }: {
                     <span className={`text-sm truncate ${item.unread ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>{name}</span>
                     {item.unread && <span className="w-2 h-2 rounded-full bg-brand-500 shrink-0" />}
                   </span>
-                  <span className="block text-xs text-gray-400 truncate">{item.lastMessagePreview ?? 'Sem mensagens ainda'}</span>
+                  <span className="block text-xs text-gray-400 truncate">{item.lastMessagePreview ?? (item.kind === 'geral' ? `Toda a equipe da base · ${item.memberCount ?? 0} pessoas` : 'Sem mensagens ainda')}</span>
                 </span>
               </Link>
             )

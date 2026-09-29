@@ -10,7 +10,10 @@ import { markChatDelivered } from './actions'
 // Marca ao abrir o app, ao voltar pra ele (o Realtime não repete o que
 // chegou enquanto a aba/app estava suspenso) e a cada mensagem nova. A RLS
 // (migration 150) só entrega eventos das conversas desta pessoa.
-export function ChatDeliveryListener() {
+// Mensagem do Geral não dispara marcação na hora: seriam todos os obreiros
+// online chamando o servidor a cada mensagem do grupo. O Geral é marcado
+// junto, ao abrir/voltar pro app (a função do banco cobre todas as conversas).
+export function ChatDeliveryListener({ geralConversationId }: { geralConversationId: string | null }) {
   useEffect(() => {
     const supabase = createClient()
     let channel: ReturnType<typeof supabase.channel> | null = null
@@ -31,7 +34,9 @@ export function ChatDeliveryListener() {
       if (session) supabase.realtime.setAuth(session.access_token)
       if (cancelled) return
       channel = supabase.channel('chat-delivery')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, markSoon)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, payload => {
+          if ((payload.new as { conversation_id?: string }).conversation_id !== geralConversationId) markSoon()
+        })
         .subscribe()
     })()
 
@@ -41,7 +46,7 @@ export function ChatDeliveryListener() {
       if (timer) clearTimeout(timer)
       if (channel) supabase.removeChannel(channel)
     }
-  }, [])
+  }, [geralConversationId])
 
   return null
 }

@@ -1,9 +1,15 @@
+/** 'dm' = conversa 1-a-1; 'geral' = grupão com toda a equipe da base (migration 153). */
+export type ConversationKind = 'dm' | 'geral'
+
 export type ConversationSummary = {
-  type: 'dm'
+  kind: ConversationKind
   id: string
-  otherUserId: string
-  otherName: string
-  otherAvatarUrl: string | null
+  /** Nome da outra pessoa (dm) ou "Geral". */
+  title: string
+  /** Foto da outra pessoa (só dm). */
+  avatarUrl: string | null
+  /** Quantas pessoas estão no grupo (só geral). */
+  memberCount: number | null
   lastMessagePreview: string | null
   lastMessageAt: string | null
   unread: boolean

@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Send, ChevronLeft, SmilePlus, Pencil, Trash2, Check, CheckCheck, X, Clock, AlertCircle } from 'lucide-react'
+import { Send, ChevronLeft, SmilePlus, Pencil, Trash2, Check, CheckCheck, X, Clock, AlertCircle, Users } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
@@ -10,7 +10,7 @@ import { EmojiPicker } from './EmojiPicker'
 import { REACTION_EMOJIS, isStickerContent } from './emoji'
 import { MESSAGE_EDIT_WINDOW_MS } from './config'
 import type { ChatActionResult } from './actions'
-import type { ChatMessage, MessageReaction } from './types'
+import type { ChatMessage, ConversationKind, MessageReaction } from './types'
 
 // Conversa no estilo WhatsApp: tudo o que a pessoa faz aparece na hora
 // (otimista) e o servidor confirma por trás — nada de esperar a action nem
@@ -24,8 +24,14 @@ type LocalMessage = ChatMessage & {
 
 type Props = {
   conversationId: string
-  otherName: string
-  otherAvatarUrl: string | null
+  /** 'geral' = grupão da base (migration 153): mostra quem escreveu cada mensagem. */
+  kind: ConversationKind
+  /** Nome da outra pessoa (dm) ou "Geral". */
+  title: string
+  subtitle: string | null
+  avatarUrl: string | null
+  /** Nome de cada membro do Geral, pra legenda dos balões. */
+  authorNames: Record<string, string>
   currentUserId: string
   messages: ChatMessage[]
   /** Até quando a outra pessoa leu a conversa — ✓✓ azul. */
@@ -71,6 +77,14 @@ function applyReaction(reactions: MessageReaction[], userId: string, emoji: stri
 // gera "…56.123Z" — comparar as strings mistura os dois formatos.
 const time = (iso: string) => new Date(iso).getTime()
 const byCreatedAt = (a: ChatMessage, b: ChatMessage) => time(a.createdAt) - time(b.createdAt)
+
+// Cor fixa por pessoa no Geral (mesma pessoa, mesma cor), como no WhatsApp.
+const AUTHOR_COLORS = ['text-rose-600', 'text-sky-700', 'text-emerald-700', 'text-violet-700', 'text-amber-700', 'text-teal-700', 'text-fuchsia-700', 'text-indigo-700']
+function authorColor(userId: string) {
+  let h = 0
+  for (const ch of userId) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+  return AUTHOR_COLORS[h % AUTHOR_COLORS.length]
+}
 const latest = (a: string | null, b: string | null) => (!a ? b : !b ? a : time(b) > time(a) ? b : a)
 
 function dayLabel(iso: string): string {
@@ -86,7 +100,7 @@ function dayLabel(iso: string): string {
 }
 
 export function ChatThread({
-  conversationId, otherName, otherAvatarUrl, currentUserId, messages, otherLastReadAt, otherLastDeliveredAt, path,
+  conversationId, kind, title, subtitle, avatarUrl, authorNames, currentUserId, messages, otherLastReadAt, otherLastDeliveredAt, path,
   sendMessageAction, toggleReactionAction, editMessageAction, deleteMessageAction, markReadAction,
 }: Props) {
   const [list, setList] = useState<LocalMessage[]>(messages)
@@ -186,14 +200,20 @@ export function ChatThread({
           const id = (payload.old as { id?: string }).id
           if (id) setList(prev => prev.filter(m => m.id !== id))
         })
-        // Mensagem chegou no aparelho da outra pessoa (✓✓ cinza) ou ela abriu a
-        // conversa (✓✓ azul) — migrations 151/152.
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_participants', filter }, payload => {
+      // Mensagem chegou no aparelho da outra pessoa (✓✓ cinza) ou ela abriu a
+      // conversa (✓✓ azul) — migrations 151/152. Só na conversa 1-a-1: no
+      // Geral cada leitura de cada membro viraria um evento pra todo mundo
+      // (dezenas de pessoas × dezenas de leituras); lá os certinhos se
+      // atualizam junto com a página quando chega mensagem nova.
+      if (kind === 'dm') {
+        channel.on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_participants', filter }, payload => {
           const row = payload.new as ParticipantRow
           if (row.user_id === currentUserId) return
           if (row.last_read_at) setOtherReadAt(prev => latest(prev, row.last_read_at))
           if (row.last_delivered_at) setOtherDeliveredAt(prev => latest(prev, row.last_delivered_at))
         })
+      }
+      channel
         .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_message_reactions' }, payload => {
           const row = (payload.eventType === 'DELETE' ? payload.old : payload.new) as ReactionRow
           if (!row?.message_id || !row.user_id) return
@@ -210,7 +230,7 @@ export function ChatThread({
       if (markReadTimerRef.current) clearTimeout(markReadTimerRef.current)
       if (channel) supabase.removeChannel(channel)
     }
-  }, [conversationId, currentUserId])
+  }, [conversationId, currentUserId, kind])
 
   // ── Rolagem: desce sozinho só se a pessoa já estava no fim (ou acabou de mandar) ──
   useLayoutEffect(() => {
@@ -307,26 +327,33 @@ export function ChatThread({
         <Link href={path.split('/').slice(0, -1).join('/')} className="lg:hidden p-1 -ml-1 text-gray-400 hover:text-gray-600" aria-label="Voltar">
           <ChevronLeft size={20} />
         </Link>
-        {otherAvatarUrl ? (
+        {kind === 'geral' ? (
+          <span className="shrink-0 w-8 h-8 rounded-full bg-brand-50 flex items-center justify-center text-brand-600">
+            <Users size={15} />
+          </span>
+        ) : avatarUrl ? (
           <button type="button" onClick={() => setAvatarOpen(true)} className="shrink-0" aria-label="Ver foto do perfil">
             {/* eslint-disable-next-line @next/next/no-img-element -- foto de perfil do usuário, não passa pelo otimizador */}
-            <img src={otherAvatarUrl} alt="" className="w-8 h-8 rounded-full object-cover" />
+            <img src={avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover" />
           </button>
         ) : (
           <span className="shrink-0 w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-sm font-semibold text-gray-600">
-            {otherName.charAt(0).toUpperCase()}
+            {title.charAt(0).toUpperCase()}
           </span>
         )}
-        <h3 className="text-sm font-semibold text-gray-800 truncate">{otherName}</h3>
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-gray-800 truncate">{title}</h3>
+          {subtitle && <p className="text-[11px] text-gray-400 truncate">{subtitle}</p>}
+        </div>
       </div>
 
-      {avatarOpen && otherAvatarUrl && (
+      {avatarOpen && avatarUrl && (
         <div
           className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6"
           onClick={() => setAvatarOpen(false)}
         >
           {/* eslint-disable-next-line @next/next/no-img-element -- foto de perfil do usuário, não passa pelo otimizador */}
-          <img src={otherAvatarUrl} alt={otherName} className="max-w-xs w-full aspect-square rounded-full object-cover shadow-2xl" />
+          <img src={avatarUrl} alt={title} className="max-w-xs w-full aspect-square rounded-full object-cover shadow-2xl" />
         </div>
       )}
 
@@ -336,6 +363,9 @@ export function ChatThread({
         )}
         {list.map((m, i) => {
           const showDay = i === 0 || dayLabel(list[i - 1].createdAt) !== dayLabel(m.createdAt)
+          // No Geral, o nome de quem escreveu aparece no começo de cada sequência dela.
+          const showAuthor = kind === 'geral' && m.authorId !== currentUserId
+            && (showDay || list[i - 1].authorId !== m.authorId)
           return (
             <Fragment key={m.id}>
               {showDay && (
@@ -346,6 +376,7 @@ export function ChatThread({
               <MessageBubble
                 message={m}
                 isOwn={m.authorId === currentUserId}
+                authorName={showAuthor ? authorNames[m.authorId] ?? 'Obreiro' : null}
                 receipt={
                   m.status ? 'pending'
                     : otherReadAt && time(m.createdAt) <= time(otherReadAt) ? 'read'
@@ -395,9 +426,11 @@ export function ChatThread({
   )
 }
 
-function MessageBubble({ message, isOwn, receipt, currentUserId, active, onToggleActive, onRetry, onEdit, onDelete, onReact }: {
+function MessageBubble({ message, isOwn, authorName, receipt, currentUserId, active, onToggleActive, onRetry, onEdit, onDelete, onReact }: {
   message: LocalMessage
   isOwn: boolean
+  /** Nome de quem escreveu (só no Geral, no começo de cada sequência). */
+  authorName: string | null
   /** Certinhos de mensagem própria, igual ao WhatsApp: ✓ enviada, ✓✓ cinza entregue, ✓✓ azul vista. */
   receipt: 'pending' | 'sent' | 'delivered' | 'read'
   currentUserId: string
@@ -454,6 +487,9 @@ function MessageBubble({ message, isOwn, receipt, currentUserId, active, onToggl
 
   return (
     <div className={`group flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}>
+      {authorName && (
+        <span className={`text-[11px] font-semibold px-1 mb-0.5 ${authorColor(message.authorId)}`}>{authorName}</span>
+      )}
       {/* Tocar na mensagem mostra as ações (no celular não existe hover). */}
       <button type="button" onClick={onToggleActive} className={`max-w-[80%] text-left ${isOwn ? 'self-end' : 'self-start'}`}>
         {sticker ? (

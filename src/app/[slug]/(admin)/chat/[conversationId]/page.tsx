@@ -20,18 +20,30 @@ export default async function ChatThreadPage({ params }: Props) {
     .select('conversation_id').eq('conversation_id', conversationId).eq('user_id', user.id).maybeSingle()
   if (!participant) notFound()
 
-  const { data: convo } = await db.from('chat_conversations').select('organization_id').eq('id', conversationId).single()
+  const { data: convo } = await db.from('chat_conversations').select('organization_id, kind').eq('id', conversationId).single()
   if (!convo) notFound()
+  const isGeral = convo.kind === 'geral'
 
   const { data: others } = await db.from('chat_participants')
     .select('user_id, last_read_at, last_delivered_at').eq('conversation_id', conversationId).neq('user_id', user.id)
-  const otherUserId = others?.[0]?.user_id ?? ''
-  const otherLastReadAt = others?.[0]?.last_read_at ?? null
-  const otherLastDeliveredAt = others?.[0]?.last_delivered_at ?? null
+  const otherUserIds = (others ?? []).map(o => o.user_id)
+  const otherUserId = otherUserIds[0] ?? ''
+
+  // Certinhos: na conversa 1-a-1 valem os horários da outra pessoa; no Geral,
+  // igual ao WhatsApp, ✓✓ só quando TODOS receberam e azul só quando TODOS
+  // viram — ou seja, o menor horário entre os membros (quem nunca abriu
+  // segura em ✓).
+  const earliest = (values: Array<string | null>) =>
+    values.length === 0 || values.some(v => !v)
+      ? null
+      : values.reduce((a, b) => (new Date(b!).getTime() < new Date(a!).getTime() ? b : a))
+  const otherLastReadAt = earliest((others ?? []).map(o => o.last_read_at))
+  const otherLastDeliveredAt = earliest((others ?? []).map(o => o.last_delivered_at))
 
   const [nameByUserId, avatarByUserId, { data: messagesRaw }] = await Promise.all([
-    resolveNames(db, convo.organization_id, [otherUserId]),
-    resolveAvatars(db, [otherUserId]),
+    // No Geral, nome de todo mundo: cada balão mostra quem escreveu.
+    resolveNames(db, convo.organization_id, isGeral ? otherUserIds : [otherUserId]),
+    isGeral ? Promise.resolve(new Map<string, string>()) : resolveAvatars(db, [otherUserId]),
     db.from('chat_messages')
       .select('id, author_id, content, created_at, edited_at')
       .eq('conversation_id', conversationId)
@@ -68,8 +80,11 @@ export default async function ChatThreadPage({ params }: Props) {
   return (
     <ChatThread
       conversationId={conversationId}
-      otherName={nameByUserId.get(otherUserId) ?? 'Pessoa'}
-      otherAvatarUrl={avatarByUserId.get(otherUserId) ?? null}
+      kind={isGeral ? 'geral' : 'dm'}
+      title={isGeral ? 'Geral' : nameByUserId.get(otherUserId) ?? 'Pessoa'}
+      subtitle={isGeral ? `Toda a equipe da base · ${otherUserIds.length + 1} pessoas` : null}
+      avatarUrl={isGeral ? null : avatarByUserId.get(otherUserId) ?? null}
+      authorNames={isGeral ? Object.fromEntries(nameByUserId) : {}}
       currentUserId={user.id}
       messages={messages}
       otherLastReadAt={otherLastReadAt}

@@ -35,16 +35,23 @@ export async function getOrCreateDirectConversation(orgId: string, otherUserId: 
 
   const db = createAdminClient()
   // Par ordenado: sempre exatamente 2 linhas em chat_participants por DM —
-  // achar uma conversa existente é achar uma conversa onde ambos aparecem.
+  // achar uma conversa existente é achar uma DM (desta base) onde ambos
+  // aparecem. Só 'dm': os dois também estão juntos no Geral da base, e sem
+  // esse filtro a conversa "privada" cairia no grupo.
   const { data: myConvos } = await db.from('chat_participants').select('conversation_id').eq('user_id', userId)
   const myIds = (myConvos ?? []).map(r => r.conversation_id)
   if (myIds.length > 0) {
     const { data: shared } = await db.from('chat_participants')
-      .select('conversation_id').eq('user_id', otherUserId).in('conversation_id', myIds).limit(1)
-    if (shared && shared.length > 0) return shared[0].conversation_id
+      .select('conversation_id').eq('user_id', otherUserId).in('conversation_id', myIds)
+    const sharedIds = (shared ?? []).map(r => r.conversation_id)
+    if (sharedIds.length > 0) {
+      const { data: dm } = await db.from('chat_conversations')
+        .select('id').in('id', sharedIds).eq('kind', 'dm').eq('organization_id', orgId).limit(1)
+      if (dm && dm.length > 0) return dm[0].id
+    }
   }
 
-  const { data: convo, error } = await db.from('chat_conversations').insert({ organization_id: orgId }).select('id').single()
+  const { data: convo, error } = await db.from('chat_conversations').insert({ organization_id: orgId, kind: 'dm' }).select('id').single()
   if (error || !convo) throw new Error(error?.message ?? 'Não foi possível iniciar a conversa.')
 
   const { error: partError } = await db.from('chat_participants').insert([
@@ -82,14 +89,18 @@ export async function sendMessage(input: {
   const [{ data: participant }, { data: convo }, { data: others }] = await Promise.all([
     db.from('chat_participants').select('conversation_id')
       .eq('conversation_id', input.conversationId).eq('user_id', userId).maybeSingle(),
-    db.from('chat_conversations').select('organization_id').eq('id', input.conversationId).maybeSingle(),
+    db.from('chat_conversations').select('organization_id, kind').eq('id', input.conversationId).maybeSingle(),
     db.from('chat_participants').select('user_id')
-      .eq('conversation_id', input.conversationId).neq('user_id', userId),
+      .eq('conversation_id', input.conversationId).neq('user_id', userId).limit(2),
   ])
   if (!participant) return { error: 'Você não faz parte dessa conversa.' }
   if (!convo) return { error: 'Conversa não encontrada.' }
 
-  const otherUserId = others?.[0]?.user_id
+  // No Geral quem está dentro já pode falar (a lista de membros é a própria
+  // regra — migration 153); canMessage e push valem só pra conversa 1-a-1.
+  // Sem push no Geral: seriam dezenas de notificações a cada mensagem.
+  const isGeral = convo.kind === 'geral'
+  const otherUserId = isGeral ? undefined : others?.[0]?.user_id
   if (otherUserId) {
     const result = await canMessage(convo.organization_id, userId, otherUserId, false)
     if (!result.allowed) return { error: result.reason }
