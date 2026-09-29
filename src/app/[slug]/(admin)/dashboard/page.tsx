@@ -241,7 +241,7 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
       .limit(20),
   ])
   const areaItems = await buildAreaTabs({
-    supabase, sbAdmin: sbAreas, slug, orgId, userId: user?.id ?? '', role: userRole, areas: myAreas, laundryEnabled,
+    supabase, sbAdmin: sbAreas, slug, orgId, userId: user?.id ?? '', areas: myAreas, laundryEnabled,
   })
 
   // Mesmo filtro de público-alvo que a Início do aluno já usa — só que

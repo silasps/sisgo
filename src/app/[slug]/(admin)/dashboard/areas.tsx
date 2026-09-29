@@ -7,22 +7,18 @@ import {
   type LinkedMinistry, type LinkedSchool, type UnitAccessContext,
 } from '@/lib/auth/unit-access'
 import {
-  Users, AlertTriangle, Home, BookOpen, ClipboardList, GraduationCap, Megaphone,
+  Users, AlertTriangle, Home, BookOpen, ClipboardList, GraduationCap,
 } from 'lucide-react'
 import { StatCard, SectionCard, EmptyState } from './ui'
 import type { AreaTab } from './AreaTabs'
 import { MiniCalendar } from './MiniCalendar'
 import { PersonalAccountCard } from './PersonalAccountCard'
-import type { AnnouncementListItem } from '@/components/ui/AnnouncementList'
-import { AnnouncementCarousel } from '@/components/ui/AnnouncementCarousel'
-import { matchesAudience } from '@/lib/audience-roles'
 
 type ServerClient = Awaited<ReturnType<typeof createClient>>
 type AdminClient = ReturnType<typeof createAdminClient>
 
 export type MyAreas = { ministries: LinkedMinistry[]; schools: LinkedSchool[] }
 
-type Announcement = AnnouncementListItem
 export type CalendarEventRow = { id: string; title: string; event_type: string; starts_at: string }
 
 /**
@@ -36,24 +32,25 @@ export async function getMyAreas(ctx: UnitAccessContext): Promise<MyAreas> {
 }
 
 /** Uma aba + painel por ministério/escola, com os dados de cada um já carregados. */
-export async function buildAreaTabs({ supabase, sbAdmin, slug, orgId, userId, role, areas, laundryEnabled }: {
-  supabase: ServerClient; sbAdmin: AdminClient; slug: string; orgId: string; userId: string; role: string; areas: MyAreas
+export async function buildAreaTabs({ supabase, sbAdmin, slug, orgId, userId, areas, laundryEnabled }: {
+  supabase: ServerClient; sbAdmin: AdminClient; slug: string; orgId: string; userId: string; areas: MyAreas
   laundryEnabled: boolean
 }): Promise<Array<{ tab: AreaTab; panel: ReactNode }>> {
   if (areas.ministries.length === 0 && areas.schools.length === 0) return []
 
   const now = new Date().toISOString()
-  const todayDate = now.slice(0, 10)
 
-  const [{ data: announcementsRaw }, { count: myReservations }, ministryData, schoolData] = await Promise.all([
-    sbAdmin
-      .from('base_announcements')
-      .select('id, title, body, pinned, category, image_url, image_focal_x, image_focal_y, image_zoom, link_url, link_label, visible_to_roles, publish_at, author_name, created_at')
-      .eq('organization_id', orgId)
-      .or(`expires_at.is.null,expires_at.gte.${todayDate}`)
-      .order('pinned', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(20),
+  const [{ data: ministryHeroRows }, { data: schoolHeroRows }, { count: myReservations }, ministryData, schoolData] = await Promise.all([
+    // Foto própria do ministério/escola (mesma usada na página pública,
+    // hero_image_url) — cada área com a sua, em vez de repetir o mesmo
+    // anúncio geral da organização em todo painel (isso já aparece uma vez
+    // só, no topo da Início).
+    areas.ministries.length > 0
+      ? sbAdmin.from('ministries').select('id, hero_image_url').in('id', areas.ministries.map(m => m.id))
+      : Promise.resolve({ data: [] as Array<{ id: string; hero_image_url: string | null }> }),
+    areas.schools.length > 0
+      ? sbAdmin.from('schools').select('id, hero_image_url').in('id', areas.schools.map(s => s.id))
+      : Promise.resolve({ data: [] as Array<{ id: string; hero_image_url: string | null }> }),
     areas.ministries.length > 0
       ? supabase.from('reservations')
         .select('*', { count: 'exact', head: true })
@@ -119,9 +116,8 @@ export async function buildAreaTabs({ supabase, sbAdmin, slug, orgId, userId, ro
     })),
   ])
 
-  const announcements = ((announcementsRaw ?? []) as Array<Announcement & { visible_to_roles: string[] | null; publish_at: string | null }>)
-    .filter(a => matchesAudience(role, a.visible_to_roles) && (!a.publish_at || new Date(a.publish_at).getTime() <= Date.now()))
-    .slice(0, 3)
+  const heroByMinistry = new Map((ministryHeroRows ?? []).map(r => [r.id, r.hero_image_url]))
+  const heroBySchool = new Map((schoolHeroRows ?? []).map(r => [r.id, r.hero_image_url]))
 
   return [
     ...areas.ministries.map((m, i) => {
@@ -141,7 +137,7 @@ export async function buildAreaTabs({ supabase, sbAdmin, slug, orgId, userId, ro
             userId={userId}
             laundryEnabled={laundryEnabled}
             ministry={m}
-            announcements={announcements}
+            heroImageUrl={heroByMinistry.get(m.id) ?? null}
             pending={d.pending}
             members={d.members}
             events={d.events}
@@ -154,7 +150,7 @@ export async function buildAreaTabs({ supabase, sbAdmin, slug, orgId, userId, ro
       const d = schoolData[i]
       return {
         tab: { key: `escola-${s.id}`, label: s.name, kind: 'escola' as const, badge: d.applications },
-        panel: <SchoolPanel key={`escola-${s.id}`} slug={slug} orgId={orgId} userId={userId} laundryEnabled={laundryEnabled} school={s} announcements={announcements} {...d} />,
+        panel: <SchoolPanel key={`escola-${s.id}`} slug={slug} orgId={orgId} userId={userId} laundryEnabled={laundryEnabled} school={s} heroImageUrl={heroBySchool.get(s.id) ?? null} {...d} />,
       }
     }),
   ]
@@ -162,19 +158,29 @@ export async function buildAreaTabs({ supabase, sbAdmin, slug, orgId, userId, ro
 
 // ── Painéis ─────────────────────────────────────────────────
 
-function AreaHero({ kicker, title, announcements }: { kicker: string; title: string; announcements: Announcement[] }) {
-  if (announcements.length === 0) {
+// Foto própria da área (hero_image_url, a mesma da página pública) — cada
+// ministério/escola com a sua, em vez de repetir o anúncio geral da
+// organização (esse já aparece uma vez só, no topo da Início).
+function AreaHero({ kicker, title, heroImageUrl }: { kicker: string; title: string; heroImageUrl: string | null }) {
+  if (!heroImageUrl) {
     return (
       <div className="rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 text-white p-4 md:p-5">
         <p className="text-xs uppercase tracking-wide text-white/70">{kicker}</p>
         <p className="text-lg font-bold leading-tight">{title}</p>
-        <p className="text-xs text-white/70 mt-2 flex items-center gap-1">
-          <Megaphone size={12} /> Nenhum anúncio da Comunicação no momento.
-        </p>
       </div>
     )
   }
-  return <AnnouncementCarousel announcements={announcements} kicker={kicker} title={title} />
+  return (
+    <div className="relative w-full rounded-xl overflow-hidden bg-gray-900" style={{ aspectRatio: '16 / 9', maxHeight: 280 }}>
+      {/* eslint-disable-next-line @next/next/no-img-element -- imagem pública do bucket, não passa pelo otimizador */}
+      <img src={heroImageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+      <div className="absolute inset-x-0 bottom-0 p-3 sm:p-4">
+        <p className="text-[10px] uppercase tracking-wide text-white/85">{kicker}</p>
+        <p className="text-base sm:text-lg font-bold text-white leading-tight">{title}</p>
+      </div>
+    </div>
+  )
 }
 
 function QuickLink({ href, title, description }: { href: string; title: string; description: string }) {
@@ -186,9 +192,9 @@ function QuickLink({ href, title, description }: { href: string; title: string; 
   )
 }
 
-function MinistryPanel({ slug, orgId, userId, laundryEnabled, ministry, announcements, pending, members, events, reservations }: {
+function MinistryPanel({ slug, orgId, userId, laundryEnabled, ministry, heroImageUrl, pending, members, events, reservations }: {
   slug: string; orgId: string; userId: string; laundryEnabled: boolean
-  ministry: LinkedMinistry; announcements: Announcement[]
+  ministry: LinkedMinistry; heroImageUrl: string | null
   pending: number; members: number; events: CalendarEventRow[]; reservations: number
 }) {
   const base = `/${slug}/ministerios/${ministry.id}`
@@ -198,7 +204,7 @@ function MinistryPanel({ slug, orgId, userId, laundryEnabled, ministry, announce
       <AreaHero
         kicker={`Ministério · ${isLeader ? 'Líder' : 'Membro'}`}
         title={ministry.longName || ministry.name}
-        announcements={announcements}
+        heroImageUrl={heroImageUrl}
       />
       <div className={`grid grid-cols-2 gap-3 animate-stagger ${isLeader ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
         <StatCard label="Membros" value={members} icon={Users} href={`${base}/equipe`} color="teal" />
@@ -217,9 +223,9 @@ function MinistryPanel({ slug, orgId, userId, laundryEnabled, ministry, announce
 
 type ClassRow = { id: string; name: string; starts_at: string | null; ends_at: string | null }
 
-function SchoolPanel({ slug, orgId, userId, laundryEnabled, school, announcements, classes, interests, applications, activeClasses }: {
+function SchoolPanel({ slug, orgId, userId, laundryEnabled, school, heroImageUrl, classes, interests, applications, activeClasses }: {
   slug: string; orgId: string; userId: string; laundryEnabled: boolean
-  school: LinkedSchool; announcements: Announcement[]
+  school: LinkedSchool; heroImageUrl: string | null
   classes: number; interests: number; applications: number; activeClasses: ClassRow[]
 }) {
   const base = `/${slug}/escolas/${school.id}`
@@ -229,7 +235,7 @@ function SchoolPanel({ slug, orgId, userId, laundryEnabled, school, announcement
       <AreaHero
         kicker={`Escola · ${school.link === 'lider' ? 'Líder' : 'Obreiro'}`}
         title={school.name}
-        announcements={announcements}
+        heroImageUrl={heroImageUrl}
       />
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 animate-stagger">
         <StatCard label="Turmas ativas" value={classes} icon={BookOpen} href={base} color="orange" />
