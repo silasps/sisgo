@@ -193,6 +193,16 @@ export async function markConversationRead(conversationId: string) {
     .eq('user_id', userId)
 }
 
+// "Entregue" (✓✓ cinza pra quem mandou): o SISGO desta pessoa está aberto
+// e recebeu as mensagens. Chamado pelo ChatDeliveryListener (todas as telas)
+// ao abrir/voltar pro app e a cada mensagem nova que chega pelo Realtime.
+// A função do banco (migration 152) usa o relógio do banco e só mexe nas
+// conversas que têm mensagem nova da outra pessoa.
+export async function markChatDelivered() {
+  const { userId } = await requireUser()
+  await createAdminClient().rpc('mark_chat_delivered', { p_user_id: userId })
+}
+
 // Reação rápida numa mensagem ("joinha" etc.) — clicar de novo no mesmo
 // emoji remove; clicar num emoji diferente troca (1 reação por pessoa por
 // mensagem, ver migration 143).

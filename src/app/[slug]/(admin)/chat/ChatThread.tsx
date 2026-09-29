@@ -28,8 +28,10 @@ type Props = {
   otherAvatarUrl: string | null
   currentUserId: string
   messages: ChatMessage[]
-  /** Até quando a outra pessoa leu a conversa — acende os dois certinhos (✓✓). */
+  /** Até quando a outra pessoa leu a conversa — ✓✓ azul. */
   otherLastReadAt: string | null
+  /** Até quando as mensagens chegaram no aparelho da outra pessoa — ✓✓ cinza (migration 152). */
+  otherLastDeliveredAt: string | null
   path: string
   sendMessageAction: (input: { conversationId: string; id: string; content: string; path?: string }) => Promise<ChatActionResult>
   toggleReactionAction: (input: { messageId: string; emoji: string }) => Promise<ChatActionResult>
@@ -84,7 +86,7 @@ function dayLabel(iso: string): string {
 }
 
 export function ChatThread({
-  conversationId, otherName, otherAvatarUrl, currentUserId, messages, otherLastReadAt, path,
+  conversationId, otherName, otherAvatarUrl, currentUserId, messages, otherLastReadAt, otherLastDeliveredAt, path,
   sendMessageAction, toggleReactionAction, editMessageAction, deleteMessageAction, markReadAction,
 }: Props) {
   const [list, setList] = useState<LocalMessage[]>(messages)
@@ -92,6 +94,7 @@ export function ChatThread({
   const [avatarOpen, setAvatarOpen] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [otherReadAt, setOtherReadAt] = useState(otherLastReadAt)
+  const [otherDeliveredAt, setOtherDeliveredAt] = useState(otherLastDeliveredAt)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const nearBottomRef = useRef(true)
@@ -109,6 +112,7 @@ export function ChatThread({
   const unseenWhileHiddenRef = useRef(false)
 
   useEffect(() => { setOtherReadAt(prev => latest(prev, otherLastReadAt)) }, [otherLastReadAt])
+  useEffect(() => { setOtherDeliveredAt(prev => latest(prev, otherLastDeliveredAt)) }, [otherLastDeliveredAt])
 
   useEffect(() => {
     const onVisibility = () => {
@@ -154,7 +158,7 @@ export function ChatThread({
 
       type Row = { id: string; author_id: string; content: string; created_at: string; edited_at: string | null }
       type ReactionRow = { message_id: string; user_id: string; emoji?: string }
-      type ParticipantRow = { user_id: string; last_read_at: string | null }
+      type ParticipantRow = { user_id: string; last_read_at: string | null; last_delivered_at: string | null }
       const filter = `conversation_id=eq.${conversationId}`
 
       channel = supabase.channel(`chat-thread-${conversationId}`)
@@ -182,10 +186,13 @@ export function ChatThread({
           const id = (payload.old as { id?: string }).id
           if (id) setList(prev => prev.filter(m => m.id !== id))
         })
-        // A outra pessoa abriu a conversa: ✓ vira ✓✓ nas minhas mensagens (migration 151).
+        // Mensagem chegou no aparelho da outra pessoa (✓✓ cinza) ou ela abriu a
+        // conversa (✓✓ azul) — migrations 151/152.
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_participants', filter }, payload => {
           const row = payload.new as ParticipantRow
-          if (row.user_id !== currentUserId && row.last_read_at) setOtherReadAt(prev => latest(prev, row.last_read_at))
+          if (row.user_id === currentUserId) return
+          if (row.last_read_at) setOtherReadAt(prev => latest(prev, row.last_read_at))
+          if (row.last_delivered_at) setOtherDeliveredAt(prev => latest(prev, row.last_delivered_at))
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_message_reactions' }, payload => {
           const row = (payload.eventType === 'DELETE' ? payload.old : payload.new) as ReactionRow
@@ -339,7 +346,12 @@ export function ChatThread({
               <MessageBubble
                 message={m}
                 isOwn={m.authorId === currentUserId}
-                read={!m.status && !!otherReadAt && time(m.createdAt) <= time(otherReadAt)}
+                receipt={
+                  m.status ? 'pending'
+                    : otherReadAt && time(m.createdAt) <= time(otherReadAt) ? 'read'
+                      : otherDeliveredAt && time(m.createdAt) <= time(otherDeliveredAt) ? 'delivered'
+                        : 'sent'
+                }
                 currentUserId={currentUserId}
                 active={activeId === m.id}
                 onToggleActive={() => setActiveId(id => (id === m.id ? null : m.id))}
@@ -383,11 +395,11 @@ export function ChatThread({
   )
 }
 
-function MessageBubble({ message, isOwn, read, currentUserId, active, onToggleActive, onRetry, onEdit, onDelete, onReact }: {
+function MessageBubble({ message, isOwn, receipt, currentUserId, active, onToggleActive, onRetry, onEdit, onDelete, onReact }: {
   message: LocalMessage
   isOwn: boolean
-  /** Mensagem própria já vista pela outra pessoa (✓✓). */
-  read: boolean
+  /** Certinhos de mensagem própria, igual ao WhatsApp: ✓ enviada, ✓✓ cinza entregue, ✓✓ azul vista. */
+  receipt: 'pending' | 'sent' | 'delivered' | 'read'
   currentUserId: string
   active: boolean
   onToggleActive: () => void
@@ -456,9 +468,9 @@ function MessageBubble({ message, isOwn, read, currentUserId, active, onToggleAc
         <span className="flex items-center gap-1 text-[10px] text-gray-400">
           {clock}{message.editedAt && ' · editado'}
           {isOwn && message.status === 'sending' && <Clock size={10} aria-label="Enviando" />}
-          {isOwn && !message.status && (read
-            ? <CheckCheck size={13} className="text-sky-500" aria-label="Vista" />
-            : <Check size={11} aria-label="Enviada" />)}
+          {isOwn && receipt === 'sent' && <Check size={11} aria-label="Enviada" />}
+          {isOwn && receipt === 'delivered' && <CheckCheck size={13} aria-label="Entregue" />}
+          {isOwn && receipt === 'read' && <CheckCheck size={13} className="text-sky-500" aria-label="Vista" />}
         </span>
         {message.status === 'failed' && (
           <button type="button" onClick={onRetry} className="flex items-center gap-1 text-[11px] font-medium text-red-600 hover:text-red-700">

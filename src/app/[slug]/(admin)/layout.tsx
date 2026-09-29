@@ -13,6 +13,7 @@ import { Toaster } from 'sonner'
 import { Suspense } from 'react'
 import { FlashToast } from '@/components/ui/FlashToast'
 import { PushNotificationManager } from '@/components/PushNotificationManager'
+import { ChatDeliveryListener } from './chat/ChatDeliveryListener'
 import { CadastroIncompletoAlert } from '@/components/layout/CadastroIncompletoAlert'
 import type { BottomBarItem } from '@/components/layout/BottomNav'
 
@@ -820,6 +821,7 @@ export default async function SlugLayout({ children, params }: Props) {
         <FlashToast />
       </Suspense>
       <PushNotificationManager />
+      <ChatDeliveryListener />
       {pendingProfileCompletion && (
         <CadastroIncompletoAlert
           href={pendingProfileCompletion.tipo === 'aluno'
