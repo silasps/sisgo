@@ -147,7 +147,7 @@ export function NovaPreInscricaoButton({
 // ── Nova pré-inscrição de obreiro ─────────────────────────────────────────
 
 export function NovaPreInscricaoObreiroButton({
-  ministries, schools, criarAction, slug, open: openProp, onOpenChange, hideTrigger,
+  ministries, schools, criarAction, slug, open: openProp, onOpenChange, hideTrigger, fixedDestination,
 }: {
   ministries: MinistryOption[]
   schools: SchoolOption[]
@@ -156,6 +156,12 @@ export function NovaPreInscricaoObreiroButton({
   open?: boolean
   onOpenChange?: (open: boolean) => void
   hideTrigger?: boolean
+  // Quando informado (líder com um único ministério/escola no escopo), trava
+  // o destino nele em vez de deixar escolher entre todos — evita que o
+  // convite feito pelo líder vá parar em outro ministério por engano. A
+  // pré-inscrição continua entrando como 'pendente' e seguindo o mesmo
+  // fluxo de revisão do DH normalmente.
+  fixedDestination?: { type: 'ministry' | 'school'; id: string; label: string }
 }) {
   const router = useRouter()
   const [openState, setOpenState] = useState(false)
@@ -167,6 +173,7 @@ export function NovaPreInscricaoObreiroButton({
     e.preventDefault()
     setLoading(true)
     const fd = new FormData(e.currentTarget)
+    if (fixedDestination) fd.set('destination', `${fixedDestination.type}:${fixedDestination.id}`)
     await criarAction(fd)
     setLoading(false)
     setOpen(false)
@@ -203,7 +210,9 @@ export function NovaPreInscricaoObreiroButton({
 
           <InternationalPhoneField phoneName="phone" accentRing="ring-violet-400" />
 
-          {(ministries.length > 0 || schools.length > 0) && (
+          {fixedDestination ? (
+            <p className="text-xs text-gray-500">Ministério/escola: <span className="font-medium text-gray-700">{fixedDestination.label}</span></p>
+          ) : (ministries.length > 0 || schools.length > 0) && (
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Ministério ou escola de interesse</label>
               <DestinationSelect

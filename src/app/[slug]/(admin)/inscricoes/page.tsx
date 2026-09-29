@@ -1233,6 +1233,26 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
   const publicSchools = (publicSchoolsRaw ?? []).filter((s: { slug: string | null }) => s.slug) as Array<{ id: string; name: string; slug: string }>
   const publicMinistries = (publicMinistriesRaw ?? []).filter((m: { slug: string | null }) => m.slug) as Array<{ id: string; name: string; slug: string }>
 
+  // Líder com um único destino (um ministério OU uma escola) no escopo:
+  // fixa o convite de obreiro nele em vez de deixar escolher entre todos —
+  // evita o convite ir parar em outro ministério por engano. Com mais de um
+  // destino, a lista já vem filtrada só aos dele (nada muda no fluxo de
+  // revisão: continua entrando como 'pendente' e passando pelo DH).
+  const leaderObreiroDestinations = isManagement ? [] : [
+    ...leaderMinistryIds.map(id => ({ type: 'ministry' as const, id })),
+    ...leaderSchoolIds.map(id => ({ type: 'school' as const, id })),
+  ]
+  const fixedObreiroDestination = leaderObreiroDestinations.length === 1
+    ? {
+        type: leaderObreiroDestinations[0].type,
+        id: leaderObreiroDestinations[0].id,
+        label: (leaderObreiroDestinations[0].type === 'ministry'
+          ? allMinistries.find(m => m.id === leaderObreiroDestinations[0].id)?.name
+          : allSchools.find(s => s.id === leaderObreiroDestinations[0].id)?.name)
+          ?? (leaderObreiroDestinations[0].type === 'ministry' ? 'seu ministério' : 'sua escola'),
+      }
+    : null
+
   async function solicitarTransferenciaEscola(formData: FormData) {
     'use server'
     const { userId, role } = await assertCanRequestTransfer(orgId)
@@ -1813,8 +1833,9 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
               <NovaPreInscricaoObreiroButton
                 slug={slug}
                 criarAction={criarPreInscricaoObreiroManual.bind(null, orgId, slug)}
-                ministries={allMinistries}
-                schools={allSchools}
+                ministries={fixedObreiroDestination ? [] : isManagement ? allMinistries : allMinistries.filter(m => leaderMinistryIds.includes(m.id))}
+                schools={fixedObreiroDestination ? [] : isManagement ? allSchools : allSchools.filter(sc => leaderSchoolIds.includes(sc.id))}
+                fixedDestination={fixedObreiroDestination ?? undefined}
               />
             )}
             {canWriteObreiro && (
