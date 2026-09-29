@@ -1,6 +1,5 @@
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { isManagementRole } from '@/lib/auth/permissions'
 import { getOrgAndUser, getWorkspaceRole, getWorkspaceMinistry, getWorkspaceMinistryLink } from '../_data'
 import { createColumn, renameColumn, deleteColumn, createCard, updateCard, deleteCard, reorderCards } from './actions'
 import { TarefasWorkspace } from './TarefasWorkspace'
@@ -18,10 +17,12 @@ export default async function TarefasPage({ params }: Props) {
   const ministry = await getWorkspaceMinistry(orgId, id)
   if (!ministry) notFound()
 
+  // Só quem tem vínculo com ESTE ministério (líder/membro) usa as Tarefas —
+  // gestão e papel de departamento sem vínculo voltam pra página do ministério.
   const { role, preview } = await getWorkspaceRole(user.id, orgId)
-  const isManagement = isManagementRole(role)
-  const link = isManagement ? null : await getWorkspaceMinistryLink(user.id, orgId, role, preview, id)
-  const isLeader = isManagement || link === 'lider'
+  const link = await getWorkspaceMinistryLink(user.id, orgId, role, preview, id)
+  if (!link) redirect(`/${slug}/ministerios/${id}`)
+  const isLeader = link === 'lider'
 
   // Client admin em vez do RLS-aware: quem chega aqui já passou pelo gate
   // de acesso do layout (preview-aware); usar RLS pura pra leitura teria o

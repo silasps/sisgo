@@ -29,16 +29,16 @@ export default async function MinisterioWorkspaceLayout({ children, params }: Pr
   // Fora da gestão/departamento, quem entra é quem lidera ou é membro DESTE
   // ministério, seja qual for o papel principal — ver lib/auth/unit-access.
   const canEnterByRole = isManagement || (isDeptRole && ministry.linked_role === role)
-  if (!canEnterByRole) {
-    const link = await getWorkspaceMinistryLink(user.id, orgId, role, preview, id)
-    if (!link) redirect(`/${slug}/ministerios`)
-  }
+  const link = await getWorkspaceMinistryLink(user.id, orgId, role, preview, id)
+  if (!canEnterByRole && !link) redirect(`/${slug}/ministerios`)
 
   const base = `/${slug}/ministerios/${id}`
   const tabs = [
     { href: base, label: 'Chat', icon: 'chat' as const },
     { href: `${base}/equipe`, label: 'Quadro de Obreiros', icon: 'equipe' as const },
-    { href: `${base}/tarefas`, label: 'Tarefas', icon: 'tarefas' as const },
+    // Tarefas é do ministério em si: só quem tem vínculo (líder/membro) —
+    // gestão e papel de departamento sem vínculo entram no resto, não aqui.
+    ...(link ? [{ href: `${base}/tarefas`, label: 'Tarefas', icon: 'tarefas' as const }] : []),
   ]
 
   return (

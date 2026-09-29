@@ -1,7 +1,6 @@
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { isManagementRole } from '@/lib/auth/permissions'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { getSchoolLink } from '@/lib/auth/unit-access'
 import { createColumn, renameColumn, deleteColumn, createCard, updateCard, deleteCard, reorderCards } from '../../../ministerios/[id]/tarefas/actions'
@@ -12,8 +11,7 @@ type Props = { params: Promise<{ slug: string; id: string }> }
 
 // Quadro de Tarefas da escola — o mesmo do ministério (componentes, actions e
 // tabelas; migration 156), só que da escola: líder = school_leaders,
-// responsáveis possíveis = quadro de obreiros da escola. Quem chega aqui já
-// passou pelo gate de acesso de escolas/[id]/layout.tsx.
+// responsáveis possíveis = quadro de obreiros da escola.
 export default async function EscolaTarefasPage({ params }: Props) {
   const { slug, id } = await params
   const supabase = await createClient()
@@ -26,9 +24,12 @@ export default async function EscolaTarefasPage({ params }: Props) {
   if (!user || !org) notFound()
   const orgId = org.id
 
+  // Só quem tem vínculo com ESTA escola (líder/obreiro) usa as Tarefas — a
+  // gestão sem vínculo volta pra página da escola.
   const { role, preview } = await getCurrentOrganizationRole(supabase, user.id, orgId)
-  const isManagement = isManagementRole(role)
-  const isLeader = isManagement || (await getSchoolLink({ userId: user.id, orgId, role, preview }, id)) === 'lider'
+  const link = await getSchoolLink({ userId: user.id, orgId, role, preview }, id)
+  if (!link) redirect(`/${slug}/escolas/${id}`)
+  const isLeader = link === 'lider'
 
   type StaffRow = { person_id: string; people: { full_name: string } | null }
 

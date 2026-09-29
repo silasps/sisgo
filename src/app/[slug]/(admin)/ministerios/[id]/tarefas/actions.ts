@@ -3,7 +3,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getRolePreview, type RolePreview } from '@/lib/role-preview'
-import { isManagementRole } from '@/lib/auth/permissions'
 import { revalidatePath } from 'next/cache'
 
 // Usa createAdminClient() (ignora RLS) + checagem de permissão aqui, igual
@@ -120,9 +119,12 @@ function throwFriendly(error: { code?: string; message: string }): never {
   throw new Error(error.message)
 }
 
+// Tarefas é de cada ministério/escola em si: só quem tem vínculo com AQUELA
+// unidade (líder/membro) mexe — sem exceção pra gestão da base (quem da
+// gestão lidera ou participa da unidade tem o vínculo normalmente). Colunas
+// e excluir tarefa dos outros: só o líder da unidade.
 async function requireLink(ctx: Ctx, orgId: string, unit: BoardUnit, requireLeader: boolean) {
   const { role, preview } = await resolveRole(ctx, orgId)
-  if (isManagementRole(role)) return
   const link = unit.kind === 'ministerio'
     ? await resolveMinistryLink(ctx, orgId, unit.id, role, preview)
     : await resolveSchoolLink(ctx, orgId, unit.id, role, preview)
@@ -303,10 +305,9 @@ export async function deleteCard(formData: FormData) {
     db.from('ministry_board_cards').select('organization_id, ministry_id, school_id, created_by').eq('id', id).single(),
   ])
   if (!card) throw new Error('Tarefa não encontrada.')
-  // Autor do card sempre pode excluir o próprio; senão precisa ser líder/gestão.
-  if (card.created_by !== ctx.userId) {
-    await requireLink(ctx, card.organization_id, unitOf(card), true)
-  }
+  // Precisa de vínculo com a unidade; a própria tarefa qualquer membro
+  // exclui, a de outra pessoa só o líder.
+  await requireLink(ctx, card.organization_id, unitOf(card), card.created_by !== ctx.userId)
 
   const { error } = await db.from('ministry_board_cards').delete().eq('id', id)
   if (error) throw new Error(error.message)

@@ -35,7 +35,7 @@ export default async function EscolaWorkspaceLayout({ children, params }: Props)
 
   // Fora da gestão, quem entra é quem tem vínculo com ESTA escola (líder ou
   // obreiro), seja qual for o papel principal — ver lib/auth/unit-access.
-  const link = isManagement ? null : await getSchoolLink({ userId: user.id, orgId, role, preview }, id)
+  const link = await getSchoolLink({ userId: user.id, orgId, role, preview }, id)
   if (!isManagement && !link) redirect(`/${slug}/escolas`)
 
   const canConfigure = isManagement || link === 'lider'
@@ -43,7 +43,9 @@ export default async function EscolaWorkspaceLayout({ children, params }: Props)
   const tabs = [
     { href: base, label: 'Geral', icon: 'geral' as const },
     { href: `${base}/equipe`, label: 'Quadro de Obreiros', icon: 'equipe' as const },
-    { href: `${base}/tarefas`, label: 'Tarefas', icon: 'tarefas' as const },
+    // Tarefas é da escola em si: só quem tem vínculo (líder/obreiro) — a
+    // gestão sem vínculo entra no resto da escola, não aqui.
+    ...(link ? [{ href: `${base}/tarefas`, label: 'Tarefas', icon: 'tarefas' as const }] : []),
     ...(canConfigure ? [
       { href: `${base}/pesquisa`, label: 'Pesquisa de Satisfação', icon: 'pesquisa' as const },
       { href: `${base}/configuracoes`, label: 'Configurações', icon: 'configuracoes' as const, alsoMatches: [`${base}/turmas`, `${base}/formulario`] },
