@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
 
 export const ROLE_PREVIEW_COOKIE = 'sisgo_preview_role'
 export const ROLE_PREVIEW_SCHOOL_COOKIE = 'sisgo_preview_school'
@@ -83,6 +84,12 @@ export async function setRolePreview(formData: FormData) {
   cookieStore.set(ROLE_PREVIEW_SCHOOL_COOKIE, schoolId, options)
   cookieStore.set(ROLE_PREVIEW_MINISTRY_COOKIE, ministryId, options)
 
+  // O cache de rota do Next (client router cache) não sabe que o cookie de
+  // preview mudou — sem isso, "Aplicar" redirecionando pra uma URL já
+  // visitada (ex.: /dashboard) podia servir a versão em cache de ANTES da
+  // troca de papel/ministério (ex.: anúncio some, painel de outro cargo).
+  revalidatePath('/', 'layout')
+
   if (redirectTo) redirect(redirectTo)
 }
 
@@ -95,6 +102,8 @@ export async function clearRolePreview(formData: FormData) {
   cookieStore.delete(ROLE_PREVIEW_COOKIE)
   cookieStore.delete(ROLE_PREVIEW_SCHOOL_COOKIE)
   cookieStore.delete(ROLE_PREVIEW_MINISTRY_COOKIE)
+
+  revalidatePath('/', 'layout')
 
   if (redirectTo) redirect(redirectTo)
 }
