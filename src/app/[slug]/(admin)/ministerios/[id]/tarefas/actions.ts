@@ -46,11 +46,35 @@ async function resolveRole(ctx: Ctx, orgId: string) {
   return { role: preview?.role ?? realRole, preview }
 }
 
+// Quadro é de um ministério OU de uma escola (migration 156). As linhas
+// guardam isso em ministry_id/school_id; aqui vira uma "unidade".
+export type BoardUnit = { kind: 'ministerio' | 'escola'; id: string }
+
+function unitOf(row: { ministry_id: string | null; school_id: string | null }): BoardUnit {
+  return row.ministry_id ? { kind: 'ministerio', id: row.ministry_id } : { kind: 'escola', id: row.school_id as string }
+}
+
+function unitColumns(unit: BoardUnit) {
+  return unit.kind === 'ministerio'
+    ? { ministry_id: unit.id, school_id: null }
+    : { ministry_id: null, school_id: unit.id }
+}
+
+const unitKey = (unit: BoardUnit) => (unit.kind === 'ministerio' ? 'ministry_id' : 'school_id')
+
+// person_ids do usuário nesta base — lista, não maybeSingle(): há usuários
+// com staff_profiles duplicados na mesma base (ver lib/auth/unit-access.ts).
+async function staffPersonIds(ctx: Ctx, orgId: string) {
+  const { data } = await ctx.supabase
+    .from('staff_profiles').select('person_id').eq('organization_id', orgId).eq('user_id', ctx.userId)
+  return (data ?? []).map(r => r.person_id).filter((id): id is string => !!id)
+}
+
 // Vínculo (líder/membro) com UM ministério específico, direto — sem passar
 // pela lista completa de ministérios da pessoa (que busca nome/descrição de
 // todo mundo só pra essa checagem de sim/não). Preview preso a um
 // ministério não gasta consulta nenhuma extra.
-async function resolveLink(ctx: Ctx, orgId: string, ministryId: string, role: string, preview: RolePreview | null): Promise<'lider' | 'membro' | null> {
+async function resolveMinistryLink(ctx: Ctx, orgId: string, ministryId: string, role: string, preview: RolePreview | null): Promise<'lider' | 'membro' | null> {
   if (preview?.ministryId) {
     if (role !== 'lider_ministerio' && role !== 'obreiro_ministerio') return null
     return preview.ministryId === ministryId ? (role === 'lider_ministerio' ? 'lider' : 'membro') : null
@@ -60,13 +84,31 @@ async function resolveLink(ctx: Ctx, orgId: string, ministryId: string, role: st
     .from('ministry_leaders').select('ministry_id').eq('ministry_id', ministryId).eq('user_id', ctx.userId).maybeSingle()
   if (leaderRow) return 'lider'
 
-  const { data: staffProfile } = await ctx.supabase
-    .from('staff_profiles').select('person_id').eq('organization_id', orgId).eq('user_id', ctx.userId).maybeSingle()
-  if (!staffProfile?.person_id) return null
+  const personIds = await staffPersonIds(ctx, orgId)
+  if (personIds.length === 0) return null
 
-  const { data: memberRow } = await ctx.supabase
-    .from('ministry_members').select('ministry_id').eq('ministry_id', ministryId).eq('person_id', staffProfile.person_id).eq('active', true).maybeSingle()
-  return memberRow ? 'membro' : null
+  const { data: memberRows } = await ctx.supabase
+    .from('ministry_members').select('ministry_id').eq('ministry_id', ministryId).in('person_id', personIds).eq('active', true).limit(1)
+  return memberRows?.length ? 'membro' : null
+}
+
+// Mesma coisa pra escola: líder = school_leaders, membro = school_staff ativo.
+async function resolveSchoolLink(ctx: Ctx, orgId: string, schoolId: string, role: string, preview: RolePreview | null): Promise<'lider' | 'membro' | null> {
+  if (preview?.schoolId) {
+    if (role !== 'lider_eted' && role !== 'obreiro_eted') return null
+    return preview.schoolId === schoolId ? (role === 'lider_eted' ? 'lider' : 'membro') : null
+  }
+
+  const { data: leaderRow } = await ctx.supabase
+    .from('school_leaders').select('school_id').eq('school_id', schoolId).eq('user_id', ctx.userId).maybeSingle()
+  if (leaderRow) return 'lider'
+
+  const personIds = await staffPersonIds(ctx, orgId)
+  if (personIds.length === 0) return null
+
+  const { data: staffRows } = await ctx.supabase
+    .from('school_staff').select('school_id').eq('school_id', schoolId).in('person_id', personIds).eq('active', true).limit(1)
+  return staffRows?.length ? 'membro' : null
 }
 
 // Rede de segurança contra corrida (a checagem de duplicado acima é
@@ -78,29 +120,33 @@ function throwFriendly(error: { code?: string; message: string }): never {
   throw new Error(error.message)
 }
 
-async function requireLink(ctx: Ctx, orgId: string, ministryId: string, requireLeader: boolean) {
+async function requireLink(ctx: Ctx, orgId: string, unit: BoardUnit, requireLeader: boolean) {
   const { role, preview } = await resolveRole(ctx, orgId)
   if (isManagementRole(role)) return
-  const link = await resolveLink(ctx, orgId, ministryId, role, preview)
-  if (!link) throw new Error('Sem acesso a este ministério.')
-  if (requireLeader && link !== 'lider') throw new Error('Só o líder do ministério pode fazer isso.')
+  const link = unit.kind === 'ministerio'
+    ? await resolveMinistryLink(ctx, orgId, unit.id, role, preview)
+    : await resolveSchoolLink(ctx, orgId, unit.id, role, preview)
+  const isMinistry = unit.kind === 'ministerio'
+  if (!link) throw new Error(isMinistry ? 'Sem acesso a este ministério.' : 'Sem acesso a esta escola.')
+  if (requireLeader && link !== 'lider') throw new Error(`Só o líder ${isMinistry ? 'do ministério' : 'da escola'} pode fazer isso.`)
 }
 
 export async function createColumn(formData: FormData) {
   const ctx = await requireUser()
-  const ministryId = formData.get('ministry_id') as string
+  const unitId = formData.get('unit_id') as string
+  const unit: BoardUnit = { kind: formData.get('unit_kind') === 'escola' ? 'escola' : 'ministerio', id: unitId }
   const organizationId = formData.get('organization_id') as string
   const name = (formData.get('name') as string)?.trim()
   const path = formData.get('path') as string
-  if (!ministryId || !organizationId || !name) return
-  await requireLink(ctx, organizationId, ministryId, true)
+  if (!unitId || !organizationId || !name) return
+  await requireLink(ctx, organizationId, unit, true)
 
   // Uma consulta só: serve tanto pra checar nome duplicado (case-insensitive)
   // quanto pra computar a posição da nova coluna — antes eram 2 consultas
   // separadas (uma pra cada), e cada round-trip a mais até o Supabase
   // hospedado é tempo real na tela (criar coluna chegou a levar ~12s).
   const db = createAdminClient()
-  const { data: existing } = await db.from('ministry_board_columns').select('name').eq('ministry_id', ministryId)
+  const { data: existing } = await db.from('ministry_board_columns').select('name').eq(unitKey(unit), unit.id)
   const rows = existing ?? []
   if (rows.some(c => c.name.toLowerCase() === name.toLowerCase())) {
     throw new Error('Já existe uma coluna com esse nome.')
@@ -108,7 +154,7 @@ export async function createColumn(formData: FormData) {
 
   const { error } = await db.from('ministry_board_columns').insert({
     organization_id: organizationId,
-    ministry_id: ministryId,
+    ...unitColumns(unit),
     name,
     position: rows.length,
   })
@@ -124,11 +170,12 @@ export async function renameColumn(formData: FormData) {
   if (!id || !name) return
 
   const db = createAdminClient()
-  const { data: column } = await db.from('ministry_board_columns').select('organization_id, ministry_id').eq('id', id).single()
+  const { data: column } = await db.from('ministry_board_columns').select('organization_id, ministry_id, school_id').eq('id', id).single()
   if (!column) throw new Error('Coluna não encontrada.')
-  await requireLink(ctx, column.organization_id, column.ministry_id, true)
+  const unit = unitOf(column)
+  await requireLink(ctx, column.organization_id, unit, true)
 
-  const { data: existing } = await db.from('ministry_board_columns').select('id, name').eq('ministry_id', column.ministry_id)
+  const { data: existing } = await db.from('ministry_board_columns').select('id, name').eq(unitKey(unit), unit.id)
   if ((existing ?? []).some(c => c.id !== id && c.name.toLowerCase() === name.toLowerCase())) {
     throw new Error('Já existe uma coluna com esse nome.')
   }
@@ -145,9 +192,9 @@ export async function deleteColumn(formData: FormData) {
   if (!id) return
 
   const db = createAdminClient()
-  const { data: column } = await db.from('ministry_board_columns').select('organization_id, ministry_id').eq('id', id).single()
+  const { data: column } = await db.from('ministry_board_columns').select('organization_id, ministry_id, school_id').eq('id', id).single()
   if (!column) throw new Error('Coluna não encontrada.')
-  await requireLink(ctx, column.organization_id, column.ministry_id, true)
+  await requireLink(ctx, column.organization_id, unitOf(column), true)
 
   const { error } = await db.from('ministry_board_columns').delete().eq('id', id)
   if (error) throw new Error(error.message)
@@ -158,9 +205,9 @@ export async function reorderColumns(orderedIds: string[]) {
   if (orderedIds.length === 0) return
   const ctx = await requireUser()
   const db = createAdminClient()
-  const { data: column } = await db.from('ministry_board_columns').select('organization_id, ministry_id').eq('id', orderedIds[0]).single()
+  const { data: column } = await db.from('ministry_board_columns').select('organization_id, ministry_id, school_id').eq('id', orderedIds[0]).single()
   if (!column) return
-  await requireLink(ctx, column.organization_id, column.ministry_id, true)
+  await requireLink(ctx, column.organization_id, unitOf(column), true)
 
   await Promise.all(orderedIds.map((id, i) =>
     db.from('ministry_board_columns').update({ position: i }).eq('id', id)
@@ -197,15 +244,16 @@ export async function createCard(formData: FormData) {
   // o "criar tarefa" de ~2s pra mais perto de 1s.
   const [ctx, { data: column }, { count }] = await Promise.all([
     requireUser(),
-    db.from('ministry_board_columns').select('ministry_id, organization_id').eq('id', columnId).single(),
+    db.from('ministry_board_columns').select('ministry_id, school_id, organization_id').eq('id', columnId).single(),
     db.from('ministry_board_cards').select('id', { count: 'exact', head: true }).eq('column_id', columnId),
   ])
   if (!column) throw new Error('Coluna não encontrada.')
-  await requireLink(ctx, column.organization_id, column.ministry_id, false)
+  const unit = unitOf(column)
+  await requireLink(ctx, column.organization_id, unit, false)
 
   const { error } = await db.from('ministry_board_cards').insert({
     organization_id: column.organization_id,
-    ministry_id: column.ministry_id,
+    ...unitColumns(unit),
     column_id: columnId,
     position: count ?? 0,
     created_by: ctx.userId,
@@ -225,11 +273,11 @@ export async function updateCard(formData: FormData) {
   const columnId = formData.get('column_id') as string | null
   const [ctx, { data: card }, columnResult] = await Promise.all([
     requireUser(),
-    db.from('ministry_board_cards').select('organization_id, ministry_id').eq('id', id).single(),
+    db.from('ministry_board_cards').select('organization_id, ministry_id, school_id').eq('id', id).single(),
     columnId ? db.from('ministry_board_columns').select('is_done').eq('id', columnId).single() : Promise.resolve(null),
   ])
   if (!card) throw new Error('Tarefa não encontrada.')
-  await requireLink(ctx, card.organization_id, card.ministry_id, false)
+  await requireLink(ctx, card.organization_id, unitOf(card), false)
 
   const patch: Record<string, unknown> = { ...fields }
   // Trocar de coluna pelo próprio modal — mesmo efeito do "mover para" do
@@ -252,12 +300,12 @@ export async function deleteCard(formData: FormData) {
   const db = createAdminClient()
   const [ctx, { data: card }] = await Promise.all([
     requireUser(),
-    db.from('ministry_board_cards').select('organization_id, ministry_id, created_by').eq('id', id).single(),
+    db.from('ministry_board_cards').select('organization_id, ministry_id, school_id, created_by').eq('id', id).single(),
   ])
   if (!card) throw new Error('Tarefa não encontrada.')
   // Autor do card sempre pode excluir o próprio; senão precisa ser líder/gestão.
   if (card.created_by !== ctx.userId) {
-    await requireLink(ctx, card.organization_id, card.ministry_id, true)
+    await requireLink(ctx, card.organization_id, unitOf(card), true)
   }
 
   const { error } = await db.from('ministry_board_cards').delete().eq('id', id)
@@ -276,9 +324,9 @@ export async function reorderCards(payload: {
   if (payload.updates.length === 0) return
   const ctx = await requireUser()
   const db = createAdminClient()
-  const { data: card } = await db.from('ministry_board_cards').select('organization_id, ministry_id').eq('id', payload.updates[0].id).single()
+  const { data: card } = await db.from('ministry_board_cards').select('organization_id, ministry_id, school_id').eq('id', payload.updates[0].id).single()
   if (!card) return
-  await requireLink(ctx, card.organization_id, card.ministry_id, false)
+  await requireLink(ctx, card.organization_id, unitOf(card), false)
 
   await Promise.all(payload.updates.map(u =>
     db.from('ministry_board_cards').update({

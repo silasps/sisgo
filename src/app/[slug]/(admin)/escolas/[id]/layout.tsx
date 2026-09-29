@@ -43,6 +43,7 @@ export default async function EscolaWorkspaceLayout({ children, params }: Props)
   const tabs = [
     { href: base, label: 'Geral', icon: 'geral' as const },
     { href: `${base}/equipe`, label: 'Quadro de Obreiros', icon: 'equipe' as const },
+    { href: `${base}/tarefas`, label: 'Tarefas', icon: 'tarefas' as const },
     ...(canConfigure ? [
       { href: `${base}/pesquisa`, label: 'Pesquisa de Satisfação', icon: 'pesquisa' as const },
       { href: `${base}/configuracoes`, label: 'Configurações', icon: 'configuracoes' as const, alsoMatches: [`${base}/turmas`, `${base}/formulario`] },

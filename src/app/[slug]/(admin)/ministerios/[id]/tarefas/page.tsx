@@ -4,13 +4,7 @@ import { isManagementRole } from '@/lib/auth/permissions'
 import { getOrgAndUser, getWorkspaceRole, getWorkspaceMinistry, getWorkspaceMinistryLink } from '../_data'
 import { createColumn, renameColumn, deleteColumn, createCard, updateCard, deleteCard, reorderCards } from './actions'
 import { TarefasWorkspace } from './TarefasWorkspace'
-import type { BoardColumn, BoardCard } from './types'
-
-const DEFAULT_COLUMNS: Array<{ name: string; is_done: boolean }> = [
-  { name: 'A Fazer', is_done: false },
-  { name: 'Fazendo', is_done: false },
-  { name: 'Concluído', is_done: true },
-]
+import { loadBoard } from './board-data'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
@@ -39,40 +33,8 @@ export default async function TarefasPage({ params }: Props) {
   // a refazer essas consultas de novo antes do toast de sucesso aparecer.
   type MemberRow = { person_id: string; people: { full_name: string } | null }
 
-  async function loadColumns() {
-    let { data: columnsRaw } = await sbAdmin
-      .from('ministry_board_columns')
-      .select('id, name, position, is_done')
-      .eq('ministry_id', id)
-      .order('position', { ascending: true })
-
-    if (!columnsRaw || columnsRaw.length === 0) {
-      // Seed preguiçoso na primeira visita. Duas requisições concorrentes
-      // podem cair aqui ao mesmo tempo (ex.: dois usuários abrindo o
-      // quadro juntos) — o índice único (migration 142) rejeita a segunda
-      // tentativa inteira (insert em lote é atômico), sem problema: só
-      // relemos o que já existe.
-      await sbAdmin.from('ministry_board_columns').insert(
-        DEFAULT_COLUMNS.map((c, i) => ({ organization_id: orgId, ministry_id: id, name: c.name, position: i, is_done: c.is_done }))
-      )
-      const { data: seeded } = await sbAdmin
-        .from('ministry_board_columns')
-        .select('id, name, position, is_done')
-        .eq('ministry_id', id)
-        .order('position', { ascending: true })
-      columnsRaw = seeded
-    }
-    return (columnsRaw ?? []) as BoardColumn[]
-  }
-
-  const [columns, cardsRaw, membersRaw, announcementsRaw] = await Promise.all([
-    loadColumns(),
-    sbAdmin
-      .from('ministry_board_cards')
-      .select('id, column_id, title, description, position, priority, assignee_person_id, due_date, labels, announcement_id, completed_at, created_by')
-      .eq('ministry_id', id)
-      .order('position', { ascending: true })
-      .then(r => r.data),
+  const [{ columns, cards }, membersRaw, announcementsRaw] = await Promise.all([
+    loadBoard(sbAdmin, orgId, { kind: 'ministerio', id }),
     sbAdmin
       .from('ministry_members')
       .select('person_id, people(full_name)')
@@ -88,7 +50,6 @@ export default async function TarefasPage({ params }: Props) {
       .then(r => r.data),
   ])
 
-  const cards = (cardsRaw ?? []) as BoardCard[]
   const members = ((membersRaw ?? []) as unknown as MemberRow[])
     .filter((m): m is MemberRow & { people: { full_name: string } } => !!m.people)
     .map(m => ({ id: m.person_id, name: m.people.full_name }))
@@ -100,7 +61,8 @@ export default async function TarefasPage({ params }: Props) {
   return (
     <main className="p-4 md:p-6 overflow-y-auto flex-1">
       <TarefasWorkspace
-        ministryId={id}
+        unitKind="ministerio"
+        unitId={id}
         organizationId={orgId}
         path={path}
         isLeader={isLeader}

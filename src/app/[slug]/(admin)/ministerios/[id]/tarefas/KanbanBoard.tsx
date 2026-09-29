@@ -21,7 +21,8 @@ type ReorderPayload = {
 }
 
 type Props = {
-  ministryId: string
+  unitKind: 'ministerio' | 'escola'
+  unitId: string
   columns: BoardColumn[]
   cards: BoardCard[]
   isLeader: boolean
@@ -42,7 +43,7 @@ type Props = {
 // não seja drag (criar/editar/excluir pelo modal) passa por
 // revalidatePath e chega aqui como prop nova, e o efeito resincroniza.
 export function KanbanBoard({
-  ministryId, columns, cards, isLeader, organizationId, path, memberNameById,
+  unitKind, unitId, columns, cards, isLeader, organizationId, path, memberNameById,
   onCardClick, onAddCard, createColumnAction, renameColumnAction, deleteColumnAction, reorderCardsAction,
 }: Props) {
   const [localCards, setLocalCards] = useState(cards)
@@ -190,7 +191,8 @@ export function KanbanBoard({
                 }}
                 className="bg-white rounded-xl border border-gray-200 p-2 space-y-2"
               >
-                <input type="hidden" name="ministry_id" value={ministryId} />
+                <input type="hidden" name="unit_kind" value={unitKind} />
+                <input type="hidden" name="unit_id" value={unitId} />
                 <input type="hidden" name="organization_id" value={organizationId} />
                 <input type="hidden" name="path" value={path} />
                 <input

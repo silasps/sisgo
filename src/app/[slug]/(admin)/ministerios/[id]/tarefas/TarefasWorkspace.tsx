@@ -22,10 +22,12 @@ type ReorderPayload = {
 // local (sincronizada via useEffect) pro arraste responder na hora — as
 // outras vistas não precisam disso.
 export function TarefasWorkspace({
-  ministryId, organizationId, path, isLeader, columns, cards, members, announcements,
+  unitKind, unitId, organizationId, path, isLeader, columns, cards, members, announcements,
   createColumn, renameColumn, deleteColumn, createCard, updateCard, deleteCard, reorderCards,
 }: {
-  ministryId: string
+  /** Quadro de um ministério ou de uma escola (migration 156). */
+  unitKind: 'ministerio' | 'escola'
+  unitId: string
   organizationId: string
   path: string
   isLeader: boolean
@@ -83,7 +85,8 @@ export function TarefasWorkspace({
 
       {view === 'board' && (
         <KanbanBoard
-          ministryId={ministryId}
+          unitKind={unitKind}
+          unitId={unitId}
           columns={columns}
           cards={cards}
           isLeader={isLeader}
