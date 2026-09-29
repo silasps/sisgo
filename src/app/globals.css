@@ -20,6 +20,11 @@
     padding-bottom: env(safe-area-inset-bottom);
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
+    /* Rede de segurança: qualquer elemento que não encolha no mobile (ex.:
+       uma barra flex sem wrap) não pode mais estourar a tela inteira pros
+       lados — fica só ele cortando, em vez da página toda ficando larga
+       e cortando os campos de formulário junto. */
+    overflow-x: hidden;
   }
   .page-transition {
     /* Sem `forwards`/`both`: o `transform` do último frame não pode ficar
