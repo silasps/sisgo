@@ -19,24 +19,41 @@ export function ConversationList({ items, chatBasePath, orgId }: {
   // Mensagem nova em qualquer conversa minha (a RLS só entrega as minhas —
   // migration 150) → atualiza prévia, ordem e bolinha de não lida sem a
   // pessoa precisar recarregar. Espera um instante pra juntar rajadas.
+  // Com a aba escondida, espera a pessoa voltar: recarregar a conversa
+  // aberta marca como lida no servidor, e quem mandou veria ✓✓ sem ter sido visto.
   useEffect(() => {
     const supabase = createClient()
     let channel: ReturnType<typeof supabase.channel> | null = null
     let timer: ReturnType<typeof setTimeout> | null = null
+    let pendingWhileHidden = false
     let cancelled = false
+
+    const refreshSoon = () => {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => router.refresh(), 700)
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible' && pendingWhileHidden) {
+        pendingWhileHidden = false
+        refreshSoon()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+
     ;(async () => {
       const { data: { session } } = await supabase.auth.getSession()
       if (session) supabase.realtime.setAuth(session.access_token)
       if (cancelled) return
       channel = supabase.channel('chat-conversation-list')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, () => {
-          if (timer) clearTimeout(timer)
-          timer = setTimeout(() => router.refresh(), 700)
+          if (document.visibilityState === 'visible') refreshSoon()
+          else pendingWhileHidden = true
         })
         .subscribe()
     })()
     return () => {
       cancelled = true
+      document.removeEventListener('visibilitychange', onVisibility)
       if (timer) clearTimeout(timer)
       if (channel) supabase.removeChannel(channel)
     }

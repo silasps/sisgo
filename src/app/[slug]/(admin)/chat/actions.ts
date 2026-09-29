@@ -174,11 +174,21 @@ export async function deleteMessage(input: { messageId: string }): Promise<ChatA
   return error ? { error: 'Não foi possível excluir a mensagem.' } : {}
 }
 
+// last_read_at é o que acende os dois certinhos (✓✓) pra quem mandou
+// (ChatThread.tsx, via Realtime — migration 151). Nunca fica antes da
+// última mensagem: o horário dela vem do relógio do banco e "agora" vem do
+// servidor da aplicação — uma diferença de milissegundos entre os dois não
+// pode deixar uma mensagem já vista com um certinho só.
 export async function markConversationRead(conversationId: string) {
   const { userId } = await requireUser()
   const db = createAdminClient()
+  const { data: latest } = await db.from('chat_messages')
+    .select('created_at').eq('conversation_id', conversationId)
+    .order('created_at', { ascending: false }).limit(1).maybeSingle()
+  const now = new Date().toISOString()
+  const readAt = latest?.created_at && latest.created_at > now ? latest.created_at : now
   await db.from('chat_participants')
-    .update({ last_read_at: new Date().toISOString() })
+    .update({ last_read_at: readAt })
     .eq('conversation_id', conversationId)
     .eq('user_id', userId)
 }

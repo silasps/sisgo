@@ -24,8 +24,9 @@ export default async function ChatThreadPage({ params }: Props) {
   if (!convo) notFound()
 
   const { data: others } = await db.from('chat_participants')
-    .select('user_id').eq('conversation_id', conversationId).neq('user_id', user.id)
+    .select('user_id, last_read_at').eq('conversation_id', conversationId).neq('user_id', user.id)
   const otherUserId = others?.[0]?.user_id ?? ''
+  const otherLastReadAt = others?.[0]?.last_read_at ?? null
 
   const [nameByUserId, avatarByUserId, { data: messagesRaw }] = await Promise.all([
     resolveNames(db, convo.organization_id, [otherUserId]),
@@ -70,6 +71,7 @@ export default async function ChatThreadPage({ params }: Props) {
       otherAvatarUrl={avatarByUserId.get(otherUserId) ?? null}
       currentUserId={user.id}
       messages={messages}
+      otherLastReadAt={otherLastReadAt}
       path={path}
       sendMessageAction={sendMessage}
       toggleReactionAction={toggleReaction}

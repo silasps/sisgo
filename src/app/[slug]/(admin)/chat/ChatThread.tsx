@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Send, ChevronLeft, SmilePlus, Pencil, Trash2, Check, X, Clock, AlertCircle } from 'lucide-react'
+import { Send, ChevronLeft, SmilePlus, Pencil, Trash2, Check, CheckCheck, X, Clock, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
@@ -28,6 +28,8 @@ type Props = {
   otherAvatarUrl: string | null
   currentUserId: string
   messages: ChatMessage[]
+  /** Até quando a outra pessoa leu a conversa — acende os dois certinhos (✓✓). */
+  otherLastReadAt: string | null
   path: string
   sendMessageAction: (input: { conversationId: string; id: string; content: string; path?: string }) => Promise<ChatActionResult>
   toggleReactionAction: (input: { messageId: string; emoji: string }) => Promise<ChatActionResult>
@@ -63,7 +65,11 @@ function applyReaction(reactions: MessageReaction[], userId: string, emoji: stri
   return next
 }
 
-const byCreatedAt = (a: ChatMessage, b: ChatMessage) => a.createdAt.localeCompare(b.createdAt)
+// Por data, não por texto: o banco devolve "…56.123456+00:00" e o navegador
+// gera "…56.123Z" — comparar as strings mistura os dois formatos.
+const time = (iso: string) => new Date(iso).getTime()
+const byCreatedAt = (a: ChatMessage, b: ChatMessage) => time(a.createdAt) - time(b.createdAt)
+const latest = (a: string | null, b: string | null) => (!a ? b : !b ? a : time(b) > time(a) ? b : a)
 
 function dayLabel(iso: string): string {
   const d = new Date(iso)
@@ -78,13 +84,14 @@ function dayLabel(iso: string): string {
 }
 
 export function ChatThread({
-  conversationId, otherName, otherAvatarUrl, currentUserId, messages, path,
+  conversationId, otherName, otherAvatarUrl, currentUserId, messages, otherLastReadAt, path,
   sendMessageAction, toggleReactionAction, editMessageAction, deleteMessageAction, markReadAction,
 }: Props) {
   const [list, setList] = useState<LocalMessage[]>(messages)
   const [draft, setDraft] = useState('')
   const [avatarOpen, setAvatarOpen] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
+  const [otherReadAt, setOtherReadAt] = useState(otherLastReadAt)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const nearBottomRef = useRef(true)
@@ -97,6 +104,21 @@ export function ChatThread({
   // atualização da página — não pode derrubar e refazer a assinatura.
   const markReadRef = useRef(markReadAction)
   useEffect(() => { markReadRef.current = markReadAction }, [markReadAction])
+  // Chegou mensagem da outra pessoa com a aba escondida: só conta como lida
+  // quando a pessoa voltar pra aba (senão quem mandou veria ✓✓ sem ter sido visto).
+  const unseenWhileHiddenRef = useRef(false)
+
+  useEffect(() => { setOtherReadAt(prev => latest(prev, otherLastReadAt)) }, [otherLastReadAt])
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState !== 'visible' || !unseenWhileHiddenRef.current) return
+      unseenWhileHiddenRef.current = false
+      markReadRef.current(conversationId).catch(() => {})
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [conversationId])
 
   // Snapshot novo do servidor: ele manda, mas o que ainda não foi confirmado
   // (enviando/falhou) continua na tela.
@@ -116,8 +138,12 @@ export function ChatThread({
 
     const scheduleMarkRead = () => {
       if (markReadTimerRef.current) clearTimeout(markReadTimerRef.current)
+      if (document.visibilityState !== 'visible') {
+        unseenWhileHiddenRef.current = true
+        return
+      }
       markReadTimerRef.current = setTimeout(() => {
-        if (document.visibilityState === 'visible') markReadRef.current(conversationId).catch(() => {})
+        markReadRef.current(conversationId).catch(() => {})
       }, 800)
     }
 
@@ -128,6 +154,7 @@ export function ChatThread({
 
       type Row = { id: string; author_id: string; content: string; created_at: string; edited_at: string | null }
       type ReactionRow = { message_id: string; user_id: string; emoji?: string }
+      type ParticipantRow = { user_id: string; last_read_at: string | null }
       const filter = `conversation_id=eq.${conversationId}`
 
       channel = supabase.channel(`chat-thread-${conversationId}`)
@@ -154,6 +181,11 @@ export function ChatThread({
         .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'chat_messages' }, payload => {
           const id = (payload.old as { id?: string }).id
           if (id) setList(prev => prev.filter(m => m.id !== id))
+        })
+        // A outra pessoa abriu a conversa: ✓ vira ✓✓ nas minhas mensagens (migration 151).
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_participants', filter }, payload => {
+          const row = payload.new as ParticipantRow
+          if (row.user_id !== currentUserId && row.last_read_at) setOtherReadAt(prev => latest(prev, row.last_read_at))
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_message_reactions' }, payload => {
           const row = (payload.eventType === 'DELETE' ? payload.old : payload.new) as ReactionRow
@@ -307,6 +339,7 @@ export function ChatThread({
               <MessageBubble
                 message={m}
                 isOwn={m.authorId === currentUserId}
+                read={!m.status && !!otherReadAt && time(m.createdAt) <= time(otherReadAt)}
                 currentUserId={currentUserId}
                 active={activeId === m.id}
                 onToggleActive={() => setActiveId(id => (id === m.id ? null : m.id))}
@@ -350,9 +383,11 @@ export function ChatThread({
   )
 }
 
-function MessageBubble({ message, isOwn, currentUserId, active, onToggleActive, onRetry, onEdit, onDelete, onReact }: {
+function MessageBubble({ message, isOwn, read, currentUserId, active, onToggleActive, onRetry, onEdit, onDelete, onReact }: {
   message: LocalMessage
   isOwn: boolean
+  /** Mensagem própria já vista pela outra pessoa (✓✓). */
+  read: boolean
   currentUserId: string
   active: boolean
   onToggleActive: () => void
@@ -366,7 +401,7 @@ function MessageBubble({ message, isOwn, currentUserId, active, onToggleActive, 
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [editDraft, setEditDraft] = useState(message.content)
   const sticker = isStickerContent(message.content)
-  const time = new Date(message.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  const clock = new Date(message.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   // Ainda não confirmada pelo servidor: sem editar/excluir/reagir até entrar.
   const confirmed = !message.status
   const withinEditWindow = confirmed && (Date.now() - new Date(message.createdAt).getTime()) < MESSAGE_EDIT_WINDOW_MS
@@ -419,9 +454,11 @@ function MessageBubble({ message, isOwn, currentUserId, active, onToggleActive, 
       </button>
       <div className="flex items-center gap-1.5 mt-0.5 px-1">
         <span className="flex items-center gap-1 text-[10px] text-gray-400">
-          {time}{message.editedAt && ' · editado'}
+          {clock}{message.editedAt && ' · editado'}
           {isOwn && message.status === 'sending' && <Clock size={10} aria-label="Enviando" />}
-          {isOwn && !message.status && <Check size={11} aria-label="Enviada" />}
+          {isOwn && !message.status && (read
+            ? <CheckCheck size={13} className="text-sky-500" aria-label="Vista" />
+            : <Check size={11} aria-label="Enviada" />)}
         </span>
         {message.status === 'failed' && (
           <button type="button" onClick={onRetry} className="flex items-center gap-1 text-[11px] font-medium text-red-600 hover:text-red-700">
