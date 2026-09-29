@@ -247,12 +247,12 @@ function SchoolPanel({ slug, orgId, userId, laundryEnabled, school, classes, int
   return (
     <>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 animate-stagger">
-        <StatCard label="Turmas ativas" value={classes} icon={BookOpen} href={base} color="orange" />
+        <StatCard label="Turmas ativas" value={classes} icon={BookOpen} href={`${base}/configuracoes?tab=turmas`} color="orange" />
         <StatCard label="Pré-inscrições" value={interests} icon={ClipboardList} href={`/${slug}/inscricoes`} color="blue" />
         <StatCard label="Inscrições em análise" value={applications} icon={GraduationCap} href={`/${slug}/inscricoes`} color="purple" />
       </div>
       <PersonalAccountCard slug={slug} orgId={orgId} userId={userId} laundryEnabled={laundryEnabled} />
-      <SectionCard title="Turmas ativas" href={base} linkLabel="Abrir escola">
+      <SectionCard title="Turmas ativas" href={`${base}/configuracoes?tab=turmas`} linkLabel="Gerenciar turmas">
         {activeClasses.length === 0 ? (
           <EmptyState icon={BookOpen} label="Nenhuma turma ativa nesta escola" />
         ) : (
