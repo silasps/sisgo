@@ -13,6 +13,8 @@ export type ConversationSummary = {
   lastMessagePreview: string | null
   lastMessageAt: string | null
   unread: boolean
+  /** Silenciada por esta pessoa (migration 154): bolinha cinza, sem aviso no menu. */
+  muted: boolean
 }
 
 export type ChatListItem = ConversationSummary

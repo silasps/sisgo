@@ -4,10 +4,12 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { after } from 'next/server'
 import { canMessage, searchEligiblePeople } from '@/lib/auth/chat-access'
+import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
+import { isManagementRole } from '@/lib/auth/permissions'
 import { sendPushToUsers } from '@/lib/notifications/push'
 import { REACTION_EMOJIS } from './emoji'
 import { resolveNames } from './_data'
-import { MESSAGE_EDIT_WINDOW_MS } from './config'
+import { MESSAGE_EDIT_WINDOW_MS, hasImportantTag } from './config'
 import type { ChatPerson } from './types'
 
 // Retenção proposital baixa (o usuário foi explícito: não quer o Chat
@@ -90,17 +92,19 @@ export async function sendMessage(input: {
     db.from('chat_participants').select('conversation_id')
       .eq('conversation_id', input.conversationId).eq('user_id', userId).maybeSingle(),
     db.from('chat_conversations').select('organization_id, kind').eq('id', input.conversationId).maybeSingle(),
-    db.from('chat_participants').select('user_id')
+    db.from('chat_participants').select('user_id, muted')
       .eq('conversation_id', input.conversationId).neq('user_id', userId).limit(2),
   ])
   if (!participant) return { error: 'Você não faz parte dessa conversa.' }
   if (!convo) return { error: 'Conversa não encontrada.' }
 
   // No Geral quem está dentro já pode falar (a lista de membros é a própria
-  // regra — migration 153); canMessage e push valem só pra conversa 1-a-1.
-  // Sem push no Geral: seriam dezenas de notificações a cada mensagem.
+  // regra — migration 153); canMessage vale só pra conversa 1-a-1. Push no
+  // Geral só com @importante (ver config.ts) — a cada mensagem seriam
+  // dezenas de notificações.
   const isGeral = convo.kind === 'geral'
   const otherUserId = isGeral ? undefined : others?.[0]?.user_id
+  const otherMuted = !isGeral && !!others?.[0]?.muted
   if (otherUserId) {
     const result = await canMessage(convo.organization_id, userId, otherUserId, false)
     if (!result.allowed) return { error: result.reason }
@@ -130,12 +134,28 @@ export async function sendMessage(input: {
     // 1 min — lenta demais pra "alguém te mandou mensagem agora"). Falha
     // silenciosamente se a pessoa não tiver token nativo (só Capacitor tem
     // push hoje, ver PushNotificationManager.tsx).
-    if (otherUserId) {
+    const body = content.length > 80 ? `${content.slice(0, 80)}…` : content
+    const data = input.path ? { url: input.path } : undefined
+
+    // Quem silenciou a conversa não recebe push (migration 154).
+    if (otherUserId && !otherMuted) {
       const senderName = (await resolveNames(db, convo.organization_id, [userId])).get(userId) ?? 'Alguém'
-      await sendPushToUsers([otherUserId], {
-        title: senderName,
-        body: content.length > 80 ? `${content.slice(0, 80)}…` : content,
-        data: input.path ? { url: input.path } : undefined,
+      await sendPushToUsers([otherUserId], { title: senderName, body, data })
+    }
+
+    // @importante no Geral avisa a equipe inteira — inclusive quem silenciou
+    // o grupo, igual menção no WhatsApp: é justamente o que não pode passar batido.
+    if (isGeral && hasImportantTag(content)) {
+      const [{ data: members }, names] = await Promise.all([
+        db.from('chat_participants').select('user_id')
+          .eq('conversation_id', input.conversationId).neq('user_id', userId),
+        resolveNames(db, convo.organization_id, [userId]),
+      ])
+      const senderFirstName = (names.get(userId) ?? 'Alguém').split(' ')[0]
+      await sendPushToUsers((members ?? []).map(m => m.user_id), {
+        title: `📢 Geral · ${senderFirstName}`,
+        body,
+        data,
       })
     }
   })
@@ -173,23 +193,51 @@ export async function editMessage(input: { messageId: string; content: string })
   return error ? { error: 'Não foi possível editar a mensagem.' } : {}
 }
 
+// Liderança da base (gestão) modera o Geral: apaga mensagem de qualquer
+// pessoa, a qualquer tempo. Nas conversas 1-a-1 ninguém apaga a mensagem
+// do outro. Papel efetivo (com preview) — superadmin simulando um obreiro
+// não modera, igual ao resto do sistema.
+async function canModerateGeral(userId: string, orgId: string) {
+  const supabase = await createClient()
+  const { role } = await getCurrentOrganizationRole(supabase, userId, orgId)
+  return isManagementRole(role)
+}
+
 export async function deleteMessage(input: { messageId: string }): Promise<ChatActionResult> {
   const { userId } = await requireUser()
   if (!input.messageId) return {}
 
   const db = createAdminClient()
-  const problem = await ownMessageInWindow(db, userId, input.messageId, 'excluir')
-  if (problem) return { error: problem }
+  const { data: message } = await db.from('chat_messages')
+    .select('author_id, created_at, conversation_id').eq('id', input.messageId).maybeSingle()
+  if (!message) return { error: 'Mensagem não encontrada.' }
+
+  if (message.author_id !== userId) {
+    const { data: convo } = await db.from('chat_conversations')
+      .select('organization_id, kind').eq('id', message.conversation_id).maybeSingle()
+    const moderator = convo?.kind === 'geral' && await canModerateGeral(userId, convo.organization_id)
+    if (!moderator) return { error: 'Você só pode excluir suas próprias mensagens.' }
+  } else {
+    const problem = await ownMessageInWindow(db, userId, input.messageId, 'excluir')
+    if (problem) return { error: problem }
+  }
 
   const { error } = await db.from('chat_messages').delete().eq('id', input.messageId)
   return error ? { error: 'Não foi possível excluir a mensagem.' } : {}
 }
 
-// last_read_at é o que acende os dois certinhos (✓✓) pra quem mandou
-// (ChatThread.tsx, via Realtime — migration 151). Nunca fica antes da
-// última mensagem: o horário dela vem do relógio do banco e "agora" vem do
-// servidor da aplicação — uma diferença de milissegundos entre os dois não
-// pode deixar uma mensagem já vista com um certinho só.
+// Silenciar (qualquer conversa): sem aviso no menu, bolinha cinza na lista
+// e sem push — só pra esta pessoa (migration 154). No Geral é a única saída
+// pra quem não quer ser incomodado: sair do grupo não existe (migration 155).
+export async function setConversationMuted(input: { conversationId: string; muted: boolean }): Promise<ChatActionResult> {
+  const { userId } = await requireUser()
+  const { error } = await createAdminClient().from('chat_participants')
+    .update({ muted: input.muted })
+    .eq('conversation_id', input.conversationId)
+    .eq('user_id', userId)
+  return error ? { error: 'Não foi possível alterar as notificações.' } : {}
+}
+
 export async function markConversationRead(conversationId: string) {
   const { userId } = await requireUser()
   const db = createAdminClient()

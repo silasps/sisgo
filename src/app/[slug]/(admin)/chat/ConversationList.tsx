@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { MessageCircle, Users } from 'lucide-react'
+import { BellOff, MessageCircle, Users } from 'lucide-react'
 import { NewConversationModal } from './NewConversationModal'
 import type { ChatListItem } from './types'
 
@@ -95,8 +95,11 @@ export function ConversationList({ items, chatBasePath, orgId }: {
                 )}
                 <span className="flex-1 min-w-0">
                   <span className="flex items-center justify-between gap-2">
-                    <span className={`text-sm truncate ${item.unread ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>{name}</span>
-                    {item.unread && <span className="w-2 h-2 rounded-full bg-brand-500 shrink-0" />}
+                    <span className={`flex items-center gap-1 min-w-0 text-sm ${item.unread ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>
+                      <span className="truncate">{name}</span>
+                      {item.muted && <BellOff size={12} className="shrink-0 text-gray-400" aria-label="Silenciada" />}
+                    </span>
+                    {item.unread && <span className={`w-2 h-2 rounded-full shrink-0 ${item.muted ? 'bg-gray-300' : 'bg-brand-500'}`} />}
                   </span>
                   <span className="block text-xs text-gray-400 truncate">{item.lastMessagePreview ?? (item.kind === 'geral' ? `Toda a equipe da base · ${item.memberCount ?? 0} pessoas` : 'Sem mensagens ainda')}</span>
                 </span>

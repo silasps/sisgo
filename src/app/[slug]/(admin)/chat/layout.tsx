@@ -44,10 +44,11 @@ export default async function ChatLayout({ params, children }: Props) {
 type Admin = ReturnType<typeof createAdminClient>
 
 async function loadConversations(db: Admin, orgId: string, userId: string): Promise<ConversationSummary[]> {
-  const { data: myParts } = await db.from('chat_participants').select('conversation_id, last_read_at').eq('user_id', userId)
+  const { data: myParts } = await db.from('chat_participants').select('conversation_id, last_read_at, muted').eq('user_id', userId)
   const myIds = (myParts ?? []).map(p => p.conversation_id)
   if (myIds.length === 0) return []
   const lastReadByConvo = new Map((myParts ?? []).map(p => [p.conversation_id, p.last_read_at]))
+  const mutedConvos = new Set((myParts ?? []).filter(p => p.muted).map(p => p.conversation_id))
 
   // Só as conversas DESTA base (quem está em duas bases não mistura as listas).
   const { data: convos } = await db.from('chat_conversations')
@@ -107,6 +108,7 @@ async function loadConversations(db: Admin, orgId: string, userId: string): Prom
       lastMessagePreview: !last ? null : kind === 'geral' ? `${author}: ${last.content}` : last.content,
       lastMessageAt: lastMessageAtByConvo.get(id) ?? null,
       unread,
+      muted: mutedConvos.has(id),
     }
   })
 }

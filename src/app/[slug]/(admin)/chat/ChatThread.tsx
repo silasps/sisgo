@@ -1,14 +1,15 @@
 'use client'
 
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
-import { Send, ChevronLeft, SmilePlus, Pencil, Trash2, Check, CheckCheck, X, Clock, AlertCircle, Users } from 'lucide-react'
+import { Send, ChevronLeft, SmilePlus, Pencil, Trash2, Check, CheckCheck, X, Clock, AlertCircle, Users, MoreVertical, Bell, BellOff } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { EmojiPicker } from './EmojiPicker'
 import { REACTION_EMOJIS, isStickerContent } from './emoji'
-import { MESSAGE_EDIT_WINDOW_MS } from './config'
+import { MESSAGE_EDIT_WINDOW_MS, IMPORTANT_TAG } from './config'
 import type { ChatActionResult } from './actions'
 import type { ChatMessage, ConversationKind, MessageReaction } from './types'
 
@@ -44,6 +45,11 @@ type Props = {
   editMessageAction: (input: { messageId: string; content: string }) => Promise<ChatActionResult>
   deleteMessageAction: (input: { messageId: string }) => Promise<ChatActionResult>
   markReadAction: (conversationId: string) => Promise<void>
+  /** Esta pessoa silenciou a conversa (migration 154). */
+  muted: boolean
+  /** Liderança da base no Geral: pode apagar mensagem de qualquer pessoa. */
+  canModerate: boolean
+  setMutedAction: (input: { conversationId: string; muted: boolean }) => Promise<ChatActionResult>
 }
 
 const OFFLINE: ChatActionResult = { error: 'Sem conexão com o servidor.' }
@@ -78,6 +84,27 @@ function applyReaction(reactions: MessageReaction[], userId: string, emoji: stri
 const time = (iso: string) => new Date(iso).getTime()
 const byCreatedAt = (a: ChatMessage, b: ChatMessage) => time(a.createdAt) - time(b.createdAt)
 
+// Destaca "@importante" no texto (mesma regra de palavra inteira do push —
+// config.ts), pra quem lê entender por que recebeu a notificação.
+const IMPORTANT_TAG_MATCH = /(^|[^\p{L}\p{N}_@.])(@importante)(?![\p{L}\p{N}_])/giu
+function withImportantHighlight(content: string, isOwn: boolean): ReactNode {
+  const parts: ReactNode[] = []
+  let last = 0
+  for (const match of content.matchAll(IMPORTANT_TAG_MATCH)) {
+    const tagStart = (match.index ?? 0) + match[1].length
+    parts.push(content.slice(last, tagStart))
+    parts.push(
+      <span key={tagStart} className={`font-bold rounded px-0.5 ${isOwn ? 'bg-white/25' : 'bg-red-50 text-red-600'}`}>
+        {match[2]}
+      </span>,
+    )
+    last = tagStart + match[2].length
+  }
+  if (parts.length === 0) return content
+  parts.push(content.slice(last))
+  return parts
+}
+
 // Cor fixa por pessoa no Geral (mesma pessoa, mesma cor), como no WhatsApp.
 const AUTHOR_COLORS = ['text-rose-600', 'text-sky-700', 'text-emerald-700', 'text-violet-700', 'text-amber-700', 'text-teal-700', 'text-fuchsia-700', 'text-indigo-700']
 function authorColor(userId: string) {
@@ -102,7 +129,12 @@ function dayLabel(iso: string): string {
 export function ChatThread({
   conversationId, kind, title, subtitle, avatarUrl, authorNames, currentUserId, messages, otherLastReadAt, otherLastDeliveredAt, path,
   sendMessageAction, toggleReactionAction, editMessageAction, deleteMessageAction, markReadAction,
+  muted, canModerate, setMutedAction,
 }: Props) {
+  const router = useRouter()
+  const [isMuted, setIsMuted] = useState(muted)
+  const [menuOpen, setMenuOpen] = useState(false)
+  useEffect(() => setIsMuted(muted), [muted])
   const [list, setList] = useState<LocalMessage[]>(messages)
   const [draft, setDraft] = useState('')
   const [avatarOpen, setAvatarOpen] = useState(false)
@@ -321,6 +353,20 @@ export function ChatThread({
     }
   }
 
+  async function toggleMuted() {
+    const next = !isMuted
+    setMenuOpen(false)
+    setIsMuted(next)
+    const result = await setMutedAction({ conversationId, muted: next }).catch(() => OFFLINE)
+    if (result.error) {
+      setIsMuted(!next)
+      toast.error(result.error)
+      return
+    }
+    toast.success(next ? 'Conversa silenciada.' : 'Notificações reativadas.')
+    router.refresh() // sininho riscado na lista e aviso do menu
+  }
+
   return (
     <div className="flex flex-col flex-1 min-h-0">
       <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 shrink-0">
@@ -341,11 +387,36 @@ export function ChatThread({
             {title.charAt(0).toUpperCase()}
           </span>
         )}
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-gray-800 truncate">{title}</h3>
+        <div className="min-w-0 flex-1">
+          <h3 className="flex items-center gap-1 text-sm font-semibold text-gray-800">
+            <span className="truncate">{title}</span>
+            {isMuted && <BellOff size={13} className="shrink-0 text-gray-400" aria-label="Silenciada" />}
+          </h3>
           {subtitle && <p className="text-[11px] text-gray-400 truncate">{subtitle}</p>}
         </div>
+        <div className="relative shrink-0">
+          <button
+            type="button"
+            onClick={() => setMenuOpen(o => !o)}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+            aria-label="Opções da conversa"
+          >
+            <MoreVertical size={18} />
+          </button>
+          {menuOpen && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+              <div className="absolute right-0 top-full mt-1 z-20 w-56 bg-white border border-gray-200 rounded-xl shadow-lg py-1">
+                <button type="button" onClick={toggleMuted} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                  {isMuted ? <Bell size={15} /> : <BellOff size={15} />}
+                  {isMuted ? 'Reativar notificações' : 'Silenciar notificações'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
+
 
       {avatarOpen && avatarUrl && (
         <div
@@ -377,6 +448,9 @@ export function ChatThread({
                 message={m}
                 isOwn={m.authorId === currentUserId}
                 authorName={showAuthor ? authorNames[m.authorId] ?? 'Obreiro' : null}
+                authorFullName={authorNames[m.authorId] ?? 'esta pessoa'}
+                canModerate={canModerate}
+                highlightImportant={kind === 'geral'}
                 receipt={
                   m.status ? 'pending'
                     : otherReadAt && time(m.createdAt) <= time(otherReadAt) ? 'read'
@@ -406,7 +480,7 @@ export function ChatThread({
           onChange={e => setDraft(e.target.value)}
           onKeyDown={handleKeyDown}
           rows={1}
-          placeholder="Escreva uma mensagem…"
+          placeholder={kind === 'geral' ? `Mensagem pra toda a equipe · ${IMPORTANT_TAG} avisa todos` : 'Escreva uma mensagem…'}
           className="flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 max-h-32"
         />
         <EmojiPicker onSelect={emoji => setDraft(prev => `${prev}${emoji}`)} />
@@ -426,11 +500,17 @@ export function ChatThread({
   )
 }
 
-function MessageBubble({ message, isOwn, authorName, receipt, currentUserId, active, onToggleActive, onRetry, onEdit, onDelete, onReact }: {
+function MessageBubble({ message, isOwn, authorName, authorFullName, canModerate, highlightImportant, receipt, currentUserId, active, onToggleActive, onRetry, onEdit, onDelete, onReact }: {
   message: LocalMessage
   isOwn: boolean
   /** Nome de quem escreveu (só no Geral, no começo de cada sequência). */
   authorName: string | null
+  /** Nome completo do autor, pra confirmação de moderação. */
+  authorFullName: string
+  /** Liderança no Geral: pode apagar mensagem dos outros. */
+  canModerate: boolean
+  /** No Geral, "@importante" aparece destacado (é o que dispara o push). */
+  highlightImportant: boolean
   /** Certinhos de mensagem própria, igual ao WhatsApp: ✓ enviada, ✓✓ cinza entregue, ✓✓ azul vista. */
   receipt: 'pending' | 'sent' | 'delivered' | 'read'
   currentUserId: string
@@ -451,6 +531,8 @@ function MessageBubble({ message, isOwn, authorName, receipt, currentUserId, act
   const confirmed = !message.status
   const withinEditWindow = confirmed && (Date.now() - new Date(message.createdAt).getTime()) < MESSAGE_EDIT_WINDOW_MS
   const canEditOrDelete = isOwn && withinEditWindow
+  // Moderação: liderança apaga mensagem de outra pessoa no Geral, a qualquer tempo.
+  const canModerateThis = canModerate && !isOwn && confirmed
 
   function saveEdit() {
     const content = editDraft.trim()
@@ -496,7 +578,9 @@ function MessageBubble({ message, isOwn, authorName, receipt, currentUserId, act
           <span className={`block text-4xl leading-none px-1 ${message.status ? 'opacity-60' : ''}`}>{message.content}</span>
         ) : (
           <span className={`block rounded-2xl px-3 py-2 text-sm transition-opacity ${isOwn ? 'bg-brand-500 text-white rounded-br-sm' : 'bg-gray-100 text-gray-800 rounded-bl-sm'} ${message.status === 'sending' ? 'opacity-70' : ''} ${message.status === 'failed' ? 'ring-2 ring-red-300' : ''}`}>
-            <span className="block whitespace-pre-wrap break-words">{message.content}</span>
+            <span className="block whitespace-pre-wrap break-words">
+              {highlightImportant ? withImportantHighlight(message.content, isOwn) : message.content}
+            </span>
           </span>
         )}
       </button>
@@ -534,6 +618,16 @@ function MessageBubble({ message, isOwn, authorName, receipt, currentUserId, act
                   <Trash2 size={13} />
                 </button>
               </>
+            )}
+            {canModerateThis && (
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(true)}
+                className="p-0.5 text-gray-300 hover:text-red-500"
+                aria-label="Apagar mensagem (moderação)"
+              >
+                <Trash2 size={13} />
+              </button>
             )}
             <div className="relative">
               <button
@@ -581,8 +675,10 @@ function MessageBubble({ message, isOwn, authorName, receipt, currentUserId, act
       )}
       <ConfirmModal
         open={confirmDelete}
-        message="Excluir esta mensagem? Essa ação não pode ser desfeita."
-        confirmLabel="Excluir"
+        message={isOwn
+          ? 'Excluir esta mensagem? Essa ação não pode ser desfeita.'
+          : `Apagar a mensagem de ${authorFullName} para todos? Essa ação não pode ser desfeita.`}
+        confirmLabel={isOwn ? 'Excluir' : 'Apagar'}
         onConfirm={() => { setConfirmDelete(false); onDelete() }}
         onCancel={() => setConfirmDelete(false)}
       />

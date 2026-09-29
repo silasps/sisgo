@@ -1,7 +1,9 @@
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { sendMessage, toggleReaction, editMessage, deleteMessage, markConversationRead } from '../actions'
+import { sendMessage, toggleReaction, editMessage, deleteMessage, markConversationRead, setConversationMuted } from '../actions'
+import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
+import { isManagementRole } from '@/lib/auth/permissions'
 import { resolveNames, resolveAvatars } from '../_data'
 import { ChatThread } from '../ChatThread'
 import type { ChatMessage } from '../types'
@@ -17,12 +19,16 @@ export default async function ChatThreadPage({ params }: Props) {
   if (!user) redirect('/login')
 
   const { data: participant } = await db.from('chat_participants')
-    .select('conversation_id').eq('conversation_id', conversationId).eq('user_id', user.id).maybeSingle()
+    .select('conversation_id, muted').eq('conversation_id', conversationId).eq('user_id', user.id).maybeSingle()
   if (!participant) notFound()
 
   const { data: convo } = await db.from('chat_conversations').select('organization_id, kind').eq('id', conversationId).single()
   if (!convo) notFound()
   const isGeral = convo.kind === 'geral'
+  // Liderança da base modera o Geral (apaga mensagem de qualquer pessoa) —
+  // a action confere de novo; aqui é só pra mostrar o botão.
+  const canModerate = isGeral
+    && isManagementRole((await getCurrentOrganizationRole(supabase, user.id, convo.organization_id)).role)
 
   const { data: others } = await db.from('chat_participants')
     .select('user_id, last_read_at, last_delivered_at').eq('conversation_id', conversationId).neq('user_id', user.id)
@@ -95,6 +101,9 @@ export default async function ChatThreadPage({ params }: Props) {
       editMessageAction={editMessage}
       deleteMessageAction={deleteMessage}
       markReadAction={markConversationRead}
+      muted={participant.muted}
+      canModerate={canModerate}
+      setMutedAction={setConversationMuted}
     />
   )
 }

@@ -711,14 +711,16 @@ export default async function SlugLayout({ children, params }: Props) {
   // last_read_at vs. mensagem de outra pessoa que o mural já usa acima.
   let hasUnreadDM = false
   const [{ data: myChatParts }, { data: geralConversation }] = await Promise.all([
-    sbAdmin.from('chat_participants').select('conversation_id, last_read_at').eq('user_id', user.id),
+    sbAdmin.from('chat_participants').select('conversation_id, last_read_at, muted').eq('user_id', user.id),
     sbAdmin.from('chat_conversations').select('id').eq('organization_id', org.id).eq('kind', 'geral').maybeSingle(),
   ])
-  if ((myChatParts ?? []).length > 0) {
-    const convoIds = (myChatParts ?? []).map(p => p.conversation_id)
+  // Conversa silenciada não acende o aviso (migration 154).
+  const unmutedChatParts = (myChatParts ?? []).filter(p => !p.muted)
+  if (unmutedChatParts.length > 0) {
+    const convoIds = unmutedChatParts.map(p => p.conversation_id)
     const { data: dmMsgs } = await sbAdmin.from('chat_messages')
       .select('conversation_id, created_at').in('conversation_id', convoIds).neq('author_id', user.id)
-    const lastReadMap = new Map((myChatParts ?? []).map(p => [p.conversation_id, p.last_read_at]))
+    const lastReadMap = new Map(unmutedChatParts.map(p => [p.conversation_id, p.last_read_at]))
     hasUnreadDM = (dmMsgs ?? []).some(m => {
       const lastRead = lastReadMap.get(m.conversation_id)
       return !lastRead || new Date(m.created_at) > new Date(lastRead)
