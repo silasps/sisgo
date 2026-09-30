@@ -115,6 +115,16 @@ export const HOSPEDAGEM_ROLES: readonly Role[] = [
   'hospitalidade',
 ]
 
+/** Quem atribui líder de escola/ministério — superadmin, admin_base e
+ * lider_base (o carve-out documentado acima em OPERATIONAL_ROLES: lider_base
+ * não tem poder operacional geral, mas "atribui líderes" é uma das exceções).
+ * DH vê a área de configurações mas não deveria reatribuir liderança. */
+export const LEADERSHIP_ASSIGNMENT_ROLES: readonly Role[] = [
+  'superadmin',
+  'admin_base',
+  'lider_base',
+]
+
 /** Papéis que podem ver o módulo de reservas */
 export const RESERVATION_ROLES: readonly Role[] = [
   'superadmin',
@@ -140,6 +150,11 @@ export function isManagementRole(role: string): boolean {
 /** Papéis com poder de escrita operacional (exclui lider_base) */
 export function isOperationalManager(role: string): boolean {
   return (OPERATIONAL_ROLES as readonly string[]).includes(role)
+}
+
+/** Verifica se o papel pode atribuir liderança de escola/ministério */
+export function canAssignLeadership(role: string): boolean {
+  return (LEADERSHIP_ASSIGNMENT_ROLES as readonly string[]).includes(role)
 }
 
 /** Verifica se o papel tem acesso ao financeiro geral */

@@ -2,12 +2,12 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { notFound, redirect } from 'next/navigation'
 import {
-  assignSchoolLeader, addSchoolCoLeader, removeSchoolLeader,
+  assignSchoolLeaderByPerson, addSchoolCoLeaderByPerson, removeSchoolLeader,
   addSchoolStaffBatch, removeSchoolStaff,
   submitSchoolObreiroRequest, approveSchoolObreiroRequest,
   rejectSchoolObreiroRequest, cancelSchoolObreiroRequest,
 } from '../actions'
-import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
+import { isManagementRole, isOperationalManager, canAssignLeadership } from '@/lib/auth/permissions'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { getSchoolLink } from '@/lib/auth/unit-access'
 import { MultiSelectModal } from '@/components/ui/MultiSelectModal'
@@ -15,12 +15,12 @@ import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = {
   params: Promise<{ slug: string; id: string }>
-  searchParams: Promise<{ msg?: string; pending?: string }>
+  searchParams: Promise<{ msg?: string; pending?: string; erro?: string }>
 }
 
 export default async function EscolaEquipePage({ params, searchParams }: Props) {
   const { slug, id } = await params
-  const { msg, pending } = await searchParams
+  const { msg, pending, erro } = await searchParams
   const supabase = await createClient()
   const sbAdmin = createAdminClient()
 
@@ -34,6 +34,7 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
   const { role, preview } = await getCurrentOrganizationRole(supabase, user.id, orgId)
   const isManagement = isManagementRole(role)
   const canWrite = isOperationalManager(role)
+  const canAssignLeader = canAssignLeadership(role)
   // Líder DESTA escola (vínculo), não "tem papel lider_eted" — ver lib/auth/unit-access.
   // Quem já escreve direto (canWrite) não passa pelo fluxo de solicitação ao DH.
   const isLiderEted = !canWrite && (await getSchoolLink({ userId: user.id, orgId, role, preview }, id)) === 'lider'
@@ -97,7 +98,9 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
   // Uma escola pode ter mais de um líder (colíderes) — school_leaders só tem
   // unique(school_id, user_id), não um líder único por escola.
   let leaders: Array<{ userId: string; email: string | null }> = []
-  let orgUsersForAssignment: Array<{ id: string; email: string }> = []
+  // Busca entre TODAS as pessoas da base, não só quem já tem login — quem
+  // ainda não tem ganha um na hora (ver resolvePersonToUserId em ../actions).
+  let peopleForAssignment: Array<{ id: string; label: string }> = []
 
   if (isManagement) {
     const { data: leaderRows } = await supabase
@@ -109,16 +112,17 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
         return { userId, email: lu?.email ?? null }
       }))
     }
-    const { data: orgUsersData } = await supabase
-      .from('organization_users').select('user_id').eq('organization_id', orgId).eq('active', true)
-    if (orgUsersData?.length) {
-      const { data: { users: authUsers } } = await sbAdmin.auth.admin.listUsers({ perPage: 1000 })
-      const orgUserSet = new Set(orgUsersData.map(u => u.user_id))
+    if (canAssignLeader) {
+      const { data: staffRows } = await sbAdmin
+        .from('staff_profiles').select('person_id, user_id').eq('organization_id', orgId).not('user_id', 'is', null)
       const leaderUserIdSet = new Set(leaderUserIds)
-      orgUsersForAssignment = authUsers
-        .filter(u => orgUserSet.has(u.id) && !leaderUserIdSet.has(u.id))
-        .map(u => ({ id: u.id, email: u.email ?? u.id }))
-        .sort((a, b) => a.email.localeCompare(b.email))
+      const userIdByPersonId = new Map((staffRows ?? []).map(s => [s.person_id, s.user_id as string]))
+      peopleForAssignment = (allPeople ?? [])
+        .filter(p => {
+          const uid = userIdByPersonId.get(p.id)
+          return !uid || !leaderUserIdSet.has(uid)
+        })
+        .map(p => ({ id: p.id, label: p.full_name }))
     }
   }
 
@@ -196,16 +200,18 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
   }
   const handleAssignLeader = async (formData: FormData) => {
     'use server'
-    const userId = formData.get('user_id') as string
-    if (!userId) return
-    await assignSchoolLeader(orgId, id, userId)
+    const personId = formData.get('person_id') as string
+    if (!personId) return
+    const result = await assignSchoolLeaderByPerson(orgId, id, personId)
+    if (result.error) redirect(`${base}?erro=${encodeURIComponent(result.error)}`)
     redirect(`${base}?msg=lider_atribuido`)
   }
   const handleAddCoLeader = async (formData: FormData) => {
     'use server'
-    const userId = formData.get('user_id') as string
-    if (!userId) return
-    await addSchoolCoLeader(orgId, id, userId)
+    const personId = formData.get('person_id') as string
+    if (!personId) return
+    const result = await addSchoolCoLeaderByPerson(orgId, id, personId)
+    if (result.error) redirect(`${base}?erro=${encodeURIComponent(result.error)}`)
     redirect(`${base}?msg=lider_atribuido`)
   }
   const handleRemoveLeader = async (formData: FormData) => {
@@ -244,6 +250,9 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
       {msgInfo && (
         <div className={`border rounded-lg px-4 py-3 text-sm ${msgInfo.cls}`}>{msgInfo.text}</div>
       )}
+      {erro && (
+        <div className="border rounded-lg px-4 py-3 text-sm bg-red-50 border-red-200 text-red-700">{erro}</div>
+      )}
       {pending && Number(pending) > 0 && (
         <div className="border rounded-lg px-4 py-3 text-sm bg-amber-50 border-amber-200 text-amber-700">
           {Number(pending) === 1
@@ -271,16 +280,16 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
           ) : (
             <p className="text-xs text-gray-400">Sem líder atribuído.</p>
           )}
-          {orgUsersForAssignment.length > 0 && (
+          {canAssignLeader && peopleForAssignment.length > 0 && (
             <details className="mt-2 border-t border-gray-100 pt-2">
               <summary className="text-xs text-brand-600 cursor-pointer select-none font-medium">
                 {leaders.length > 0 ? '+ Adicionar colíder' : 'Atribuir'}
               </summary>
               <form action={leaders.length > 0 ? handleAddCoLeader : handleAssignLeader} className="mt-2 space-y-1.5">
-                <select name="user_id" required className={`${INPUT} text-xs`}>
+                <select name="person_id" required className={`${INPUT} text-xs`}>
                   <option value="">Selecionar...</option>
-                  {orgUsersForAssignment.map(u => (
-                    <option key={u.id} value={u.id}>{u.email}</option>
+                  {peopleForAssignment.map(p => (
+                    <option key={p.id} value={p.id}>{p.label}</option>
                   ))}
                 </select>
                 <button type="submit" className="w-full px-3 py-1.5 text-xs font-medium rounded-lg bg-brand-500 hover:bg-brand-600 text-white transition-colors">Confirmar</button>

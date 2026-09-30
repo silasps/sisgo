@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import {
-  assignSchoolLeader, addSchoolCoLeader, removeSchoolLeader,
+  assignSchoolLeaderByPerson, addSchoolCoLeaderByPerson, removeSchoolLeader,
   removeSchoolStaff,
   submitSchoolObreiroRequest, approveSchoolObreiroRequest,
   rejectSchoolObreiroRequest, cancelSchoolObreiroRequest,
@@ -15,7 +15,7 @@ import { NovaTurmaModal } from './NovaTurmaModal'
 import { EmbedCodeBox } from '@/components/ui/EmbedCodeBox'
 import { SearchableSelectModal } from '@/components/ui/SearchableSelectModal'
 
-import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
+import { isManagementRole, isOperationalManager, canAssignLeadership } from '@/lib/auth/permissions'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { getSchoolLink } from '@/lib/auth/unit-access'
 import { SCHOOL_TYPES } from '@/lib/schools'
@@ -26,7 +26,7 @@ import { HoursField } from '@/components/ui/HoursField'
 
 type Props = {
   params: Promise<{ slug: string; id: string }>
-  searchParams: Promise<{ msg?: string; tab?: string }>
+  searchParams: Promise<{ msg?: string; tab?: string; erro?: string }>
 }
 
 function whatsappDigits(value: string | null | undefined): string | null {
@@ -59,7 +59,7 @@ function WhatsAppButton({ phone }: { phone?: string | null }) {
 
 export default async function EditarEscolaPage({ params, searchParams }: Props) {
   const { slug, id } = await params
-  const { msg, tab } = await searchParams
+  const { msg, tab, erro } = await searchParams
   const initialTab = tab === 'turmas' ? 'turmas' as const : 'escola' as const
   const supabase = await createClient()
   const sbAdmin  = createAdminClient()
@@ -71,8 +71,9 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
   if (!user || !org) notFound()
 
   const { role, preview } = await getCurrentOrganizationRole(supabase, user.id, org.id)
-  const isManagement  = isManagementRole(role)
-  const canWrite      = isOperationalManager(role)
+  const isManagement    = isManagementRole(role)
+  const canWrite        = isOperationalManager(role)
+  const canAssignLeader = canAssignLeadership(role)
 
   const { data: escola } = await supabase
     .from('schools')
@@ -191,7 +192,11 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
     .eq('school_id', id)
 
   let leaders: Array<{ userId: string; email: string | null }> = []
-  let orgUsersForAssignment: Array<{ id: string; email: string; fullName: string | null }> = []
+  // Busca entre TODAS as pessoas da base, não só quem já tem login — quem
+  // ainda não tem login ganha um na hora de virar líder (ver
+  // resolvePersonToUserId em ../actions). Sem isso, promover alguém a líder
+  // exigia dar login manualmente antes, num fluxo separado.
+  let peopleForAssignment: Array<{ id: string; label: string }> = []
 
   if (isManagement) {
     const leaderUserIds = (leaderRows ?? []).map(r => r.user_id)
@@ -201,23 +206,19 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
         return { userId, email: lu?.email ?? null }
       }))
     }
-    const { data: orgUsersData } = await supabase
-      .from('organization_users').select('user_id').eq('organization_id', org.id).eq('active', true)
-    if (orgUsersData?.length) {
-      const { data: { users: authUsers } } = await sbAdmin.auth.admin.listUsers({ perPage: 1000 })
-      const { data: staffRows } = await sbAdmin
-        .from('staff_profiles').select('user_id, people(full_name)')
-        .eq('organization_id', org.id).eq('active', true).not('user_id', 'is', null)
-      const namesByUserId = new Map<string, string>()
-      for (const s of (staffRows ?? []) as unknown as Array<{ user_id: string | null; people: { full_name: string } | null }>) {
-        if (s.user_id && s.people?.full_name) namesByUserId.set(s.user_id, s.people.full_name)
-      }
-      const orgUserSet = new Set(orgUsersData.map((u: { user_id: string }) => u.user_id))
+    if (canAssignLeader) {
+      const [{ data: peopleData }, { data: staffRows }] = await Promise.all([
+        supabase.from('people').select('id, full_name').eq('organization_id', org.id).order('full_name'),
+        sbAdmin.from('staff_profiles').select('person_id, user_id').eq('organization_id', org.id).not('user_id', 'is', null),
+      ])
       const leaderUserIdSet = new Set(leaderUserIds)
-      orgUsersForAssignment = authUsers
-        .filter(u => orgUserSet.has(u.id) && !leaderUserIdSet.has(u.id))
-        .map(u => ({ id: u.id, email: u.email ?? u.id, fullName: namesByUserId.get(u.id) ?? null }))
-        .sort((a, b) => (a.fullName ?? a.email).localeCompare(b.fullName ?? b.email))
+      const userIdByPersonId = new Map((staffRows ?? []).map(s => [s.person_id, s.user_id as string]))
+      peopleForAssignment = (peopleData ?? [])
+        .filter(p => {
+          const uid = userIdByPersonId.get(p.id)
+          return !uid || !leaderUserIdSet.has(uid)
+        })
+        .map(p => ({ id: p.id, label: p.full_name }))
     }
   }
 
@@ -343,17 +344,19 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
 
   const handleAssignLeader = async (formData: FormData) => {
     'use server'
-    const userId = formData.get('user_id') as string
-    if (!userId) return
-    await assignSchoolLeader(org.id, id, userId)
+    const personId = formData.get('person_id') as string
+    if (!personId) return
+    const result = await assignSchoolLeaderByPerson(org.id, id, personId)
+    if (result.error) redirect(`/${slug}/escolas/${id}/configuracoes?erro=${encodeURIComponent(result.error)}`)
     redirect(`/${slug}/escolas/${id}/configuracoes?msg=lider_atribuido`)
   }
 
   const handleAddCoLeader = async (formData: FormData) => {
     'use server'
-    const userId = formData.get('user_id') as string
-    if (!userId) return
-    await addSchoolCoLeader(org.id, id, userId)
+    const personId = formData.get('person_id') as string
+    if (!personId) return
+    const result = await addSchoolCoLeaderByPerson(org.id, id, personId)
+    if (result.error) redirect(`/${slug}/escolas/${id}/configuracoes?erro=${encodeURIComponent(result.error)}`)
     redirect(`/${slug}/escolas/${id}/configuracoes?msg=lider_atribuido`)
   }
 
@@ -454,6 +457,11 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
           {msg && msgs[msg] && (
             <div className={`border rounded-lg px-4 py-3 text-sm mb-4 ${msgs[msg].cls}`}>
               {msgs[msg].text}
+            </div>
+          )}
+          {erro && (
+            <div className="border rounded-lg px-4 py-3 text-sm mb-4 bg-red-50 border-red-200 text-red-700">
+              {erro}
             </div>
           )}
 
@@ -706,29 +714,30 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                 ) : (
                   <p className="text-sm text-gray-400 mb-3">Sem líder atribuído.</p>
                 )}
-                {orgUsersForAssignment.length > 0 ? (
-                  <details className={leaders.length > 0 ? 'border-t border-gray-100 pt-3' : ''}>
-                    <summary className="text-sm text-brand-600 cursor-pointer select-none font-medium">
-                      {leaders.length > 0 ? '+ Adicionar colíder' : 'Atribuir líder'}
-                    </summary>
-                    <form action={leaders.length > 0 ? handleAddCoLeader : handleAssignLeader} className="mt-3 space-y-2">
-                      <SearchableSelectModal
-                        name="user_id"
-                        options={orgUsersForAssignment.map(u => ({
-                          id: u.id,
-                          label: u.fullName ?? u.email,
-                          sublabel: u.fullName ? u.email : undefined,
-                        }))}
-                        title="Selecionar usuário"
-                      />
-                      <p className="text-xs text-gray-400">O papel do usuário será atualizado para Líder de Escola.</p>
-                      <button type="submit" className="w-full px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
-                        Confirmar
-                      </button>
-                    </form>
-                  </details>
-                ) : (
-                  <p className="text-xs text-gray-400">Nenhum outro usuário disponível.</p>
+                {canAssignLeader && (
+                  peopleForAssignment.length > 0 ? (
+                    <details className={leaders.length > 0 ? 'border-t border-gray-100 pt-3' : ''}>
+                      <summary className="text-sm text-brand-600 cursor-pointer select-none font-medium">
+                        {leaders.length > 0 ? '+ Adicionar colíder' : 'Atribuir líder'}
+                      </summary>
+                      <form action={leaders.length > 0 ? handleAddCoLeader : handleAssignLeader} className="mt-3 space-y-2">
+                        <SearchableSelectModal
+                          name="person_id"
+                          options={peopleForAssignment}
+                          title="Selecionar pessoa"
+                        />
+                        <p className="text-xs text-gray-400">
+                          Busca qualquer pessoa cadastrada na base. Quem ainda não tem login ganha um automaticamente
+                          (usando o e-mail já no cadastro) — o papel dela vira Líder de Escola.
+                        </p>
+                        <button type="submit" className="w-full px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
+                          Confirmar
+                        </button>
+                      </form>
+                    </details>
+                  ) : (
+                    <p className="text-xs text-gray-400">Nenhuma outra pessoa cadastrada na base.</p>
+                  )
                 )}
               </div>
 
