@@ -47,14 +47,18 @@ export function NovaTurmaModal({ action }: { action: Action }) {
             </div>
           </div>
 
+          {/* <input type="date"> no Safari iOS ignora width:100% quando vazio
+              (o placeholder "dd/mm/aaaa" pede mais espaço nativo do que a
+              largura calculada) — overflow-hidden no wrapper contém o campo
+              mesmo assim, em vez de deixar ele estourar o card do modal. */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
+            <div className="overflow-hidden">
               <label className="block text-xs font-medium text-gray-600 mb-1">Início</label>
-              <input name="starts_at" type="date" className={`${INPUT} min-w-0`} />
+              <input name="starts_at" type="date" className={`${INPUT} max-w-full min-w-0`} />
             </div>
-            <div>
+            <div className="overflow-hidden">
               <label className="block text-xs font-medium text-gray-600 mb-1">Fim</label>
-              <input name="ends_at" type="date" className={`${INPUT} min-w-0`} />
+              <input name="ends_at" type="date" className={`${INPUT} max-w-full min-w-0`} />
             </div>
           </div>
 
