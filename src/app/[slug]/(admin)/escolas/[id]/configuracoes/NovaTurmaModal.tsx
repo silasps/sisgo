@@ -29,7 +29,8 @@ export function NovaTurmaModal({ action }: { action: Action }) {
       </button>
 
       <Modal open={open} onClose={() => setOpen(false)} title="Nova turma"
-        subtitle="Só o nome é obrigatório — o resto (custo, local, inscrições) você define na página da turma logo em seguida">
+        subtitle="Só o nome é obrigatório — o resto (custo, local, inscrições) você define na página da turma logo em seguida"
+        closeOnBackdropClick={false}>
         <form action={action} className="space-y-4 p-5">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Nome da turma *</label>
