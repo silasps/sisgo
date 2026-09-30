@@ -115,14 +115,16 @@ export const HOSPEDAGEM_ROLES: readonly Role[] = [
   'hospitalidade',
 ]
 
-/** Quem atribui líder de escola/ministério — superadmin, admin_base e
+/** Quem atribui líder de escola/ministério — superadmin, admin_base,
  * lider_base (o carve-out documentado acima em OPERATIONAL_ROLES: lider_base
- * não tem poder operacional geral, mas "atribui líderes" é uma das exceções).
- * DH vê a área de configurações mas não deveria reatribuir liderança. */
+ * não tem poder operacional geral, mas "atribui líderes" é uma das exceções)
+ * e dh — tudo que envolve movimentação/atribuição de pessoas é escopo de DH
+ * por decisão do usuário (reverte a exclusão de DH daqui feita em b233b41). */
 export const LEADERSHIP_ASSIGNMENT_ROLES: readonly Role[] = [
   'superadmin',
   'admin_base',
   'lider_base',
+  'dh',
 ]
 
 /** Papéis que podem ver o módulo de reservas */
