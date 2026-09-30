@@ -1,94 +1,112 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
-import { assignLeader, removeLeader } from './actions'
+import { SearchableSelectModal } from '@/components/ui/SearchableSelectModal'
+import { assignMinistryLeaderByPerson, addMinistryCoLeaderByPerson, removeMinistryLeader } from './actions'
 
-type Props = { slug: string; ministryId: string; orgId: string }
+type Props = { slug: string; ministryId: string; orgId: string; canAssignLeader: boolean }
 
-export async function LeaderPanel({ slug, ministryId, orgId }: Props) {
+export async function LeaderPanel({ slug, ministryId, orgId, canAssignLeader }: Props) {
   const sbAdmin = createAdminClient()
 
-  const { data: leaderRow } = await sbAdmin
+  const { data: leaderRows } = await sbAdmin
     .from('ministry_leaders')
     .select('user_id')
     .eq('ministry_id', ministryId)
-    .single()
-  const leaderUserId = leaderRow?.user_id ?? null
 
-  let leaderEmail: string | null = null
-  if (leaderUserId) {
-    const { data: { user: lu } } = await sbAdmin.auth.admin.getUserById(leaderUserId)
-    leaderEmail = lu?.email ?? null
+  const leaderUserIds = (leaderRows ?? []).map(r => r.user_id)
+  let leaders: Array<{ userId: string; email: string | null }> = []
+  if (leaderUserIds.length > 0) {
+    leaders = await Promise.all(leaderUserIds.map(async userId => {
+      const { data: { user: lu } } = await sbAdmin.auth.admin.getUserById(userId)
+      return { userId, email: lu?.email ?? null }
+    }))
   }
 
-  const { data: orgUsersData } = await sbAdmin
-    .from('organization_users')
-    .select('user_id')
-    .eq('organization_id', orgId)
-    .eq('active', true)
-
-  let orgUsersForAssignment: Array<{ id: string; email: string }> = []
-  if (orgUsersData?.length) {
-    const { data: { users: authUsers } } = await sbAdmin.auth.admin.listUsers({ perPage: 1000 })
-    const orgUserSet = new Set(orgUsersData.map(u => u.user_id))
-    orgUsersForAssignment = authUsers
-      .filter(u => orgUserSet.has(u.id) && u.id !== (leaderUserId ?? ''))
-      .map(u => ({ id: u.id, email: u.email ?? u.id }))
-      .sort((a, b) => a.email.localeCompare(b.email))
+  // Busca entre TODAS as pessoas da base, não só quem já tem login — mesmo
+  // padrão da "Liderança da Escola" (ver escolas/[id]/configuracoes/page.tsx).
+  let peopleForAssignment: Array<{ id: string; label: string }> = []
+  if (canAssignLeader) {
+    const [{ data: peopleData }, { data: staffRows }] = await Promise.all([
+      sbAdmin.from('people').select('id, full_name').eq('organization_id', orgId).order('full_name'),
+      sbAdmin.from('staff_profiles').select('person_id, user_id').eq('organization_id', orgId).not('user_id', 'is', null),
+    ])
+    const leaderUserIdSet = new Set(leaderUserIds)
+    const userIdByPersonId = new Map((staffRows ?? []).map(s => [s.person_id, s.user_id as string]))
+    peopleForAssignment = (peopleData ?? [])
+      .filter(p => {
+        const uid = userIdByPersonId.get(p.id)
+        return !uid || !leaderUserIdSet.has(uid)
+      })
+      .map(p => ({ id: p.id, label: p.full_name }))
   }
 
   const handleAssignLeader = async (formData: FormData) => {
     'use server'
-    const userId = formData.get('user_id') as string
-    if (!userId) return
-    const sb = createAdminClient()
-    const { data: liderRole } = await sb.from('roles').select('id').eq('name', 'lider_ministerio').single()
-    if (liderRole) {
-      await sb.from('organization_users')
-        .update({ role_id: liderRole.id, updated_at: new Date().toISOString() })
-        .eq('user_id', userId).eq('organization_id', orgId)
-    }
-    await assignLeader(orgId, ministryId, userId)
+    const personId = formData.get('person_id') as string
+    if (!personId) return
+    const result = await assignMinistryLeaderByPerson(orgId, ministryId, personId)
+    if (result.error) redirect(`/${slug}/ministerios/${ministryId}?erro=${encodeURIComponent(result.error)}`)
     redirect(`/${slug}/ministerios/${ministryId}?msg=lider_atribuido`)
   }
 
-  const handleRemoveLeader = async () => {
+  const handleAddCoLeader = async (formData: FormData) => {
     'use server'
-    await removeLeader(ministryId)
-    redirect(`/${slug}/ministerios/${ministryId}`)
+    const personId = formData.get('person_id') as string
+    if (!personId) return
+    const result = await addMinistryCoLeaderByPerson(orgId, ministryId, personId)
+    if (result.error) redirect(`/${slug}/ministerios/${ministryId}?erro=${encodeURIComponent(result.error)}`)
+    redirect(`/${slug}/ministerios/${ministryId}?msg=lider_atribuido`)
   }
 
-  const INPUT = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400'
+  const handleRemoveLeader = async (formData: FormData) => {
+    'use server'
+    const userId = formData.get('user_id') as string
+    if (!userId) return
+    await removeMinistryLeader(ministryId, userId)
+    redirect(`/${slug}/ministerios/${ministryId}`)
+  }
 
   return (
     <div className="hidden lg:block bg-white rounded-xl border border-gray-200 p-4">
       <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Líder</h3>
-      {leaderEmail ? (
-        <div>
-          <p className="text-sm font-medium text-gray-900 truncate">{leaderEmail}</p>
-          <form action={handleRemoveLeader} className="mt-1">
-            <button type="submit" className="text-[10px] text-red-400 hover:text-red-600 transition-colors">Remover</button>
-          </form>
-        </div>
+      {leaders.length > 0 ? (
+        <ul className="space-y-1.5">
+          {leaders.map(l => (
+            <li key={l.userId} className="flex items-center justify-between gap-2">
+              <p className="text-sm font-medium text-gray-900 truncate">{l.email}</p>
+              <form action={handleRemoveLeader}>
+                <input type="hidden" name="user_id" value={l.userId} />
+                <button type="submit" className="text-[10px] text-red-400 hover:text-red-600 transition-colors">Remover</button>
+              </form>
+            </li>
+          ))}
+        </ul>
       ) : (
         <p className="text-xs text-gray-400">Sem líder atribuído.</p>
       )}
-      {orgUsersForAssignment.length > 0 && (
-        <details className="mt-2 border-t border-gray-100 pt-2">
-          <summary className="text-xs text-brand-600 cursor-pointer select-none font-medium">
-            {leaderEmail ? 'Trocar' : 'Atribuir'}
-          </summary>
-          <form action={handleAssignLeader} className="mt-2 space-y-1.5">
-            <select name="user_id" required className={`${INPUT} text-xs`}>
-              <option value="">Selecionar...</option>
-              {orgUsersForAssignment.map(u => (
-                <option key={u.id} value={u.id}>{u.email}</option>
-              ))}
-            </select>
-            <button type="submit" className="w-full px-3 py-1.5 text-xs font-medium rounded-lg bg-brand-500 hover:bg-brand-600 text-white transition-colors">
-              Confirmar
-            </button>
-          </form>
-        </details>
+      {canAssignLeader && (
+        peopleForAssignment.length > 0 ? (
+          <details className={leaders.length > 0 ? 'mt-2 border-t border-gray-100 pt-2' : 'mt-2'}>
+            <summary className="text-xs text-brand-600 cursor-pointer select-none font-medium">
+              {leaders.length > 0 ? '+ Adicionar colíder' : 'Atribuir líder'}
+            </summary>
+            <form action={leaders.length > 0 ? handleAddCoLeader : handleAssignLeader} className="mt-2 space-y-1.5">
+              <SearchableSelectModal
+                name="person_id"
+                options={peopleForAssignment}
+                title="Selecionar pessoa"
+              />
+              <p className="text-[10px] text-gray-400">
+                Busca qualquer pessoa cadastrada na base. Quem ainda não tem login ganha um automaticamente.
+              </p>
+              <button type="submit" className="w-full px-3 py-1.5 text-xs font-medium rounded-lg bg-brand-500 hover:bg-brand-600 text-white transition-colors">
+                Confirmar
+              </button>
+            </form>
+          </details>
+        ) : (
+          <p className="text-[10px] text-gray-400 mt-2">Nenhuma outra pessoa cadastrada na base.</p>
+        )
       )}
     </div>
   )

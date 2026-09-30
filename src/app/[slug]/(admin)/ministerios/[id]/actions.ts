@@ -1,6 +1,9 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { resolvePersonToUserId } from '@/lib/staff/resolvePersonToUserId'
+
+type AdminClient = ReturnType<typeof createAdminClient>
 
 // Quando um ministério tem `linked_role` (Hospitalidade/Secretaria/DH/Cozinha/
 // Manutenção/Comunicação — configurado na criação do ministério) e a pessoa
@@ -106,6 +109,68 @@ export async function assignLeader(orgId: string, ministryId: string, userId: st
 export async function removeLeader(ministryId: string) {
   const sb = createAdminClient()
   await sb.from('ministry_leaders').delete().eq('ministry_id', ministryId)
+}
+
+// ── Atribuição de líder por PESSOA (mesmo padrão de escolas/[id]/actions.ts)
+// — busca entre toda a base, não só quem já tem login, e permite colíderes
+// (ministry_leaders é unique(ministry_id, user_id), não um líder único por
+// ministério). Ao contrário de assignLeader() acima (usado só pra sincronizar
+// ministry_leaders quando "líder de ministério" é um PAPEL ACUMULADO, sem
+// mexer no papel principal — ver updateExtraRoles em obreiros/actions.ts),
+// estas também promovem o papel principal da pessoa pra lider_ministerio,
+// igual grantSchoolLeaderRole faz pro lado das escolas. ─────────────────────
+
+async function grantMinistryLeaderRole(sb: AdminClient, orgId: string, ministryId: string, userId: string) {
+  const { data: role } = await sb.from('roles').select('id').eq('name', 'lider_ministerio').single()
+  if (role) {
+    await sb.from('organization_users')
+      .update({ role_id: role.id, updated_at: new Date().toISOString() })
+      .eq('user_id', userId).eq('organization_id', orgId)
+  }
+
+  const { data: ministry } = await sb.from('ministries').select('name').eq('id', ministryId).single()
+  if (ministry) {
+    await sb.from('staff_profiles')
+      .update({ area: ministry.name, role_title: 'Líder', updated_at: new Date().toISOString() })
+      .eq('organization_id', orgId).eq('user_id', userId)
+  }
+}
+
+// "Atribuir líder" — usado quando o ministério ainda não tem nenhum.
+export async function assignMinistryLeader(orgId: string, ministryId: string, userId: string) {
+  const sb = createAdminClient()
+  await sb.from('ministry_leaders').delete().eq('ministry_id', ministryId)
+  await sb.from('ministry_leaders').insert({ organization_id: orgId, ministry_id: ministryId, user_id: userId })
+  await grantMinistryLeaderRole(sb, orgId, ministryId, userId)
+}
+
+// "Adicionar colíder" — soma à liderança existente em vez de substituir.
+export async function addMinistryCoLeader(orgId: string, ministryId: string, userId: string) {
+  const sb = createAdminClient()
+  const { error } = await sb.from('ministry_leaders').insert({ organization_id: orgId, ministry_id: ministryId, user_id: userId })
+  if (error) throw new Error(error.message)
+  await grantMinistryLeaderRole(sb, orgId, ministryId, userId)
+}
+
+export async function removeMinistryLeader(ministryId: string, userId: string) {
+  const sb = createAdminClient()
+  await sb.from('ministry_leaders').delete().eq('ministry_id', ministryId).eq('user_id', userId)
+}
+
+export async function assignMinistryLeaderByPerson(orgId: string, ministryId: string, personId: string): Promise<{ error?: string }> {
+  const sb = createAdminClient()
+  const resolved = await resolvePersonToUserId(sb, orgId, personId, 'lider_ministerio')
+  if ('error' in resolved) return resolved
+  await assignMinistryLeader(orgId, ministryId, resolved.userId)
+  return {}
+}
+
+export async function addMinistryCoLeaderByPerson(orgId: string, ministryId: string, personId: string): Promise<{ error?: string }> {
+  const sb = createAdminClient()
+  const resolved = await resolvePersonToUserId(sb, orgId, personId, 'lider_ministerio')
+  if ('error' in resolved) return resolved
+  await addMinistryCoLeader(orgId, ministryId, resolved.userId)
+  return {}
 }
 
 // ── DH: adiciona membro diretamente ──────────────────────────────────────────
