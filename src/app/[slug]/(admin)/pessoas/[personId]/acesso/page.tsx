@@ -5,7 +5,7 @@ import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { MANAGEMENT_ROLES, isOperationalManager, canAssignLeadership } from '@/lib/auth/permissions'
 import { loadStaffRoleOptions } from '@/lib/staff/roleOptions'
 import { ObreiroCard } from '../../../obreiros/ObreirosClientForms'
-import { criarAcessoComEmail } from './actions'
+import { criarAcessoComEmail, adicionarTelefonePessoa, marcarCredencialEnviada } from './actions'
 import { CriarAcessoForm } from './CriarAcessoForm'
 import { SetAsLeaderCard } from './SetAsLeaderCard'
 import { addSchoolCoLeaderByPerson } from '../../../escolas/[id]/actions'
@@ -72,7 +72,11 @@ export default async function PessoaAcessoPage({ params, searchParams }: Props) 
           <div className="border rounded-lg px-4 py-3 text-sm bg-red-50 border-red-200 text-red-700">{erro}</div>
         )}
         {staffProfile ? (
-          <CriarAcessoForm action={criarAcessoComEmail.bind(null, personId, org.id, slug)} />
+          <CriarAcessoForm
+            action={criarAcessoComEmail.bind(null, personId, org.id, slug)}
+            addPhoneAction={adicionarTelefonePessoa.bind(null, personId)}
+            markSentAction={marcarCredencialEnviada}
+          />
         ) : (
           <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center">
             <p className="text-sm text-gray-400">Essa pessoa ainda não tem perfil de obreiro.</p>
