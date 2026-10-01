@@ -532,22 +532,31 @@ function ExtraRolesForm({
 
 // Valores reais mais comuns em staff_profiles.role_title hoje — texto livre
 // deixava o dado inconsistente ("Líder de Ministério" vs "líder de
-// ministério" vs frases inteiras). "Outra" mantém a flexibilidade pro caso
-// que não encaixa em nenhuma das opções fixas.
-const ROLE_TITLE_PRESETS = [
-  'Obreiro de Ministério',
-  'Obreiro de Escola',
-  'Líder de Ministério',
-  'Líder de Escola',
-  'Voluntário',
-  'Funcionário',
-]
+// ministério" vs frases inteiras). Depende da Área escolhida: ministério só
+// oferece funções de ministério, escola só de escola — não faz sentido
+// "Líder de Escola" aparecer pra alguém sendo cadastrado num ministério.
+// "Outra" mantém a flexibilidade pro caso que não encaixa em nenhuma opção.
+const MINISTRY_ROLE_TITLES = ['Obreiro de Ministério', 'Líder de Ministério', 'Voluntário em Ministério', 'Funcionário']
+const SCHOOL_ROLE_TITLES = ['Obreiro de Escola', 'Líder de Escola', 'Instrutor', 'Funcionário']
 
-function RoleTitleSelector({ defaultValue }: { defaultValue: string }) {
-  const [preset, setPreset] = useState(() => (ROLE_TITLE_PRESETS.includes(defaultValue) ? defaultValue : defaultValue ? 'outra' : ''))
-  const [custom, setCustom] = useState(() => (ROLE_TITLE_PRESETS.includes(defaultValue) ? '' : defaultValue))
+function RoleTitleSelector({ scope, defaultValue }: { scope: string; defaultValue: string }) {
+  const presets = scope.startsWith('ministry:') ? MINISTRY_ROLE_TITLES : scope.startsWith('school:') ? SCHOOL_ROLE_TITLES : []
+  const [preset, setPreset] = useState(() => (presets.includes(defaultValue) ? defaultValue : defaultValue ? 'outra' : ''))
+  const [custom, setCustom] = useState(() => (presets.includes(defaultValue) ? '' : defaultValue))
   const value = preset === 'outra' ? custom : preset
   const SELECT = 'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400'
+
+  if (presets.length === 0) {
+    return (
+      <div>
+        <label className="mb-1 block text-sm font-medium text-gray-700">Função descritiva</label>
+        <input type="hidden" name="role_title" value="" />
+        <select disabled className={`${SELECT} text-gray-400`}>
+          <option>Selecione a área primeiro</option>
+        </select>
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -555,7 +564,7 @@ function RoleTitleSelector({ defaultValue }: { defaultValue: string }) {
       <input type="hidden" name="role_title" value={value} />
       <select value={preset} onChange={e => setPreset(e.target.value)} className={SELECT}>
         <option value="">Selecionar função...</option>
-        {ROLE_TITLE_PRESETS.map(p => <option key={p} value={p}>{p}</option>)}
+        {presets.map(p => <option key={p} value={p}>{p}</option>)}
         <option value="outra">Outra (digitar)</option>
       </select>
       {preset === 'outra' && (
@@ -635,7 +644,7 @@ export function CreateStaffUserForm({
           />
         </div>
 
-        <RoleTitleSelector key={defaultRoleTitle} defaultValue={defaultRoleTitle} />
+        <RoleTitleSelector key={scope} scope={scope} defaultValue={defaultRoleTitle} />
       </div>
 
       <div className="pt-2">
