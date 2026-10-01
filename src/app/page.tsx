@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import { RevealBackground } from '@/components/RevealBackground'
 import { MarketingHeader } from '@/components/marketing/MarketingHeader'
@@ -15,18 +15,20 @@ type Props = { searchParams: Promise<{ code?: string }> }
 export default async function LandingPage({ searchParams }: Props) {
   const { code } = await searchParams
   if (code) redirect(`/auth/callback?code=${code}`)
-  let orgs: { id: string; name: string; slug: string; city: string | null; state: string | null; logo_url: string | null }[] | null = null
-  try {
-    const supabase = await createClient()
-    const { data } = await supabase
-      .from('organizations')
-      .select('id, name, slug, city, state, logo_url')
-      .eq('active', true)
-      .order('name')
-    orgs = data
-  } catch {
-    // Stale auth session — render as anonymous
-  }
+  // Lista pública: cliente anônimo, sem ler os cookies de sessão. Com o
+  // cliente de supabase/server, um cookie vencido/revogado no navegador
+  // fazia o auth-js tentar refresh a cada visita e logar
+  // "Invalid Refresh Token: Refresh Token Not Found".
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { persistSession: false, autoRefreshToken: false } }
+  )
+  const { data: orgs } = await supabase
+    .from('organizations')
+    .select('id, name, slug, city, state, logo_url')
+    .eq('active', true)
+    .order('name')
 
   return (
     <>
