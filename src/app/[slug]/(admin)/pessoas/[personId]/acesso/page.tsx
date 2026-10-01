@@ -7,19 +7,15 @@ import { loadStaffRoleOptions } from '@/lib/staff/roleOptions'
 import { ObreiroCard } from '../../../obreiros/ObreirosClientForms'
 import { criarAcessoComEmail, adicionarTelefonePessoa, marcarCredencialEnviada, removerAcesso } from './actions'
 import { CriarAcessoForm } from './CriarAcessoForm'
-import { SetAsLeaderCard } from './SetAsLeaderCard'
+import { SetAsLeaderCard, type Leadership } from './SetAsLeaderCard'
 import { ConfirmSubmitButton } from '@/components/ui/ConfirmSubmitButton'
-import { addSchoolCoLeaderByPerson } from '../../../escolas/[id]/actions'
-import { addMinistryCoLeaderByPerson } from '../../../ministerios/[id]/actions'
+import { addSchoolCoLeaderByPerson, removeSchoolLeader } from '../../../escolas/[id]/actions'
+import { addMinistryCoLeaderByPerson, removeMinistryLeader } from '../../../ministerios/[id]/actions'
 
-type Props = {
-  params: Promise<{ slug: string; personId: string }>
-  searchParams: Promise<{ msg?: string; erro?: string }>
-}
+type Props = { params: Promise<{ slug: string; personId: string }> }
 
-export default async function PessoaAcessoPage({ params, searchParams }: Props) {
+export default async function PessoaAcessoPage({ params }: Props) {
   const { slug, personId } = await params
-  const { msg, erro } = await searchParams
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -36,6 +32,7 @@ export default async function PessoaAcessoPage({ params, searchParams }: Props) 
   if (!person) notFound()
 
   const canAssignLeader = canAssignLeadership(role)
+  const base = `/${slug}/pessoas/${personId}/acesso`
 
   const handleSetAsLeader = async (formData: FormData) => {
     'use server'
@@ -45,12 +42,8 @@ export default async function PessoaAcessoPage({ params, searchParams }: Props) 
     const result = unitType === 'school'
       ? await addSchoolCoLeaderByPerson(org.id, unitId, personId)
       : await addMinistryCoLeaderByPerson(org.id, unitId, personId)
-    if (result.error) redirect(`/${slug}/pessoas/${personId}/acesso?erro=${encodeURIComponent(result.error)}`)
-    redirect(`/${slug}/pessoas/${personId}/acesso?msg=lider_atribuido`)
-  }
-
-  const msgs: Record<string, { text: string; cls: string }> = {
-    lider_atribuido: { text: 'Líder atribuído com sucesso.', cls: 'bg-green-50 border-green-200 text-green-700' },
+    if (result.error) redirect(`${base}?flash_error=${encodeURIComponent(result.error)}`)
+    redirect(`${base}?flash_success=${encodeURIComponent('Líder atribuído com sucesso.')}`)
   }
 
   const { data: staffProfile } = await db
@@ -60,18 +53,22 @@ export default async function PessoaAcessoPage({ params, searchParams }: Props) 
     .eq('person_id', personId)
     .maybeSingle()
 
+  const handleRemoverLideranca = async (formData: FormData) => {
+    'use server'
+    const unitType = formData.get('unit_type') as string
+    const unitId = formData.get('unit_id') as string
+    if (!unitId || !staffProfile?.user_id) return
+    if (unitType === 'school') await removeSchoolLeader(unitId, staffProfile.user_id)
+    else await removeMinistryLeader(unitId, staffProfile.user_id)
+    redirect(`${base}?flash_success=${encodeURIComponent('Liderança removida.')}`)
+  }
+
   if (!staffProfile?.user_id) {
     const { schools, ministries } = canAssignLeader
       ? await loadStaffRoleOptions(supabase, org.id)
       : { schools: [], ministries: [] }
     return (
       <main className="p-4 md:p-6 max-w-2xl mx-auto space-y-4">
-        {msg && msgs[msg] && (
-          <div className={`border rounded-lg px-4 py-3 text-sm ${msgs[msg].cls}`}>{msgs[msg].text}</div>
-        )}
-        {erro && (
-          <div className="border rounded-lg px-4 py-3 text-sm bg-red-50 border-red-200 text-red-700">{erro}</div>
-        )}
         {staffProfile ? (
           <CriarAcessoForm
             action={criarAcessoComEmail.bind(null, personId, org.id, slug)}
@@ -84,7 +81,13 @@ export default async function PessoaAcessoPage({ params, searchParams }: Props) 
           </div>
         )}
         {canAssignLeader && (
-          <SetAsLeaderCard action={handleSetAsLeader} schools={schools} ministries={ministries} />
+          <SetAsLeaderCard
+            action={handleSetAsLeader}
+            removeAction={handleRemoverLideranca}
+            schools={schools}
+            ministries={ministries}
+            currentLeaderships={[]}
+          />
         )}
       </main>
     )
@@ -92,12 +95,19 @@ export default async function PessoaAcessoPage({ params, searchParams }: Props) 
 
   type OrgUserRow = { id: string; active: boolean; extra_roles: string[] | null; roles: { id: string; name: string; label: string } | null }
   type MinistryLinkRaw = { ministries: { name: string } | null }
+  type SchoolLeaderRow = { school_id: string; schools: { name: string } | null }
+  type MinistryLeaderRow = { ministry_id: string; ministries: { name: string } | null }
 
-  const [{ data: orgUserRaw }, { roles, schools, ministries }, { data: authUser }, { data: ministryLinksRaw }] = await Promise.all([
+  const [
+    { data: orgUserRaw }, { roles, schools, ministries }, { data: authUser }, { data: ministryLinksRaw },
+    { data: schoolLeaderRows }, { data: ministryLeaderRows },
+  ] = await Promise.all([
     db.from('organization_users').select('id, active, extra_roles, roles(id, name, label)').eq('organization_id', org.id).eq('user_id', staffProfile.user_id).maybeSingle(),
     loadStaffRoleOptions(supabase, org.id),
     db.auth.admin.getUserById(staffProfile.user_id),
     db.from('ministry_members').select('ministries(name)').eq('person_id', personId).eq('active', true),
+    db.from('school_leaders').select('school_id, schools(name)').eq('organization_id', org.id).eq('user_id', staffProfile.user_id),
+    db.from('ministry_leaders').select('ministry_id, ministries(name)').eq('organization_id', org.id).eq('user_id', staffProfile.user_id),
   ])
 
   const orgUser = orgUserRaw as unknown as OrgUserRow | null
@@ -112,20 +122,26 @@ export default async function PessoaAcessoPage({ params, searchParams }: Props) 
   const orgAccumulations = (org.role_accumulations as Record<string, string[]> | null) ?? {}
   const viewerIsDH = role === 'dh'
 
+  // Onde essa pessoa já é líder/colíder de verdade (school_leaders/
+  // ministry_leaders) — separado do que ela só "serve em" (school_staff/
+  // ministry_members, já mostrado em "Serve em:" no topo da página).
+  const currentLeaderships: Leadership[] = [
+    ...((schoolLeaderRows ?? []) as unknown as SchoolLeaderRow[])
+      .filter(r => r.schools)
+      .map(r => ({ type: 'school' as const, id: r.school_id, name: r.schools!.name })),
+    ...((ministryLeaderRows ?? []) as unknown as MinistryLeaderRow[])
+      .filter(r => r.ministries)
+      .map(r => ({ type: 'ministry' as const, id: r.ministry_id, name: r.ministries!.name })),
+  ]
+
   const handleRemoverAcesso = async () => {
     'use server'
     await removerAcesso(personId, org.id)
-    redirect(`/${slug}/pessoas/${personId}/acesso`)
+    redirect(`${base}?flash_success=${encodeURIComponent('Acesso removido.')}`)
   }
 
   return (
     <main className="p-4 md:p-6 max-w-2xl mx-auto space-y-4">
-      {msg && msgs[msg] && (
-        <div className={`border rounded-lg px-4 py-3 text-sm ${msgs[msg].cls}`}>{msgs[msg].text}</div>
-      )}
-      {erro && (
-        <div className="border rounded-lg px-4 py-3 text-sm bg-red-50 border-red-200 text-red-700">{erro}</div>
-      )}
       <ObreiroCard
         orgUserId={orgUser.id}
         userId={staffProfile.user_id}
@@ -146,10 +162,16 @@ export default async function PessoaAcessoPage({ params, searchParams }: Props) 
         currentExtraRoles={orgUser.extra_roles ?? []}
         viewerIsDH={viewerIsDH}
         readOnly={!isOperationalManager(role)}
-        redirectTo={`/${slug}/pessoas/${personId}/acesso`}
+        redirectTo={base}
       />
       {canAssignLeader && (
-        <SetAsLeaderCard action={handleSetAsLeader} schools={schools} ministries={ministries} />
+        <SetAsLeaderCard
+          action={handleSetAsLeader}
+          removeAction={handleRemoverLideranca}
+          schools={schools}
+          ministries={ministries}
+          currentLeaderships={currentLeaderships}
+        />
       )}
       {isOperationalManager(role) && (
         <form action={handleRemoverAcesso} className="bg-white rounded-xl border border-red-100 p-5">
