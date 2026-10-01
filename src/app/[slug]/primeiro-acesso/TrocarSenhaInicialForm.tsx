@@ -22,7 +22,11 @@ export function TrocarSenhaInicialForm({ slug }: { slug: string }) {
       const { error } = await supabase.auth.updateUser({ password: next, data: { must_change_password: false } })
       if (error) { toast.error('Não foi possível atualizar a senha. Tente novamente.'); return }
       toast.success('Senha definida!')
-      router.replace(`/${slug}/dashboard`)
+      // Volta pro /primeiro-acesso (não direto pro dashboard): o servidor
+      // decide ali se ainda falta completar o cadastro (telefone) antes de
+      // liberar o dashboard de verdade.
+      router.replace(`/${slug}/primeiro-acesso`)
+      router.refresh()
     })
   }
 
