@@ -216,7 +216,13 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
   // Escopo de ESCRITA em escolas (null = gestão, sem restrição).
   const allowedSchoolIds: string[] | null = isManagement ? null : leaderSchoolIds
   const canWriteEted = leaderSchoolIds.length > 0
-  const canWriteObreiro = canWrite || leaderMinistryIds.length > 0 || canWriteEted
+  // lider_base fica de fora de canWrite de propósito (vê tudo, mas não opera
+  // aprovação/recusa/finalização — ver permissions.ts), só que "enviar
+  // formulário direto"/link de pré-inscrição de obreiro é um convite pra
+  // alguém de fora, não uma decisão do processo seletivo: é o mesmo tipo de
+  // carve-out que "atribui líderes" já tem pra esse papel, então entra aqui
+  // à parte em vez de em canWrite.
+  const canWriteObreiro = canWrite || userRole === 'lider_base' || leaderMinistryIds.length > 0 || canWriteEted
   // Só tem ministério no escopo: esconde o fluxo de aluno e, com um único
   // ministério, fixa o destino do formulário de obreiro nele.
   const onlyMinistryScope = !isManagement && viewAlunoSchoolIds.length === 0
