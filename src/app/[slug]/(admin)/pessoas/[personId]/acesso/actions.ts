@@ -88,7 +88,11 @@ export async function criarAcessoComEmail(
     `No primeiro acesso você vai precisar trocar essa senha.`,
   ].join('\n')
 
-  revalidatePath(`/${slug}/pessoas/${personId}/acesso`)
+  // Não revalida a própria página de Acesso aqui: o Next aplicaria a
+  // atualização sozinho (é a MESMA rota que o usuário está vendo), trocando
+  // de ramo (agora com user_id) e derrubando o card de sucesso/WhatsApp
+  // ainda em tela. Essa revalidação roda só quando o usuário clica em
+  // "Concluir" (router.refresh() no CriarAcessoForm).
   revalidatePath(`/${slug}/pessoas`)
   revalidatePath(`/${slug}/pessoas/importar`)
   return { ok: true, email, password, phone: chosenPhone, orgUserId, whatsappMessage }
