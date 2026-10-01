@@ -5,9 +5,10 @@ import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { MANAGEMENT_ROLES, isOperationalManager, canAssignLeadership } from '@/lib/auth/permissions'
 import { loadStaffRoleOptions } from '@/lib/staff/roleOptions'
 import { ObreiroCard } from '../../../obreiros/ObreirosClientForms'
-import { criarAcessoComEmail, adicionarTelefonePessoa, marcarCredencialEnviada } from './actions'
+import { criarAcessoComEmail, adicionarTelefonePessoa, marcarCredencialEnviada, removerAcesso } from './actions'
 import { CriarAcessoForm } from './CriarAcessoForm'
 import { SetAsLeaderCard } from './SetAsLeaderCard'
+import { ConfirmSubmitButton } from '@/components/ui/ConfirmSubmitButton'
 import { addSchoolCoLeaderByPerson } from '../../../escolas/[id]/actions'
 import { addMinistryCoLeaderByPerson } from '../../../ministerios/[id]/actions'
 
@@ -111,6 +112,12 @@ export default async function PessoaAcessoPage({ params, searchParams }: Props) 
   const orgAccumulations = (org.role_accumulations as Record<string, string[]> | null) ?? {}
   const viewerIsDH = role === 'dh'
 
+  const handleRemoverAcesso = async () => {
+    'use server'
+    await removerAcesso(personId, org.id)
+    redirect(`/${slug}/pessoas/${personId}/acesso`)
+  }
+
   return (
     <main className="p-4 md:p-6 max-w-2xl mx-auto space-y-4">
       {msg && msgs[msg] && (
@@ -143,6 +150,21 @@ export default async function PessoaAcessoPage({ params, searchParams }: Props) 
       />
       {canAssignLeader && (
         <SetAsLeaderCard action={handleSetAsLeader} schools={schools} ministries={ministries} />
+      )}
+      {isOperationalManager(role) && (
+        <form action={handleRemoverAcesso} className="bg-white rounded-xl border border-red-100 p-5">
+          <h2 className="font-semibold text-gray-900 mb-1">Remover acesso</h2>
+          <p className="text-xs text-gray-400 mb-3">
+            Apaga o login e o e-mail cadastrado dessa pessoa — ela volta pro estado &ldquo;sem login&rdquo;,
+            pronta pra recriar o acesso do zero (útil se o e-mail foi digitado errado, por exemplo).
+          </p>
+          <ConfirmSubmitButton
+            confirmMessage={`Remover o acesso de ${person.full_name}? Isso apaga o login (${authUser.user?.email ?? 'sem e-mail'}) e o e-mail cadastrado — não dá pra desfazer.`}
+            className="px-4 py-2 text-sm font-medium rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
+          >
+            Remover acesso
+          </ConfirmSubmitButton>
+        </form>
       )}
     </main>
   )

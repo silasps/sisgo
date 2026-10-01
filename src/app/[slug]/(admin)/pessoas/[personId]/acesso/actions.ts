@@ -125,3 +125,23 @@ export async function marcarCredencialEnviada(orgUserId: string): Promise<void> 
   const db = createAdminClient()
   await db.from('organization_users').update({ invite_sent_at: new Date().toISOString() }).eq('id', orgUserId)
 }
+
+// Desfaz um "Criar acesso" — apaga o login (auth.users) e o e-mail
+// cadastrado, devolvendo a pessoa pro estado "sem login" pra recriar o
+// acesso do zero (útil em teste, ou quando o e-mail digitado foi errado).
+// organization_users/school_leaders/ministry_leaders somem sozinhos — todos
+// referenciam auth.users(id) on delete cascade; staff_profiles.user_id é
+// on delete set null, por isso zeramos accepted_at manualmente aqui também.
+export async function removerAcesso(personId: string, orgId: string): Promise<{ error?: string }> {
+  const db = createAdminClient()
+  const { data: staffProfile } = await db.from('staff_profiles')
+    .select('id, user_id').eq('organization_id', orgId).eq('person_id', personId).maybeSingle()
+  if (!staffProfile?.user_id) return {}
+
+  const { error } = await db.auth.admin.deleteUser(staffProfile.user_id)
+  if (error) return { error: error.message }
+
+  await db.from('staff_profiles').update({ accepted_at: null }).eq('id', staffProfile.id)
+  await db.from('person_contacts').delete().eq('person_id', personId).eq('type', 'email')
+  return {}
+}
