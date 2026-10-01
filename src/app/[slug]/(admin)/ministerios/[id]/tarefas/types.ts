@@ -20,6 +20,26 @@ export type BoardCard = {
   created_by: string
 }
 
+// Não dá pra colorir coluna pelo nome (líder pode renomear/criar à vontade),
+// só existe o sinal estrutural `is_done` + a ordem. Então a categoria vem
+// de onde a coluna está no fluxo: a primeira não-concluída é "a fazer", as
+// do meio são "fazendo", e `is_done` é "concluído" — mesma leitura que
+// Jira/ClickUp fazem com "status categories" (to do/in progress/done), só
+// que aqui é inferida em vez de configurada.
+export type ColumnCategory = 'todo' | 'doing' | 'done'
+
+export function columnCategory(column: BoardColumn, columns: BoardColumn[]): ColumnCategory {
+  if (column.is_done) return 'done'
+  const firstOpenColumn = columns.find(c => !c.is_done)
+  return firstOpenColumn?.id === column.id ? 'todo' : 'doing'
+}
+
+export const COLUMN_CATEGORY_STYLES: Record<ColumnCategory, { dot: string; badge: string; accent: string }> = {
+  todo:  { dot: 'bg-gray-300',  badge: 'bg-gray-100 text-gray-500',  accent: 'border-l-gray-300' },
+  doing: { dot: 'bg-blue-400',  badge: 'bg-blue-50 text-blue-600',   accent: 'border-l-blue-400' },
+  done:  { dot: 'bg-green-400', badge: 'bg-green-50 text-green-600', accent: 'border-l-green-400' },
+}
+
 export type ColumnOption = { id: string; name: string }
 export type MemberOption = { id: string; name: string }
 export type AnnouncementOption = { id: string; title: string }

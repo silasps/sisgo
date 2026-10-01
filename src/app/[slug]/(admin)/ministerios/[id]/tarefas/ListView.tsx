@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { User, CalendarDays, ArrowUpDown } from 'lucide-react'
 import type { BoardColumn, BoardCard } from './types'
-import { PRIORITY_STYLES, labelColor } from './types'
+import { PRIORITY_STYLES, labelColor, columnCategory, COLUMN_CATEGORY_STYLES } from './types'
 
 type SortKey = 'due_date' | 'priority' | 'column'
 const PRIORITY_RANK: Record<BoardCard['priority'], number> = { alta: 0, media: 1, baixa: 2 }
@@ -17,6 +17,7 @@ export function ListView({ columns, cards, memberNameById, onCardClick }: {
   const [sortKey, setSortKey] = useState<SortKey>('due_date')
   const columnNameById = useMemo(() => new Map(columns.map(c => [c.id, c.name])), [columns])
   const columnIndexById = useMemo(() => new Map(columns.map((c, i) => [c.id, i])), [columns])
+  const columnCategoryById = useMemo(() => new Map(columns.map(c => [c.id, columnCategory(c, columns)])), [columns])
 
   const sorted = useMemo(() => {
     const list = [...cards]
@@ -63,6 +64,8 @@ export function ListView({ columns, cards, memberNameById, onCardClick }: {
           const priority = PRIORITY_STYLES[card.priority]
           const assigneeName = card.assignee_person_id ? memberNameById.get(card.assignee_person_id) : null
           const overdue = card.due_date && new Date(`${card.due_date}T23:59:59`).getTime() < Date.now() && !card.completed_at
+          const category = columnCategoryById.get(card.column_id) ?? 'todo'
+          const columnBadge = COLUMN_CATEGORY_STYLES[category]
           return (
             <button
               key={card.id}
@@ -71,7 +74,7 @@ export function ListView({ columns, cards, memberNameById, onCardClick }: {
               className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 transition-colors"
             >
               <span className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded shrink-0 ${priority.className}`}>{priority.label}</span>
-              <span className="flex-1 min-w-0 text-sm text-gray-800 truncate">{card.title}</span>
+              <span className={`flex-1 min-w-0 text-sm truncate ${category === 'done' ? 'text-gray-500 line-through' : 'text-gray-800'}`}>{card.title}</span>
               {card.labels && card.labels.length > 0 && (
                 <span className="hidden md:flex items-center gap-1 shrink-0">
                   {card.labels.slice(0, 2).map(l => (
@@ -79,7 +82,7 @@ export function ListView({ columns, cards, memberNameById, onCardClick }: {
                   ))}
                 </span>
               )}
-              <span className="hidden sm:inline text-xs text-gray-400 bg-gray-100 rounded-full px-2 py-0.5 shrink-0">{columnNameById.get(card.column_id) ?? '—'}</span>
+              <span className={`hidden sm:inline text-xs rounded-full px-2 py-0.5 shrink-0 ${columnBadge.badge}`}>{columnNameById.get(card.column_id) ?? '—'}</span>
               {assigneeName && (
                 <span className="hidden sm:inline-flex items-center gap-1 text-xs text-gray-500 shrink-0">
                   <User size={11} /> {assigneeName.split(' ')[0]}

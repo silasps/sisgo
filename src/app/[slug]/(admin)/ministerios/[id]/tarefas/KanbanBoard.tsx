@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import {
-  DndContext, DragOverlay, PointerSensor, useSensor, useSensors, closestCorners, useDroppable,
+  DndContext, DragOverlay, MouseSensor, TouchSensor, useSensor, useSensors, closestCorners, useDroppable,
   type DragEndEvent, type DragOverEvent, type DragStartEvent,
 } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable'
@@ -11,8 +11,8 @@ import { CSS } from '@dnd-kit/utilities'
 import { Plus, MoreVertical, User, CalendarDays, Kanban } from 'lucide-react'
 import { ConfirmSubmitButton } from '@/components/ui/ConfirmSubmitButton'
 import { SubmitButton } from '@/components/ui/SubmitButton'
-import type { BoardColumn, BoardCard } from './types'
-import { PRIORITY_STYLES, labelColor } from './types'
+import type { BoardColumn, BoardCard, ColumnCategory } from './types'
+import { PRIORITY_STYLES, labelColor, columnCategory, COLUMN_CATEGORY_STYLES } from './types'
 
 type ReorderPayload = {
   updates: Array<{ id: string; columnId: string; position: number }>
@@ -64,8 +64,18 @@ export function KanbanBoard({
     return map
   }, [localCards, columns])
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+  // Mouse: um leve arrasto (5px) já inicia o drag — não tem conflito com
+  // nada. Touch: precisa de um toque seguro (~200ms) antes de virar drag,
+  // senão qualquer rolagem vertical que comece em cima de um card seria
+  // capturada como arraste (o card tem touch-action:none pra permitir o
+  // dnd-kit, o que também bloqueia o scroll nativo do celular). O delay dá
+  // tempo de distinguir "quero rolar a tela" de "quero arrastar o card".
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+  )
   const activeCard = activeId ? localCards.find(c => c.id === activeId) ?? null : null
+  const activeCardColumn = activeCard ? columns.find(c => c.id === activeCard.column_id) : undefined
 
   function findColumnOf(cardId: string): string | undefined {
     return localCards.find(c => c.id === cardId)?.column_id
@@ -164,6 +174,7 @@ export function KanbanBoard({
           <ColumnView
             key={col.id}
             column={col}
+            category={columnCategory(col, columns)}
             cards={cardsByColumn.get(col.id) ?? []}
             isLeader={isLeader}
             path={path}
@@ -228,17 +239,25 @@ export function KanbanBoard({
       </div>
 
       <DragOverlay>
-        {activeCard && <CardTile card={activeCard} memberNameById={memberNameById} dragging />}
+        {activeCard && activeCardColumn && (
+          <CardTile
+            card={activeCard}
+            category={columnCategory(activeCardColumn, columns)}
+            memberNameById={memberNameById}
+            dragging
+          />
+        )}
       </DragOverlay>
     </DndContext>
   )
 }
 
 function ColumnView({
-  column, cards, isLeader, path, memberNameById, onCardClick, onAddCard, onQuickMove, otherColumns,
+  column, category, cards, isLeader, path, memberNameById, onCardClick, onAddCard, onQuickMove, otherColumns,
   renameColumnAction, deleteColumnAction,
 }: {
   column: BoardColumn
+  category: ColumnCategory
   cards: BoardCard[]
   isLeader: boolean
   path: string
@@ -250,12 +269,13 @@ function ColumnView({
   renameColumnAction: (formData: FormData) => Promise<void>
   deleteColumnAction: (formData: FormData) => Promise<void>
 }) {
+  const style = COLUMN_CATEGORY_STYLES[category]
   const { setNodeRef, isOver } = useDroppable({ id: column.id })
   const [menuOpen, setMenuOpen] = useState(false)
   const [renaming, setRenaming] = useState(false)
 
   return (
-    <div className="shrink-0 w-64 flex flex-col gap-2">
+    <div className="flex-1 min-w-64 max-w-sm flex flex-col gap-2">
       <div className="flex items-center justify-between px-1">
         {renaming ? (
           <form
@@ -282,8 +302,9 @@ function ColumnView({
         ) : (
           <>
             <div className="flex items-center gap-1.5 min-w-0">
+              <span className={`size-1.5 rounded-full shrink-0 ${style.dot}`} />
               <p className="font-semibold text-sm text-gray-800 truncate">{column.name}</p>
-              <span className="text-xs font-medium text-gray-400 bg-gray-100 rounded-full px-1.5">{cards.length}</span>
+              <span className={`text-xs font-medium rounded-full px-1.5 ${style.badge}`}>{cards.length}</span>
             </div>
             {isLeader && (
               <div className="relative shrink-0">
@@ -326,6 +347,7 @@ function ColumnView({
             <SortableCard
               key={card.id}
               card={card}
+              category={category}
               memberNameById={memberNameById}
               onClick={() => onCardClick(card)}
               otherColumns={otherColumns}
@@ -346,8 +368,9 @@ function ColumnView({
   )
 }
 
-function SortableCard({ card, memberNameById, onClick, otherColumns, onQuickMove }: {
+function SortableCard({ card, category, memberNameById, onClick, otherColumns, onQuickMove }: {
   card: BoardCard
+  category: ColumnCategory
   memberNameById: Map<string, string>
   onClick: () => void
   otherColumns: BoardColumn[]
@@ -360,6 +383,7 @@ function SortableCard({ card, memberNameById, onClick, otherColumns, onQuickMove
     <div ref={setNodeRef} style={style} {...attributes} {...listeners} onClick={onClick}>
       <CardTile
         card={card}
+        category={category}
         memberNameById={memberNameById}
         otherColumns={otherColumns}
         onQuickMove={onQuickMove}
@@ -368,8 +392,9 @@ function SortableCard({ card, memberNameById, onClick, otherColumns, onQuickMove
   )
 }
 
-function CardTile({ card, memberNameById, dragging, otherColumns, onQuickMove }: {
+function CardTile({ card, category, memberNameById, dragging, otherColumns, onQuickMove }: {
   card: BoardCard
+  category: ColumnCategory
   memberNameById: Map<string, string>
   dragging?: boolean
   otherColumns?: BoardColumn[]
@@ -377,6 +402,8 @@ function CardTile({ card, memberNameById, dragging, otherColumns, onQuickMove }:
 }) {
   const priority = PRIORITY_STYLES[card.priority]
   const assigneeName = card.assignee_person_id ? memberNameById.get(card.assignee_person_id) : null
+  const isDone = category === 'done'
+  const overdue = !isDone && card.due_date && new Date(`${card.due_date}T23:59:59`).getTime() < Date.now()
 
   return (
     // O card inteiro é a superfície de arraste (attributes/listeners do dnd-kit
@@ -384,8 +411,13 @@ function CardTile({ card, memberNameById, dragging, otherColumns, onQuickMove }:
     // PointerSensor com activationConstraint distance:5 (ver KanbanBoard)
     // distingue um clique (abre o modal) de um arraste de verdade sem
     // precisar de um handle separado.
-    <div className={`group bg-white rounded-lg border border-gray-200 p-2.5 space-y-1.5 cursor-grab active:cursor-grabbing touch-none select-none ${dragging ? 'shadow-lg' : 'hover:border-gray-300 hover:shadow-sm'} transition-all`}>
-      <p className="text-sm text-gray-800 leading-snug">{card.title}</p>
+    //
+    // Faixa à esquerda (border-l) reflete a categoria da coluna atual — a
+    // mesma leitura de "status category" do Jira/ClickUp (a fazer/fazendo/
+    // concluído), só que inferida da posição da coluna em vez de configurada
+    // à parte (ver columnCategory em types.ts).
+    <div className={`group bg-white rounded-lg border border-gray-200 border-l-4 ${COLUMN_CATEGORY_STYLES[category].accent} p-2.5 space-y-1.5 cursor-grab active:cursor-grabbing touch-none select-none ${dragging ? 'shadow-lg' : 'hover:border-gray-300 hover:shadow-sm'} ${isDone ? 'opacity-70' : ''} transition-all`}>
+      <p className={`text-sm leading-snug ${isDone ? 'text-gray-500 line-through' : 'text-gray-800'}`}>{card.title}</p>
       {card.labels && card.labels.length > 0 && (
         <div className="flex items-center gap-1 flex-wrap">
           {card.labels.map(l => (
@@ -401,7 +433,7 @@ function CardTile({ card, memberNameById, dragging, otherColumns, onQuickMove }:
           </span>
         )}
         {card.due_date && (
-          <span className="inline-flex items-center gap-1 text-[11px] text-gray-400">
+          <span className={`inline-flex items-center gap-1 text-[11px] ${overdue ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
             <CalendarDays size={11} /> {new Date(`${card.due_date}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
           </span>
         )}
