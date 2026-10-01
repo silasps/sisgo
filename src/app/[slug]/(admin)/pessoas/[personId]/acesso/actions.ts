@@ -79,13 +79,13 @@ export async function criarAcessoComEmail(
 
   const { data: org } = await db.from('organizations').select('name').eq('id', orgId).single()
   const loginUrl = `https://www.sisgomission.com/${slug}`
+  // *asterisco* vira negrito no WhatsApp — \n\n separa em parágrafos de
+  // verdade (sem isso o texto chega tudo grudado numa linha só).
   const whatsappMessage = [
-    `Olá, ${person.full_name}! Seu acesso ao SISGO em ${org?.name ?? 'sua base'} foi criado.`,
-    `Acesse: ${loginUrl}`,
-    `E-mail: ${email}`,
-    `Senha provisória: ${password}`,
-    `No primeiro acesso você vai precisar trocar essa senha.`,
-  ].join('\n')
+    `Olá, ${person.full_name}!\n\nSeu acesso ao SISGO em *${org?.name ?? 'sua base'}* foi criado. 👏`,
+    `🔐 *Dados de acesso*\nLink: ${loginUrl}\nE-mail: ${email}\nSenha provisória: *${password}*`,
+    `⚠️ No primeiro acesso você vai precisar trocar essa senha.`,
+  ].join('\n\n')
 
   // Sem revalidatePath aqui — mesmo mirando OUTRAS rotas, qualquer
   // revalidatePath chamado durante essa Server Action disparava um refresh
