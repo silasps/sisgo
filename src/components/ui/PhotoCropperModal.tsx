@@ -126,7 +126,11 @@ export function PhotoCropperModal({
           <button type="button" onClick={onCancel} className="text-white/70 hover:text-white sm:text-gray-400 sm:hover:text-gray-700 text-xl leading-none px-1">×</button>
         </div>
 
-        <div className="absolute sm:relative top-14 sm:top-auto bottom-[172px] sm:bottom-auto inset-x-0 sm:inset-x-auto sm:h-[min(70vh,44rem)] bg-gray-900">
+        {/* No desktop a área de recorte desconta cabeçalho + rodapé (56 + 172
+            = 228px) do teto de 90vh do cartão — só com 70vh, em tela com
+            menos de ~1140px de altura o overflow-hidden do cartão cortava
+            justamente a linha dos botões de confirmar/cancelar. */}
+        <div className="absolute sm:relative top-14 sm:top-auto bottom-[172px] sm:bottom-auto inset-x-0 sm:inset-x-auto sm:h-[min(70vh,44rem,calc(90vh_-_228px))] bg-gray-900">
           <Cropper
             image={imageSrc}
             crop={crop}
