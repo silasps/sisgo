@@ -10,6 +10,8 @@ import { CriarAcessoForm } from './CriarAcessoForm'
 import { SetAsLeaderCard, type Leadership } from './SetAsLeaderCard'
 import { ResetPasswordCard } from './ResetPasswordCard'
 import { UpdateEmailCard } from './UpdateEmailCard'
+import { DesligarObreiroCard } from '../desligamento/DesligarObreiroCard'
+import { desligarObreiro } from '../desligamento/actions'
 import { ConfirmSubmitButton } from '@/components/ui/ConfirmSubmitButton'
 import { addSchoolCoLeaderByPerson, removeSchoolLeader } from '../../../escolas/[id]/actions'
 import { addMinistryCoLeaderByPerson, removeMinistryLeader } from '../../../ministerios/[id]/actions'
@@ -187,6 +189,12 @@ export default async function PessoaAcessoPage({ params }: Props) {
       <UpdateEmailCard
         currentEmail={authUser.user?.email ?? ''}
         action={atualizarEmailLogin.bind(null, staffProfile.user_id, personId)}
+      />
+      <DesligarObreiroCard
+        fullName={person.full_name}
+        slug={slug}
+        personId={personId}
+        action={desligarObreiro.bind(null, personId, org.id, user.id)}
       />
       <form action={handleRemoverAcesso} className="bg-white rounded-xl border border-red-100 p-5">
         <h2 className="font-semibold text-gray-900 mb-1">Remover acesso</h2>
