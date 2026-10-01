@@ -3,7 +3,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { generateDefaultPassword } from '@/lib/import-pessoas/password'
 import { resolveOrCreateRoleId } from '@/lib/import-pessoas/roles'
-import { revalidatePath } from 'next/cache'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -88,13 +87,14 @@ export async function criarAcessoComEmail(
     `No primeiro acesso você vai precisar trocar essa senha.`,
   ].join('\n')
 
-  // Não revalida a própria página de Acesso aqui: o Next aplicaria a
-  // atualização sozinho (é a MESMA rota que o usuário está vendo), trocando
-  // de ramo (agora com user_id) e derrubando o card de sucesso/WhatsApp
-  // ainda em tela. Essa revalidação roda só quando o usuário clica em
-  // "Concluir" (router.refresh() no CriarAcessoForm).
-  revalidatePath(`/${slug}/pessoas`)
-  revalidatePath(`/${slug}/pessoas/importar`)
+  // Sem revalidatePath aqui — mesmo mirando OUTRAS rotas, qualquer
+  // revalidatePath chamado durante essa Server Action disparava um refresh
+  // que acabava batendo na própria página de Acesso (a que está em tela),
+  // derrubando o card de sucesso com e-mail/senha/WhatsApp alguns segundos
+  // depois. Essas páginas (pessoas, pessoas/importar) já usam cookies/auth
+  // e renderizam dinâmico a cada acesso — não dependem de revalidatePath pra
+  // mostrar dado fresco. O "Concluir" do CriarAcessoForm já faz
+  // router.refresh() na própria página quando o usuário sai desse card.
   return { ok: true, email, password, phone: chosenPhone, orgUserId, whatsappMessage }
 }
 
