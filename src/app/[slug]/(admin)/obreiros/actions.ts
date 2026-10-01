@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { triggerSiteRevalidation } from '@/lib/revalidate-webhook'
 import { assignLeader } from '../ministerios/[id]/actions'
+import { type AccountCredentials, lookupPersonPhone, buildWelcomeWhatsappMessage } from '@/lib/staff/accountCredentials'
 
 const BLOCKED_ROLE_NAMES = ['superadmin', 'admin_base', 'lider_base']
 const REQUIRED_STAFF_ROLES: Record<string, { label: string; description: string }> = {
@@ -86,7 +87,14 @@ export async function changeRole(formData: FormData) {
   redirect(redirectTo)
 }
 
-export async function createStaffUser(formData: FormData) {
+export type CreatedStaffUser = AccountCredentials & { ok: true; orgUserId: string; personId: string | null }
+
+// Cria login + vínculo + perfil de obreiro direto (sem passar por pré-
+// inscrição/análise). Devolve e-mail/senha/telefone prontos pra entregar na
+// hora (ver AccountCredentialsCard em NovaPessoaButton) em vez de redirecionar
+// direto — sem isso a pessoa saía sem ver a senha gerada em lugar nenhum, só
+// dava pra recuperar depois via "Redefinir senha" em Pessoas > Acesso.
+export async function createStaffUser(formData: FormData): Promise<{ error: string } | CreatedStaffUser> {
   const fullName = (formData.get('full_name') as string).trim()
   const email = (formData.get('email') as string).trim().toLowerCase()
   const password = formData.get('password') as string
@@ -96,12 +104,12 @@ export async function createStaffUser(formData: FormData) {
   const slug = formData.get('slug') as string
   const orgId = formData.get('org_id') as string
 
-  if (!fullName || !email || !password || !roleId) return
+  if (!fullName || !email || !password || !roleId) return { error: 'Preencha nome, e-mail, senha e função.' }
 
   const admin = createAdminClient()
 
   const role = await resolveRole(admin, roleId)
-  if (!role || BLOCKED_ROLE_NAMES.includes(role.name)) return
+  if (!role || BLOCKED_ROLE_NAMES.includes(role.name)) return { error: 'Função inválida.' }
 
   const { data: { users } } = await admin.auth.admin.listUsers({ perPage: 1000 })
   const existingAuthUser = users.find(u => u.email?.toLowerCase() === email)
@@ -114,7 +122,7 @@ export async function createStaffUser(formData: FormData) {
       user_metadata: { full_name: fullName, must_change_password: true },
       email_confirm: true,
     })
-    if (error || !created.user) return
+    if (error || !created.user) return { error: error?.message ?? 'Não foi possível criar o login.' }
     userId = created.user.id
   }
 
@@ -125,18 +133,20 @@ export async function createStaffUser(formData: FormData) {
     .eq('organization_id', orgId)
     .maybeSingle()
 
+  let orgUserId = existingOrgUser?.id ?? ''
   if (existingOrgUser) {
     await admin
       .from('organization_users')
       .update({ role_id: role.id, active: true, updated_at: new Date().toISOString() })
       .eq('id', existingOrgUser.id)
   } else {
-    await admin.from('organization_users').insert({
+    const { data: newOrgUser } = await admin.from('organization_users').insert({
       user_id: userId,
       organization_id: orgId,
       role_id: role.id,
       active: true,
-    })
+    }).select('id').single()
+    orgUserId = newOrgUser?.id ?? ''
   }
 
   const { data: existingProfile } = await admin
@@ -154,6 +164,11 @@ export async function createStaffUser(formData: FormData) {
       .select('id')
       .single()
     personId = person?.id
+    // Pessoa nova (não reaproveitada): sem isso o cadastro ficava sem
+    // NENHUM contato, nem o e-mail que acabou de ser digitado aqui.
+    if (personId) {
+      await admin.from('person_contacts').insert({ person_id: personId, type: 'email', value: email, is_primary: true })
+    }
   }
 
   if (personId) {
@@ -174,7 +189,12 @@ export async function createStaffUser(formData: FormData) {
     }
   }
 
-  redirect(`/${slug}/obreiros`)
+  const phone = personId ? await lookupPersonPhone(admin, personId) : null
+  const { data: org } = await admin.from('organizations').select('name').eq('id', orgId).single()
+  const loginUrl = `https://www.sisgomission.com/${slug}`
+  const whatsappMessage = buildWelcomeWhatsappMessage({ fullName, orgName: org?.name ?? 'sua base', loginUrl, email, password })
+
+  return { ok: true, email, password, phone, orgUserId, personId: personId ?? null, whatsappMessage }
 }
 
 export async function updateExtraRoles(formData: FormData) {

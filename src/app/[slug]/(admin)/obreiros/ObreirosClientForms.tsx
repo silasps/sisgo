@@ -1,10 +1,13 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { useFormStatus } from 'react-dom'
+import { useMemo, useState, useTransition } from 'react'
+import { toast } from 'sonner'
 import { ChevronDown, Loader2, X } from 'lucide-react'
 import { useSidebarLeftClass } from '@/components/layout/account-context'
-import { changeRole, createStaffUser, toggleActive, updateExtraRoles } from './actions'
+import { useRouter } from 'next/navigation'
+import { changeRole, createStaffUser, toggleActive, updateExtraRoles, type CreatedStaffUser } from './actions'
+import { AccountCredentialsCard } from '@/components/staff/AccountCredentialsCard'
+import { adicionarTelefonePessoa, marcarCredencialEnviada } from '../pessoas/[personId]/acesso/actions'
 
 type RoleRow = { id: string; name: string; label: string }
 type OptionRow = { id: string; name: string }
@@ -525,35 +528,86 @@ function ExtraRolesForm({
   )
 }
 
+// Valores reais mais comuns em staff_profiles.role_title hoje — texto livre
+// deixava o dado inconsistente ("Líder de Ministério" vs "líder de
+// ministério" vs frases inteiras). "Outra" mantém a flexibilidade pro caso
+// que não encaixa em nenhuma das opções fixas.
+const ROLE_TITLE_PRESETS = [
+  'Obreiro de Ministério',
+  'Obreiro de Escola',
+  'Líder de Ministério',
+  'Líder de Escola',
+  'Voluntário',
+  'Funcionário',
+]
+
+function RoleTitleSelector({ defaultValue }: { defaultValue: string }) {
+  const [preset, setPreset] = useState(() => (ROLE_TITLE_PRESETS.includes(defaultValue) ? defaultValue : defaultValue ? 'outra' : ''))
+  const [custom, setCustom] = useState(() => (ROLE_TITLE_PRESETS.includes(defaultValue) ? '' : defaultValue))
+  const value = preset === 'outra' ? custom : preset
+  const SELECT = 'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400'
+
+  return (
+    <div>
+      <label className="mb-1 block text-sm font-medium text-gray-700">Função descritiva</label>
+      <input type="hidden" name="role_title" value={value} />
+      <select value={preset} onChange={e => setPreset(e.target.value)} className={SELECT}>
+        <option value="">Selecionar função...</option>
+        {ROLE_TITLE_PRESETS.map(p => <option key={p} value={p}>{p}</option>)}
+        <option value="outra">Outra (digitar)</option>
+      </select>
+      {preset === 'outra' && (
+        <input
+          value={custom}
+          onChange={e => setCustom(e.target.value)}
+          placeholder="Instrutor, monitor, administrativo..."
+          className={`${SELECT} mt-2`}
+        />
+      )}
+    </div>
+  )
+}
+
 export function CreateStaffUserForm({
   roles,
   schools,
   ministries,
   orgId,
   slug,
+  onCreated,
 }: {
   roles: RoleRow[]
   schools: OptionRow[]
   ministries: OptionRow[]
   orgId: string
   slug: string
+  onCreated: (result: CreatedStaffUser) => void
 }) {
   const [scope, setScope] = useState('')
   const [assignmentRole, setAssignmentRole] = useState('obreiro')
+  const [isPending, startTransition] = useTransition()
   const roleName = roleForScope(scope, assignmentRole)
   const roleId = useMemo(() => roleIdForName(roles, roleName), [roleName, roles])
   const area = areaForScope(scope)
   const isSpecialMinistry = scope.startsWith('ministry:') && Boolean(specialMinistryByName(area))
   const defaultRoleTitle = assignmentRole === 'voluntario' ? 'Voluntário' : isSpecialMinistry && assignmentRole === 'obreiro' ? 'Obreiro' : ''
 
-  return (
-    <form action={createStaffUser} className="space-y-4">
-      <input type="hidden" name="org_id" value={orgId} />
-      <input type="hidden" name="slug" value={slug} />
-      <input type="hidden" name="role_id" value={roleId} />
-      <input type="hidden" name="role_title_fallback" value={defaultRoleTitle} />
-      <input type="hidden" name="area" value={area} />
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const fd = new FormData(e.currentTarget)
+    fd.set('org_id', orgId)
+    fd.set('slug', slug)
+    fd.set('role_id', roleId)
+    fd.set('area', area)
+    startTransition(async () => {
+      const res = await createStaffUser(fd)
+      if ('error' in res) { toast.error(res.error); return }
+      onCreated(res)
+    })
+  }
 
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Nome completo" name="full_name" type="text" placeholder="João da Silva" required />
         <Field label="E-mail" name="email" type="email" placeholder="joao@exemplo.com" required />
@@ -578,36 +632,23 @@ export function CreateStaffUserForm({
           />
         </div>
 
-        <Field label="Função descritiva" name="role_title" type="text" placeholder="Instrutor, monitor, administrativo..." defaultValue={defaultRoleTitle} />
+        <RoleTitleSelector key={defaultRoleTitle} defaultValue={defaultRoleTitle} />
       </div>
 
       <div className="pt-2">
-        <CreateObreiroSubmitButton />
+        <button
+          type="submit"
+          disabled={isPending}
+          className="flex items-center gap-2 rounded-lg bg-brand-500 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
+        >
+          {isPending && <Loader2 className="size-4 animate-spin" />}
+          {isPending ? 'Criando…' : 'Criar obreiro'}
+        </button>
         <p className="mt-2 text-xs text-gray-400">
           Se o e-mail já existir, o usuário será vinculado a esta base e reativado com a função selecionada.
         </p>
       </div>
     </form>
-  )
-}
-
-// useFormStatus só enxerga o pending de verdade dentro de um <form> que usa
-// Server Action — precisa ser um componente filho, não dá pra chamar direto
-// em CreateStaffUserForm (que é quem renderiza o <form>). Sem isso, clicar
-// em "Criar obreiro" não mudava de estado nenhum durante os 6-7s que a
-// action demora (cria login, organization_users, staff_profiles...) — dava
-// a sensação de ter travado.
-function CreateObreiroSubmitButton() {
-  const { pending } = useFormStatus()
-  return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="flex items-center gap-2 rounded-lg bg-brand-500 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
-    >
-      {pending && <Loader2 className="size-4 animate-spin" />}
-      {pending ? 'Criando…' : 'Criar obreiro'}
-    </button>
   )
 }
 
@@ -622,8 +663,21 @@ export function CreateObreiroModal({
 }) {
   const [openState, setOpenState] = useState(false)
   const open = openProp ?? openState
-  const setOpen = (value: boolean) => (onOpenChange ? onOpenChange(value) : setOpenState(value))
+  const setOpen = (value: boolean) => {
+    if (!value) setCreated(null) // fecha e reseta — próxima abertura começa do formulário de novo
+    if (onOpenChange) onOpenChange(value); else setOpenState(value)
+  }
   const sidebarLeftClass = useSidebarLeftClass()
+  const router = useRouter()
+  const [created, setCreated] = useState<CreatedStaffUser | null>(null)
+
+  function handleAddPhone(phone: string) {
+    if (!created?.personId) return Promise.resolve({ error: 'Pessoa não encontrada.' })
+    const fd = new FormData()
+    fd.append('phone', phone)
+    return adicionarTelefonePessoa(created.personId, fd)
+  }
+
   return (
     <>
       {!hideTrigger && (
@@ -654,7 +708,17 @@ export function CreateObreiroModal({
               </button>
             </div>
             <div className="p-6">
-              <CreateStaffUserForm roles={roles} schools={schools} ministries={ministries} orgId={orgId} slug={slug} />
+              {created ? (
+                <AccountCredentialsCard
+                  title="Obreiro criado com sucesso."
+                  credentials={created}
+                  onAddPhone={handleAddPhone}
+                  onSent={() => marcarCredencialEnviada(created.orgUserId)}
+                  onDone={() => { setOpen(false); router.refresh() }}
+                />
+              ) : (
+                <CreateStaffUserForm roles={roles} schools={schools} ministries={ministries} orgId={orgId} slug={slug} onCreated={setCreated} />
+              )}
             </div>
           </div>
         </div>
