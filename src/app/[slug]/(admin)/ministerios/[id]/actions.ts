@@ -2,6 +2,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { resolvePersonToUserId } from '@/lib/staff/resolvePersonToUserId'
+import { demoteIfNoLeaderships } from '@/lib/staff/demoteIfNoLeaderships'
 
 type AdminClient = ReturnType<typeof createAdminClient>
 
@@ -139,9 +140,13 @@ async function grantMinistryLeaderRole(sb: AdminClient, orgId: string, ministryI
 // "Atribuir líder" — usado quando o ministério ainda não tem nenhum.
 export async function assignMinistryLeader(orgId: string, ministryId: string, userId: string) {
   const sb = createAdminClient()
+  const { data: previousLeaders } = await sb.from('ministry_leaders').select('user_id').eq('ministry_id', ministryId)
   await sb.from('ministry_leaders').delete().eq('ministry_id', ministryId)
   await sb.from('ministry_leaders').insert({ organization_id: orgId, ministry_id: ministryId, user_id: userId })
   await grantMinistryLeaderRole(sb, orgId, ministryId, userId)
+  for (const prev of previousLeaders ?? []) {
+    if (prev.user_id !== userId) await demoteIfNoLeaderships(sb, orgId, prev.user_id)
+  }
 }
 
 // "Adicionar colíder" — soma à liderança existente em vez de substituir.
@@ -152,9 +157,10 @@ export async function addMinistryCoLeader(orgId: string, ministryId: string, use
   await grantMinistryLeaderRole(sb, orgId, ministryId, userId)
 }
 
-export async function removeMinistryLeader(ministryId: string, userId: string) {
+export async function removeMinistryLeader(ministryId: string, userId: string, orgId: string) {
   const sb = createAdminClient()
   await sb.from('ministry_leaders').delete().eq('ministry_id', ministryId).eq('user_id', userId)
+  await demoteIfNoLeaderships(sb, orgId, userId)
 }
 
 export async function assignMinistryLeaderByPerson(orgId: string, ministryId: string, personId: string): Promise<{ error?: string }> {

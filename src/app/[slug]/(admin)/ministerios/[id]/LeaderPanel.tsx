@@ -62,7 +62,7 @@ export async function LeaderPanel({ slug, ministryId, orgId, canAssignLeader }: 
     'use server'
     const userId = formData.get('user_id') as string
     if (!userId) return
-    await removeMinistryLeader(ministryId, userId)
+    await removeMinistryLeader(ministryId, userId, orgId)
     redirect(`/${slug}/ministerios/${ministryId}`)
   }
 

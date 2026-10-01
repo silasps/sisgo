@@ -58,8 +58,8 @@ export default async function PessoaAcessoPage({ params }: Props) {
     const unitType = formData.get('unit_type') as string
     const unitId = formData.get('unit_id') as string
     if (!unitId || !staffProfile?.user_id) return
-    if (unitType === 'school') await removeSchoolLeader(unitId, staffProfile.user_id)
-    else await removeMinistryLeader(unitId, staffProfile.user_id)
+    if (unitType === 'school') await removeSchoolLeader(unitId, staffProfile.user_id, org.id)
+    else await removeMinistryLeader(unitId, staffProfile.user_id, org.id)
     redirect(`${base}?flash_success=${encodeURIComponent('Liderança removida.')}`)
   }
 

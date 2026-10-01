@@ -364,7 +364,7 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
     'use server'
     const userId = formData.get('user_id') as string
     if (!userId) return
-    await removeSchoolLeader(id, userId)
+    await removeSchoolLeader(id, userId, org.id)
     redirect(`/${slug}/escolas/${id}/configuracoes`)
   }
 

@@ -218,7 +218,7 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
     'use server'
     const userId = formData.get('user_id') as string
     if (!userId) return
-    await removeSchoolLeader(id, userId)
+    await removeSchoolLeader(id, userId, orgId)
     redirect(base)
   }
   const handleApproveLoan = async (formData: FormData) => {
