@@ -131,6 +131,7 @@ export default async function PessoaWorkspaceLayout({ children, params }: Props)
 
   const base = `/${slug}/pessoas/${personId}`
   const tabs = [
+    ...(MANAGEMENT_ROLES.includes(role as never) ? [{ href: `${base}/dados`, label: 'Dados' }] : []),
     { href: `${base}/carteirinha`, label: 'Carteirinha' },
     { href: `${base}/financeiro`, label: 'Financeiro' },
     { href: `${base}/hospedagem`, label: 'Hospedagem' },
