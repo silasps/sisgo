@@ -36,7 +36,7 @@ export function WorkspaceTabBar({ tabs }: { tabs: Tab[] }) {
   })
 
   return (
-    <nav className="flex gap-1 overflow-x-auto border-b border-gray-200 bg-white px-4 md:px-6 scrollbar-none">
+    <nav className="sticky top-16 z-[9] flex gap-1 overflow-x-auto border-b border-gray-200 bg-white px-4 md:px-6 scrollbar-none">
       {tabs.map((tab, i) => {
         const active = i === activeIndex
         const Icon = tab.icon ? ICON_MAP[tab.icon] : undefined
