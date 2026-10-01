@@ -1,7 +1,8 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { ChevronDown, X } from 'lucide-react'
+import { useFormStatus } from 'react-dom'
+import { ChevronDown, Loader2, X } from 'lucide-react'
 import { useSidebarLeftClass } from '@/components/layout/account-context'
 import { changeRole, createStaffUser, toggleActive, updateExtraRoles } from './actions'
 
@@ -581,17 +582,32 @@ export function CreateStaffUserForm({
       </div>
 
       <div className="pt-2">
-        <button
-          type="submit"
-          className="rounded-lg bg-brand-500 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
-        >
-          Criar obreiro
-        </button>
+        <CreateObreiroSubmitButton />
         <p className="mt-2 text-xs text-gray-400">
           Se o e-mail já existir, o usuário será vinculado a esta base e reativado com a função selecionada.
         </p>
       </div>
     </form>
+  )
+}
+
+// useFormStatus só enxerga o pending de verdade dentro de um <form> que usa
+// Server Action — precisa ser um componente filho, não dá pra chamar direto
+// em CreateStaffUserForm (que é quem renderiza o <form>). Sem isso, clicar
+// em "Criar obreiro" não mudava de estado nenhum durante os 6-7s que a
+// action demora (cria login, organization_users, staff_profiles...) — dava
+// a sensação de ter travado.
+function CreateObreiroSubmitButton() {
+  const { pending } = useFormStatus()
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="flex items-center gap-2 rounded-lg bg-brand-500 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
+    >
+      {pending && <Loader2 className="size-4 animate-spin" />}
+      {pending ? 'Criando…' : 'Criar obreiro'}
+    </button>
   )
 }
 
