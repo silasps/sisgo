@@ -577,10 +577,10 @@ export default async function SlugLayout({ children, params }: Props) {
       .eq('status', 'pendente')
     reservationsPending = count ?? 0
   } else if (isHospitalidade) {
+    // Hospitalidade gerencia todo pedido, espaço e quarto (ver reservas/page.tsx).
     const { count } = await supabase.from('reservations')
       .select('*', { count: 'exact', head: true })
       .eq('organization_id', org.id)
-      .eq('type', 'quarto')
       .eq('status', 'pendente')
     reservationsPending = count ?? 0
   } else if (isObreiroEted || isAluno || isAssociado) {

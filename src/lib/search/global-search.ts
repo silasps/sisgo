@@ -37,7 +37,7 @@ export async function globalSearch(slug: string, query: string): Promise<GlobalS
   if (!org) return []
   const orgId = org.id
 
-  const { role, preview, accumulatedRoles, extraRoles } = await getCurrentOrganizationRole(supabase, user.id, orgId)
+  const { role, preview, accumulatedRoles, extraRoles, linkedRoles } = await getCurrentOrganizationRole(supabase, user.id, orgId)
   const allRoles = [role, ...accumulatedRoles, ...extraRoles]
   const is = (r: string) => allRoles.includes(r)
   const isManagement = isManagementRole(role)
@@ -258,20 +258,18 @@ export async function globalSearch(slug: string, query: string): Promise<GlobalS
   }
 
   // ── Reservas ─────────────────────────────────────────────────────────────
-  // Mesmo recorte de /reservas: gestão vê tudo; hospitalidade só reserva de
-  // quarto; qualquer outro papel permitido só vê a própria reserva.
-  if (canSeeReservations(role)) {
+  // Mesmo recorte de /reservas: gestão e hospitalidade (inclusive por vínculo
+  // com o ministério Hospitalidade) veem todo pedido; qualquer outro papel
+  // permitido só vê a própria reserva.
+  const seesAllReservations = isManagement || is('hospitalidade') || linkedRoles.includes('hospitalidade')
+  if (canSeeReservations(role) || seesAllReservations) {
     let resQuery = supabase.from('reservations')
       .select('id, title, status, starts_at')
       .eq('organization_id', orgId)
       .or(`title.ilike.${like},description.ilike.${like},resource_description.ilike.${like}`)
       .order('created_at', { ascending: false })
       .limit(PER_SECTION)
-    if (!isManagement) {
-      resQuery = is('hospitalidade')
-        ? resQuery.eq('type', 'quarto')
-        : resQuery.eq('requested_by', user.id)
-    }
+    if (!seesAllReservations) resQuery = resQuery.eq('requested_by', user.id)
     const { data: resRows } = await resQuery
     for (const r of resRows ?? []) {
       results.push({ id: r.id, section: 'Reservas', icon: 'reservas', title: r.title, subtitle: r.starts_at ? new Date(r.starts_at).toLocaleDateString('pt-BR') : r.status, href: `/${slug}/reservas` })

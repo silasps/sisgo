@@ -74,13 +74,14 @@ export async function cancelApprovedReservation(
     updated_at:   new Date().toISOString(),
   }).eq('id', id)
 
-  const { data: allocation } = await sb.from('room_allocations')
+  // Quarto inteiro = uma alocação por cama; `.maybeSingle()` aqui dava erro
+  // com mais de uma linha e nenhuma cama era liberada.
+  const { data: allocations } = await sb.from('room_allocations')
     .select('id, bed_id')
     .eq('reservation_id', id)
-    .neq('status', 'cancelada')
-    .maybeSingle()
+    .in('status', ['confirmada', 'checkin'])
 
-  if (allocation) {
+  for (const allocation of allocations ?? []) {
     await cancelAllocation({ id: allocation.id, organizationId, bedId: allocation.bed_id })
   }
 }

@@ -304,11 +304,11 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
   if (isHospitalidade) {
     const hospitalityDepts = myDepts.length > 0 ? myDepts : ['hospitalidade']
     const todayDate = today.slice(0, 10)
-    const [{ count: pendingRooms }, { count: approvedRooms }, { count: serviceRequests }, { data: allocationsRaw }] = await Promise.all([
+    const [{ count: pendingReservations }, { count: approvedRooms }, { count: serviceRequests }, { data: allocationsRaw }] = await Promise.all([
+      // Todo pedido pendente (espaço e quarto) — a hospitalidade gerencia os dois.
       supabase.from('reservations')
         .select('*', { count: 'exact', head: true })
         .eq('organization_id', orgId)
-        .eq('type', 'quarto')
         .eq('status', 'pendente'),
       supabase.from('reservations')
         .select('*', { count: 'exact', head: true })
@@ -342,7 +342,7 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
       content: (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 animate-stagger">
-            <StatCard label="Quartos pendentes" value={pendingRooms ?? 0} icon={Home} href={`/${slug}/reservas`} color="orange" />
+            <StatCard label="Reservas pendentes" value={pendingReservations ?? 0} icon={Home} href={`/${slug}/reservas`} color="orange" />
             <StatCard label="Hospedagens do mês" value={approvedRooms ?? 0} icon={CalendarDays} href={`/${slug}/reservas?tab=quartos`} color="green" />
             <StatCard label="Solicitações" value={serviceRequests ?? 0} icon={AlertTriangle} href={`/${slug}/pendentes`} color="pink" />
           </div>

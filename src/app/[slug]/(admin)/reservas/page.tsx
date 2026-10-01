@@ -1,14 +1,17 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
+import { after } from 'next/server'
 import { Header } from '@/components/layout/Header'
 import { SearchBar } from '@/components/ui/SearchBar'
 import { ConfirmSubmitButton } from '@/components/ui/ConfirmSubmitButton'
 import { notFound, redirect } from 'next/navigation'
 import { createReservation, updateReservationStatus, cancelReservation, cancelApprovedReservation, updateReservationFormSettings } from './actions'
 import { getAvailableRoomsAnyDestination, createAllocation, allocateWholeRoom, cancelAllocation, type AvailableRoom } from '../hospedagem/actions'
-import { getRolePreview } from '@/lib/role-preview'
+import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
+import { getAllocatedRoomLabels, notifyNewReservation, notifyReservationDecision } from '@/lib/reservations'
 import { ReservationFormSettingsEditor } from './ReservationFormSettingsEditor'
-import { isManagementRole, isOperationalManager, canSeeHospedagem } from '@/lib/auth/permissions'
+import { isManagementRole, isOperationalManager, userHasAnyRole, HOSPEDAGEM_ROLES } from '@/lib/auth/permissions'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -121,20 +124,15 @@ export default async function ReservasPage({ params, searchParams }: Props) {
   ])
   if (!user || !org) notFound()
 
-  const { data: orgUsers } = await supabase
-    .from('organization_users')
-    .select('organization_id, roles(name)')
-    .eq('user_id', user.id)
-    .eq('active', true)
-  const userOrgRows      = (orgUsers ?? []) as unknown as Array<{ organization_id: string | null; roles: { name: string } | null }>
-  const superadminRow    = userOrgRows.find(row => row.roles?.name === 'superadmin')
-  const currentOrgRow    = userOrgRows.find(row => row.organization_id === org.id)
-  const realRole         = superadminRow?.roles?.name ?? currentOrgRow?.roles?.name ?? ''
-  const preview         = await getRolePreview(realRole)
-  const role            = preview?.role ?? realRole
+  const { role, preview, allRoles } = await getCurrentOrganizationRole(supabase, user.id, org.id)
   const isManagement    = isManagementRole(role)
   const canWrite        = isOperationalManager(role)
-  const isHospitalidade = role === 'hospitalidade'
+  // Hospitalidade também vem de ministério com linked_role (líder/membro do
+  // ministério Hospitalidade), papel extra ou acumulado — mesmo cálculo do
+  // menu. Olhando só o papel principal, quem cuida da hospitalidade por
+  // vínculo caía aqui como solicitante comum e não via pedido nenhum.
+  const isHospitalidade = allRoles.includes('hospitalidade')
+  const canEditForm     = userHasAnyRole(allRoles, HOSPEDAGEM_ROLES)
   const isLiderEted     = role === 'lider_eted'
   const isObreiroEted   = role === 'obreiro_eted'
   const isAluno         = role === 'aluno'
@@ -236,15 +234,12 @@ export default async function ReservasPage({ params, searchParams }: Props) {
 
   let reservations: ResRow[] = []
 
-  if (isManagement) {
+  // Hospitalidade gerencia todo pedido (espaço e quarto), igual à gestão.
+  if (isManagement || isHospitalidade) {
     const baseQuery = supabase.from('reservations').select('*').eq('organization_id', org.id).order('created_at', { ascending: false })
     const { data } = tab === 'espacos' ? await baseQuery.eq('type', 'espaco')
       : tab === 'quartos' ? await baseQuery.eq('type', 'quarto')
       : await baseQuery
-    reservations = (data ?? []) as ResRow[]
-  } else if (isHospitalidade) {
-    const { data } = await supabase.from('reservations').select('*')
-      .eq('organization_id', org.id).eq('type', 'quarto').order('created_at', { ascending: false })
     reservations = (data ?? []) as ResRow[]
   } else {
     const { data } = await supabase.from('reservations').select('*')
@@ -330,7 +325,6 @@ export default async function ReservasPage({ params, searchParams }: Props) {
   }
   if ((isManagement || isHospitalidade) && tab === 'historico') {
     let histResQuery = supabase.from('reservations').select('*').eq('organization_id', org.id).order('created_at', { ascending: false })
-    if (!isManagement) histResQuery = histResQuery.eq('type', 'quarto') // hospitalidade só vê quarto, igual na aba ativa
     if (date_from) histResQuery = histResQuery.gte('created_at', date_from)
     if (date_to) histResQuery = histResQuery.lte('created_at', `${date_to}T23:59:59`)
     const { data: histResRows } = await histResQuery
@@ -398,13 +392,28 @@ export default async function ReservasPage({ params, searchParams }: Props) {
   // (a mesma reserva continua gerenciável normalmente pelas outras abas).
   const isHistoricoView = tab === 'historico'
 
+  // Quarto/cama que a hospitalidade definiu ao concluir — é o que quem pediu
+  // vê como "reserva marcada". Só reserva aprovada tem alocação ligada.
+  const allocatedRoomByReservation = await getAllocatedRoomLabels(
+    createAdminClient(),
+    displayList.filter(r => !r.allocationId && r.status === 'aprovada').map(r => r.id),
+  )
+
+  const isReviewer = canWrite || isHospitalidade
+  // Revisor por vínculo (ex.: líder do ministério Hospitalidade) mantém o
+  // formulário do próprio ministério/escola — antes ele sumia ao virar revisor.
+  const canRequest = canWrite || !!requesterId
+
   // ── Server actions ───────────────────────────────────────────────────────────
 
   const handleCreate = async (formData: FormData) => {
     'use server'
-    const type  = formData.get('type') as 'espaco' | 'quarto'
+    const type  = formData.get('type')
     const title = (formData.get('title') as string).trim()
     if (!title) return
+    // Tipo sem escolha (o select começa vazio, ver form) — sem isso um pedido
+    // de quarto podia sair como "Espaço" só por ser a 1ª opção.
+    if (type !== 'espaco' && type !== 'quarto') redirect(`/${slug}/reservas?msg=campos_obrigatorios`)
 
     const missingRequired = RESERVATION_FORM_FIELDS.some(field => {
       const config = formConfig[field.key]
@@ -441,6 +450,8 @@ export default async function ReservasPage({ params, searchParams }: Props) {
 
     if (!finalRequesterId) return
 
+    const startsAt = formData.get('starts_at') as string
+    const endsAt   = formData.get('ends_at') as string
     await createReservation({
       organizationId:      org.id,
       type,
@@ -449,19 +460,32 @@ export default async function ReservasPage({ params, searchParams }: Props) {
       requesterType:       finalRequesterType,
       requesterId:         finalRequesterId,
       requestedBy:         user.id,
-      startsAt:            formData.get('starts_at') as string,
-      endsAt:              formData.get('ends_at') as string,
+      startsAt,
+      endsAt,
       resourceDescription: (formData.get('resource_description') as string) || null,
       guestsCount:         formData.get('guests_count') ? Number(formData.get('guests_count')) : null,
       guestsDescription:   (formData.get('guests_description') as string) || null,
       formAnswers,
     })
+
+    // Avisa a hospitalidade depois da resposta — quem pediu não espera o push.
+    const onBehalfOf = [...ministriesForForm, ...schoolsForForm].find(item => item.id === finalRequesterId)?.name
+    after(() => notifyNewReservation({
+      organizationId: org.id,
+      slug,
+      createdBy: user.id,
+      requesterLabel: onBehalfOf ?? requesterLabel,
+      type,
+      title,
+      startsAt,
+      endsAt,
+    }))
     redirect(`/${slug}/reservas?msg=criada`)
   }
 
   const handleUpdateFormSettings = async (formData: FormData) => {
     'use server'
-    if (!canSeeHospedagem(role)) return
+    if (!canEditForm) return
 
     const fields = RESERVATION_FORM_FIELDS.reduce((acc, field) => {
       const label = String(formData.get(`${field.key}_label`) ?? '').trim()
@@ -499,31 +523,29 @@ export default async function ReservasPage({ params, searchParams }: Props) {
 
   const handleApprove = async (formData: FormData) => {
     'use server'
+    if (!isReviewer) return
     const reservationId = formData.get('reservation_id') as string
     const costRaw = formData.get('final_cost') as string
-    await updateReservationStatus(
-      reservationId,
-      'aprovada',
-      user.id,
-      (formData.get('review_notes') as string) || null,
-      costRaw ? parseFloat(costRaw) : null,
-    )
 
-    // Se o revisor já escolheu quarto/cama no mesmo formulário, aloca na
-    // hora — evita ter que digitar o mesmo hóspede de novo depois em
-    // Hospedagem. "Não atribuir agora" (valor vazio) preserva o
-    // comportamento de antes: aprova só a solicitação.
+    const { data: resv } = await createAdminClient().from('reservations')
+      .select('title, guests_description, starts_at, ends_at, status')
+      .eq('id', reservationId).eq('organization_id', org.id).single()
+    // Já concluída por outra pessoa da equipe (duas abas abertas): não aloca
+    // de novo nem troca o status por cima.
+    if (!resv || resv.status !== 'pendente') redirect(`/${slug}/reservas?tab=${tab}`)
+
+    // Quarto/cama escolhido no mesmo formulário — pode ser outro que não o
+    // pedido. Aloca ANTES de aprovar: se a vaga foi ocupada nesse meio tempo,
+    // a reserva continua pendente em vez de ficar aprovada sem quarto.
+    // "Não atribuir quarto agora" (valor vazio) só aprova a solicitação.
     const roomChoice = (formData.get('room_choice') as string) || ''
     if (roomChoice) {
       const [mode, roomId, bedId] = roomChoice.split(':')
-      const { createAdminClient } = await import('@/lib/supabase/admin')
-      const { data: resv } = await createAdminClient().from('reservations')
-        .select('title, guests_description, starts_at, ends_at')
-        .eq('id', reservationId).single()
-      if (resv) {
-        const checkIn = resv.starts_at.split('T')[0]
-        const checkOut = resv.ends_at.split('T')[0]
-        const guestName = resv.guests_description?.trim() || resv.title
+      const checkIn = resv.starts_at.split('T')[0]
+      const checkOut = resv.ends_at.split('T')[0]
+      const guestName = resv.guests_description?.trim() || resv.title
+      let allocationFailed = false
+      try {
         if (mode === 'cama') {
           await createAllocation({
             organizationId: org.id, roomId, bedId: bedId ?? null, reservationId,
@@ -537,21 +559,38 @@ export default async function ReservasPage({ params, searchParams }: Props) {
             reservationId,
           })
         }
+      } catch {
+        allocationFailed = true
       }
+      if (allocationFailed) redirect(`/${slug}/reservas?tab=${tab}&msg=quarto_indisponivel`)
     }
 
+    await updateReservationStatus(
+      reservationId,
+      'aprovada',
+      user.id,
+      (formData.get('review_notes') as string) || null,
+      costRaw ? parseFloat(costRaw) : null,
+    )
+    after(() => notifyReservationDecision({ reservationId, slug, actorId: user.id }))
     redirect(`/${slug}/reservas?tab=${tab}`)
   }
 
   const handleReject = async (formData: FormData) => {
     'use server'
+    if (!isReviewer) return
+    const reservationId = formData.get('reservation_id') as string
+    const { data: resv } = await createAdminClient().from('reservations')
+      .select('status').eq('id', reservationId).eq('organization_id', org.id).single()
+    if (resv?.status !== 'pendente') redirect(`/${slug}/reservas?tab=${tab}`)
     await updateReservationStatus(
-      formData.get('reservation_id') as string,
+      reservationId,
       'rejeitada',
       user.id,
       (formData.get('review_notes') as string) || null,
       null,
     )
+    after(() => notifyReservationDecision({ reservationId, slug, actorId: user.id }))
     redirect(`/${slug}/reservas?tab=${tab}`)
   }
 
@@ -563,12 +602,15 @@ export default async function ReservasPage({ params, searchParams }: Props) {
 
   const handleReviewerCancel = async (formData: FormData) => {
     'use server'
+    if (!isReviewer) return
+    const reservationId = formData.get('reservation_id') as string
     await cancelApprovedReservation(
-      formData.get('reservation_id') as string,
+      reservationId,
       org.id,
       user.id,
       (formData.get('review_notes') as string) || null,
     )
+    after(() => notifyReservationDecision({ reservationId, slug, actorId: user.id }))
     redirect(`/${slug}/reservas?tab=${tab}`)
   }
 
@@ -585,9 +627,6 @@ export default async function ReservasPage({ params, searchParams }: Props) {
     })
     redirect(`/${slug}/reservas?tab=${tab}`)
   }
-
-  const isReviewer = canWrite || isHospitalidade
-  const canRequest = canWrite || (!isReviewer && !!requesterId)
 
   // Pra cada reserva de quarto pendente, busca quarto/cama livre na janela de
   // data dela — alimenta o seletor "atribuir agora" no Aprovar (Parte 2: liga
@@ -611,6 +650,7 @@ export default async function ReservasPage({ params, searchParams }: Props) {
     criada: 'Solicitação enviada. A equipe responsável será notificada.',
     formulario_atualizado: 'Formulário de reservas atualizado.',
     campos_obrigatorios: 'Preencha todos os campos obrigatórios do formulário.',
+    quarto_indisponivel: 'Esse quarto/cama não está mais livre nessas datas. A reserva continua pendente: escolha outra opção.',
   }
 
   return (
@@ -637,7 +677,7 @@ export default async function ReservasPage({ params, searchParams }: Props) {
           </div>
         )}
 
-        {canSeeHospedagem(role) && (
+        {canEditForm && (
           <ReservationFormSettingsEditor
             action={handleUpdateFormSettings}
             fixedFields={RESERVATION_FORM_FIELDS.map(field => ({
@@ -652,15 +692,10 @@ export default async function ReservasPage({ params, searchParams }: Props) {
           />
         )}
 
-        {/* Tabs — gestão vê Todas/Espaços/Quartos/Histórico; hospitalidade só
-            vê quarto mesmo (sua lista já é sempre type=quarto), então o
-            recorte aqui é só Ativas/Histórico. */}
+        {/* Tabs — gestão e hospitalidade gerenciam todo pedido (espaço e quarto). */}
         {(isManagement || isHospitalidade) && (
-          <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
-            {(isManagement
-              ? [['todas', 'Todas'], ['espacos', 'Espaços'], ['quartos', 'Quartos'], ['historico', 'Histórico']]
-              : [['todas', 'Ativas'], ['historico', 'Histórico']]
-            ).map(([key, label]) => (
+          <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit max-w-full overflow-x-auto">
+            {[['todas', 'Todas'], ['espacos', 'Espaços'], ['quartos', 'Quartos'], ['historico', 'Histórico']].map(([key, label]) => (
               <a key={key} href={`?tab=${key}`}
                 className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${tab === key ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
                 {label}
@@ -753,8 +788,9 @@ export default async function ReservasPage({ params, searchParams }: Props) {
                 )}
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Tipo</label>
-                  <select name="type" required
+                  <select name="type" required defaultValue={isObreiro ? 'quarto' : ''}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
+                    {!isObreiro && <option value="" disabled>Selecione…</option>}
                     {!isObreiro && <option value="espaco">Espaço (evento, reunião)</option>}
                     <option value="quarto">Quarto (hóspede/visitante)</option>
                   </select>
@@ -900,6 +936,9 @@ export default async function ReservasPage({ params, searchParams }: Props) {
                       </p>
                     )}
                     {r.resource_description && <p>Local: {r.resource_description}</p>}
+                    {allocatedRoomByReservation.get(r.id) && (
+                      <p className="text-green-700 font-medium">Quarto definido: {allocatedRoomByReservation.get(r.id)}</p>
+                    )}
                     {r.guests_count != null && <p>Pessoas: {r.guests_count}</p>}
                     {r.guests_description && <p>Hóspedes/participantes: {r.guests_description}</p>}
                     {formAnswers.map(answer => (
