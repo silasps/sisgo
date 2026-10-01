@@ -4,7 +4,30 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { triggerSiteRevalidation } from '@/lib/revalidate-webhook'
-import { assignLeader } from '../ministerios/[id]/actions'
+import { assignLeader, addMember } from '../ministerios/[id]/actions'
+import { addSchoolStaff } from '../escolas/[id]/actions'
+
+type AdminClient = ReturnType<typeof createAdminClient>
+
+// "Criar obreiro direto" e "Editar função" só setavam staff_profiles.area
+// (texto livre) — isso nunca criou o vínculo de verdade em ministry_members/
+// school_staff, que é o que "Serve em:" na página da pessoa de fato lê.
+// Resultado: escolher uma área no formulário não vinculava a pessoa a
+// nada (bug relatado: Sirlei criada direto no ministério Intercessão
+// aparecia "Nenhum vínculo").
+async function linkPersonToUnitByName(
+  admin: AdminClient, orgId: string, personId: string,
+  unitType: string, areaName: string | null, roleTitle: string | null,
+) {
+  if (!areaName) return
+  if (unitType === 'ministry') {
+    const { data: ministry } = await admin.from('ministries').select('id').eq('organization_id', orgId).eq('name', areaName).maybeSingle()
+    if (ministry) await addMember(ministry.id, personId, null)
+  } else if (unitType === 'school') {
+    const { data: school } = await admin.from('schools').select('id').eq('organization_id', orgId).eq('name', areaName).maybeSingle()
+    if (school) await addSchoolStaff(school.id, personId, roleTitle || 'Obreiro')
+  }
+}
 import { type AccountCredentials, lookupPersonPhone, buildWelcomeWhatsappMessage } from '@/lib/staff/accountCredentials'
 
 const BLOCKED_ROLE_NAMES = ['superadmin', 'admin_base', 'lider_base']
@@ -51,6 +74,7 @@ export async function changeRole(formData: FormData) {
   const roleId = formData.get('role_id') as string
   const currentRoleId = formData.get('current_role_id') as string
   const area = (formData.get('area') as string | null)?.trim() ?? null
+  const unitType = (formData.get('unit_type') as string | null) ?? ''
   const roleTitleInput = (formData.get('role_title') as string | null)?.trim()
   const roleTitleFallback = (formData.get('role_title_fallback') as string | null)?.trim()
   const roleTitle = roleTitleInput || roleTitleFallback || null
@@ -74,13 +98,14 @@ export async function changeRole(formData: FormData) {
   if (area !== null && userId) {
     const { data: existingProfile } = await admin
       .from('staff_profiles')
-      .select('id')
+      .select('id, person_id')
       .eq('organization_id', orgId)
       .eq('user_id', userId)
       .maybeSingle()
 
     if (existingProfile) {
       await admin.from('staff_profiles').update({ area, role_title: roleTitle || null }).eq('id', existingProfile.id)
+      await linkPersonToUnitByName(admin, orgId, existingProfile.person_id, unitType, area, roleTitle)
     }
   }
 
@@ -100,6 +125,7 @@ export async function createStaffUser(formData: FormData): Promise<{ error: stri
   const password = formData.get('password') as string
   const roleId = formData.get('role_id') as string
   const area = (formData.get('area') as string | null)?.trim() ?? null
+  const unitType = (formData.get('unit_type') as string | null) ?? ''
   const roleTitle = (formData.get('role_title') as string | null)?.trim() ?? null
   const slug = formData.get('slug') as string
   const orgId = formData.get('org_id') as string
@@ -187,6 +213,8 @@ export async function createStaffUser(formData: FormData): Promise<{ error: stri
     } else {
       await admin.from('staff_profiles').insert(payload)
     }
+
+    await linkPersonToUnitByName(admin, orgId, personId, unitType, area, roleTitle)
   }
 
   const phone = personId ? await lookupPersonPhone(admin, personId) : null

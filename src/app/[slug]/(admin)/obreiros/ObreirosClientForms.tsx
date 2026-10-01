@@ -224,6 +224,7 @@ export function ChangeRoleCells({
           <input type="hidden" name="current_role_id" value={currentRoleId} />
           <input type="hidden" name="role_id" value={roleId} />
           <input type="hidden" name="area" value={area} />
+          <input type="hidden" name="unit_type" value={scope.startsWith('school:') ? 'school' : scope.startsWith('ministry:') ? 'ministry' : ''} />
           <input type="hidden" name="role_title" value={roleTitle} />
           <input type="hidden" name="slug" value={slug} />
           <input type="hidden" name="org_id" value={orgId} />
@@ -429,6 +430,7 @@ export function ObreiroCard({
             <input type="hidden" name="current_role_id" value={currentRoleId} />
             <input type="hidden" name="role_id" value={roleId} />
             <input type="hidden" name="area" value={area} />
+            <input type="hidden" name="unit_type" value={scope.startsWith('school:') ? 'school' : scope.startsWith('ministry:') ? 'ministry' : ''} />
             <input type="hidden" name="role_title" value={roleTitle} />
             <input type="hidden" name="slug" value={slug} />
             <input type="hidden" name="org_id" value={orgId} />
@@ -599,6 +601,7 @@ export function CreateStaffUserForm({
     fd.set('slug', slug)
     fd.set('role_id', roleId)
     fd.set('area', area)
+    fd.set('unit_type', scope.startsWith('school:') ? 'school' : scope.startsWith('ministry:') ? 'ministry' : '')
     startTransition(async () => {
       const res = await createStaffUser(fd)
       if ('error' in res) { toast.error(res.error); return }
