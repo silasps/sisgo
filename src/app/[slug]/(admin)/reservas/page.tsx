@@ -1,16 +1,19 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
+import { BedDouble } from 'lucide-react'
 import { after } from 'next/server'
 import { Header } from '@/components/layout/Header'
 import { SearchBar } from '@/components/ui/SearchBar'
-import { ConfirmSubmitButton } from '@/components/ui/ConfirmSubmitButton'
 import { notFound, redirect } from 'next/navigation'
 import { createReservation, updateReservationStatus, cancelReservation, cancelApprovedReservation, updateReservationFormSettings } from './actions'
-import { getAvailableRoomsAnyDestination, createAllocation, allocateWholeRoom, cancelAllocation, type AvailableRoom } from '../hospedagem/actions'
+import { getAvailableRoomsAnyDestination, cancelAllocation } from '../hospedagem/actions'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
-import { getAllocatedRoomLabels, notifyNewReservation, notifyReservationDecision } from '@/lib/reservations'
+import { getReservationRooms, notifyNewReservation, notifyReservationDecision } from '@/lib/reservations'
 import { ReservationFormSettingsEditor } from './ReservationFormSettingsEditor'
+import { ReservationDecisionButton, ReasonActionButton, type DecisionState, type ReservationInfo } from './ReviewActions'
+import type { RoomOption } from './roomRanking'
+import { parseRoomChoice, allocateReservationRoom } from './allocate'
 import { isManagementRole, isOperationalManager, userHasAnyRole, HOSPEDAGEM_ROLES } from '@/lib/auth/permissions'
 
 type Props = {
@@ -104,6 +107,12 @@ function normalizeFormSettings(raw: unknown): ReservationFormSettings {
 
 function fmt(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('pt-BR')
+}
+
+// Noites de estadia (o dia da saída não conta).
+function nights(start: string, end: string) {
+  const day = (d: string) => new Date(`${d.slice(0, 10)}T00:00:00Z`).getTime()
+  return Math.round((day(end) - day(start)) / 86_400_000)
 }
 
 // created_at/reviewed_at têm hora de verdade (timestamptz); check-in/check-out
@@ -394,7 +403,7 @@ export default async function ReservasPage({ params, searchParams }: Props) {
 
   // Quarto/cama que a hospitalidade definiu ao concluir — é o que quem pediu
   // vê como "reserva marcada". Só reserva aprovada tem alocação ligada.
-  const allocatedRoomByReservation = await getAllocatedRoomLabels(
+  const roomByReservation = await getReservationRooms(
     createAdminClient(),
     displayList.filter(r => !r.allocationId && r.status === 'aprovada').map(r => r.id),
   )
@@ -521,48 +530,39 @@ export default async function ReservasPage({ params, searchParams }: Props) {
     redirect(`/${slug}/reservas?msg=formulario_atualizado`)
   }
 
-  const handleApprove = async (formData: FormData) => {
+  // Vaga ocupada no meio tempo volta como erro pro diálogo (que recarrega a
+  // lista); sucesso redireciona.
+  const roomTakenError = 'Esse quarto/cama acabou de ser ocupado nessas datas. A lista foi atualizada: escolha outra opção.'
+
+  const handleApprove = async (_state: DecisionState, formData: FormData): Promise<DecisionState> => {
     'use server'
-    if (!isReviewer) return
+    if (!isReviewer) return null
     const reservationId = formData.get('reservation_id') as string
     const costRaw = formData.get('final_cost') as string
 
     const { data: resv } = await createAdminClient().from('reservations')
-      .select('title, guests_description, starts_at, ends_at, status')
+      .select('title, type, guests_description, starts_at, ends_at, status')
       .eq('id', reservationId).eq('organization_id', org.id).single()
     // Já concluída por outra pessoa da equipe (duas abas abertas): não aloca
     // de novo nem troca o status por cima.
     if (!resv || resv.status !== 'pendente') redirect(`/${slug}/reservas?tab=${tab}`)
 
-    // Quarto/cama escolhido no mesmo formulário — pode ser outro que não o
-    // pedido. Aloca ANTES de aprovar: se a vaga foi ocupada nesse meio tempo,
-    // a reserva continua pendente em vez de ficar aprovada sem quarto.
-    // "Não atribuir quarto agora" (valor vazio) só aprova a solicitação.
-    const roomChoice = (formData.get('room_choice') as string) || ''
-    if (roomChoice) {
-      const [mode, roomId, bedId] = roomChoice.split(':')
-      const checkIn = resv.starts_at.split('T')[0]
-      const checkOut = resv.ends_at.split('T')[0]
-      const guestName = resv.guests_description?.trim() || resv.title
-      let allocationFailed = false
-      try {
-        if (mode === 'cama') {
-          await createAllocation({
-            organizationId: org.id, roomId, bedId: bedId ?? null, reservationId,
-            personId: null, guestName, guestType: 'convidado',
-            checkIn, checkOut, notes: null, createdBy: user.id,
-          })
-        } else if (mode === 'quarto') {
-          await allocateWholeRoom({
-            organizationId: org.id, roomId, guestName, guestType: 'convidado',
-            schoolId: null, checkIn, checkOut, notes: null, createdBy: user.id,
-            reservationId,
-          })
-        }
-      } catch {
-        allocationFailed = true
-      }
-      if (allocationFailed) redirect(`/${slug}/reservas?tab=${tab}&msg=quarto_indisponivel`)
+    // Quarto inteiro ou camas escolhidos no diálogo — podem ser outros que não
+    // os do pedido. Aloca ANTES de aprovar: se a vaga foi ocupada nesse meio
+    // tempo, a reserva continua pendente em vez de ficar aprovada sem quarto.
+    // "Decidir depois" (sem escolha) só aprova.
+    const choice = resv.type === 'quarto' ? parseRoomChoice(formData) : null
+    if (choice) {
+      const allocated = await allocateReservationRoom({
+        organizationId: org.id,
+        reservationId,
+        choice,
+        guestName: resv.guests_description?.trim() || resv.title,
+        checkIn: resv.starts_at.split('T')[0],
+        checkOut: resv.ends_at.split('T')[0],
+        createdBy: user.id,
+      })
+      if (!allocated) return { error: roomTakenError }
     }
 
     await updateReservationStatus(
@@ -573,7 +573,75 @@ export default async function ReservasPage({ params, searchParams }: Props) {
       costRaw ? parseFloat(costRaw) : null,
     )
     after(() => notifyReservationDecision({ reservationId, slug, actorId: user.id }))
-    redirect(`/${slug}/reservas?tab=${tab}`)
+    redirect(`/${slug}/reservas?tab=${tab}&msg=aprovada`)
+  }
+
+  // Define ou troca o quarto de uma reserva já aprovada ("Decidir depois" no
+  // aprovar, ou mudança de planos). Aloca o novo antes de liberar o antigo:
+  // se a vaga nova não estiver mais livre, nada muda.
+  const handleAssignRoom = async (_state: DecisionState, formData: FormData): Promise<DecisionState> => {
+    'use server'
+    if (!isReviewer) return null
+    const reservationId = formData.get('reservation_id') as string
+    const choice = parseRoomChoice(formData)
+    const admin = createAdminClient()
+    const { data: resv } = await admin.from('reservations')
+      .select('title, type, guests_description, starts_at, ends_at, status')
+      .eq('id', reservationId).eq('organization_id', org.id).single()
+    if (!choice || !resv || resv.status !== 'aprovada' || resv.type !== 'quarto') redirect(`/${slug}/reservas?tab=${tab}`)
+
+    const { data: previous } = await admin.from('room_allocations')
+      .select('id, bed_id, status')
+      .eq('reservation_id', reservationId)
+      .in('status', ['confirmada', 'checkin'])
+    // Hóspede já em estadia: mudar de quarto é com Hospedagem (o check-in vai junto).
+    if ((previous ?? []).some(a => a.status === 'checkin')) {
+      return { error: 'O hóspede já fez check-in: a troca de quarto é feita em Hospedagem.' }
+    }
+
+    const allocated = await allocateReservationRoom({
+      organizationId: org.id,
+      reservationId,
+      choice,
+      guestName: resv.guests_description?.trim() || resv.title,
+      checkIn: resv.starts_at.split('T')[0],
+      checkOut: resv.ends_at.split('T')[0],
+      createdBy: user.id,
+    })
+    if (!allocated) return { error: roomTakenError }
+    for (const allocation of previous ?? []) {
+      await cancelAllocation({ id: allocation.id, organizationId: org.id, bedId: allocation.bed_id })
+    }
+
+    after(() => notifyReservationDecision({ reservationId, slug, actorId: user.id, roomChanged: true }))
+    redirect(`/${slug}/reservas?tab=${tab}&msg=quarto_salvo`)
+  }
+
+  // Quartos/camas livres na janela da reserva, buscados só quando o diálogo
+  // de aprovar/definir quarto abre — antes era uma busca por cartão pendente
+  // a cada carregamento da página, e a lista ainda podia estar velha na hora
+  // de escolher.
+  const loadRoomOptions = async (reservationId: string): Promise<RoomOption[]> => {
+    'use server'
+    if (!isReviewer) return []
+    const { data: resv } = await createAdminClient().from('reservations')
+      .select('starts_at, ends_at')
+      .eq('id', reservationId).eq('organization_id', org.id).single()
+    if (!resv) return []
+    const rooms = await getAvailableRoomsAnyDestination({
+      organizationId: org.id,
+      checkIn: resv.starts_at.split('T')[0],
+      checkOut: resv.ends_at.split('T')[0],
+    })
+    return rooms.map(room => ({
+      id: room.roomId,
+      name: room.roomName,
+      place: [room.blockName, room.floorName].filter(Boolean).join(' · ') || null,
+      gender: room.genderConstraint,
+      totalBeds: room.totalBeds,
+      wholeRoomAvailable: room.wholeRoomAvailable,
+      beds: room.availableBeds,
+    }))
   }
 
   const handleReject = async (formData: FormData) => {
@@ -591,7 +659,7 @@ export default async function ReservasPage({ params, searchParams }: Props) {
       null,
     )
     after(() => notifyReservationDecision({ reservationId, slug, actorId: user.id }))
-    redirect(`/${slug}/reservas?tab=${tab}`)
+    redirect(`/${slug}/reservas?tab=${tab}&msg=recusada`)
   }
 
   const handleCancel = async (formData: FormData) => {
@@ -628,30 +696,15 @@ export default async function ReservasPage({ params, searchParams }: Props) {
     redirect(`/${slug}/reservas?tab=${tab}`)
   }
 
-  // Pra cada reserva de quarto pendente, busca quarto/cama livre na janela de
-  // data dela — alimenta o seletor "atribuir agora" no Aprovar (Parte 2: liga
-  // aprovação de reserva à alocação de cama, em vez de digitar tudo de novo
-  // depois em Hospedagem). Lista de pendentes costuma ser pequena, uma query
-  // por item é aceitável aqui.
-  const availableRoomsByReservation = new Map<string, AvailableRoom[]>()
-  if (isReviewer) {
-    for (const r of reservations) {
-      if (r.type !== 'quarto' || r.status !== 'pendente') continue
-      const options = await getAvailableRoomsAnyDestination({
-        organizationId: org.id,
-        checkIn: r.starts_at.split('T')[0],
-        checkOut: r.ends_at.split('T')[0],
-      })
-      availableRoomsByReservation.set(r.id, options)
-    }
-  }
-
   const msgInfo: Record<string, string> = {
     criada: 'Solicitação enviada. A equipe responsável será notificada.',
     formulario_atualizado: 'Formulário de reservas atualizado.',
     campos_obrigatorios: 'Preencha todos os campos obrigatórios do formulário.',
-    quarto_indisponivel: 'Esse quarto/cama não está mais livre nessas datas. A reserva continua pendente: escolha outra opção.',
+    aprovada: 'Reserva aprovada. Quem pediu já vê a reserva confirmada.',
+    recusada: 'Pedido recusado.',
+    quarto_salvo: 'Quarto salvo na reserva.',
   }
+  const isWarningMsg = msg === 'campos_obrigatorios'
 
   return (
     <>
@@ -672,7 +725,7 @@ export default async function ReservasPage({ params, searchParams }: Props) {
         <div className="max-w-3xl mx-auto space-y-6">
 
         {msg && msgInfo[msg] && (
-          <div className="border rounded-lg px-4 py-3 text-sm bg-blue-50 border-blue-200 text-blue-700">
+          <div className={`border rounded-lg px-4 py-3 text-sm ${isWarningMsg ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>
             {msgInfo[msg]}
           </div>
         )}
@@ -908,6 +961,19 @@ export default async function ReservasPage({ params, searchParams }: Props) {
               const typeLabel = r.type === 'espaco' ? 'Espaço' : 'Quarto'
               const isPending = r.status === 'pendente'
               const formAnswers = Array.isArray(r.form_answers) ? r.form_answers.filter(answer => answer.value) : []
+              const room = roomByReservation.get(r.id)
+              // Troca de quarto com hóspede já em estadia é com Hospedagem.
+              const canChangeRoom = r.type === 'quarto' && !room?.checkedIn
+              const stayNights = r.type === 'quarto' ? nights(r.starts_at, r.ends_at) : 0
+              const info: ReservationInfo = {
+                id: r.id,
+                title: r.title,
+                type: r.type === 'espaco' ? 'espaco' : 'quarto',
+                period: `${fmt(r.starts_at)} → ${fmt(r.ends_at)}${stayNights > 0 ? ` · ${stayNights} ${stayNights === 1 ? 'noite' : 'noites'}` : ''}`,
+                guestsCount: r.guests_count,
+                guestsDescription: r.guests_description,
+                requested: r.resource_description,
+              }
               return (
                 <li key={r.id} className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
                   <div className="flex items-start justify-between gap-2">
@@ -936,8 +1002,10 @@ export default async function ReservasPage({ params, searchParams }: Props) {
                       </p>
                     )}
                     {r.resource_description && <p>Local: {r.resource_description}</p>}
-                    {allocatedRoomByReservation.get(r.id) && (
-                      <p className="text-green-700 font-medium">Quarto definido: {allocatedRoomByReservation.get(r.id)}</p>
+                    {room && (
+                      <p className="!mt-1.5 flex items-center gap-1.5 rounded-lg bg-green-50 px-2.5 py-1.5 font-medium text-green-700">
+                        <BedDouble className="size-3.5 shrink-0" /> Quarto definido: {room.label}
+                      </p>
                     )}
                     {r.guests_count != null && <p>Pessoas: {r.guests_count}</p>}
                     {r.guests_description && <p>Hóspedes/participantes: {r.guests_description}</p>}
@@ -952,7 +1020,7 @@ export default async function ReservasPage({ params, searchParams }: Props) {
                     )}
                     {r.review_notes && (
                       <p className="italic text-gray-400">
-                        {r.status === 'cancelada' ? 'Motivo do cancelamento' : r.status === 'rejeitada' ? 'Motivo da recusa' : 'Nota'}: &ldquo;{r.review_notes}&rdquo;
+                        {r.status === 'cancelada' ? 'Motivo do cancelamento' : r.status === 'rejeitada' ? 'Motivo da recusa' : 'Recado'}: &ldquo;{r.review_notes}&rdquo;
                       </p>
                     )}
                     {r.allocationNotes && (
@@ -960,80 +1028,61 @@ export default async function ReservasPage({ params, searchParams }: Props) {
                     )}
                   </div>
 
-                  {/* Aprovar/Rejeitar (reviewer) */}
+                  {/* Aprovar/Recusar (revisor) — cada um abre o próprio diálogo */}
                   {isReviewer && isPending && !isHistoricoView && (
-                    <div className="border-t border-gray-100 pt-3 grid sm:grid-cols-2 gap-2">
-                      <form action={handleApprove} className="space-y-2">
-                        <input type="hidden" name="reservation_id" value={r.id} />
-                        {r.type === 'quarto' && (
-                          <select name="room_choice" defaultValue=""
-                            className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 bg-white">
-                            <option value="">Não atribuir quarto agora</option>
-                            {(availableRoomsByReservation.get(r.id) ?? []).flatMap(room => [
-                              ...(room.wholeRoomAvailable ? [
-                                <option key={`quarto-${room.roomId}`} value={`quarto:${room.roomId}`}>
-                                  {room.roomName} (quarto inteiro)
-                                </option>,
-                              ] : []),
-                              ...room.availableBeds.map(bed => (
-                                <option key={bed.id} value={`cama:${room.roomId}:${bed.id}`}>
-                                  {room.roomName} — {bed.label}
-                                </option>
-                              )),
-                            ])}
-                          </select>
-                        )}
-                        <input name="final_cost" type="number" step="0.01" placeholder="Custo R$ (opcional)"
-                          className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                        <input name="review_notes" placeholder="Nota (opcional)"
-                          className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                        <button type="submit"
-                          className="w-full px-4 py-1.5 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded-lg transition-colors">
-                          Aprovar
-                        </button>
-                      </form>
-                      <form action={handleReject} className="space-y-2">
-                        <input type="hidden" name="reservation_id" value={r.id} />
-                        <input name="review_notes" placeholder="Motivo da recusa (opcional)"
-                          className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                        <button type="submit"
-                          className="w-full px-4 py-1.5 border border-red-200 text-red-500 text-xs font-medium rounded-lg hover:bg-red-50 transition-colors">
-                          Rejeitar
-                        </button>
-                      </form>
+                    <div className="border-t border-gray-100 pt-3 grid grid-cols-2 gap-2">
+                      <ReasonActionButton
+                        action={handleReject}
+                        hidden={{ reservation_id: r.id }}
+                        fieldName="review_notes"
+                        label="Recusar"
+                        title="Recusar pedido"
+                        subtitle={r.title}
+                        hint="Quem pediu vê o motivo junto com a recusa."
+                        confirmLabel="Recusar pedido"
+                        pendingText="Recusando…"
+                      />
+                      <ReservationDecisionButton variant="aprovar" reservation={info} action={handleApprove}
+                        loadRooms={loadRoomOptions} label="Aprovar" tone="approve" />
                     </div>
                   )}
 
-                  {/* Cancelar (revisor, reserva já aprovada) */}
+                  {/* Reserva aprovada (revisor): definir/trocar quarto ou cancelar */}
                   {isReviewer && r.status === 'aprovada' && !r.allocationId && !isHistoricoView && (
-                    <div className="border-t border-gray-100 pt-3">
-                      <form action={handleReviewerCancel} className="flex flex-col sm:flex-row gap-2">
-                        <input type="hidden" name="reservation_id" value={r.id} />
-                        <input name="review_notes" placeholder="Motivo do cancelamento (opcional)"
-                          className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                        <ConfirmSubmitButton
-                          confirmMessage={`Cancelar a reserva "${r.title}"? Essa ação não pode ser desfeita.`}
-                          className="px-4 py-1.5 border border-red-200 text-red-500 text-xs font-medium rounded-lg hover:bg-red-50 transition-colors whitespace-nowrap">
-                          Cancelar reserva
-                        </ConfirmSubmitButton>
-                      </form>
+                    <div className={`border-t border-gray-100 pt-3 grid gap-2 ${canChangeRoom ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                      {canChangeRoom && (
+                        <ReservationDecisionButton key={room?.label ?? 'sem-quarto'} variant="quarto" reservation={info} action={handleAssignRoom}
+                          loadRooms={loadRoomOptions} currentRoom={room?.label ?? null}
+                          label={room ? 'Trocar quarto' : 'Definir quarto'} tone="brand" />
+                      )}
+                      <ReasonActionButton
+                        action={handleReviewerCancel}
+                        hidden={{ reservation_id: r.id }}
+                        fieldName="review_notes"
+                        label="Cancelar reserva"
+                        title="Cancelar reserva"
+                        subtitle={r.title}
+                        hint={room ? 'O quarto é liberado e quem pediu vê o motivo.' : 'Quem pediu vê o motivo junto com o cancelamento.'}
+                        confirmLabel="Cancelar reserva"
+                        pendingText="Cancelando…"
+                      />
                     </div>
                   )}
 
                   {/* Cancelar (revisor, cama alocada direto — sem reserva por trás) */}
                   {isReviewer && r.allocationId && !isHistoricoView && (
                     <div className="border-t border-gray-100 pt-3">
-                      <form action={handleCancelAllocationDirect} className="flex flex-col sm:flex-row gap-2">
-                        <input type="hidden" name="allocation_id" value={r.allocationId} />
-                        <input type="hidden" name="bed_id" value={r.allocationBedId ?? ''} />
-                        <input name="reason" placeholder="Motivo do cancelamento (opcional)"
-                          className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                        <ConfirmSubmitButton
-                          confirmMessage={`Cancelar a alocação de "${r.title}"? Essa ação não pode ser desfeita.`}
-                          className="px-4 py-1.5 border border-red-200 text-red-500 text-xs font-medium rounded-lg hover:bg-red-50 transition-colors whitespace-nowrap">
-                          Cancelar alocação
-                        </ConfirmSubmitButton>
-                      </form>
+                      <ReasonActionButton
+                        action={handleCancelAllocationDirect}
+                        hidden={{ allocation_id: r.allocationId, bed_id: r.allocationBedId ?? '' }}
+                        fieldName="reason"
+                        label="Cancelar alocação"
+                        title="Cancelar alocação"
+                        subtitle={r.title}
+                        hint="A cama é liberada na hora."
+                        confirmLabel="Cancelar alocação"
+                        pendingText="Cancelando…"
+                      />
                     </div>
                   )}
 

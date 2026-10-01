@@ -9,38 +9,57 @@ function fmtDate(d: string) {
   return `${day}/${m}/${y}`
 }
 
+export type ReservationRoom = {
+  label: string // "Quarto 12 — Cama 1, Cama 2" | "Quarto 12 (quarto inteiro)"
+  checkedIn: boolean // hóspede já em estadia: troca de quarto aí é mudança, vai por Hospedagem
+}
+
 /**
  * Quarto/cama que a hospitalidade definiu pra cada reserva (alocação ligada
  * por reservation_id). Admin porque quem pediu (líder de ministério, aluno…)
  * não lê room_allocations pela RLS — os ids já vêm filtrados pela página.
- * Quarto inteiro vira uma alocação por cama, daí o agrupamento por quarto.
+ * Cada cama é uma alocação, daí o agrupamento por quarto.
  */
-export async function getAllocatedRoomLabels(sb: AdminClient, reservationIds: string[]): Promise<Map<string, string>> {
-  const rows: Array<{ reservation_id: string; rooms: { name: string } | null; beds: { label: string } | null }> = []
+export async function getReservationRooms(sb: AdminClient, reservationIds: string[]): Promise<Map<string, ReservationRoom>> {
+  type Row = { reservation_id: string; room_id: string; status: string; rooms: { name: string } | null; beds: { label: string } | null }
+  const rows: Row[] = []
   // Lotes de 100 — o histórico pode ter centenas de ids e o `in` vai na URL.
   for (let start = 0; start < reservationIds.length; start += 100) {
     const { data } = await sb.from('room_allocations')
-      .select('reservation_id, rooms(name), beds(label)')
+      .select('reservation_id, room_id, status, rooms(name), beds(label)')
       .in('reservation_id', reservationIds.slice(start, start + 100))
       .in('status', ['confirmada', 'checkin', 'checkout'])
-    rows.push(...((data ?? []) as unknown as typeof rows))
+    rows.push(...((data ?? []) as unknown as Row[]))
   }
+  if (rows.length === 0) return new Map()
 
-  const bedsByRoomByReservation = new Map<string, Map<string, string[]>>()
+  // Todas as camas ativas do quarto na mesma reserva = quarto inteiro.
+  const roomIds = [...new Set(rows.map(r => r.room_id))]
+  const { data: roomBeds } = await sb.from('beds').select('room_id').in('room_id', roomIds).neq('status', 'manutencao')
+  const totalBedsByRoom = new Map<string, number>()
+  for (const b of (roomBeds ?? []) as Array<{ room_id: string }>) totalBedsByRoom.set(b.room_id, (totalBedsByRoom.get(b.room_id) ?? 0) + 1)
+
+  const byReservation = new Map<string, { checkedIn: boolean; rooms: Map<string, { name: string; beds: string[]; count: number }> }>()
   for (const row of rows) {
-    const byRoom = bedsByRoomByReservation.get(row.reservation_id) ?? new Map<string, string[]>()
-    const roomName = row.rooms?.name ?? 'Quarto'
-    byRoom.set(roomName, [...(byRoom.get(roomName) ?? []), ...(row.beds?.label ? [row.beds.label] : [])])
-    bedsByRoomByReservation.set(row.reservation_id, byRoom)
+    const entry = byReservation.get(row.reservation_id) ?? { checkedIn: false, rooms: new Map() }
+    const room = entry.rooms.get(row.room_id) ?? { name: row.rooms?.name ?? 'Quarto', beds: [], count: 0 }
+    room.count++
+    if (row.beds?.label) room.beds.push(row.beds.label)
+    entry.rooms.set(row.room_id, room)
+    entry.checkedIn ||= row.status === 'checkin'
+    byReservation.set(row.reservation_id, entry)
   }
 
-  const labels = new Map<string, string>()
-  for (const [reservationId, byRoom] of bedsByRoomByReservation) {
-    labels.set(reservationId, [...byRoom].map(([room, beds]) =>
-      beds.length > 1 ? `${room} (quarto inteiro)` : beds.length === 1 ? `${room} — ${beds[0]}` : room,
-    ).join(', '))
+  const result = new Map<string, ReservationRoom>()
+  for (const [reservationId, entry] of byReservation) {
+    const label = [...entry.rooms].map(([roomId, room]) => {
+      const total = totalBedsByRoom.get(roomId) ?? 0
+      if (total > 1 && room.count >= total) return `${room.name} (quarto inteiro)`
+      return room.beds.length > 0 ? `${room.name} — ${room.beds.join(', ')}` : room.name
+    }).join(' · ')
+    result.set(reservationId, { label, checkedIn: entry.checkedIn })
   }
-  return labels
+  return result
 }
 
 /**
@@ -110,8 +129,12 @@ export async function notifyNewReservation(params: {
   })
 }
 
-/** Avisa quem pediu que a reserva foi concluída (confirmada, recusada ou cancelada). */
-export async function notifyReservationDecision(params: { reservationId: string; slug: string; actorId: string }) {
+/**
+ * Avisa quem pediu que a reserva foi concluída (confirmada, recusada ou
+ * cancelada) — ou, com `roomChanged`, que o quarto de uma reserva já
+ * confirmada foi definido/trocado.
+ */
+export async function notifyReservationDecision(params: { reservationId: string; slug: string; actorId: string; roomChanged?: boolean }) {
   const sb = createAdminClient()
   const { data: r } = await sb.from('reservations')
     .select('title, status, starts_at, ends_at, requested_by, review_notes')
@@ -122,8 +145,9 @@ export async function notifyReservationDecision(params: { reservationId: string;
   let title: string
   let body: string
   if (r.status === 'aprovada') {
-    const room = (await getAllocatedRoomLabels(sb, [params.reservationId])).get(params.reservationId)
-    title = 'Reserva confirmada'
+    const room = (await getReservationRooms(sb, [params.reservationId])).get(params.reservationId)?.label
+    if (params.roomChanged && !room) return
+    title = params.roomChanged ? 'Quarto da reserva definido' : 'Reserva confirmada'
     body = `"${r.title}" · ${fmtDate(r.starts_at)} → ${fmtDate(r.ends_at)}${room ? ` · ${room}` : ''}`
   } else if (r.status === 'rejeitada' || r.status === 'cancelada') {
     title = r.status === 'rejeitada' ? 'Reserva recusada' : 'Reserva cancelada'
