@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Loader2, UserPlus, Copy, Phone } from 'lucide-react'
+import { Loader2, UserPlus, Copy, Phone, Check } from 'lucide-react'
 import type { CreatedAccess } from './actions'
 
 type Props = {
@@ -25,6 +25,7 @@ export function CriarAcessoForm({ action, addPhoneAction, markSentAction }: Prop
   const [created, setCreated] = useState<CreatedAccess | null>(null)
   const [addingPhone, setAddingPhone] = useState(false)
   const [phoneInput, setPhoneInput] = useState('')
+  const [sentViaWhatsApp, setSentViaWhatsApp] = useState(false)
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -40,6 +41,7 @@ export function CriarAcessoForm({ action, addPhoneAction, markSentAction }: Prop
   function handleSendWhatsApp() {
     if (!created?.phone) return
     window.open(whatsappUrl(created.phone, created.whatsappMessage), '_blank', 'noopener,noreferrer')
+    setSentViaWhatsApp(true)
     if (created.orgUserId) startTransition(() => markSentAction(created.orgUserId))
   }
 
@@ -87,13 +89,28 @@ export function CriarAcessoForm({ action, addPhoneAction, markSentAction }: Prop
             <Copy size={13} /> Copiar dados
           </button>
           {created.phone ? (
-            <button
-              type="button"
-              onClick={handleSendWhatsApp}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors"
-            >
-              Enviar por WhatsApp
-            </button>
+            sentViaWhatsApp ? (
+              <div className="flex items-center gap-2">
+                <span className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-green-50 text-green-700 border border-green-200">
+                  <Check size={13} /> Enviado por WhatsApp
+                </span>
+                <button
+                  type="button"
+                  onClick={handleSendWhatsApp}
+                  className="text-xs text-gray-500 hover:text-gray-700 underline underline-offset-2"
+                >
+                  Enviar novamente
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSendWhatsApp}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors"
+              >
+                Enviar por WhatsApp
+              </button>
+            )
           ) : !addingPhone && (
             <button
               type="button"
