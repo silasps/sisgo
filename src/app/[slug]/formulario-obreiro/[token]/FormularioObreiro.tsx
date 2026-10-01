@@ -3,7 +3,7 @@
 import { useRef, useState, useEffect, useContext, createContext } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { HeartHandshake, Camera, IdCard, FileText, KeyRound, Copy, Check } from 'lucide-react'
+import { HeartHandshake, Camera, IdCard, FileText, KeyRound, Copy, Check, LogOut } from 'lucide-react'
 import { salvarSecaoObreiro, salvarSecaoObreiroComArquivos, enviarFormularioObreiro, gerarLinkReferenciaObreiro, enviarRegrasInstituicaoEmail } from './actions'
 
 const SECTIONS_COM_ARQUIVO = new Set([3, 7, 10])
@@ -1759,7 +1759,12 @@ export function FormularioObreiro({
                 variant="warning"
                 onConfirm={() => router.push(`/${slug}`)}
               >
-                <button type="button" className="text-xs font-semibold text-gray-400 hover:text-gray-600 transition-colors">
+                {/* Antes era um texto cinza discreto do lado dos botões
+                    coloridos de idioma — passava despercebido (achavam que
+                    não tinha como sair sem terminar). Vira um botão com
+                    borda, do mesmo peso visual dos outros. */}
+                <button type="button" className="inline-flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-gray-700 border border-gray-200 hover:border-gray-300 rounded-full px-2.5 py-1 transition-colors">
+                  <LogOut className="size-3.5" aria-hidden />
                   {d.nav.exit}
                 </button>
               </ConfirmDialog>

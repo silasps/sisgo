@@ -111,7 +111,7 @@ export async function createStaffUser(formData: FormData) {
     const { data: created, error } = await admin.auth.admin.createUser({
       email,
       password,
-      user_metadata: { full_name: fullName },
+      user_metadata: { full_name: fullName, must_change_password: true },
       email_confirm: true,
     })
     if (error || !created.user) return

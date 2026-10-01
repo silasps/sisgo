@@ -3,17 +3,19 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import {
-  assignSchoolLeader, addSchoolCoLeader, removeSchoolLeader,
+  assignSchoolLeaderByPerson, addSchoolCoLeaderByPerson, removeSchoolLeader,
   removeSchoolStaff,
   submitSchoolObreiroRequest, approveSchoolObreiroRequest,
   rejectSchoolObreiroRequest, cancelSchoolObreiroRequest,
   toggleTurmaActive, deleteTurma,
 } from '../actions'
 import { DeleteTurmaButton } from '../DeleteTurmaButton'
+import { SchoolConfigTabs } from './SchoolConfigTabs'
+import { NovaTurmaModal } from './NovaTurmaModal'
 import { EmbedCodeBox } from '@/components/ui/EmbedCodeBox'
 import { SearchableSelectModal } from '@/components/ui/SearchableSelectModal'
 
-import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
+import { isManagementRole, isOperationalManager, canAssignLeadership } from '@/lib/auth/permissions'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { getSchoolLink } from '@/lib/auth/unit-access'
 import { SCHOOL_TYPES } from '@/lib/schools'
@@ -24,7 +26,7 @@ import { HoursField } from '@/components/ui/HoursField'
 
 type Props = {
   params: Promise<{ slug: string; id: string }>
-  searchParams: Promise<{ msg?: string }>
+  searchParams: Promise<{ msg?: string; tab?: string; erro?: string }>
 }
 
 function whatsappDigits(value: string | null | undefined): string | null {
@@ -57,7 +59,8 @@ function WhatsAppButton({ phone }: { phone?: string | null }) {
 
 export default async function EditarEscolaPage({ params, searchParams }: Props) {
   const { slug, id } = await params
-  const { msg } = await searchParams
+  const { msg, tab, erro } = await searchParams
+  const initialTab = tab === 'turmas' ? 'turmas' as const : 'escola' as const
   const supabase = await createClient()
   const sbAdmin  = createAdminClient()
 
@@ -68,8 +71,9 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
   if (!user || !org) notFound()
 
   const { role, preview } = await getCurrentOrganizationRole(supabase, user.id, org.id)
-  const isManagement  = isManagementRole(role)
-  const canWrite      = isOperationalManager(role)
+  const isManagement    = isManagementRole(role)
+  const canWrite        = isOperationalManager(role)
+  const canAssignLeader = canAssignLeadership(role)
 
   const { data: escola } = await supabase
     .from('schools')
@@ -188,7 +192,11 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
     .eq('school_id', id)
 
   let leaders: Array<{ userId: string; email: string | null }> = []
-  let orgUsersForAssignment: Array<{ id: string; email: string; fullName: string | null }> = []
+  // Busca entre TODAS as pessoas da base, não só quem já tem login — quem
+  // ainda não tem login ganha um na hora de virar líder (ver
+  // resolvePersonToUserId em ../actions). Sem isso, promover alguém a líder
+  // exigia dar login manualmente antes, num fluxo separado.
+  let peopleForAssignment: Array<{ id: string; label: string }> = []
 
   if (isManagement) {
     const leaderUserIds = (leaderRows ?? []).map(r => r.user_id)
@@ -198,23 +206,19 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
         return { userId, email: lu?.email ?? null }
       }))
     }
-    const { data: orgUsersData } = await supabase
-      .from('organization_users').select('user_id').eq('organization_id', org.id).eq('active', true)
-    if (orgUsersData?.length) {
-      const { data: { users: authUsers } } = await sbAdmin.auth.admin.listUsers({ perPage: 1000 })
-      const { data: staffRows } = await sbAdmin
-        .from('staff_profiles').select('user_id, people(full_name)')
-        .eq('organization_id', org.id).eq('active', true).not('user_id', 'is', null)
-      const namesByUserId = new Map<string, string>()
-      for (const s of (staffRows ?? []) as unknown as Array<{ user_id: string | null; people: { full_name: string } | null }>) {
-        if (s.user_id && s.people?.full_name) namesByUserId.set(s.user_id, s.people.full_name)
-      }
-      const orgUserSet = new Set(orgUsersData.map((u: { user_id: string }) => u.user_id))
+    if (canAssignLeader) {
+      const [{ data: peopleData }, { data: staffRows }] = await Promise.all([
+        supabase.from('people').select('id, full_name').eq('organization_id', org.id).order('full_name'),
+        sbAdmin.from('staff_profiles').select('person_id, user_id').eq('organization_id', org.id).not('user_id', 'is', null),
+      ])
       const leaderUserIdSet = new Set(leaderUserIds)
-      orgUsersForAssignment = authUsers
-        .filter(u => orgUserSet.has(u.id) && !leaderUserIdSet.has(u.id))
-        .map(u => ({ id: u.id, email: u.email ?? u.id, fullName: namesByUserId.get(u.id) ?? null }))
-        .sort((a, b) => (a.fullName ?? a.email).localeCompare(b.fullName ?? b.email))
+      const userIdByPersonId = new Map((staffRows ?? []).map(s => [s.person_id, s.user_id as string]))
+      peopleForAssignment = (peopleData ?? [])
+        .filter(p => {
+          const uid = userIdByPersonId.get(p.id)
+          return !uid || !leaderUserIdSet.has(uid)
+        })
+        .map(p => ({ id: p.id, label: p.full_name }))
     }
   }
 
@@ -330,6 +334,7 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
       semester: formData.get('semester') ? Number(formData.get('semester')) : null,
       starts_at: (formData.get('starts_at') as string) || null,
       ends_at: (formData.get('ends_at') as string) || null,
+      max_students: formData.get('max_students') ? Number(formData.get('max_students')) : null,
       active: true,
     }).select('id').single()
     if (error || !newClass) redirect(`/${slug}/escolas/${id}`)
@@ -339,17 +344,19 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
 
   const handleAssignLeader = async (formData: FormData) => {
     'use server'
-    const userId = formData.get('user_id') as string
-    if (!userId) return
-    await assignSchoolLeader(org.id, id, userId)
+    const personId = formData.get('person_id') as string
+    if (!personId) return
+    const result = await assignSchoolLeaderByPerson(org.id, id, personId)
+    if (result.error) redirect(`/${slug}/escolas/${id}/configuracoes?erro=${encodeURIComponent(result.error)}`)
     redirect(`/${slug}/escolas/${id}/configuracoes?msg=lider_atribuido`)
   }
 
   const handleAddCoLeader = async (formData: FormData) => {
     'use server'
-    const userId = formData.get('user_id') as string
-    if (!userId) return
-    await addSchoolCoLeader(org.id, id, userId)
+    const personId = formData.get('person_id') as string
+    if (!personId) return
+    const result = await addSchoolCoLeaderByPerson(org.id, id, personId)
+    if (result.error) redirect(`/${slug}/escolas/${id}/configuracoes?erro=${encodeURIComponent(result.error)}`)
     redirect(`/${slug}/escolas/${id}/configuracoes?msg=lider_atribuido`)
   }
 
@@ -357,7 +364,7 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
     'use server'
     const userId = formData.get('user_id') as string
     if (!userId) return
-    await removeSchoolLeader(id, userId)
+    await removeSchoolLeader(id, userId, org.id)
     redirect(`/${slug}/escolas/${id}/configuracoes`)
   }
 
@@ -422,14 +429,14 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
       formData.get('active') === 'true',
     )
     await triggerSiteRevalidation(org.id, 'events')
-    redirect(`/${slug}/escolas/${id}`)
+    redirect(`/${slug}/escolas/${id}/configuracoes?tab=turmas`)
   }
 
   const handleDeleteTurma = async (formData: FormData) => {
     'use server'
     await deleteTurma(formData.get('class_id') as string)
     await triggerSiteRevalidation(org.id, 'events')
-    redirect(`/${slug}/escolas/${id}`)
+    redirect(`/${slug}/escolas/${id}/configuracoes?tab=turmas`)
   }
 
   const publicUrl = (escola as unknown as { slug: string | null }).slug
@@ -452,7 +459,78 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
               {msgs[msg].text}
             </div>
           )}
+          {erro && (
+            <div className="border rounded-lg px-4 py-3 text-sm mb-4 bg-red-50 border-red-200 text-red-700">
+              {erro}
+            </div>
+          )}
 
+          <SchoolConfigTabs
+            turmasCount={turmas?.length ?? 0}
+            initialTab={initialTab}
+            turmas={
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="font-semibold text-gray-900">Turmas</h2>
+                  <NovaTurmaModal action={createTurma} />
+                </div>
+                {turmas && turmas.length > 0 ? (
+                  <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+                    {turmas.map(t => {
+                      const hasEnrollments = enrolledClassIds.has(t.id)
+                      return (
+                        <div key={t.id} className="group relative flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-brand-50 transition-colors">
+                          <Link href={`/${slug}/escolas/${id}/turmas/${t.id}`} className="absolute inset-0" aria-label={`Abrir turma ${t.name}`} />
+                          <div className="pointer-events-none min-w-0 flex-1">
+                            <p className="font-medium text-sm text-gray-900 group-hover:text-brand-700 transition-colors truncate">{t.name}</p>
+                            <p className="text-xs text-gray-400">
+                              {[t.year, t.semester ? `${t.semester}º sem.` : null].filter(Boolean).join(' · ')}
+                              {t.starts_at ? ` · Início: ${new Date(t.starts_at).toLocaleDateString('pt-BR')}` : ''}
+                            </p>
+                          </div>
+                          <div className="relative z-10 pointer-events-auto flex items-center gap-1 ml-3 flex-shrink-0">
+                            {/* Olhinho — toggle ativo/inativo */}
+                            <form action={handleToggleTurma}>
+                              <input type="hidden" name="class_id" value={t.id} />
+                              <input type="hidden" name="active" value={String(t.active)} />
+                              <button
+                                type="submit"
+                                title={t.active ? 'Desativar turma' : 'Ativar turma'}
+                                className={`p-1.5 rounded-lg transition-colors ${t.active ? 'text-green-600 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'}`}
+                              >
+                                {t.active ? (
+                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                ) : (
+                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                                )}
+                              </button>
+                            </form>
+                            {/* Lápis — editar */}
+                            <Link
+                              href={`/${slug}/escolas/${id}/turmas/${t.id}`}
+                              title="Editar turma"
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            </Link>
+                            {/* Lixeira — excluir (só se sem alunos) */}
+                            <DeleteTurmaButton
+                              classId={t.id}
+                              className={t.name}
+                              disabled={hasEnrollments}
+                              action={handleDeleteTurma}
+                            />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400">Nenhuma turma cadastrada ainda.</p>
+                )}
+              </div>
+            }
+            escola={
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-stagger">
 
             {/* Coluna principal */}
@@ -612,89 +690,6 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                   </div>
                 )}
               </section>
-
-              {/* Turmas */}
-              <section>
-                <h2 className="font-semibold text-gray-900 mb-3">Turmas</h2>
-                {turmas && turmas.length > 0 && (
-                  <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100 mb-4">
-                    {turmas.map(t => {
-                      const hasEnrollments = enrolledClassIds.has(t.id)
-                      return (
-                        <div key={t.id} className="group relative flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-brand-50 transition-colors">
-                          <Link href={`/${slug}/escolas/${id}/turmas/${t.id}`} className="absolute inset-0" aria-label={`Abrir turma ${t.name}`} />
-                          <div className="pointer-events-none min-w-0 flex-1">
-                            <p className="font-medium text-sm text-gray-900 group-hover:text-brand-700 transition-colors truncate">{t.name}</p>
-                            <p className="text-xs text-gray-400">
-                              {[t.year, t.semester ? `${t.semester}º sem.` : null].filter(Boolean).join(' · ')}
-                              {t.starts_at ? ` · Início: ${new Date(t.starts_at).toLocaleDateString('pt-BR')}` : ''}
-                            </p>
-                          </div>
-                          <div className="relative z-10 pointer-events-auto flex items-center gap-1 ml-3 flex-shrink-0">
-                            {/* Olhinho — toggle ativo/inativo */}
-                            <form action={handleToggleTurma}>
-                              <input type="hidden" name="class_id" value={t.id} />
-                              <input type="hidden" name="active" value={String(t.active)} />
-                              <button
-                                type="submit"
-                                title={t.active ? 'Desativar turma' : 'Ativar turma'}
-                                className={`p-1.5 rounded-lg transition-colors ${t.active ? 'text-green-600 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'}`}
-                              >
-                                {t.active ? (
-                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                                ) : (
-                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                                )}
-                              </button>
-                            </form>
-                            {/* Lápis — editar */}
-                            <Link
-                              href={`/${slug}/escolas/${id}/turmas/${t.id}`}
-                              title="Editar turma"
-                              className="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                            </Link>
-                            {/* Lixeira — excluir (só se sem alunos) */}
-                            <DeleteTurmaButton
-                              classId={t.id}
-                              className={t.name}
-                              disabled={hasEnrollments}
-                              action={handleDeleteTurma}
-                            />
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-                <form action={createTurma} className="bg-white rounded-xl border border-dashed border-gray-300 p-4">
-                  <p className="text-sm font-medium text-gray-700 mb-3">Nova turma</p>
-                  <div className="grid sm:grid-cols-3 gap-3">
-                    <div className="sm:col-span-3">
-                      <input name="name" required placeholder="Nome da turma (ex: ETED Julho 2026)"
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                    </div>
-                    <input name="year" type="number" placeholder="Ano (ex: 2026)"
-                      className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                    <input name="semester" type="number" min="1" max="2" placeholder="Semestre (1 ou 2)"
-                      className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                    <div>
-                      <label className="block text-xs text-gray-400 mb-1">Início (opcional)</label>
-                      <input name="starts_at" type="date"
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-400 mb-1">Fim (opcional)</label>
-                      <input name="ends_at" type="date"
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                    </div>
-                    <button type="submit" className="self-end px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg transition-colors">
-                      Criar turma
-                    </button>
-                  </div>
-                </form>
-              </section>
             </div>
 
             {/* Sidebar */}
@@ -719,29 +714,30 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                 ) : (
                   <p className="text-sm text-gray-400 mb-3">Sem líder atribuído.</p>
                 )}
-                {orgUsersForAssignment.length > 0 ? (
-                  <details className={leaders.length > 0 ? 'border-t border-gray-100 pt-3' : ''}>
-                    <summary className="text-sm text-brand-600 cursor-pointer select-none font-medium">
-                      {leaders.length > 0 ? '+ Adicionar colíder' : 'Atribuir líder'}
-                    </summary>
-                    <form action={leaders.length > 0 ? handleAddCoLeader : handleAssignLeader} className="mt-3 space-y-2">
-                      <SearchableSelectModal
-                        name="user_id"
-                        options={orgUsersForAssignment.map(u => ({
-                          id: u.id,
-                          label: u.fullName ?? u.email,
-                          sublabel: u.fullName ? u.email : undefined,
-                        }))}
-                        title="Selecionar usuário"
-                      />
-                      <p className="text-xs text-gray-400">O papel do usuário será atualizado para Líder de Escola.</p>
-                      <button type="submit" className="w-full px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
-                        Confirmar
-                      </button>
-                    </form>
-                  </details>
-                ) : (
-                  <p className="text-xs text-gray-400">Nenhum outro usuário disponível.</p>
+                {canAssignLeader && (
+                  peopleForAssignment.length > 0 ? (
+                    <details className={leaders.length > 0 ? 'border-t border-gray-100 pt-3' : ''}>
+                      <summary className="text-sm text-brand-600 cursor-pointer select-none font-medium">
+                        {leaders.length > 0 ? '+ Adicionar colíder' : 'Atribuir líder'}
+                      </summary>
+                      <form action={leaders.length > 0 ? handleAddCoLeader : handleAssignLeader} className="mt-3 space-y-2">
+                        <SearchableSelectModal
+                          name="person_id"
+                          options={peopleForAssignment}
+                          title="Selecionar pessoa"
+                        />
+                        <p className="text-xs text-gray-400">
+                          Busca qualquer pessoa cadastrada na base. Quem ainda não tem login ganha um automaticamente
+                          (usando o e-mail já no cadastro) — o papel dela vira Líder de Escola.
+                        </p>
+                        <button type="submit" className="w-full px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
+                          Confirmar
+                        </button>
+                      </form>
+                    </details>
+                  ) : (
+                    <p className="text-xs text-gray-400">Nenhuma outra pessoa cadastrada na base.</p>
+                  )
                 )}
               </div>
 
@@ -854,13 +850,71 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
               </div>
             </div>
           </div>
+            }
+          />
         </main>
       )}
 
       {/* ════════ VISÃO LÍDER DE ESCOLA ═══════════════════════════════════════════════ */}
       {isLiderEted && (
-        <main className="p-4 md:p-6 space-y-4 max-w-2xl mx-auto overflow-y-auto flex-1">
-
+        <main className="p-4 md:p-6 max-w-2xl mx-auto overflow-y-auto flex-1">
+          <SchoolConfigTabs
+            turmasCount={turmas?.length ?? 0}
+            initialTab={initialTab}
+            turmas={
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="font-semibold text-gray-900">Turmas</h2>
+                  <NovaTurmaModal action={createTurma} />
+                </div>
+                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                  {turmas && turmas.length > 0 ? (
+                    <ul className="divide-y divide-gray-100">
+                      {turmas.map(t => (
+                        <li key={t.id} className="group relative flex items-center justify-between py-2.5 cursor-pointer hover:bg-brand-50 -mx-5 px-5 transition-colors">
+                          <Link href={`/${slug}/escolas/${id}/turmas/${t.id}`} className="absolute inset-0" aria-label={`Abrir turma ${t.name}`} />
+                          <div className="pointer-events-none min-w-0 flex-1">
+                            <p className="text-sm font-medium text-gray-900 group-hover:text-brand-700 transition-colors truncate">{t.name}</p>
+                            <p className="text-xs text-gray-400">
+                              {[t.year, t.semester ? `${t.semester}º sem.` : null].filter(Boolean).join(' · ')}
+                              {t.starts_at ? ` · Início: ${new Date(t.starts_at).toLocaleDateString('pt-BR')}` : ''}
+                            </p>
+                          </div>
+                          <div className="relative z-10 pointer-events-auto flex items-center gap-1 ml-3 flex-shrink-0">
+                            <form action={handleToggleTurma}>
+                              <input type="hidden" name="class_id" value={t.id} />
+                              <input type="hidden" name="active" value={String(t.active)} />
+                              <button
+                                type="submit"
+                                title={t.active ? 'Desativar turma' : 'Ativar turma'}
+                                className={`p-1.5 rounded-lg transition-colors ${t.active ? 'text-green-600 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'}`}
+                              >
+                                {t.active ? (
+                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                ) : (
+                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                                )}
+                              </button>
+                            </form>
+                            <Link
+                              href={`/${slug}/escolas/${id}/turmas/${t.id}`}
+                              title="Editar turma"
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            </Link>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-gray-400">Nenhuma turma cadastrada ainda.</p>
+                  )}
+                </div>
+              </div>
+            }
+            escola={
+          <div className="space-y-4 md:space-y-6">
           {/* Dados da escola — mesmo formulário da visão de gestão */}
           <form action={updateSchool} className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
             <div className="p-5">
@@ -1006,79 +1060,6 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
             <p className="text-xs text-gray-400">Ative ou desative campos do formulário que os candidatos preenchem.</p>
           </div>
 
-          {/* Turmas */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <h2 className="text-sm font-semibold text-gray-700 mb-3">Turmas ({turmas?.length ?? 0})</h2>
-            {turmas && turmas.length > 0 ? (
-              <ul className="divide-y divide-gray-100">
-                {turmas.map(t => (
-                  <li key={t.id} className="group relative flex items-center justify-between py-2.5 cursor-pointer hover:bg-brand-50 -mx-5 px-5 transition-colors">
-                    <Link href={`/${slug}/escolas/${id}/turmas/${t.id}`} className="absolute inset-0" aria-label={`Abrir turma ${t.name}`} />
-                    <div className="pointer-events-none min-w-0 flex-1">
-                      <p className="text-sm font-medium text-gray-900 group-hover:text-brand-700 transition-colors truncate">{t.name}</p>
-                      <p className="text-xs text-gray-400">
-                        {[t.year, t.semester ? `${t.semester}º sem.` : null].filter(Boolean).join(' · ')}
-                        {t.starts_at ? ` · Início: ${new Date(t.starts_at).toLocaleDateString('pt-BR')}` : ''}
-                      </p>
-                    </div>
-                    <div className="relative z-10 pointer-events-auto flex items-center gap-1 ml-3 flex-shrink-0">
-                      <form action={handleToggleTurma}>
-                        <input type="hidden" name="class_id" value={t.id} />
-                        <input type="hidden" name="active" value={String(t.active)} />
-                        <button
-                          type="submit"
-                          title={t.active ? 'Desativar turma' : 'Ativar turma'}
-                          className={`p-1.5 rounded-lg transition-colors ${t.active ? 'text-green-600 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'}`}
-                        >
-                          {t.active ? (
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                          ) : (
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                          )}
-                        </button>
-                      </form>
-                      <Link
-                        href={`/${slug}/escolas/${id}/turmas/${t.id}`}
-                        title="Editar turma"
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                      </Link>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-gray-400">Nenhuma turma cadastrada.</p>
-            )}
-          </div>
-          <form action={createTurma} className="bg-white rounded-xl border border-dashed border-gray-300 p-4">
-            <p className="text-sm font-medium text-gray-700 mb-3">Nova turma</p>
-            <div className="grid sm:grid-cols-3 gap-3">
-              <div className="sm:col-span-3">
-                <input name="name" required placeholder="Nome da turma (ex: ETED Julho 2026)"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-              </div>
-              <input name="year" type="number" placeholder="Ano (ex: 2026)"
-                className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-              <input name="semester" type="number" min="1" max="2" placeholder="Semestre (1 ou 2)"
-                className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-              <div>
-                <label className="block text-xs text-gray-400 mb-1">Início (opcional)</label>
-                <input name="starts_at" type="date"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-400 mb-1">Fim (opcional)</label>
-                <input name="ends_at" type="date"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-              </div>
-              <button type="submit" className="self-end px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg transition-colors">
-                Criar turma
-              </button>
-            </div>
-          </form>
-
           {/* Obreiros da Escola */}
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <h2 className="text-sm font-semibold text-gray-700 mb-3">Obreiros da Escola ({staffMembers.length})</h2>
@@ -1182,6 +1163,9 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
               Solicitar / Ver Reservas →
             </Link>
           </div>
+          </div>
+            }
+          />
         </main>
       )}
 

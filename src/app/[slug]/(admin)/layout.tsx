@@ -821,7 +821,14 @@ export default async function SlugLayout({ children, params }: Props) {
         {children}
       </AppShell>
       <FeedbackButton />
-      <Toaster position="top-right" richColors closeButton style={{ zIndex: 9999 }} />
+      <Toaster
+        position="top-right"
+        richColors
+        closeButton
+        style={{ zIndex: 9999 }}
+        offset={{ top: 'max(16px, env(safe-area-inset-top))' }}
+        mobileOffset={{ top: 'max(16px, env(safe-area-inset-top))' }}
+      />
       <Suspense>
         <FlashToast />
       </Suspense>

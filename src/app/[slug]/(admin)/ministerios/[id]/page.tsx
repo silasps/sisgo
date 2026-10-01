@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { redirect, notFound } from 'next/navigation'
 import { Suspense } from 'react'
 import { updateMinistry } from './actions'
-import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
+import { isManagementRole, isOperationalManager, canAssignLeadership } from '@/lib/auth/permissions'
 import { getOrgAndUser, getWorkspaceRole, getWorkspaceMinistry, getWorkspaceMinistryLink } from './_data'
 import { Users, ClipboardList, GraduationCap } from 'lucide-react'
 import { MuralClient } from './mural/MuralClient'
@@ -12,7 +12,7 @@ import { LocaleContentTabs } from '@/components/ui/LocaleContentTabs'
 
 type Props = {
   params: Promise<{ slug: string; id: string }>
-  searchParams: Promise<{ msg?: string }>
+  searchParams: Promise<{ msg?: string; erro?: string }>
 }
 
 // Aba principal do ministério: mural (post-its) + resumo/config ao lado.
@@ -20,7 +20,7 @@ type Props = {
 // voltou pra cá — o Chat (/[slug]/chat) ficou só com as conversas.
 export default async function MinisterioOverviewPage({ params, searchParams }: Props) {
   const { slug, id } = await params
-  const { msg } = await searchParams
+  const { msg, erro } = await searchParams
 
   const sbAdmin = createAdminClient()
 
@@ -277,7 +277,7 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
             consulta mais cara da tela e não pode segurar o mural. */}
         {isManagement && (
           <Suspense fallback={<div className="hidden lg:block bg-white rounded-xl border border-gray-200 p-4 h-24 animate-pulse" />}>
-            <LeaderPanel slug={slug} ministryId={id} orgId={orgId} />
+            <LeaderPanel slug={slug} ministryId={id} orgId={orgId} canAssignLeader={canAssignLeadership(role)} />
           </Suspense>
         )}
       </aside>
@@ -287,6 +287,11 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
         {msgInfo && (
           <div className={`border rounded-lg px-4 py-3 text-sm mx-3 mt-3 md:mx-6 md:mt-6 ${msgInfo.cls}`}>
             {msgInfo.text}
+          </div>
+        )}
+        {erro && (
+          <div className="border rounded-lg px-4 py-3 text-sm mx-3 mt-3 md:mx-6 md:mt-6 bg-red-50 border-red-200 text-red-700">
+            {erro}
           </div>
         )}
         <MuralClient

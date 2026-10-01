@@ -52,7 +52,7 @@ export function RolePreviewForm({ action, preview, schools, ministries, redirect
   }, [ministries, preview?.ministryId, preview?.schoolId, role, schools])
 
   return (
-    <form action={action} className="ml-auto flex items-center gap-1.5">
+    <form action={action} className="ml-auto flex flex-wrap items-center gap-1.5">
       {redirectTo && <input type="hidden" name="redirect_to" value={redirectTo} />}
       <span className="hidden sm:inline text-gray-500">Visualizar como</span>
       <select

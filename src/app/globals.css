@@ -14,12 +14,35 @@
 
   html {
     scroll-behavior: smooth;
+    /* Par com o overflow-x do body: modais são portalados pro <body> com
+       position:fixed, que no Safari iOS segue o viewport de LAYOUT — só
+       cortar no body não é confiável sozinho pra evitar que estourem a
+       tela nos dois lados. */
+    overflow-x: hidden;
   }
   body {
     @apply bg-gray-50 text-gray-900 antialiased;
     padding-bottom: env(safe-area-inset-bottom);
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
+    /* Rede de segurança: qualquer elemento que não encolha no mobile (ex.:
+       uma barra flex sem wrap) não pode mais estourar a tela inteira pros
+       lados — fica só ele cortando, em vez da página toda ficando larga
+       e cortando os campos de formulário junto. */
+    overflow-x: hidden;
+  }
+  /* Causa raiz real do "campo estourando a tela no mobile": itens de grid
+     (`.grid`) têm min-width:auto por padrão — um `<select>`/input com
+     conteúdo largo (ex.: opção de texto longo) recusa encolher abaixo do
+     próprio conteúdo, mesmo com `w-full` nele, e força a grid (e a página
+     dentro dela) mais larga que a tela. `grid-cols-N` do Tailwind já
+     resolve isso via `minmax(0,1fr)` — mas uma grid sem colunas explícitas
+     no mobile (ex.: `grid sm:grid-cols-2`, 1 coluna implícita até o
+     breakpoint) fica sem essa proteção. Zera pra todo filho direto de
+     `.grid` — camada `base`, então qualquer `min-w-*` explícito no elemento
+     continua ganhando (utilities têm prioridade sobre base no Tailwind). */
+  .grid > * {
+    min-width: 0;
   }
   .page-transition {
     /* Sem `forwards`/`both`: o `transform` do último frame não pode ficar

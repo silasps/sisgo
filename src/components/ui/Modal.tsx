@@ -11,10 +11,14 @@ type Props = {
   subtitle?: string
   headerExtra?: React.ReactNode
   hideFooter?: boolean
+  /** false pra formulários onde clicar fora por engano arrisca perder o que
+   * já foi digitado — só fecha pelo X ou pelo botão de rodapé. Default true
+   * (mantém o comportamento de sempre pros outros modais). */
+  closeOnBackdropClick?: boolean
   children: React.ReactNode
 }
 
-export function Modal({ open, onClose, title, subtitle, headerExtra, hideFooter, children }: Props) {
+export function Modal({ open, onClose, title, subtitle, headerExtra, hideFooter, closeOnBackdropClick = true, children }: Props) {
   const sidebarLeftClass = useSidebarLeftClass()
 
   useEffect(() => {
@@ -38,7 +42,7 @@ export function Modal({ open, onClose, title, subtitle, headerExtra, hideFooter,
   // "fixed" em relação a esse ancestral, não à viewport — o modal aparece
   // preso num canto da tela em vez de centralizado.
   return createPortal(
-    <div className={`fixed inset-0 ${sidebarLeftClass} z-50 flex items-center justify-center p-4`} onClick={onClose}>
+    <div className={`fixed inset-0 ${sidebarLeftClass} z-50 flex items-center justify-center p-4`} onClick={closeOnBackdropClick ? onClose : undefined}>
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
       <div
         className="relative z-10 w-full max-w-lg max-h-[85vh] flex flex-col rounded-2xl bg-white shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 duration-200"

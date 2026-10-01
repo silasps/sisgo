@@ -18,18 +18,27 @@ type Tab = { href: string; label: string; icon?: keyof typeof ICON_MAP; alsoMatc
 export function WorkspaceTabBar({ tabs }: { tabs: Tab[] }) {
   const pathname = usePathname()
 
-  function isActive(tab: Tab) {
-    if (tab.href === tabs[0]?.href) {
-      return pathname === tab.href || pathname === tab.href + '/'
+  // Só um ganha o destaque: pega o href (próprio ou de alsoMatches) mais
+  // específico (mais longo) que bate com o caminho atual — em vez de cada
+  // aba decidir sozinha se está ativa, o que deixava margem pra mais de uma
+  // "achar" que bate (ex.: Geral, cujo href é prefixo de todos os outros).
+  let activeIndex = -1
+  let bestLen = -1
+  tabs.forEach((tab, i) => {
+    const candidates = i === 0 ? [tab.href] : [tab.href, ...(tab.alsoMatches ?? [])]
+    for (const href of candidates) {
+      const matches = i === 0 ? (pathname === href || pathname === href + '/') : pathname.startsWith(href)
+      if (matches && href.length > bestLen) {
+        bestLen = href.length
+        activeIndex = i
+      }
     }
-    if (pathname.startsWith(tab.href)) return true
-    return tab.alsoMatches?.some(p => pathname.startsWith(p)) ?? false
-  }
+  })
 
   return (
     <nav className="flex gap-1 overflow-x-auto border-b border-gray-200 bg-white px-4 md:px-6 scrollbar-none">
-      {tabs.map(tab => {
-        const active = isActive(tab)
+      {tabs.map((tab, i) => {
+        const active = i === activeIndex
         const Icon = tab.icon ? ICON_MAP[tab.icon] : undefined
         return (
           <Link

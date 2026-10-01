@@ -4,7 +4,7 @@ import { useRef, useState, useEffect, useContext, createContext, useMemo } from 
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { getFormDict, normalizeLang, t } from '@/lib/i18n/forms'
 import type { FormDict, Lang } from '@/lib/i18n/forms'
-import { HeartHandshake, Camera, IdCard, FileText } from 'lucide-react'
+import { HeartHandshake, Camera, IdCard, FileText, LogOut } from 'lucide-react'
 import { ptDict } from '@/lib/i18n/forms'
 import { orgShortName } from '@/lib/orgShortName'
 import { LangSwitcher } from '@/components/ui/LangSwitcher'
@@ -1859,7 +1859,11 @@ export function FormularioInscricao({
                 variant="warning"
                 onConfirm={() => router.push(`/${slug}`)}
               >
-                <button type="button" className="text-xs font-semibold text-gray-400 hover:text-gray-600 transition-colors">
+                {/* Mesmo ajuste do formulário de obreiro — texto cinza
+                    discreto do lado dos botões coloridos de idioma passava
+                    despercebido. */}
+                <button type="button" className="inline-flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-gray-700 border border-gray-200 hover:border-gray-300 rounded-full px-2.5 py-1 transition-colors">
+                  <LogOut className="size-3.5" aria-hidden />
                   {d.nav.exit}
                 </button>
               </ConfirmDialog>

@@ -1,6 +1,8 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { resolvePersonToUserId } from '@/lib/staff/resolvePersonToUserId'
+import { demoteIfNoLeaderships } from '@/lib/staff/demoteIfNoLeaderships'
 
 type AdminClient = ReturnType<typeof createAdminClient>
 
@@ -29,9 +31,13 @@ async function grantSchoolLeaderRole(sb: AdminClient, orgId: string, schoolId: s
 // qualquer liderança anterior (histórico: era o único fluxo, "trocar líder").
 export async function assignSchoolLeader(orgId: string, schoolId: string, userId: string) {
   const sb = createAdminClient()
+  const { data: previousLeaders } = await sb.from('school_leaders').select('user_id').eq('school_id', schoolId)
   await sb.from('school_leaders').delete().eq('school_id', schoolId)
   await sb.from('school_leaders').insert({ organization_id: orgId, school_id: schoolId, user_id: userId })
   await grantSchoolLeaderRole(sb, orgId, schoolId, userId)
+  for (const prev of previousLeaders ?? []) {
+    if (prev.user_id !== userId) await demoteIfNoLeaderships(sb, orgId, prev.user_id)
+  }
 }
 
 // "Adicionar colíder" — soma à liderança existente em vez de substituir.
@@ -46,9 +52,26 @@ export async function addSchoolCoLeader(orgId: string, schoolId: string, userId:
   await grantSchoolLeaderRole(sb, orgId, schoolId, userId)
 }
 
-export async function removeSchoolLeader(schoolId: string, userId: string) {
+export async function removeSchoolLeader(schoolId: string, userId: string, orgId: string) {
   const sb = createAdminClient()
   await sb.from('school_leaders').delete().eq('school_id', schoolId).eq('user_id', userId)
+  await demoteIfNoLeaderships(sb, orgId, userId)
+}
+
+export async function assignSchoolLeaderByPerson(orgId: string, schoolId: string, personId: string): Promise<{ error?: string }> {
+  const sb = createAdminClient()
+  const resolved = await resolvePersonToUserId(sb, orgId, personId, 'lider_eted')
+  if ('error' in resolved) return resolved
+  await assignSchoolLeader(orgId, schoolId, resolved.userId)
+  return {}
+}
+
+export async function addSchoolCoLeaderByPerson(orgId: string, schoolId: string, personId: string): Promise<{ error?: string }> {
+  const sb = createAdminClient()
+  const resolved = await resolvePersonToUserId(sb, orgId, personId, 'lider_eted')
+  if ('error' in resolved) return resolved
+  await addSchoolCoLeader(orgId, schoolId, resolved.userId)
+  return {}
 }
 
 export async function addSchoolStaff(schoolId: string, personId: string, role: string) {

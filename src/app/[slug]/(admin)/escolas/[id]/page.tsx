@@ -166,7 +166,7 @@ export default async function EscolaOverviewPage({ params }: Props) {
               </div>
             </div>
           </Link>
-          <Link href={`${base}/configuracoes`} className="flex-1 group bg-white rounded-xl border border-gray-200 p-2.5 lg:p-3 transition-all hover:shadow-md hover:-translate-y-0.5">
+          <Link href={`${base}/configuracoes?tab=turmas`} className="flex-1 group bg-white rounded-xl border border-gray-200 p-2.5 lg:p-3 transition-all hover:shadow-md hover:-translate-y-0.5">
             <div className="flex lg:flex-col items-center gap-2 lg:gap-0 lg:text-center">
               <BookOpen size={14} className="text-indigo-600 lg:mb-1" />
               <div>
