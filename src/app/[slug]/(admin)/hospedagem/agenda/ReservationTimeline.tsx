@@ -1,9 +1,10 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, LogIn, LogOut, Search, UserPlus, X } from 'lucide-react'
+import { BedDouble, ChevronLeft, ChevronRight, LogIn, LogOut, Search, X } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { SubmitButton } from '@/components/ui/SubmitButton'
+import { GuestTypeFields, type ObreiroOption } from '../GuestTypeFields'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,7 @@ type Props = {
   beds: BedOption[]
   allocs: AllocRow[]
   schools: SchoolOption[]
+  obreiros: ObreiroOption[]
   today: string
   allocateAction: (fd: FormData) => Promise<void>
   allocateRoomAction: (fd: FormData) => Promise<void>
@@ -65,13 +67,8 @@ const ALLOC_COLORS: Record<string, string> = {
   convidado:   'bg-purple-400',
 }
 
-const GUEST_TYPES = [
-  { value: 'visitante', label: 'Visitante' },
-  { value: 'aluno', label: 'Aluno' },
-  { value: 'obreiro', label: 'Obreiro' },
-  { value: 'missionario', label: 'Missionário' },
-  { value: 'convidado', label: 'Convidado' },
-] as const
+// Mesmo botão do modal do quarto no mapa.
+const submitCls = 'w-full py-3 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold transition-colors flex items-center justify-center gap-2'
 
 const GUEST_TYPE_LABEL: Record<string, string> = {
   visitante: 'Visitante', aluno: 'Aluno', obreiro: 'Obreiro',
@@ -108,7 +105,7 @@ function daysRemaining(checkOut: string, today: string): number {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
-export function ReservationTimeline({ rooms, beds, allocs, schools, today, allocateAction, allocateRoomAction, checkinAction, checkoutAction, cancelAction }: Props) {
+export function ReservationTimeline({ rooms, beds, allocs, schools, obreiros, today, allocateAction, allocateRoomAction, checkinAction, checkoutAction, cancelAction }: Props) {
   const [startDate, setStartDate] = useState(today)
   const [searchFrom, setSearchFrom] = useState('')
   const [searchTo, setSearchTo] = useState('')
@@ -376,84 +373,18 @@ export function ReservationTimeline({ rooms, beds, allocs, schools, today, alloc
         if (!room) return null
         const roomBeds = beds.filter(b => b.roomId === room.id)
         return (
-          <Modal open onClose={() => setCreateTarget(null)} title={room.name} subtitle={fmtShort(createTarget.date)} hideFooter>
+          <Modal open onClose={() => setCreateTarget(null)} title={room.name} subtitle={[room.blockName, room.floorName].filter(Boolean).join(' · ') || undefined} hideFooter>
             <div className="p-5">
               {room.allocationMode === 'cama' ? (
                 <form action={allocateAction} className="space-y-4">
-                  <div className="flex items-center gap-2 text-green-600">
-                    <UserPlus size={20} />
-                    <p className="text-sm font-semibold">Alocar hóspede</p>
-                  </div>
                   <input type="hidden" name="room_id" value={room.id} />
+                  <GuestTypeFields destination={room.destination} schools={schools} obreiros={obreiros} where="nesta cama" group={false} />
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Cama *</label>
                     <select name="bed_id" required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
                       {roomBeds.map(b => <option key={b.id} value={b.id}>{b.label}</option>)}
                     </select>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Nome *</label>
-                    <input name="guest_name" required placeholder="Nome completo" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Tipo *</label>
-                      <select name="guest_type" required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
-                        {GUEST_TYPES.filter(t => room.destination !== 'obreiro' || t.value === 'obreiro').map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Check-in *</label>
-                      <input name="check_in" type="date" required defaultValue={createTarget.date} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Check-out *</label>
-                    <input name="check_out" type="date" required defaultValue={addDays(createTarget.date, 1)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                  </div>
-                  <SubmitButton pendingText="Alocando…">
-                    Alocar
-                  </SubmitButton>
-                </form>
-              ) : (
-                <form action={allocateRoomAction} className="space-y-4">
-                  <div className="flex items-center gap-2 text-green-600">
-                    <UserPlus size={20} />
-                    <p className="text-sm font-semibold">{room.destination === 'aluno' ? 'Alocar escola neste quarto' : 'Alocar visitante neste quarto'}</p>
-                  </div>
-                  <input type="hidden" name="room_id" value={room.id} />
-                  {room.destination === 'aluno' && schools.length > 0 ? (
-                    <>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Escola *</label>
-                        <select name="school_id" required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
-                          <option value="">Selecione a escola...</option>
-                          {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                        </select>
-                      </div>
-                      <input type="hidden" name="guest_type" value="aluno" />
-                      <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Nome/Identificação *</label>
-                        <input name="guest_name" required placeholder="Ex: Turma ETED 2026.1" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <input type="hidden" name="school_id" value="" />
-                      <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Nome do hóspede/grupo *</label>
-                        <input name="guest_name" required placeholder="Nome completo ou grupo" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Tipo</label>
-                        <select name="guest_type" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
-                          <option value="visitante">Visitante</option>
-                          <option value="convidado">Convidado</option>
-                          <option value="missionario">Missionário</option>
-                        </select>
-                      </div>
-                    </>
-                  )}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Check-in *</label>
@@ -464,8 +395,29 @@ export function ReservationTimeline({ rooms, beds, allocs, schools, today, alloc
                       <input name="check_out" type="date" required defaultValue={addDays(createTarget.date, 1)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
                     </div>
                   </div>
-                  <SubmitButton pendingText="Alocando…">
-                    Alocar Quarto Inteiro
+                  <SubmitButton pendingText="Alocando…" className={submitCls}>
+                    <BedDouble size={18} /> Alocar
+                  </SubmitButton>
+                </form>
+              ) : (
+                <form action={allocateRoomAction} className="space-y-4">
+                  <p className="text-xs text-gray-400">
+                    {roomBeds.length} cama{roomBeds.length !== 1 ? 's' : ''} · Modo quarto inteiro
+                  </p>
+                  <input type="hidden" name="room_id" value={room.id} />
+                  <GuestTypeFields destination={room.destination} schools={schools} obreiros={obreiros} />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Check-in *</label>
+                      <input name="check_in" type="date" required defaultValue={createTarget.date} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Check-out *</label>
+                      <input name="check_out" type="date" required defaultValue={addDays(createTarget.date, 1)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                    </div>
+                  </div>
+                  <SubmitButton pendingText="Alocando…" className={submitCls}>
+                    <BedDouble size={18} /> Alocar Quarto Inteiro
                   </SubmitButton>
                 </form>
               )}

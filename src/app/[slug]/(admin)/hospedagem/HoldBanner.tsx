@@ -10,16 +10,17 @@ type Props = {
   groupName: string
   startsAt: string
   endsAt: string
-  scopeLabel: string // "este bloco" | "este andar"
+  scopeLabel: string // "este bloco" | "este andar" | nome do quarto
   backBlockId: string
   backFloorId?: string
+  label?: string // reserva de quarto: nome do quarto antes do texto
 }
 
 function fmt(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('pt-BR')
 }
 
-export function HoldBanner({ cancelAction, holdId, groupName, startsAt, endsAt, scopeLabel, backBlockId, backFloorId }: Props) {
+export function HoldBanner({ cancelAction, holdId, groupName, startsAt, endsAt, scopeLabel, backBlockId, backFloorId, label }: Props) {
   const [confirming, setConfirming] = useState(false)
 
   if (confirming) {
@@ -51,6 +52,7 @@ export function HoldBanner({ cancelAction, holdId, groupName, startsAt, endsAt, 
       <div className="flex items-center gap-2 min-w-0">
         <BellRing size={14} className="text-amber-600 shrink-0" />
         <p className="text-xs text-amber-800 truncate">
+          {label && <><strong>{label}</strong> · </>}
           Reservado pro grupo <strong>{groupName}</strong> — {fmt(startsAt)} → {fmt(endsAt)}
         </p>
       </div>

@@ -2,8 +2,10 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { BedDouble } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { SubmitButton } from '@/components/ui/SubmitButton'
+import { GuestTypeFields, type ObreiroOption } from '../../GuestTypeFields'
 
 const GUEST_TYPES = [
   { value: 'visitante', label: 'Visitante' },
@@ -47,6 +49,13 @@ type AllocationData = {
 type Props = {
   allocations: AllocationData[]
   beds: BedOption[]
+  // Cabeçalho e campos do modal "Nova Alocação" — mesmo padrão do mapa.
+  roomName: string
+  roomSubtitle: string
+  destination: string
+  schools: { id: string; name: string }[]
+  obreiros: ObreiroOption[]
+  today: string
   createAction: (formData: FormData) => Promise<void>
   checkinAction: (formData: FormData) => Promise<void>
   checkoutAction: (formData: FormData) => Promise<void>
@@ -58,7 +67,8 @@ function fmt(d: string) {
 }
 
 export function AllocationManager({
-  allocations, beds, createAction, checkinAction, checkoutAction, cancelAction,
+  allocations, beds, roomName, roomSubtitle, destination, schools, obreiros, today,
+  createAction, checkinAction, checkoutAction, cancelAction,
 }: Props) {
   const [showAdd, setShowAdd] = useState(false)
   const active  = allocations.filter(a => a.status !== 'checkout' && a.status !== 'cancelada')
@@ -193,43 +203,21 @@ export function AllocationManager({
       )}
 
       {/* New Allocation Modal */}
-      <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Nova Alocação" hideFooter>
+      <Modal open={showAdd} onClose={() => setShowAdd(false)} title={roomName} subtitle={roomSubtitle || undefined} hideFooter>
         <form action={submitCreate} className="p-5 space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Nome do hóspede *</label>
-            <input
-              name="guest_name"
-              required
-              placeholder="Nome completo"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-            />
-          </div>
+          <GuestTypeFields destination={destination} schools={schools} obreiros={obreiros} where="neste quarto" group={false} />
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Tipo *</label>
-              <select
-                name="guest_type"
-                required
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-              >
-                {GUEST_TYPES.map(t => (
-                  <option key={t.value} value={t.value}>{t.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Cama</label>
-              <select
-                name="bed_id"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-              >
-                <option value="">Sem cama específica</option>
-                {beds.map(b => (
-                  <option key={b.id} value={b.id}>{b.label}</option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Cama</label>
+            <select
+              name="bed_id"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+            >
+              <option value="">Sem cama específica</option>
+              {beds.map(b => (
+                <option key={b.id} value={b.id}>{b.label}</option>
+              ))}
+            </select>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -239,6 +227,7 @@ export function AllocationManager({
                 name="check_in"
                 type="date"
                 required
+                defaultValue={today}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
               />
             </div>
@@ -263,8 +252,11 @@ export function AllocationManager({
             />
           </div>
 
-          <SubmitButton pendingText="Alocando…">
-            Alocar Hóspede
+          <SubmitButton
+            pendingText="Alocando…"
+            className="w-full py-3 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold transition-colors flex items-center justify-center gap-2"
+          >
+            <BedDouble size={18} /> Alocar Hóspede
           </SubmitButton>
         </form>
       </Modal>

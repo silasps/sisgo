@@ -5,7 +5,8 @@ import { notFound } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { isManagementRole, userHasAnyRole, HOSPEDAGEM_ROLES } from '@/lib/auth/permissions'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
-import { updateRoom, createBed, updateBed, removeBed, createAllocation, updateAllocationStatus, cancelAllocation } from '../../actions'
+import { updateRoom, createBed, updateBed, removeBed, createAllocation, updateAllocationStatus, cancelAllocation, assertObreiroDaBase } from '../../actions'
+import { loadObreiroOptions } from '../../obreiroOptions'
 import { BedManager } from './BedManager'
 import { AllocationManager } from './AllocationManager'
 import { RoomForm } from '../RoomForm'
@@ -25,6 +26,8 @@ const GENDER_LABELS: Record<string, { label: string; cls: string }> = {
   feminino:  { label: 'Feminino',  cls: 'bg-pink-100 text-pink-700' },
   misto:     { label: 'Misto',     cls: 'bg-purple-100 text-purple-700' },
 }
+
+const DEST_LABELS: Record<string, string> = { visita: 'Visitantes', aluno: 'Alunos', obreiro: 'Obreiros' }
 
 const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   ativo:      { label: 'Ativo',      cls: 'bg-green-100 text-green-700' },
@@ -49,7 +52,7 @@ export default async function RoomDetailPage({ params, searchParams }: Props) {
 
   if (!isManagementRole(role) && !userHasAnyRole(allRoles, HOSPEDAGEM_ROLES)) notFound()
 
-  // ── Fetch tudo em paralelo — nenhuma dessas 5 depende do resultado das
+  // ── Fetch tudo em paralelo — nenhuma dessas consultas depende do resultado das
   // outras (todas só precisam de roomId/org.id, já conhecidos), então rodar
   // em sequência só somava round-trips à toa. ────────────────────────────────
   const [
@@ -58,6 +61,8 @@ export default async function RoomDetailPage({ params, searchParams }: Props) {
     { data: floorsData },
     { data: bedsRaw },
     { data: allocsRaw },
+    { data: schoolsData },
+    obreiroOptions,
   ] = await Promise.all([
     sbAdmin.from('rooms')
       .select('id, name, floor_id, type, gender_constraint, destination, allocation_mode, capacity, status, notes, floors(name, blocks(name))')
@@ -77,6 +82,10 @@ export default async function RoomDetailPage({ params, searchParams }: Props) {
       .eq('room_id', roomId)
       .eq('organization_id', org.id)
       .order('check_in', { ascending: false }),
+    // Pro modal "Nova Alocação" (mesmo padrão do mapa): escolas e obreiros da
+    // base, com onde cada obreiro já está alocado.
+    sbAdmin.from('schools').select('id, name').eq('organization_id', org.id).eq('active', true).order('name'),
+    loadObreiroOptions(sbAdmin, org.id),
   ])
 
   if (!room) notFound()
@@ -124,6 +133,13 @@ export default async function RoomDetailPage({ params, searchParams }: Props) {
   const availableBeds = bedsList
     .filter(b => b.status === 'disponivel')
     .map(b => ({ id: b.id, label: b.label }))
+
+  const schools = (schoolsData ?? []) as Array<{ id: string; name: string }>
+  const roomSubtitle = [
+    roomFloor?.blocks?.name, roomFloor?.name,
+    room.gender_constraint ? GENDER_LABELS[room.gender_constraint]?.label : null,
+    DEST_LABELS[room.destination],
+  ].filter(Boolean).join(' · ')
 
   // ── Server actions ──────────────────────────────────────────────────────────
   // Sem redirect nas de quarto/cama: revalidatePath só invalida o cache do
@@ -196,14 +212,18 @@ export default async function RoomDetailPage({ params, searchParams }: Props) {
     'use server'
     const guestName = (formData.get('guest_name') as string).trim()
     if (!guestName) return
+    const guestType = formData.get('guest_type') as string
+    const personId = guestType === 'obreiro' ? (formData.get('person_id') as string) || null : null
+    if (personId) await assertObreiroDaBase(org.id, personId)
     await createAllocation({
       organizationId: org.id,
       roomId,
       bedId:          (formData.get('bed_id') as string) || null,
       reservationId:  null,
-      personId:       null,
+      personId,
       guestName,
-      guestType:      formData.get('guest_type') as string,
+      guestType,
+      schoolId:       (formData.get('school_id') as string) || null,
       checkIn:        formData.get('check_in') as string,
       checkOut:       formData.get('check_out') as string,
       notes:          (formData.get('notes') as string)?.trim() || null,
@@ -325,6 +345,12 @@ export default async function RoomDetailPage({ params, searchParams }: Props) {
           <AllocationManager
             allocations={allocsForManager}
             beds={availableBeds}
+            roomName={room.name}
+            roomSubtitle={roomSubtitle}
+            destination={room.destination}
+            schools={schools}
+            obreiros={obreiroOptions}
+            today={new Date().toISOString().split('T')[0]}
             createAction={handleCreateAllocation}
             checkinAction={handleCheckin}
             checkoutAction={handleCheckout}

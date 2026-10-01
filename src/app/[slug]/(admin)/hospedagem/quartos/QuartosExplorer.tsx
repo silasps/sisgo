@@ -6,6 +6,7 @@ import { FloorForm } from './FloorForm'
 import { RoomForm } from './RoomForm'
 import { BedForm } from './BedForm'
 import { AllocationManager } from './[roomId]/AllocationManager'
+import type { ObreiroOption } from '../GuestTypeFields'
 import { CascadeDeleteDialog } from '@/components/ui/CascadeDeleteDialog'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { StopClickPropagation } from '@/components/ui/StopClickPropagation'
@@ -74,6 +75,10 @@ type Props = {
   bedsByRoom: Record<string, Bed[]>
   allocationsByRoom: Record<string, Allocation[]>
   floorOptions: FloorOption[]
+  // Modal "Nova Alocação" — mesmo padrão do mapa (Tipo, busca de obreiro…).
+  schools: { id: string; name: string }[]
+  obreiros: ObreiroOption[]
+  today: string
   createBlockAction: (formData: FormData) => Promise<void>
   editBlockAction: (formData: FormData) => Promise<void>
   deleteBlockAction: (id: string) => Promise<void>
@@ -93,7 +98,7 @@ type Props = {
 }
 
 export function QuartosExplorer({
-  blocks, floors, rooms, bedsByRoom, allocationsByRoom, floorOptions,
+  blocks, floors, rooms, bedsByRoom, allocationsByRoom, floorOptions, schools, obreiros, today,
   createBlockAction, editBlockAction, deleteBlockAction,
   createFloorAction, editFloorAction, deleteFloorAction,
   createRoomAction, editRoomAction, deleteRoomAction,
@@ -218,6 +223,7 @@ export function QuartosExplorer({
       {block && floor && room && (
         <RoomLevel
           room={room} beds={bedsByRoom[room.id] ?? []} allocations={allocationsByRoom[room.id] ?? []} floorOptions={floorOptions}
+          schools={schools} obreiros={obreiros} today={today}
           createRoomAction={createRoomAction} editRoomAction={editRoomAction} deleteRoomAction={deleteRoomAction}
           createBedAction={createBedAction} editBedAction={editBedAction} deleteBedAction={deleteBedAction}
           createAllocationAction={createAllocationAction} checkinAction={checkinAction}
@@ -515,12 +521,13 @@ function RoomCard({ room, beds, floorOptions, onOpen, createRoomAction, editRoom
 // ── Nível 4: camas de um quarto ──────────────────────────────────────────────
 
 function RoomLevel({
-  room, beds, allocations, floorOptions,
+  room, beds, allocations, floorOptions, schools, obreiros, today,
   createRoomAction, editRoomAction, deleteRoomAction,
   createBedAction, editBedAction, deleteBedAction,
   createAllocationAction, checkinAction, checkoutAction, cancelAllocationAction,
 }: {
   room: Room; beds: Bed[]; allocations: Allocation[]; floorOptions: FloorOption[]
+  schools: Props['schools']; obreiros: Props['obreiros']; today: string
   createRoomAction: Props['createRoomAction']; editRoomAction: Props['editRoomAction']; deleteRoomAction: Props['deleteRoomAction']
   createBedAction: Props['createBedAction']; editBedAction: Props['editBedAction']; deleteBedAction: Props['deleteBedAction']
   createAllocationAction: Props['createAllocationAction']; checkinAction: Props['checkinAction']
@@ -530,6 +537,8 @@ function RoomLevel({
   const gender      = room.gender_constraint ? GENDER_LABELS[room.gender_constraint] : null
   const occupied    = beds.filter(b => b.status === 'ocupada').length
   const availableBeds = beds.filter(b => b.status === 'disponivel').map(b => ({ id: b.id, label: b.label }))
+  const roomFloor = floorOptions.find(f => f.id === room.floor_id)
+  const roomSubtitle = [roomFloor?.blockName, roomFloor?.name, gender?.label, DESTINATION_LABELS[room.destination]].filter(Boolean).join(' · ')
 
   return (
     <div className="space-y-3">
@@ -642,6 +651,12 @@ function RoomLevel({
         <AllocationManager
           allocations={allocations}
           beds={availableBeds}
+          roomName={room.name}
+          roomSubtitle={roomSubtitle}
+          destination={room.destination}
+          schools={schools}
+          obreiros={obreiros}
+          today={today}
           createAction={formData => createAllocationAction(room.id, formData)}
           checkinAction={checkinAction}
           checkoutAction={checkoutAction}

@@ -11,8 +11,9 @@ import {
   createBlock, updateBlock, deleteBlock,
   createFloor, updateFloor, deleteFloor,
   createBed, updateBed, removeBed,
-  createAllocation, updateAllocationStatus, cancelAllocation,
+  createAllocation, updateAllocationStatus, cancelAllocation, assertObreiroDaBase,
 } from '../actions'
+import { loadObreiroOptions } from '../obreiroOptions'
 import { QuartosExplorer } from './QuartosExplorer'
 import { Building2 } from 'lucide-react'
 import Link from 'next/link'
@@ -40,7 +41,7 @@ export default async function QuartosPage({ params, searchParams }: Props) {
   if (!isManagementRole(role) && !userHasAnyRole(allRoles, HOSPEDAGEM_ROLES)) notFound()
 
   // ── Fetch bloco > andar > quarto ─────────────────────────────────────────────
-  const [{ data: blocksData }, { data: floorsData }, roomsQuery] = await Promise.all([
+  const [{ data: blocksData }, { data: floorsData }, roomsQuery, { data: schoolsData }, obreiroOptions] = await Promise.all([
     sbAdmin.from('blocks').select('id, name, display_order').eq('organization_id', org.id).order('display_order').order('name'),
     sbAdmin.from('floors').select('id, block_id, name, destination, gender_constraint, display_order').eq('organization_id', org.id).order('display_order').order('name'),
     (async () => {
@@ -52,6 +53,9 @@ export default async function QuartosPage({ params, searchParams }: Props) {
       if (filterStatus && filterStatus !== 'todos') query = query.eq('status', filterStatus)
       return query
     })(),
+    // Pro modal "Nova Alocação" de cada quarto (mesmo padrão do mapa).
+    sbAdmin.from('schools').select('id, name').eq('organization_id', org.id).eq('active', true).order('name'),
+    loadObreiroOptions(sbAdmin, org.id),
   ])
   const { data: rooms } = roomsQuery
 
@@ -275,14 +279,18 @@ export default async function QuartosPage({ params, searchParams }: Props) {
     'use server'
     const guestName = (formData.get('guest_name') as string).trim()
     if (!guestName) return
+    const guestType = formData.get('guest_type') as string
+    const personId = guestType === 'obreiro' ? (formData.get('person_id') as string) || null : null
+    if (personId) await assertObreiroDaBase(org.id, personId)
     await createAllocation({
       organizationId: org.id,
       roomId,
       bedId:          (formData.get('bed_id') as string) || null,
       reservationId:  null,
-      personId:       null,
+      personId,
       guestName,
-      guestType:      formData.get('guest_type') as string,
+      guestType,
+      schoolId:       (formData.get('school_id') as string) || null,
       checkIn:        formData.get('check_in') as string,
       checkOut:       formData.get('check_out') as string,
       notes:          (formData.get('notes') as string)?.trim() || null,
@@ -376,6 +384,9 @@ export default async function QuartosPage({ params, searchParams }: Props) {
             bedsByRoom={bedsByRoom}
             allocationsByRoom={allocationsByRoom}
             floorOptions={floorOptions}
+            schools={(schoolsData ?? []) as Array<{ id: string; name: string }>}
+            obreiros={obreiroOptions}
+            today={new Date().toISOString().split('T')[0]}
             createBlockAction={handleCreateBlock}
             editBlockAction={handleEditBlock}
             deleteBlockAction={handleDeleteBlock}

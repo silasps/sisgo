@@ -6,7 +6,7 @@ import { notFound, redirect } from 'next/navigation'
 import { isManagementRole, isOperationalManager, userHasAnyRole, HOSPEDAGEM_ROLES } from '@/lib/auth/permissions'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import {
-  createAllocation, updateAllocationStatus, cancelAllocation,
+  createAllocation, updateAllocationStatus, cancelAllocation, assertObreiroDaBase,
   allocateWholeRoom, checkinWholeRoom, checkoutWholeRoom,
   toggleRoomMaintenance, toggleBedMaintenance, updateAdvanceHours,
   createHold, cancelHold,
@@ -17,7 +17,8 @@ import { BedGrid } from './BedGrid'
 import { ReservationTimeline } from './agenda/ReservationTimeline'
 import { BlockCard } from './BlockCard'
 import { FloorCard } from './FloorCard'
-import { HoldForm } from './HoldForm'
+import { HoldForm, type HoldTarget } from './HoldForm'
+import { buildObreiroOptions } from './obreiroOptions'
 import { HoldBanner } from './HoldBanner'
 import { BlockForm } from './quartos/BlockForm'
 import { FloorForm } from './quartos/FloorForm'
@@ -31,10 +32,32 @@ type Props = {
   searchParams: Promise<{ msg?: string; error?: string; view?: string; block?: string; floor?: string }>
 }
 
+const GENDER_LABEL: Record<string, string> = { masculino: 'Masc.', feminino: 'Fem.', misto: 'Misto' }
+const DEST_LABEL: Record<string, string> = { visita: 'Visitantes', aluno: 'Alunos', obreiro: 'Obreiros' }
+
+function countLabel(n: number, one: string, many: string) {
+  return `${n} ${n === 1 ? one : many}`
+}
+
+// Volta pro mesmo nível de navegação (visão/bloco/andar) de onde a ação
+// saiu — antes alocar/check-in/manutenção caía na lista de blocos e parecia
+// que nada tinha acontecido.
+function hospedagemUrl(slug: string, backQs: string, extra: Record<string, string> = {}) {
+  const qs = new URLSearchParams(backQs)
+  for (const [k, v] of Object.entries(extra)) qs.set(k, v)
+  const s = qs.toString()
+  return `/${slug}/hospedagem${s ? `?${s}` : ''}`
+}
+
 export default async function HospedagemPage({ params, searchParams }: Props) {
   const { slug } = await params
   const { msg, error, view: viewParam, block: blockId, floor: floorId } = await searchParams
   const view = viewParam === 'timeline' ? 'timeline' : 'grid'
+  const backQs = new URLSearchParams({
+    ...(view === 'timeline' ? { view: 'timeline' } : {}),
+    ...(blockId ? { block: blockId } : {}),
+    ...(floorId ? { floor: floorId } : {}),
+  }).toString()
 
   const supabase = await createClient()
   const sbAdmin = createAdminClient()
@@ -53,7 +76,11 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
   // ── Data ────────────────────────────────────────────────────────────────────
   const today = new Date().toISOString().split('T')[0]
 
-  const [{ data: rooms }, { data: beds }, { data: allocations }, { data: schoolsData }, { data: blocksData }, { data: floorsData }, { data: holdsData }] = await Promise.all([
+  // Obreiros da base só são usados nos modais de alocar (mapa de um andar e
+  // Agenda) — nas telas de blocos/andares não precisa buscar.
+  const needsObreiros = view === 'timeline' || !!floorId
+
+  const [{ data: rooms }, { data: beds }, { data: allocations }, { data: schoolsData }, { data: blocksData }, { data: floorsData }, { data: holdsData }, staffData] = await Promise.all([
     sbAdmin.from('rooms')
       .select('id, name, floor_id, type, gender_constraint, destination, allocation_mode, capacity, status, floors(name, block_id, blocks(name))')
       .eq('organization_id', org.id)
@@ -64,7 +91,7 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
       .select('id, room_id, label, type, status')
       .eq('organization_id', org.id),
     sbAdmin.from('room_allocations')
-      .select('id, room_id, bed_id, guest_name, guest_type, check_in, check_out, status, school_id')
+      .select('id, room_id, bed_id, person_id, guest_name, guest_type, check_in, check_out, status, school_id')
       .eq('organization_id', org.id)
       .in('status', ['confirmada', 'checkin'])
       .order('check_in'),
@@ -75,15 +102,18 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
       .order('name'),
     sbAdmin.from('blocks').select('id, name').eq('organization_id', org.id).order('display_order').order('name'),
     sbAdmin.from('floors').select('id, block_id, name, destination, gender_constraint').eq('organization_id', org.id).order('display_order').order('name'),
-    sbAdmin.from('space_holds').select('id, scope, block_id, floor_id, group_name, starts_at, ends_at').eq('organization_id', org.id).eq('status', 'ativo'),
+    sbAdmin.from('space_holds').select('id, scope, block_id, floor_id, room_id, group_name, starts_at, ends_at').eq('organization_id', org.id).eq('status', 'ativo'),
+    needsObreiros
+      ? sbAdmin.from('staff_profiles').select('person_id, people(full_name)').eq('organization_id', org.id).eq('active', true).then(r => r.data ?? [])
+      : Promise.resolve([]),
   ])
 
   type RoomRow  = { id: string; name: string; floor_id: string | null; type: string; gender_constraint: string | null; destination: string; allocation_mode: string; capacity: number; status: string; floors: { name: string; block_id: string; blocks: { name: string } | null } | null }
   type BedRow   = { id: string; room_id: string; label: string; type: string; status: string }
-  type AllocRow = { id: string; room_id: string; bed_id: string | null; guest_name: string; guest_type: string; check_in: string; check_out: string; status: string; school_id: string | null }
+  type AllocRow = { id: string; room_id: string; bed_id: string | null; person_id: string | null; guest_name: string; guest_type: string; check_in: string; check_out: string; status: string; school_id: string | null }
   type BlockRow = { id: string; name: string }
   type FloorRow = { id: string; block_id: string; name: string; destination: string | null; gender_constraint: string | null }
-  type HoldRow  = { id: string; scope: string; block_id: string; floor_id: string | null; group_name: string; starts_at: string; ends_at: string }
+  type HoldRow  = { id: string; scope: string; block_id: string; floor_id: string | null; room_id: string | null; group_name: string; starts_at: string; ends_at: string }
 
   const roomsList  = (rooms ?? []) as unknown as RoomRow[]
   const bedsList   = (beds ?? []) as BedRow[]
@@ -95,6 +125,9 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
 
   const holdByBlock = new Map(holdsList.filter(h => h.scope === 'block').map(h => [h.block_id, h]))
   const holdByFloor = new Map(holdsList.filter(h => h.scope === 'floor' && h.floor_id).map(h => [h.floor_id as string, h]))
+  // Reserva de quarto: era gravada mas não aparecia em lugar nenhum (só
+  // bloco/andar eram lidos aqui) — parecia que o botão não reservava.
+  const roomHolds = holdsList.filter(h => h.scope === 'room' && h.room_id)
 
   // School name map for display
   const schoolMap = new Map(schools.map(s => [s.id, s.name]))
@@ -228,42 +261,71 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
     schoolName: a.school_id ? (schoolMap.get(a.school_id) ?? null) : null,
   }))
 
+  // Obreiros pro "Tipo = Obreiro" dos modais de alocar, com onde já estão alocados.
+  const obreiroOptions = buildObreiroOptions(
+    staffData as unknown as Parameters<typeof buildObreiroOptions>[0], allocsList, roomsList, bedsList,
+  )
+
   // ── Server actions ──────────────────────────────────────────────────────────
+  // Erro (quarto já ocupado nas datas, obreiro que não é da base…) volta como
+  // mensagem em vez de derrubar a página. redirect() fora do try/catch: ver
+  // comentário em handleDeleteBlockHere.
   const handleAllocate = async (formData: FormData) => {
     'use server'
     const guestName = (formData.get('guest_name') as string).trim()
     if (!guestName) return
-    await createAllocation({
-      organizationId: org.id,
-      roomId:     formData.get('room_id') as string,
-      bedId:      (formData.get('bed_id') as string) || null,
-      reservationId: null, personId: null,
-      guestName,
-      guestType:  formData.get('guest_type') as string,
-      checkIn:    formData.get('check_in') as string,
-      checkOut:   formData.get('check_out') as string,
-      notes:      (formData.get('notes') as string)?.trim() || null,
-      createdBy:  user.id,
-    })
-    redirect(`/${slug}/hospedagem?msg=alocado`)
+    const guestType = formData.get('guest_type') as string
+    const personId = guestType === 'obreiro' ? (formData.get('person_id') as string) || null : null
+    let redirectTo: string
+    try {
+      if (personId) await assertObreiroDaBase(org.id, personId)
+      await createAllocation({
+        organizationId: org.id,
+        roomId:     formData.get('room_id') as string,
+        bedId:      (formData.get('bed_id') as string) || null,
+        reservationId: null,
+        personId,
+        guestName,
+        guestType,
+        schoolId:   (formData.get('school_id') as string) || null,
+        checkIn:    formData.get('check_in') as string,
+        checkOut:   formData.get('check_out') as string,
+        notes:      (formData.get('notes') as string)?.trim() || null,
+        createdBy:  user.id,
+      })
+      redirectTo = hospedagemUrl(slug, backQs, { msg: 'alocado' })
+    } catch (e) {
+      redirectTo = hospedagemUrl(slug, backQs, { error: (e as Error).message })
+    }
+    redirect(redirectTo)
   }
 
   const handleAllocateRoom = async (formData: FormData) => {
     'use server'
     const guestName = (formData.get('guest_name') as string).trim()
     if (!guestName) return
-    await allocateWholeRoom({
-      organizationId: org.id,
-      roomId:     formData.get('room_id') as string,
-      guestName,
-      guestType:  formData.get('guest_type') as string,
-      schoolId:   (formData.get('school_id') as string) || null,
-      checkIn:    formData.get('check_in') as string,
-      checkOut:   formData.get('check_out') as string,
-      notes:      null,
-      createdBy:  user.id,
-    })
-    redirect(`/${slug}/hospedagem?msg=alocado`)
+    const guestType = formData.get('guest_type') as string
+    const personId = guestType === 'obreiro' ? (formData.get('person_id') as string) || null : null
+    let redirectTo: string
+    try {
+      if (personId) await assertObreiroDaBase(org.id, personId)
+      await allocateWholeRoom({
+        organizationId: org.id,
+        roomId:     formData.get('room_id') as string,
+        guestName,
+        guestType,
+        schoolId:   (formData.get('school_id') as string) || null,
+        personId,
+        checkIn:    formData.get('check_in') as string,
+        checkOut:   formData.get('check_out') as string,
+        notes:      null,
+        createdBy:  user.id,
+      })
+      redirectTo = hospedagemUrl(slug, backQs, { msg: 'alocado' })
+    } catch (e) {
+      redirectTo = hospedagemUrl(slug, backQs, { error: (e as Error).message })
+    }
+    redirect(redirectTo)
   }
 
   const handleCheckin = async (formData: FormData) => {
@@ -274,7 +336,7 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
       status: 'checkin',
       bedId: (formData.get('bed_id') as string) || null,
     })
-    redirect(`/${slug}/hospedagem?msg=checkin`)
+    redirect(hospedagemUrl(slug, backQs, { msg: 'checkin' }))
   }
 
   const handleCheckout = async (formData: FormData) => {
@@ -285,7 +347,7 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
       status: 'checkout',
       bedId: (formData.get('bed_id') as string) || null,
     })
-    redirect(`/${slug}/hospedagem?msg=checkout`)
+    redirect(hospedagemUrl(slug, backQs, { msg: 'checkout' }))
   }
 
   // Cancela uma alocação direto pela Agenda (clicou na barra → gerenciar).
@@ -297,7 +359,7 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
       bedId: (formData.get('bed_id') as string) || null,
       reason: (formData.get('reason') as string) || null,
     })
-    redirect(`/${slug}/hospedagem?view=timeline&msg=alocacao_cancelada`)
+    redirect(hospedagemUrl(slug, backQs, { msg: 'alocacao_cancelada' }))
   }
 
   const handleCheckinRoom = async (formData: FormData) => {
@@ -306,7 +368,7 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
       organizationId: org.id,
       roomId: formData.get('room_id') as string,
     })
-    redirect(`/${slug}/hospedagem?msg=checkin`)
+    redirect(hospedagemUrl(slug, backQs, { msg: 'checkin' }))
   }
 
   const handleCheckoutRoom = async (formData: FormData) => {
@@ -315,7 +377,7 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
       organizationId: org.id,
       roomId: formData.get('room_id') as string,
     })
-    redirect(`/${slug}/hospedagem?msg=checkout`)
+    redirect(hospedagemUrl(slug, backQs, { msg: 'checkout' }))
   }
 
   const handleToggleRoomMaintenance = async (formData: FormData) => {
@@ -325,7 +387,7 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
       org.id,
       formData.get('enable') === 'true',
     )
-    redirect(`/${slug}/hospedagem`)
+    redirect(hospedagemUrl(slug, backQs))
   }
 
   const handleToggleBedMaintenance = async (formData: FormData) => {
@@ -335,7 +397,7 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
       org.id,
       formData.get('enable') === 'true',
     )
-    redirect(`/${slug}/hospedagem`)
+    redirect(hospedagemUrl(slug, backQs))
   }
 
   const handleCreateHold = async (formData: FormData) => {
@@ -463,7 +525,7 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
     const hours = parseInt(formData.get('hours') as string)
     if (isNaN(hours) || hours < 0) return
     await updateAdvanceHours(org.id, hours)
-    redirect(`/${slug}/hospedagem?msg=config_salva`)
+    redirect(hospedagemUrl(slug, backQs, { msg: 'config_salva' }))
   }
 
   const msgInfo: Record<string, string> = {
@@ -493,6 +555,43 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
   const scopedGridRooms = roomIdsOfCurrentFloor ? gridRooms.filter(r => roomIdsOfCurrentFloor.has(r.id)) : gridRooms
   const scopedGridBeds = roomIdsOfCurrentFloor ? gridBeds.filter(b => roomIdsOfCurrentFloor.has(b.roomId)) : gridBeds
   const scopedGridAllocs = roomIdsOfCurrentFloor ? gridAllocs.filter(a => roomIdsOfCurrentFloor.has(a.roomId)) : gridAllocs
+  const roomHoldsOfCurrentFloor = roomIdsOfCurrentFloor ? roomHolds.filter(h => roomIdsOfCurrentFloor.has(h.room_id as string)) : []
+
+  // ── Opções do "Reservar X inteiro" — mesmo cabeçalho do modal do quarto no
+  // mapa (nome, local · gênero · público, "N camas · Modo quarto inteiro") ──
+  const bedCount = (roomIds: string[]) => {
+    const ids = new Set(roomIds)
+    return bedsList.filter(b => ids.has(b.room_id)).length
+  }
+  const holdBlockTargets: HoldTarget[] = blocksList.map(b => {
+    const blockFloors = floorsByBlock.get(b.id) ?? []
+    const blockRooms = blockFloors.flatMap(f => roomsByFloor.get(f.id) ?? [])
+    const genders = new Set(blockRooms.map(r => r.gender_constraint))
+    const dests = new Set(blockRooms.map(r => r.destination))
+    const gender = genders.size === 1 ? [...genders][0] : null
+    const dest = dests.size === 1 ? [...dests][0] : null
+    return {
+      id: b.id,
+      name: b.name,
+      subtitle: [gender ? GENDER_LABEL[gender] : null, dest ? DEST_LABEL[dest] : null].filter(Boolean).join(' · ') || null,
+      summary: `${countLabel(blockFloors.length, 'andar', 'andares')} · ${countLabel(blockRooms.length, 'quarto', 'quartos')} · ${countLabel(bedCount(blockRooms.map(r => r.id)), 'cama', 'camas')} · Modo bloco inteiro`,
+    }
+  })
+  const holdFloorTargets: HoldTarget[] = floorsOfCurrentBlock.map(f => {
+    const floorRooms = roomsByFloor.get(f.id) ?? []
+    return {
+      id: f.id,
+      name: f.name,
+      subtitle: [currentBlock?.name, f.gender_constraint ? GENDER_LABEL[f.gender_constraint] : null, f.destination ? DEST_LABEL[f.destination] : null].filter(Boolean).join(' · ') || null,
+      summary: `${countLabel(floorRooms.length, 'quarto', 'quartos')} · ${countLabel(bedCount(floorRooms.map(r => r.id)), 'cama', 'camas')} · Modo andar inteiro`,
+    }
+  })
+  const holdRoomTargets: HoldTarget[] = floorId ? (roomsByFloor.get(floorId) ?? []).map(r => ({
+    id: r.id,
+    name: r.name,
+    subtitle: [r.floors?.blocks?.name, r.floors?.name, r.gender_constraint ? GENDER_LABEL[r.gender_constraint] : null, DEST_LABEL[r.destination]].filter(Boolean).join(' · ') || null,
+    summary: `${countLabel(bedCount([r.id]), 'cama', 'camas')} · Modo quarto inteiro`,
+  })) : []
 
   return (
     <>
@@ -618,6 +717,7 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
             beds={gridBeds}
             allocs={timelineAllocs}
             schools={schools}
+            obreiros={obreiroOptions}
             today={today}
             allocateAction={handleAllocate}
             allocateRoomAction={handleAllocateRoom}
@@ -640,8 +740,8 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
                 <HoldForm
                   createAction={handleCreateHold}
                   scope="block"
-                  label=""
-                  blockOptions={blocksList.map(b => ({ id: b.id, name: b.name }))}
+                  targets={holdBlockTargets}
+                  today={today}
                 />
               </div>
             )}
@@ -710,8 +810,8 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
                   createAction={handleCreateHold}
                   scope="floor"
                   blockId={currentBlock.id}
-                  label={currentBlock.name}
-                  floorOptions={floorsOfCurrentBlock.map(f => ({ id: f.id, name: f.name }))}
+                  targets={holdFloorTargets}
+                  today={today}
                 />
               )}
             </div>
@@ -800,8 +900,8 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
                   scope="room"
                   blockId={currentBlock.id}
                   floorId={currentFloor.id}
-                  label={currentFloor.name}
-                  roomOptions={scopedGridRooms.map(r => ({ id: r.id, name: r.name }))}
+                  targets={holdRoomTargets}
+                  today={today}
                 />
               )}
             </div>
@@ -817,6 +917,23 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
                 backFloorId={floorId}
               />
             )}
+            {roomHoldsOfCurrentFloor.map(h => {
+              const roomName = roomMap.get(h.room_id as string)?.name ?? 'Quarto'
+              return (
+                <HoldBanner
+                  key={h.id}
+                  cancelAction={handleCancelHold}
+                  holdId={h.id}
+                  groupName={h.group_name}
+                  startsAt={h.starts_at}
+                  endsAt={h.ends_at}
+                  scopeLabel={roomName}
+                  label={roomName}
+                  backBlockId={blockId}
+                  backFloorId={floorId}
+                />
+              )
+            })}
             {scopedGridRooms.length === 0 ? (
               <EmptyState
                 icon={Hotel}
@@ -837,6 +954,7 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
                 beds={scopedGridBeds}
                 allocs={scopedGridAllocs}
                 schools={schools}
+                obreiros={obreiroOptions}
                 today={today}
                 advanceHours={advanceHours}
                 slug={slug}

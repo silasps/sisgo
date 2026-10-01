@@ -502,6 +502,18 @@ async function syncRoomCapacity(roomId: string, organizationId: string) {
 
 // ── Allocations ──────────────────────────────────────────────────────────────
 
+// Tipo = Obreiro nos modais de alocar: o person_id vem da lista de obreiros
+// do próprio form — confere no servidor que é mesmo obreiro desta base antes
+// de ligar a alocação à pessoa.
+export async function assertObreiroDaBase(organizationId: string, personId: string) {
+  const sb = createAdminClient()
+  const { count } = await sb.from('staff_profiles')
+    .select('id', { count: 'exact', head: true })
+    .eq('organization_id', organizationId)
+    .eq('person_id', personId)
+  if (!count) throw new Error('Esse obreiro não está cadastrado nesta base.')
+}
+
 export async function createAllocation(data: {
   organizationId: string
   roomId: string
@@ -514,6 +526,7 @@ export async function createAllocation(data: {
   checkOut: string
   notes: string | null
   createdBy: string
+  schoolId?: string | null // Tipo = Escola
 }) {
   const sb = createAdminClient()
   const { error } = await sb.from('room_allocations').insert({
@@ -522,6 +535,7 @@ export async function createAllocation(data: {
     bed_id:          data.bedId,
     reservation_id:  data.reservationId,
     person_id:       data.personId,
+    school_id:       data.schoolId ?? null,
     guest_name:      data.guestName,
     guest_type:      data.guestType,
     check_in:        data.checkIn,
@@ -612,11 +626,14 @@ export async function cancelAllocation(data: {
 async function assertRoomFullyFreeForWindow(
   sb: ReturnType<typeof createAdminClient>, organizationId: string, roomId: string, checkIn: string, checkOut: string,
 ) {
+  // Só quem ainda vai ficar/está no quarto conta — alocação com check-out
+  // feito já liberou as camas, mas o check_out original dela continuava
+  // travando o quarto até a data de saída prevista.
   const { count } = await sb.from('room_allocations')
     .select('id', { count: 'exact', head: true })
     .eq('organization_id', organizationId)
     .eq('room_id', roomId)
-    .neq('status', 'cancelada')
+    .in('status', ['confirmada', 'checkin'])
     .lt('check_in', checkOut)
     .gt('check_out', checkIn)
   if ((count ?? 0) > 0) throw new Error('Quarto já tem hóspede alocado nessa janela de datas — não dá pra alocar como quarto inteiro.')
@@ -633,6 +650,7 @@ export async function allocateWholeRoom(data: {
   notes: string | null
   createdBy: string
   reservationId?: string | null
+  personId?: string | null // obreiro escolhido da lista (Tipo = Obreiro) — validar antes com assertObreiroDaBase
 }) {
   const sb = createAdminClient()
 
@@ -643,6 +661,7 @@ export async function allocateWholeRoom(data: {
     .eq('room_id', data.roomId)
     .eq('organization_id', data.organizationId)
     .neq('status', 'manutencao')
+  if (!roomBeds || roomBeds.length === 0) throw new Error('Esse quarto não tem cama ativa cadastrada — cadastre as camas antes de alocar.')
 
   const now = new Date()
   const checkInDate = new Date(data.checkIn + 'T00:00:00')
@@ -652,26 +671,31 @@ export async function allocateWholeRoom(data: {
   const advanceHours = (orgRow as { hospedagem_advance_hours?: number } | null)?.hospedagem_advance_hours ?? 120
   const bedStatus = hoursUntil <= 0 ? 'ocupada' : hoursUntil <= advanceHours ? 'reservada' : 'disponivel'
 
-  for (const bed of (roomBeds ?? [])) {
-    await sb.from('room_allocations').insert({
-      organization_id: data.organizationId,
-      room_id:         data.roomId,
-      bed_id:          bed.id,
-      reservation_id:  data.reservationId ?? null,
-      guest_name:      data.guestName,
-      guest_type:      data.guestType,
-      school_id:       data.schoolId,
-      check_in:        data.checkIn,
-      check_out:       data.checkOut,
-      notes:           data.notes,
-      created_by:      data.createdBy,
+  // Um insert só, checando erro — o loop antigo (um insert por cama, sem
+  // olhar o retorno) podia falhar calado e a tela dizia "alocado com sucesso".
+  const { error } = await sb.from('room_allocations').insert(roomBeds.map(bed => ({
+    organization_id: data.organizationId,
+    room_id:         data.roomId,
+    bed_id:          bed.id,
+    reservation_id:  data.reservationId ?? null,
+    person_id:       data.personId ?? null,
+    guest_name:      data.guestName,
+    guest_type:      data.guestType,
+    school_id:       data.schoolId,
+    check_in:        data.checkIn,
+    check_out:       data.checkOut,
+    notes:           data.notes,
+    created_by:      data.createdBy,
+  })))
+  if (error) throw new Error(error.message)
+
+  if (bedStatus !== 'disponivel') {
+    await sb.from('beds').update({
+      status: bedStatus,
+      updated_at: now.toISOString(),
     })
-    if (bedStatus !== 'disponivel') {
-      await sb.from('beds').update({
-        status: bedStatus,
-        updated_at: new Date().toISOString(),
-      }).eq('id', bed.id)
-    }
+      .in('id', roomBeds.map(b => b.id))
+      .eq('organization_id', data.organizationId)
   }
 }
 

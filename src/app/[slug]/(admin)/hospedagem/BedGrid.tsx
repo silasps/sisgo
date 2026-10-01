@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import { SubmitButton } from '@/components/ui/SubmitButton'
-import { AlertTriangle, BedDouble, Building2, GraduationCap, LogIn, LogOut, UserPlus, Users, Wrench } from 'lucide-react'
+import { AlertTriangle, BedDouble, Building2, GraduationCap, LogIn, LogOut, Users, Wrench } from 'lucide-react'
+import { GuestTypeFields, type ObreiroOption } from './GuestTypeFields'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -49,6 +50,7 @@ type Props = {
   beds: BedData[]
   allocs: AllocData[]
   schools: SchoolOption[]
+  obreiros: ObreiroOption[]
   today: string
   advanceHours: number
   slug: string
@@ -63,14 +65,6 @@ type Props = {
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
-
-const GUEST_TYPES = [
-  { value: 'visitante', label: 'Visitante' },
-  { value: 'aluno', label: 'Aluno' },
-  { value: 'obreiro', label: 'Obreiro' },
-  { value: 'missionario', label: 'Missionário' },
-  { value: 'convidado', label: 'Convidado' },
-] as const
 
 const GUEST_TYPE_LABEL: Record<string, string> = {
   visitante: 'Visitante', aluno: 'Aluno', obreiro: 'Obreiro',
@@ -286,7 +280,7 @@ function ModeToggle({ mode, onChange }: { mode: 'cama' | 'quarto'; onChange: (m:
 // ── Main Component ───────────────────────────────────────────────────────────
 
 export function BedGrid({
-  rooms, beds, allocs, schools, today, advanceHours, slug,
+  rooms, beds, allocs, schools, obreiros, today, advanceHours, slug,
   allocateAction, allocateRoomAction,
   checkinAction, checkoutAction,
   checkinRoomAction, checkoutRoomAction,
@@ -542,35 +536,24 @@ export function BedGrid({
               </>
             ) : (
               <form action={allocateAction} className="space-y-4">
-                <div className="flex items-center gap-2 text-green-600">
-                  <UserPlus size={20} />
-                  <p className="text-sm font-semibold">Alocar hóspede</p>
-                </div>
                 <input type="hidden" name="room_id" value={selectedBed.roomId} />
                 <input type="hidden" name="bed_id" value={selectedBed.id} />
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Nome *</label>
-                  <input name="guest_name" required placeholder="Nome completo" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                </div>
+                <GuestTypeFields
+                  destination={rooms.find(r => r.id === selectedBed.roomId)?.destination ?? 'visita'}
+                  schools={schools}
+                  obreiros={obreiros}
+                  where="nesta cama"
+                  group={false}
+                />
                 <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Tipo *</label>
-                    <select name="guest_type" required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
-                      {GUEST_TYPES.filter(t => {
-                        const room = rooms.find(r => r.id === selectedBed.roomId)
-                        if (room?.destination === 'obreiro') return t.value === 'obreiro'
-                        return true
-                      }).map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                    </select>
-                  </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Check-in *</label>
                     <input name="check_in" type="date" required defaultValue={today} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
                   </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Check-out *</label>
-                  <input name="check_out" type="date" required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Check-out *</label>
+                    <input name="check_out" type="date" required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                  </div>
                 </div>
                 <SubmitButton className="w-full py-3 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-semibold transition-colors flex items-center justify-center gap-2">
                   <BedDouble size={18} /> Alocar
@@ -651,46 +634,8 @@ export function BedGrid({
               </>
             ) : (
               <form action={allocateRoomAction} className="space-y-4">
-                <div className="flex items-center gap-2 text-green-600">
-                  <UserPlus size={20} />
-                  <p className="text-sm font-semibold">
-                    {selectedRoom.destination === 'aluno' ? 'Alocar escola neste quarto' : 'Alocar visitante neste quarto'}
-                  </p>
-                </div>
                 <input type="hidden" name="room_id" value={selectedRoom.id} />
-
-                {selectedRoom.destination === 'aluno' && schools.length > 0 ? (
-                  <>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Escola *</label>
-                      <select name="school_id" required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
-                        <option value="">Selecione a escola...</option>
-                        {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                      </select>
-                    </div>
-                    <input type="hidden" name="guest_type" value="aluno" />
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Nome/Identificação *</label>
-                      <input name="guest_name" required placeholder="Ex: Turma ETED 2026.1" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <input type="hidden" name="school_id" value="" />
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Nome do hóspede/grupo *</label>
-                      <input name="guest_name" required placeholder="Nome completo ou grupo" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Tipo</label>
-                      <select name="guest_type" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
-                        <option value="visitante">Visitante</option>
-                        <option value="convidado">Convidado</option>
-                        <option value="missionario">Missionário</option>
-                      </select>
-                    </div>
-                  </>
-                )}
+                <GuestTypeFields destination={selectedRoom.destination} schools={schools} obreiros={obreiros} />
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
