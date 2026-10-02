@@ -43,6 +43,7 @@ export default async function EscolaWorkspaceLayout({ children, params }: Props)
   const tabs = [
     { href: base, label: 'Geral', icon: 'geral' as const },
     { href: `${base}/equipe`, label: 'Quadro de Obreiros', icon: 'equipe' as const },
+    { href: `${base}/alunos`, label: 'Alunos', icon: 'alunos' as const },
     // Tarefas é da escola em si: só quem tem vínculo (líder/obreiro) — a
     // gestão sem vínculo entra no resto da escola, não aqui.
     ...(link ? [{ href: `${base}/tarefas`, label: 'Tarefas', icon: 'tarefas' as const }] : []),

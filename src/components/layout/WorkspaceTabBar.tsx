@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { MessageCircle, Users, LayoutDashboard, Settings, Smile, Kanban } from 'lucide-react'
+import { MessageCircle, Users, LayoutDashboard, Settings, Smile, Kanban, GraduationCap } from 'lucide-react'
 
 const ICON_MAP = {
   chat: MessageCircle,
@@ -11,6 +11,7 @@ const ICON_MAP = {
   configuracoes: Settings,
   pesquisa: Smile,
   tarefas: Kanban,
+  alunos: GraduationCap,
 }
 
 type Tab = { href: string; label: string; icon?: keyof typeof ICON_MAP; alsoMatches?: string[] }

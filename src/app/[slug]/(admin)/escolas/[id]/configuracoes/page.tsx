@@ -7,11 +7,12 @@ import {
   removeSchoolStaff,
   submitSchoolObreiroRequest, approveSchoolObreiroRequest,
   rejectSchoolObreiroRequest, cancelSchoolObreiroRequest,
-  toggleTurmaActive, deleteTurma,
+  deleteTurma,
 } from '../actions'
 import { DeleteTurmaButton } from '../DeleteTurmaButton'
 import { SchoolConfigTabs } from './SchoolConfigTabs'
 import { NovaTurmaModal } from './NovaTurmaModal'
+import { TurmaActiveToggle } from './TurmaActiveToggle'
 import { EmbedCodeBox } from '@/components/ui/EmbedCodeBox'
 import { SearchableSelectModal } from '@/components/ui/SearchableSelectModal'
 
@@ -23,6 +24,7 @@ import { triggerSiteRevalidation } from '@/lib/revalidate-webhook'
 import { CheckCircle2, AlertTriangle, Settings, Image as ImageIcon } from 'lucide-react'
 import { FileInputField } from '@/components/ui/FileInputField'
 import { HoursField } from '@/components/ui/HoursField'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = {
   params: Promise<{ slug: string; id: string }>
@@ -422,16 +424,6 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
     redirect(`/${slug}/escolas/${id}`)
   }
 
-  const handleToggleTurma = async (formData: FormData) => {
-    'use server'
-    await toggleTurmaActive(
-      formData.get('class_id') as string,
-      formData.get('active') === 'true',
-    )
-    await triggerSiteRevalidation(org.id, 'events')
-    redirect(`/${slug}/escolas/${id}/configuracoes?tab=turmas`)
-  }
-
   const handleDeleteTurma = async (formData: FormData) => {
     'use server'
     await deleteTurma(formData.get('class_id') as string)
@@ -490,21 +482,7 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                           </div>
                           <div className="relative z-10 pointer-events-auto flex items-center gap-1 ml-3 flex-shrink-0">
                             {/* Olhinho — toggle ativo/inativo */}
-                            <form action={handleToggleTurma}>
-                              <input type="hidden" name="class_id" value={t.id} />
-                              <input type="hidden" name="active" value={String(t.active)} />
-                              <button
-                                type="submit"
-                                title={t.active ? 'Desativar turma' : 'Ativar turma'}
-                                className={`p-1.5 rounded-lg transition-colors ${t.active ? 'text-green-600 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'}`}
-                              >
-                                {t.active ? (
-                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                                ) : (
-                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                                )}
-                              </button>
-                            </form>
+                            <TurmaActiveToggle classId={t.id} active={t.active} organizationId={org.id} />
                             {/* Lápis — editar */}
                             <Link
                               href={`/${slug}/escolas/${id}/turmas/${t.id}`}
@@ -634,9 +612,9 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                   <Link href={`/${slug}/escolas`} className="px-5 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                     Cancelar
                   </Link>
-                  <button type="submit" className="px-5 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg transition-colors">
+                  <SubmitButton className="px-5 py-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors">
                     Salvar alterações
-                  </button>
+                  </SubmitButton>
                 </div>
               </form>
 
@@ -652,9 +630,9 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                       defaultValue={(escola as unknown as { contact_email: string | null }).contact_email ?? ''}
                       placeholder="eted.suabase@gmail.com" />
                   </div>
-                  <button type="submit" className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg transition-colors whitespace-nowrap">
+                  <SubmitButton className="px-4 py-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors whitespace-nowrap">
                     Salvar e-mail
-                  </button>
+                  </SubmitButton>
                 </div>
                 {(() => {
                   const email   = (escola as unknown as { contact_email: string | null }).contact_email
@@ -664,9 +642,10 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                   return (
                     <div className="flex items-center gap-3 flex-wrap">
                       <p className="text-xs text-orange-500 flex items-center gap-1"><AlertTriangle className="size-3.5 flex-shrink-0" /> Aguardando verificação — verifique a caixa de entrada de <strong>{email}</strong></p>
-                      <button type="submit" formAction={reenviarVerificacao} className="text-xs text-brand-500 hover:text-brand-600 underline underline-offset-2 whitespace-nowrap">
+                      <SubmitButton formAction={reenviarVerificacao} pendingText="Enviando…"
+                        className="text-xs text-brand-500 hover:text-brand-600 disabled:opacity-50 underline underline-offset-2 whitespace-nowrap">
                         Reenviar link
-                      </button>
+                      </SubmitButton>
                     </div>
                   )
                 })()}
@@ -857,7 +836,7 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
 
       {/* ════════ VISÃO LÍDER DE ESCOLA ═══════════════════════════════════════════════ */}
       {isLiderEted && (
-        <main className="p-4 md:p-6 max-w-2xl mx-auto overflow-y-auto flex-1">
+        <main className="p-4 md:p-6 max-w-4xl overflow-y-auto flex-1">
           <SchoolConfigTabs
             turmasCount={turmas?.length ?? 0}
             initialTab={initialTab}
@@ -867,50 +846,32 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                   <h2 className="font-semibold text-gray-900">Turmas</h2>
                   <NovaTurmaModal action={createTurma} />
                 </div>
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
-                  {turmas && turmas.length > 0 ? (
-                    <ul className="divide-y divide-gray-100">
-                      {turmas.map(t => (
-                        <li key={t.id} className="group relative flex items-center justify-between py-2.5 cursor-pointer hover:bg-brand-50 -mx-5 px-5 transition-colors">
-                          <Link href={`/${slug}/escolas/${id}/turmas/${t.id}`} className="absolute inset-0" aria-label={`Abrir turma ${t.name}`} />
-                          <div className="pointer-events-none min-w-0 flex-1">
-                            <p className="text-sm font-medium text-gray-900 group-hover:text-brand-700 transition-colors truncate">{t.name}</p>
-                            <p className="text-xs text-gray-400">
-                              {[t.year, t.semester ? `${t.semester}º sem.` : null].filter(Boolean).join(' · ')}
-                              {t.starts_at ? ` · Início: ${new Date(t.starts_at).toLocaleDateString('pt-BR')}` : ''}
-                            </p>
-                          </div>
-                          <div className="relative z-10 pointer-events-auto flex items-center gap-1 ml-3 flex-shrink-0">
-                            <form action={handleToggleTurma}>
-                              <input type="hidden" name="class_id" value={t.id} />
-                              <input type="hidden" name="active" value={String(t.active)} />
-                              <button
-                                type="submit"
-                                title={t.active ? 'Desativar turma' : 'Ativar turma'}
-                                className={`p-1.5 rounded-lg transition-colors ${t.active ? 'text-green-600 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'}`}
-                              >
-                                {t.active ? (
-                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                                ) : (
-                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                                )}
-                              </button>
-                            </form>
-                            <Link
-                              href={`/${slug}/escolas/${id}/turmas/${t.id}`}
-                              title="Editar turma"
-                              className="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                            </Link>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-sm text-gray-400">Nenhuma turma cadastrada ainda.</p>
-                  )}
-                </div>
+                {turmas && turmas.length > 0 ? (
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {turmas.map(t => (
+                      <div key={t.id} className="group relative bg-white rounded-xl border border-gray-200 p-4 hover:border-brand-200 hover:bg-brand-50 transition-colors">
+                        <Link href={`/${slug}/escolas/${id}/turmas/${t.id}`} className="absolute inset-0 rounded-xl" aria-label={`Abrir turma ${t.name}`} />
+                        <p className="text-sm font-medium text-gray-900 group-hover:text-brand-700 transition-colors truncate pr-1">{t.name}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {[t.year, t.semester ? `${t.semester}º sem.` : null].filter(Boolean).join(' · ')}
+                          {t.starts_at ? ` · Início: ${new Date(t.starts_at).toLocaleDateString('pt-BR')}` : ''}
+                        </p>
+                        <div className="relative z-10 pointer-events-auto flex items-center gap-1 mt-3">
+                          <TurmaActiveToggle classId={t.id} active={t.active} organizationId={org.id} />
+                          <Link
+                            href={`/${slug}/escolas/${id}/turmas/${t.id}`}
+                            title="Editar turma"
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                          </Link>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400">Nenhuma turma cadastrada ainda.</p>
+                )}
               </div>
             }
             escola={
@@ -1010,9 +971,9 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
             </div>
 
             <div className="p-5 flex justify-end">
-              <button type="submit" className="px-5 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg transition-colors">
+              <SubmitButton className="px-5 py-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors">
                 Salvar alterações
-              </button>
+              </SubmitButton>
             </div>
           </form>
 
@@ -1028,9 +989,9 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                   defaultValue={(escola as unknown as { contact_email: string | null }).contact_email ?? ''}
                   placeholder="eted.suabase@gmail.com" />
               </div>
-              <button type="submit" className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg transition-colors whitespace-nowrap">
+              <SubmitButton className="px-4 py-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors whitespace-nowrap">
                 Salvar e-mail
-              </button>
+              </SubmitButton>
             </div>
             {(() => {
               const email   = (escola as unknown as { contact_email: string | null }).contact_email
@@ -1040,9 +1001,10 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
               return (
                 <div className="flex items-center gap-3 flex-wrap">
                   <p className="text-xs text-orange-500 flex items-center gap-1"><AlertTriangle className="size-3.5 flex-shrink-0" /> Aguardando verificação — verifique a caixa de entrada de <strong>{email}</strong></p>
-                  <button type="submit" formAction={reenviarVerificacao} className="text-xs text-brand-500 hover:text-brand-600 underline underline-offset-2 whitespace-nowrap">
+                  <SubmitButton formAction={reenviarVerificacao} pendingText="Enviando…"
+                    className="text-xs text-brand-500 hover:text-brand-600 disabled:opacity-50 underline underline-offset-2 whitespace-nowrap">
                     Reenviar link
-                  </button>
+                  </SubmitButton>
                 </div>
               )
             })()}

@@ -1238,6 +1238,12 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
   const allMinistries = (allMinistriesRaw ?? []) as Array<{ id: string; name: string }>
   const publicSchools = (publicSchoolsRaw ?? []).filter((s: { slug: string | null }) => s.slug) as Array<{ id: string; name: string; slug: string }>
   const publicMinistries = (publicMinistriesRaw ?? []).filter((m: { slug: string | null }) => m.slug) as Array<{ id: string; name: string; slug: string }>
+  // Link público exibido só cobre o escopo de quem está vendo — mostrar o
+  // botão com base na organização inteira e filtrar por dentro deixava o
+  // card vazio pra quem lidera uma escola/ministério sem link público,
+  // mesmo havendo outro na mesma organização.
+  const visiblePublicSchools = isManagement ? publicSchools : publicSchools.filter(s => viewAlunoSchoolIds.includes(s.id))
+  const visiblePublicMinistries = isManagement ? publicMinistries : publicMinistries.filter(m => leaderMinistryIds.includes(m.id))
 
   // Líder com um único destino (um ministério OU uma escola) no escopo:
   // fixa o convite de obreiro nele em vez de deixar escolher entre todos —
@@ -1873,25 +1879,19 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           initialTab={tab}
           initialEtapa={etapa}
           hideAlunoTipo={onlyMinistryScope}
-          linksAluno={publicSchools.length > 0 ? (
+          linksAluno={visiblePublicSchools.length > 0 ? (
             <InscricaoLinkCard
               orgSlug={slug}
-              schools={(!isManagement
-                ? publicSchools.filter(s => viewAlunoSchoolIds.includes(s.id))
-                : publicSchools
-              ).map(s => ({ slug: s.slug, name: s.name }))}
+              schools={visiblePublicSchools.map(s => ({ slug: s.slug, name: s.name }))}
             />
           ) : null}
           linksObreiro={(
             <>
               <ServirLinkCard slug={slug} />
-              {publicMinistries.length > 0 && (
+              {visiblePublicMinistries.length > 0 && (
                 <MinistryLinkCard
                   orgSlug={slug}
-                  ministries={(!isManagement
-                    ? publicMinistries.filter(m => leaderMinistryIds.includes(m.id))
-                    : publicMinistries
-                  ).map(m => ({ slug: m.slug, name: m.name }))}
+                  ministries={visiblePublicMinistries.map(m => ({ slug: m.slug, name: m.name }))}
                 />
               )}
             </>

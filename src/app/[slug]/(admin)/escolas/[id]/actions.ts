@@ -196,3 +196,46 @@ export async function deleteSchool(schoolId: string) {
   if (interestCount) throw new Error('Escola possui pré-inscrições cadastradas.')
   await sb.from('schools').delete().eq('id', schoolId)
 }
+
+// ── Líder/DH: envia formulário definitivo de obreiro direto, sem pré-inscrição
+// pública prévia (a pessoa já conversou com o líder fora do sistema) ────────
+export async function inviteSchoolStaffDirect(data: {
+  slug: string
+  organizationId: string
+  schoolId: string
+  fullName: string
+  email: string | null
+  phone: string | null
+  message: string | null
+  createdBy: string | null
+}) {
+  const { sendDirectStaffInvite } = await import('@/lib/staff/staffApplicationInvite')
+  return sendDirectStaffInvite({
+    slug: data.slug,
+    organizationId: data.organizationId,
+    ministryId: null,
+    schoolId: data.schoolId,
+    fullName: data.fullName,
+    email: data.email,
+    phone: data.phone,
+    message: data.message,
+    createdBy: data.createdBy,
+  })
+}
+
+// ── Líder/DH: envia formulário definitivo de aluno direto, sem pré-inscrição
+// pública prévia (a pessoa já conversou com o líder fora do sistema) ───────
+export async function inviteSchoolStudentDirect(data: {
+  slug: string
+  organizationId: string
+  schoolId: string
+  classId: string | null
+  fullName: string
+  email: string | null
+  phone: string | null
+  message: string | null
+  createdBy: string | null
+}) {
+  const { sendDirectStudentInvite } = await import('@/lib/school/studentApplicationInvite')
+  return sendDirectStudentInvite(data)
+}
