@@ -5,7 +5,7 @@ import { slugify } from '@/lib/slugify'
 
 const VALID_SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/
 
-export function isValidSlug(slug: string | null | undefined): slug is string {
+function isValidSlug(slug: string | null | undefined): slug is string {
   return !!slug && VALID_SLUG.test(slug)
 }
 
