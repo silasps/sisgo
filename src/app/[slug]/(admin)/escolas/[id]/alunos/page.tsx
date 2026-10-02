@@ -9,6 +9,7 @@ import { HEALTH_ROLES, isOperationalManager } from '@/lib/auth/permissions'
 import { SubmitButton } from '@/components/ui/SubmitButton'
 import { EnviarFormularioAlunoDiretoButton } from '@/components/inscricoes/EnviarFormularioAlunoDiretoButton'
 import { getOrCreateShortLink } from '@/lib/shortLinks'
+import { ensureSchoolSlug } from '@/lib/school/schoolSlug'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
@@ -52,15 +53,23 @@ export default async function EscolaAlunosPage({ params }: Props) {
 
   const db = createAdminClient()
 
-  const { data: escolaPublic } = await db.from('schools').select('slug, is_public').eq('id', id).maybeSingle()
+  const { data: escolaPublic } = await db.from('schools').select('name, slug, is_public').eq('id', id).maybeSingle()
 
   async function handleCopyPublicLink() {
     'use server'
     if (!escolaPublic?.is_public) return { error: 'A página pública desta escola está desativada. Ative em Configurações > Página pública.' }
-    if (!escolaPublic?.slug) return { error: 'Esta escola não tem um endereço (slug) definido. Configure em Configurações > Página pública.' }
+    let schoolSlug: string
+    try {
+      schoolSlug = await ensureSchoolSlug({
+        schoolId: id, organizationId: org!.id, orgPathSlug: slug,
+        name: escolaPublic.name, currentSlug: escolaPublic.slug,
+      })
+    } catch {
+      return { error: 'Falta colocar o nome da escola em Configurações — o endereço público é gerado a partir dele.' }
+    }
     const url = await getOrCreateShortLink({
       organizationId: org!.id,
-      targetPath: `/${slug}/escola/${escolaPublic.slug}`,
+      targetPath: `/${slug}/escola/${schoolSlug}`,
       createdBy: user!.id,
     })
     return { url }

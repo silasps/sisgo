@@ -21,6 +21,7 @@ import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { getSchoolLink } from '@/lib/auth/unit-access'
 import { SCHOOL_TYPES } from '@/lib/schools'
 import { triggerSiteRevalidation } from '@/lib/revalidate-webhook'
+import { ensureSchoolSlug } from '@/lib/school/schoolSlug'
 import { CheckCircle2, AlertTriangle, Settings, Image as ImageIcon } from 'lucide-react'
 import { FileInputField } from '@/components/ui/FileInputField'
 import { HoursField } from '@/components/ui/HoursField'
@@ -260,10 +261,11 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
       heroImageUrl = null
     }
 
+    const newName = formData.get('name') as string
+
     await sb.from('schools').update({
-      name: formData.get('name') as string,
+      name: newName,
       acronym: (formData.get('acronym') as string) || null,
-      slug: (formData.get('slug') as string) || null,
       school_type: formData.get('school_type') as string,
       type_name: (formData.get('type_name') as string)?.trim() || 'Escola',
       subtitle: (formData.get('subtitle') as string) || null,
@@ -278,6 +280,15 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
       is_public: formData.get('is_public') === 'on',
       active: formData.get('active') === 'on',
     }).eq('id', id)
+
+    // Endereço público (slug) não é mais editável — gera na hora se ainda
+    // não existir (escola criada antes dessa mudança, ou nome definido
+    // depois), a partir do nome que acabou de ser salvo.
+    await ensureSchoolSlug({
+      schoolId: id, organizationId: org!.id, orgPathSlug: slug,
+      name: newName, currentSlug: (escola as unknown as { slug: string | null }).slug,
+    })
+
     await triggerSiteRevalidation(org!.id, 'schools')
     redirect(`/${slug}/escolas/${id}?msg=atualizado`)
   }
@@ -523,7 +534,12 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                       <Field label="Nome da escola *" name="name" defaultValue={escola.name} required />
                     </div>
                     <Field label="Sigla / Acrônimo" name="acronym" defaultValue={escola.acronym ?? ''} placeholder="Ex: ETED" />
-                    <Field label="Slug (URL pública)" name="slug" defaultValue={(escola as unknown as { slug: string | null }).slug ?? ''} placeholder="ex: eted-almirante" />
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Endereço público (automático)</label>
+                      <p className="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 truncate">
+                        {(escola as unknown as { slug: string | null }).slug || 'gerado ao salvar, a partir do nome'}
+                      </p>
+                    </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-500 mb-1">Categoria</label>
                       <select name="school_type" defaultValue={(escola as unknown as { school_type: string }).school_type}
@@ -885,7 +901,12 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                   <Field label="Nome da escola *" name="name" defaultValue={escola.name} required />
                 </div>
                 <Field label="Sigla / Acrônimo" name="acronym" defaultValue={escola.acronym ?? ''} placeholder="Ex: ETED" />
-                <Field label="Slug (URL pública)" name="slug" defaultValue={(escola as unknown as { slug: string | null }).slug ?? ''} placeholder="ex: eted-almirante" />
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Endereço público (automático)</label>
+                  <p className="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 truncate">
+                    {(escola as unknown as { slug: string | null }).slug || 'gerado ao salvar, a partir do nome'}
+                  </p>
+                </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Categoria</label>
                   <select name="school_type" defaultValue={(escola as unknown as { school_type: string }).school_type}

@@ -85,9 +85,11 @@ export default async function NovaEscolaPage({ params, searchParams }: Props) {
       linkedMinistryId = ministryRow?.id ?? null
     }
 
+    const name = formData.get('name') as string
+
     const { data: escola, error } = await sb.from('schools').insert({
       organization_id: orgRow.id,
-      name: formData.get('name') as string,
+      name,
       school_type: schoolType,
       type_name: (formData.get('type_name') as string)?.trim() || 'Escola',
       subtitle: (formData.get('subtitle') as string)?.trim() || null,
@@ -99,6 +101,12 @@ export default async function NovaEscolaPage({ params, searchParams }: Props) {
 
     if (error) console.error('createSchool', error)
     if (!escola) return
+
+    // Endereço público (slug) sai pronto, derivado do nome — não é mais um
+    // campo editável à parte (ver src/lib/school/schoolSlug.ts).
+    const { ensureSchoolSlug } = await import('@/lib/school/schoolSlug')
+    await ensureSchoolSlug({ schoolId: escola.id, organizationId: orgRow.id, orgPathSlug: slug, name, currentSlug: null })
+
     redirect(`/${slug}/escolas/${escola.id}`)
   }
 
