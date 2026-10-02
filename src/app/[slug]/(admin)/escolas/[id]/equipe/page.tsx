@@ -37,11 +37,11 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
 
   // Formulário de obreiro é de ministério — uma escola só tem link público
   // de "quero servir aqui" se for o lado escola de um ministério (linked_ministry_id).
-  let publicStaffLink: { slug: string } | null = null
+  let linkedMinistryForStaff: { slug: string | null; is_public: boolean } | null = null
   if (escola?.linked_ministry_id) {
     const { data: linkedMinistry } = await supabase.from('ministries')
       .select('slug, is_public').eq('id', escola.linked_ministry_id).maybeSingle()
-    if (linkedMinistry?.is_public && linkedMinistry.slug) publicStaffLink = { slug: linkedMinistry.slug }
+    linkedMinistryForStaff = linkedMinistry ?? null
   }
 
   const { role, preview } = await getCurrentOrganizationRole(supabase, user.id, orgId)
@@ -256,10 +256,12 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
   }
   const handleCopyPublicLink = async () => {
     'use server'
-    if (!publicStaffLink) return { error: 'Sem página pública de obreiro pra esta escola.' }
+    if (!linkedMinistryForStaff) return { error: 'Esta escola não está vinculada a um ministério — sem página pública de obreiro pra ela.' }
+    if (!linkedMinistryForStaff.is_public) return { error: 'A página pública do ministério vinculado está desativada. Ative em Ministério > Geral > Página pública.' }
+    if (!linkedMinistryForStaff.slug) return { error: 'O ministério vinculado não tem um endereço (slug) definido. Configure em Ministério > Geral > Página pública.' }
     const url = await getOrCreateShortLink({
       organizationId: orgId,
-      targetPath: `/${slug}/servir/${publicStaffLink.slug}`,
+      targetPath: `/${slug}/servir/${linkedMinistryForStaff.slug}`,
       createdBy: user.id,
     })
     return { url }
@@ -328,7 +330,7 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
             slug={slug}
             action={handleEnviarFormularioDireto}
             fixedDestination={{ type: 'school', id, label: escola?.name ?? 'esta escola' }}
-            publicLinkAction={publicStaffLink ? handleCopyPublicLink : undefined}
+            publicLinkAction={handleCopyPublicLink}
           />
         </div>
       )}

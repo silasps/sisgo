@@ -40,10 +40,12 @@ export function EnviarFormularioObreiroDiretoButton({
   const [isPending, startTransition] = useTransition()
   const [result, setResult] = useState<ActionResult | null>(null)
   const [publicLinkState, setPublicLinkState] = useState<'idle' | 'loading' | 'copied' | 'error'>('idle')
+  const [publicLinkError, setPublicLinkError] = useState<string | null>(null)
 
   function handleCopyPublicLink() {
     if (!publicLinkAction) return
     setPublicLinkState('loading')
+    setPublicLinkError(null)
     startTransition(async () => {
       const res = await publicLinkAction()
       if (res.url) {
@@ -52,6 +54,7 @@ export function EnviarFormularioObreiroDiretoButton({
         setTimeout(() => setPublicLinkState('idle'), 2500)
       } else {
         setPublicLinkState('error')
+        setPublicLinkError(res.error ?? 'Não foi possível gerar o link.')
       }
     })
   }
@@ -60,6 +63,7 @@ export function EnviarFormularioObreiroDiretoButton({
     setOpen(false)
     setResult(null)
     setPublicLinkState('idle')
+    setPublicLinkError(null)
     if (result?.url) router.refresh()
   }
 
@@ -87,15 +91,20 @@ export function EnviarFormularioObreiroDiretoButton({
       <Modal open={open} onClose={handleClose} title="Enviar formulário definitivo de obreiro"
         subtitle="Use quando você já conversou com a pessoa fora do sistema — pula a pré-inscrição pública.">
         {publicLinkAction && !result?.url && (
-          <div className="mx-5 mt-4 flex items-center justify-between gap-3 rounded-lg border border-violet-100 bg-violet-50 px-3 py-2.5">
-            <p className="text-xs text-violet-700">
-              Ou copie o link público pra divulgar (WhatsApp, Instagram, site) — pra quem quer se inscrever por conta própria.
-            </p>
-            <button type="button" onClick={handleCopyPublicLink} disabled={publicLinkState === 'loading'}
-              className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-violet-700 bg-white border border-violet-200 rounded-lg hover:bg-violet-100 disabled:opacity-60 transition-colors whitespace-nowrap">
-              <Copy className="size-3.5" />
-              {publicLinkState === 'copied' ? 'Copiado!' : publicLinkState === 'loading' ? 'Gerando…' : publicLinkState === 'error' ? 'Erro, tente de novo' : 'Copiar link'}
-            </button>
+          <div className="mx-5 mt-4 rounded-lg border border-violet-100 bg-violet-50 px-3 py-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-violet-700">
+                Ou copie o link público pra divulgar (WhatsApp, Instagram, site) — pra quem quer se inscrever por conta própria.
+              </p>
+              <button type="button" onClick={handleCopyPublicLink} disabled={publicLinkState === 'loading'}
+                className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-violet-700 bg-white border border-violet-200 rounded-lg hover:bg-violet-100 disabled:opacity-60 transition-colors whitespace-nowrap">
+                <Copy className="size-3.5" />
+                {publicLinkState === 'copied' ? 'Copiado!' : publicLinkState === 'loading' ? 'Gerando…' : publicLinkState === 'error' ? 'Ver motivo' : 'Copiar link'}
+              </button>
+            </div>
+            {publicLinkState === 'error' && publicLinkError && (
+              <p className="text-xs text-amber-700 mt-2"><AlertTriangle className="size-3.5 inline -mt-0.5" /> {publicLinkError}</p>
+            )}
           </div>
         )}
         {!result?.url ? (

@@ -53,11 +53,11 @@ export default async function EscolaAlunosPage({ params }: Props) {
   const db = createAdminClient()
 
   const { data: escolaPublic } = await db.from('schools').select('slug, is_public').eq('id', id).maybeSingle()
-  const hasPublicPage = Boolean(escolaPublic?.is_public && escolaPublic?.slug)
 
   async function handleCopyPublicLink() {
     'use server'
-    if (!escolaPublic?.is_public || !escolaPublic?.slug) return { error: 'Escola sem página pública ativa.' }
+    if (!escolaPublic?.is_public) return { error: 'A página pública desta escola está desativada. Ative em Configurações > Página pública.' }
+    if (!escolaPublic?.slug) return { error: 'Esta escola não tem um endereço (slug) definido. Configure em Configurações > Página pública.' }
     const url = await getOrCreateShortLink({
       organizationId: org!.id,
       targetPath: `/${slug}/escola/${escolaPublic.slug}`,
@@ -120,7 +120,7 @@ export default async function EscolaAlunosPage({ params }: Props) {
           <EnviarFormularioAlunoDiretoButton
             action={handleEnviarFormularioDireto}
             classes={turmas ?? []}
-            publicLinkAction={hasPublicPage ? handleCopyPublicLink : undefined}
+            publicLinkAction={handleCopyPublicLink}
           />
         </div>
       )}

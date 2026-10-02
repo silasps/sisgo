@@ -368,12 +368,11 @@ export default async function EquipePage({ params, searchParams }: Props) {
     })
     redirect(`/${slug}/ministerios/${id}/equipe`)
   }
-  const hasPublicMinistryPage = Boolean((ministry as unknown as { is_public?: boolean; slug?: string | null })?.is_public
-    && (ministry as unknown as { slug?: string | null })?.slug)
   const handleCopyPublicLink = async () => {
     'use server'
     const m = ministry as unknown as { is_public?: boolean; slug?: string | null }
-    if (!m?.is_public || !m?.slug) return { error: 'Ministério sem página pública ativa.' }
+    if (!m?.is_public) return { error: 'A página pública deste ministério está desativada. Ative em Geral > Página pública.' }
+    if (!m?.slug) return { error: 'Este ministério não tem um endereço (slug) definido. Configure em Geral > Página pública.' }
     const url = await getOrCreateShortLink({
       organizationId: orgId,
       targetPath: `/${slug}/servir/${m.slug}`,
@@ -433,7 +432,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
             slug={slug}
             action={handleEnviarFormularioDireto}
             fixedDestination={{ type: 'ministry', id, label: ministryName }}
-            publicLinkAction={hasPublicMinistryPage ? handleCopyPublicLink : undefined}
+            publicLinkAction={handleCopyPublicLink}
           />
         </div>
       )}
