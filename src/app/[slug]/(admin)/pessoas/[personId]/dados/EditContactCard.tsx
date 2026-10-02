@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Loader2, Contact } from 'lucide-react'
+import { PhoneInput } from '@/components/ui/PhoneInput'
 
 type Props = {
   currentEmail: string
@@ -46,12 +47,7 @@ export function EditContactCard({ currentEmail, currentPhone, action }: Props) {
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Telefone / WhatsApp</label>
-            <input
-              value={phone}
-              onChange={e => setPhone(e.target.value)}
-              placeholder="(41) 99999-9999"
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-            />
+            <PhoneInput value={phone} onChange={setPhone} />
           </div>
         </div>
         <p className="text-[11px] text-gray-400">

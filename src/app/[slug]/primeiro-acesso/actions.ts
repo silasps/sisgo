@@ -2,13 +2,16 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { validatePhoneValue } from '@/lib/phone'
 
 // Completa o que falta no cadastro de quem entrou pela primeira vez com um
 // perfil mínimo (ex.: "Criar obreiro" em Obreiros só pede nome + e-mail) —
 // ver checagem de telefone em page.tsx, que decide se essa etapa aparece.
 export async function completarCadastroInicial(formData: FormData): Promise<{ error: string } | { ok: true }> {
-  const phone = ((formData.get('phone') as string) ?? '').replace(/\D/g, '')
-  if (phone.length < 10 || phone.length > 13) return { error: 'Telefone inválido — use DDD + número.' }
+  const phoneResult = validatePhoneValue((formData.get('phone') as string) ?? '')
+  if ('error' in phoneResult) return phoneResult
+  const phone = phoneResult.value
+  if (!phone) return { error: 'Informe um telefone.' }
   const birthDate = (formData.get('birth_date') as string) || null
 
   const supabase = await createClient()

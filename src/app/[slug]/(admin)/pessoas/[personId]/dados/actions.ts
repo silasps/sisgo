@@ -1,6 +1,7 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { validatePhoneValue } from '@/lib/phone'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const DOCUMENT_EXT: Record<string, string> = {
@@ -29,10 +30,11 @@ export async function atualizarContatoPessoa(
   formData: FormData,
 ): Promise<{ error: string } | { ok: true }> {
   const email = ((formData.get('email') as string) ?? '').trim().toLowerCase()
-  const phone = ((formData.get('phone') as string) ?? '').replace(/\D/g, '')
+  const phoneResult = validatePhoneValue((formData.get('phone') as string) ?? '')
 
   if (email && !EMAIL_RE.test(email)) return { error: `Email "${email}" não parece válido.` }
-  if (phone && (phone.length < 10 || phone.length > 13)) return { error: 'Telefone inválido — use DDD + número.' }
+  if ('error' in phoneResult) return { error: phoneResult.error }
+  const phone = phoneResult.value
 
   const db = createAdminClient()
   const upsertContact = async (type: 'email' | 'whatsapp', value: string) => {

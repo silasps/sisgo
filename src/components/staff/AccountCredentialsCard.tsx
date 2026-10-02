@@ -4,11 +4,11 @@ import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { Copy, Phone, Check } from 'lucide-react'
 import type { AccountCredentials } from '@/lib/staff/accountCredentials'
+import { whatsappDigits } from '@/lib/phone'
+import { PhoneInput } from '@/components/ui/PhoneInput'
 
 function whatsappUrl(phone: string, message: string) {
-  const digits = phone.replace(/\D/g, '')
-  const withCountry = digits.length <= 11 ? `55${digits}` : digits
-  return `https://wa.me/${withCountry}?text=${encodeURIComponent(message)}`
+  return `https://wa.me/${whatsappDigits(phone)}?text=${encodeURIComponent(message)}`
 }
 
 // Card de "e-mail + senha prontos pra entregar", reusado em todo fluxo que
@@ -110,14 +110,9 @@ export function AccountCredentialsCard({
 
       {!phone && addingPhone && (
         <form onSubmit={handleAddPhone} className="flex items-center gap-2">
-          <input
-            autoFocus
-            required
-            value={phoneInput}
-            onChange={e => setPhoneInput(e.target.value)}
-            placeholder="(41) 99999-9999"
-            className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-          />
+          <div className="flex-1">
+            <PhoneInput value={phoneInput} onChange={setPhoneInput} autoFocus />
+          </div>
           <button
             type="submit"
             disabled={isPending}

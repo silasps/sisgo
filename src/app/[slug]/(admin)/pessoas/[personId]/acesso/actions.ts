@@ -6,6 +6,7 @@ import { resolveOrCreateRoleId } from '@/lib/import-pessoas/roles'
 import {
   type AccountCredentials, lookupPersonPhone, buildWelcomeWhatsappMessage, buildResetWhatsappMessage,
 } from '@/lib/staff/accountCredentials'
+import { validatePhoneValue } from '@/lib/phone'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -84,8 +85,10 @@ export async function adicionarTelefonePessoa(
   personId: string,
   formData: FormData,
 ): Promise<{ error: string } | { ok: true; phone: string }> {
-  const phone = ((formData.get('phone') as string) ?? '').replace(/\D/g, '')
-  if (phone.length < 10 || phone.length > 13) return { error: 'Telefone inválido — use DDD + número.' }
+  const phoneResult = validatePhoneValue((formData.get('phone') as string) ?? '')
+  if ('error' in phoneResult) return phoneResult
+  const phone = phoneResult.value
+  if (!phone) return { error: 'Informe um telefone.' }
 
   const db = createAdminClient()
   const { data: existing } = await db.from('person_contacts').select('id').eq('person_id', personId).eq('type', 'whatsapp').maybeSingle()

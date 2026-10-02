@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Loader2, UserCheck } from 'lucide-react'
 import { completarCadastroInicial } from './actions'
+import { PhoneInput } from '@/components/ui/PhoneInput'
 
 export function CompletarCadastroInicialForm({ slug }: { slug: string }) {
   const router = useRouter()
@@ -29,15 +30,7 @@ export function CompletarCadastroInicialForm({ slug }: { slug: string }) {
     <form onSubmit={handleSubmit} className="space-y-3">
       <div>
         <label className="block text-xs font-medium text-gray-500 mb-1">Telefone / WhatsApp</label>
-        <input
-          type="tel"
-          value={phone}
-          onChange={e => setPhone(e.target.value)}
-          required
-          autoFocus
-          placeholder="(41) 99999-9999"
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-        />
+        <PhoneInput value={phone} onChange={setPhone} autoFocus />
       </div>
       <div>
         <label className="block text-xs font-medium text-gray-500 mb-1">Data de nascimento (opcional)</label>
