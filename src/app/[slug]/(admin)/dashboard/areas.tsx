@@ -53,8 +53,8 @@ export async function buildAreaTabs({ supabase, sbAdmin, slug, orgId, userId, ar
       ? sbAdmin.from('ministries').select('id, hero_image_url').in('id', areas.ministries.map(m => m.id))
       : Promise.resolve({ data: [] as Array<{ id: string; hero_image_url: string | null }> }),
     areas.schools.length > 0
-      ? sbAdmin.from('schools').select('id, hero_image_url').in('id', areas.schools.map(s => s.id))
-      : Promise.resolve({ data: [] as Array<{ id: string; hero_image_url: string | null }> }),
+      ? sbAdmin.from('schools').select('id, hero_image_url, linked_ministry_id').in('id', areas.schools.map(s => s.id))
+      : Promise.resolve({ data: [] as Array<{ id: string; hero_image_url: string | null; linked_ministry_id: string | null }> }),
     areas.ministries.length > 0
       ? supabase.from('reservations')
         .select('*', { count: 'exact', head: true })
@@ -123,15 +123,37 @@ export async function buildAreaTabs({ supabase, sbAdmin, slug, orgId, userId, ar
   const heroByMinistry = new Map((ministryHeroRows ?? []).map(r => [r.id, r.hero_image_url]))
   const heroBySchool = new Map((schoolHeroRows ?? []).map(r => [r.id, r.hero_image_url]))
 
+  // Escola é "o lado aluno" de um ministério quando tem linked_ministry_id
+  // pra um ministério que a própria pessoa também acumula — nesse caso
+  // getMySchools já devolve essa escola automaticamente (unit-access.ts),
+  // e sem esse merge ela virava uma SEGUNDA aba com o mesmo nome do
+  // ministério (ex.: "ETED Comunicadores" duas vezes). Pessoas/obreiros são
+  // sempre do ministério; a escola entra como seção "Alunos" dentro da
+  // mesma aba, não como aba própria.
+  const linkedMinistryIdBySchoolId = new Map((schoolHeroRows ?? []).map(r => [r.id, r.linked_ministry_id]))
+  const myMinistryIds = new Set(areas.ministries.map(m => m.id))
+  const absorbedSchoolIds = new Set<string>()
+  const schoolIndexByMinistryId = new Map<string, number>()
+  areas.schools.forEach((s, i) => {
+    const linkedMinistryId = linkedMinistryIdBySchoolId.get(s.id)
+    if (linkedMinistryId && myMinistryIds.has(linkedMinistryId)) {
+      absorbedSchoolIds.add(s.id)
+      schoolIndexByMinistryId.set(linkedMinistryId, i)
+    }
+  })
+
   return [
     ...areas.ministries.map((m, i) => {
       const d = ministryData[i]
+      const schoolIdx = schoolIndexByMinistryId.get(m.id)
+      const linkedSchool = schoolIdx !== undefined ? areas.schools[schoolIdx] : null
+      const linkedSchoolData = schoolIdx !== undefined ? schoolData[schoolIdx] : null
       return {
         tab: {
           key: `ministerio-${m.id}`,
           label: m.name,
           kind: 'ministerio' as const,
-          badge: m.link === 'lider' ? d.pending : undefined,
+          badge: (m.link === 'lider' ? d.pending : 0) + (linkedSchoolData?.applications ?? 0) || undefined,
         },
         hero: (
           <AreaHero
@@ -153,25 +175,30 @@ export async function buildAreaTabs({ supabase, sbAdmin, slug, orgId, userId, ar
             members={d.members}
             events={d.events}
             reservations={myReservations ?? 0}
+            linkedSchool={linkedSchool}
+            linkedSchoolData={linkedSchoolData}
           />
         ),
       }
     }),
-    ...areas.schools.map((s, i) => {
-      const d = schoolData[i]
-      return {
-        tab: { key: `escola-${s.id}`, label: s.name, kind: 'escola' as const, badge: d.applications },
-        hero: (
-          <AreaHero
-            key={`escola-hero-${s.id}`}
-            kicker={`Escola · ${s.link === 'lider' ? 'Líder' : 'Obreiro'}`}
-            title={s.name}
-            heroImageUrl={heroBySchool.get(s.id) ?? null}
-          />
-        ),
-        panel: <SchoolPanel key={`escola-${s.id}`} slug={slug} orgId={orgId} userId={userId} laundryEnabled={laundryEnabled} school={s} {...d} />,
-      }
-    }),
+    ...areas.schools
+      .map((s, i) => ({ s, i }))
+      .filter(({ s }) => !absorbedSchoolIds.has(s.id))
+      .map(({ s, i }) => {
+        const d = schoolData[i]
+        return {
+          tab: { key: `escola-${s.id}`, label: s.name, kind: 'escola' as const, badge: d.applications },
+          hero: (
+            <AreaHero
+              key={`escola-hero-${s.id}`}
+              kicker={`Escola · ${s.link === 'lider' ? 'Líder' : 'Obreiro'}`}
+              title={s.name}
+              heroImageUrl={heroBySchool.get(s.id) ?? null}
+            />
+          ),
+          panel: <SchoolPanel key={`escola-${s.id}`} slug={slug} orgId={orgId} userId={userId} laundryEnabled={laundryEnabled} school={s} {...d} />,
+        }
+      }),
   ]
 }
 
@@ -211,10 +238,18 @@ function QuickLink({ href, title, description }: { href: string; title: string; 
   )
 }
 
-function MinistryPanel({ slug, orgId, userId, laundryEnabled, ministry, pending, members, events, reservations }: {
+type ClassRow = { id: string; name: string; starts_at: string | null; ends_at: string | null }
+type SchoolStatsData = { classes: number; interests: number; applications: number; activeClasses: ClassRow[] }
+
+function MinistryPanel({ slug, orgId, userId, laundryEnabled, ministry, pending, members, events, reservations, linkedSchool, linkedSchoolData }: {
   slug: string; orgId: string; userId: string; laundryEnabled: boolean
   ministry: LinkedMinistry
   pending: number; members: number; events: CalendarEventRow[]; reservations: number
+  // Ministério que também é o lado obreiro de uma escola (linked_ministry_id)
+  // — a gestão de alunos entra como seção aqui, não como aba própria (ver
+  // comentário em buildAreaTabs sobre o merge).
+  linkedSchool: LinkedSchool | null
+  linkedSchoolData: SchoolStatsData | null
 }) {
   const base = `/${slug}/ministerios/${ministry.id}`
   const isLeader = ministry.link === 'lider'
@@ -231,49 +266,72 @@ function MinistryPanel({ slug, orgId, userId, laundryEnabled, ministry, pending,
       </div>
       <PersonalAccountCard slug={slug} orgId={orgId} userId={userId} laundryEnabled={laundryEnabled} />
       <MiniCalendar slug={slug} events={events} />
+      {linkedSchool && linkedSchoolData && (
+        <div className="pt-1 border-t border-gray-100 space-y-4">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 mt-4">
+            Escola · {linkedSchool.name}
+          </p>
+          <SchoolStatsGrid slug={slug} school={linkedSchool} {...linkedSchoolData} />
+          <SchoolActiveClassesCard slug={slug} school={linkedSchool} activeClasses={linkedSchoolData.activeClasses} />
+        </div>
+      )}
     </>
   )
 }
 
-type ClassRow = { id: string; name: string; starts_at: string | null; ends_at: string | null }
+function SchoolStatsGrid({ slug, school, classes, interests, applications }: {
+  slug: string; school: LinkedSchool
+} & Omit<SchoolStatsData, 'activeClasses'>) {
+  const base = `/${slug}/escolas/${school.id}`
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 animate-stagger">
+      <StatCard label="Turmas ativas" value={classes} icon={BookOpen} href={`${base}/configuracoes?tab=turmas`} color="orange" />
+      <StatCard label="Pré-inscrições" value={interests} icon={ClipboardList} href={`/${slug}/inscricoes`} color="blue" />
+      <StatCard label="Inscrições em análise" value={applications} icon={GraduationCap} href={`/${slug}/inscricoes`} color="purple" />
+    </div>
+  )
+}
 
-function SchoolPanel({ slug, orgId, userId, laundryEnabled, school, classes, interests, applications, activeClasses }: {
-  slug: string; orgId: string; userId: string; laundryEnabled: boolean
-  school: LinkedSchool
-  classes: number; interests: number; applications: number; activeClasses: ClassRow[]
+function SchoolActiveClassesCard({ slug, school, activeClasses }: {
+  slug: string; school: LinkedSchool; activeClasses: ClassRow[]
 }) {
   const base = `/${slug}/escolas/${school.id}`
   const monthYear = (d: string) => new Date(d).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })
   return (
+    <SectionCard title="Turmas ativas" href={`${base}/configuracoes?tab=turmas`} linkLabel="Gerenciar turmas">
+      {activeClasses.length === 0 ? (
+        <EmptyState icon={BookOpen} label="Nenhuma turma ativa nesta escola" />
+      ) : (
+        <div className="divide-y divide-gray-100">
+          {activeClasses.map(c => (
+            <Link key={c.id} href={`${base}/turmas/${c.id}`}
+              className="flex items-start justify-between py-2.5 px-2 -mx-2 rounded-lg hover:bg-brand-50 transition-colors group">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-gray-800 group-hover:text-brand-700 transition-colors truncate">{c.name}</p>
+                {c.starts_at && c.ends_at && (
+                  <p className="text-xs text-gray-400 mt-0.5">{monthYear(c.starts_at)} – {monthYear(c.ends_at)}</p>
+                )}
+              </div>
+              <span className="ml-2 shrink-0 text-xs bg-green-50 text-green-700 border border-green-100 px-2 py-0.5 rounded-full font-medium">
+                ativa
+              </span>
+            </Link>
+          ))}
+        </div>
+      )}
+    </SectionCard>
+  )
+}
+
+function SchoolPanel({ slug, orgId, userId, laundryEnabled, school, ...stats }: {
+  slug: string; orgId: string; userId: string; laundryEnabled: boolean
+  school: LinkedSchool
+} & SchoolStatsData) {
+  return (
     <>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 animate-stagger">
-        <StatCard label="Turmas ativas" value={classes} icon={BookOpen} href={`${base}/configuracoes?tab=turmas`} color="orange" />
-        <StatCard label="Pré-inscrições" value={interests} icon={ClipboardList} href={`/${slug}/inscricoes`} color="blue" />
-        <StatCard label="Inscrições em análise" value={applications} icon={GraduationCap} href={`/${slug}/inscricoes`} color="purple" />
-      </div>
+      <SchoolStatsGrid slug={slug} school={school} {...stats} />
       <PersonalAccountCard slug={slug} orgId={orgId} userId={userId} laundryEnabled={laundryEnabled} />
-      <SectionCard title="Turmas ativas" href={`${base}/configuracoes?tab=turmas`} linkLabel="Gerenciar turmas">
-        {activeClasses.length === 0 ? (
-          <EmptyState icon={BookOpen} label="Nenhuma turma ativa nesta escola" />
-        ) : (
-          <div className="divide-y divide-gray-100">
-            {activeClasses.map(c => (
-              <Link key={c.id} href={`${base}/turmas/${c.id}`}
-                className="flex items-start justify-between py-2.5 px-2 -mx-2 rounded-lg hover:bg-brand-50 transition-colors group">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-800 group-hover:text-brand-700 transition-colors truncate">{c.name}</p>
-                  {c.starts_at && c.ends_at && (
-                    <p className="text-xs text-gray-400 mt-0.5">{monthYear(c.starts_at)} – {monthYear(c.ends_at)}</p>
-                  )}
-                </div>
-                <span className="ml-2 shrink-0 text-xs bg-green-50 text-green-700 border border-green-100 px-2 py-0.5 rounded-full font-medium">
-                  ativa
-                </span>
-              </Link>
-            ))}
-          </div>
-        )}
-      </SectionCard>
+      <SchoolActiveClassesCard slug={slug} school={school} activeClasses={stats.activeClasses} />
     </>
   )
 }
