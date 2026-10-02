@@ -17,6 +17,7 @@ import { getOrgAndUser, getWorkspaceClient, getWorkspaceRole, getWorkspaceMinist
 import { EnviarFormularioObreiroDiretoButton } from '@/components/inscricoes/EnviarFormularioObreiroDiretoButton'
 import { SearchableSelectModal } from '@/components/ui/SearchableSelectModal'
 import { setTeacherLodgingAccess, getTeacherLodgingAccessMap } from '@/lib/school/teacherVisitRequests'
+import { getOrCreateShortLink } from '@/lib/shortLinks'
 
 type Props = {
   params: Promise<{ slug: string; id: string }>
@@ -367,6 +368,19 @@ export default async function EquipePage({ params, searchParams }: Props) {
     })
     redirect(`/${slug}/ministerios/${id}/equipe`)
   }
+  const hasPublicMinistryPage = Boolean((ministry as unknown as { is_public?: boolean; slug?: string | null })?.is_public
+    && (ministry as unknown as { slug?: string | null })?.slug)
+  const handleCopyPublicLink = async () => {
+    'use server'
+    const m = ministry as unknown as { is_public?: boolean; slug?: string | null }
+    if (!m?.is_public || !m?.slug) return { error: 'Ministério sem página pública ativa.' }
+    const url = await getOrCreateShortLink({
+      organizationId: orgId,
+      targetPath: `/${slug}/servir/${m.slug}`,
+      createdBy: user.id,
+    })
+    return { url }
+  }
   const handleEnviarFormularioDireto = async (formData: FormData) => {
     'use server'
     return inviteStaffMemberDirect({
@@ -419,6 +433,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
             slug={slug}
             action={handleEnviarFormularioDireto}
             fixedDestination={{ type: 'ministry', id, label: ministryName }}
+            publicLinkAction={hasPublicMinistryPage ? handleCopyPublicLink : undefined}
           />
         </div>
       )}

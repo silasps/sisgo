@@ -5,6 +5,7 @@ import { notFound, redirect } from 'next/navigation'
 import { ClipboardList, Mail, MessageCircle } from 'lucide-react'
 import { NovaPreInscricaoButton, NovaPreInscricaoObreiroButton, EditarPreInscricaoButton, EditarPreInscricaoObreiroButton, MarcarRecebidoExternoButton, LinksReferenciaAdminButton } from './InscricoesModals'
 import { EnviarFormularioObreiroDiretoButton } from '@/components/inscricoes/EnviarFormularioObreiroDiretoButton'
+import { getOrCreateShortLink } from '@/lib/shortLinks'
 import { RecusarModal } from './RecusarModal'
 import { DisponibilizarFormularioButton } from './DisponibilizarFormularioButton'
 import { getEmailQuota } from '@/lib/email/getEmailQuota'
@@ -1140,6 +1141,15 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     return result
   }
 
+  async function handleCopyServirLink() {
+    'use server'
+    const url = await getOrCreateShortLink({
+      organizationId: orgId,
+      targetPath: `/${slug}/servir`,
+      createdBy: user?.id ?? null,
+    })
+    return { url }
+  }
   async function enviarFormularioObreiroDireto(formData: FormData) {
     'use server'
     const { createClient } = await import('@/lib/supabase/server')
@@ -1861,6 +1871,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
                   id: fixedMinistryId,
                   label: allMinistries.find(m => m.id === fixedMinistryId)?.name ?? 'seu ministério',
                 } : undefined}
+                publicLinkAction={handleCopyServirLink}
               />
             )}
           </div>

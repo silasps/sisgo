@@ -14,6 +14,7 @@ import { MultiSelectModal } from '@/components/ui/MultiSelectModal'
 import { SubmitButton } from '@/components/ui/SubmitButton'
 import { EnviarFormularioObreiroDiretoButton } from '@/components/inscricoes/EnviarFormularioObreiroDiretoButton'
 import { setTeacherLodgingAccess, getTeacherLodgingAccessMap } from '@/lib/school/teacherVisitRequests'
+import { getOrCreateShortLink } from '@/lib/shortLinks'
 
 type Props = {
   params: Promise<{ slug: string; id: string }>
@@ -29,10 +30,19 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
   const [{ data: { user } }, { data: org }, { data: escola }] = await Promise.all([
     supabase.auth.getUser(),
     supabase.from('organizations').select('id').eq('slug', slug).single(),
-    supabase.from('schools').select('name').eq('id', id).single(),
+    supabase.from('schools').select('name, linked_ministry_id').eq('id', id).single(),
   ])
   if (!user || !org) notFound()
   const orgId = org.id
+
+  // Formulário de obreiro é de ministério — uma escola só tem link público
+  // de "quero servir aqui" se for o lado escola de um ministério (linked_ministry_id).
+  let publicStaffLink: { slug: string } | null = null
+  if (escola?.linked_ministry_id) {
+    const { data: linkedMinistry } = await supabase.from('ministries')
+      .select('slug, is_public').eq('id', escola.linked_ministry_id).maybeSingle()
+    if (linkedMinistry?.is_public && linkedMinistry.slug) publicStaffLink = { slug: linkedMinistry.slug }
+  }
 
   const { role, preview } = await getCurrentOrganizationRole(supabase, user.id, orgId)
   const isManagement = isManagementRole(role)
@@ -244,6 +254,16 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
     await rejectStaffLoan(formData.get('loan_id') as string, user.id, (formData.get('recommendation') as string)?.trim() || null)
     redirect(base)
   }
+  const handleCopyPublicLink = async () => {
+    'use server'
+    if (!publicStaffLink) return { error: 'Sem página pública de obreiro pra esta escola.' }
+    const url = await getOrCreateShortLink({
+      organizationId: orgId,
+      targetPath: `/${slug}/servir/${publicStaffLink.slug}`,
+      createdBy: user.id,
+    })
+    return { url }
+  }
   const handleEnviarFormularioDireto = async (formData: FormData) => {
     'use server'
     const { inviteSchoolStaffDirect } = await import('../actions')
@@ -308,6 +328,7 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
             slug={slug}
             action={handleEnviarFormularioDireto}
             fixedDestination={{ type: 'school', id, label: escola?.name ?? 'esta escola' }}
+            publicLinkAction={publicStaffLink ? handleCopyPublicLink : undefined}
           />
         </div>
       )}

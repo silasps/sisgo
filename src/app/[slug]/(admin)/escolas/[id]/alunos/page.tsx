@@ -8,6 +8,7 @@ import { getSchoolLink } from '@/lib/auth/unit-access'
 import { HEALTH_ROLES, isOperationalManager } from '@/lib/auth/permissions'
 import { SubmitButton } from '@/components/ui/SubmitButton'
 import { EnviarFormularioAlunoDiretoButton } from '@/components/inscricoes/EnviarFormularioAlunoDiretoButton'
+import { getOrCreateShortLink } from '@/lib/shortLinks'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
@@ -50,6 +51,20 @@ export default async function EscolaAlunosPage({ params }: Props) {
   const isLiderEted = !canWrite && (await getSchoolLink({ userId: user.id, orgId: org.id, role, preview }, id)) === 'lider'
 
   const db = createAdminClient()
+
+  const { data: escolaPublic } = await db.from('schools').select('slug, is_public').eq('id', id).maybeSingle()
+  const hasPublicPage = Boolean(escolaPublic?.is_public && escolaPublic?.slug)
+
+  async function handleCopyPublicLink() {
+    'use server'
+    if (!escolaPublic?.is_public || !escolaPublic?.slug) return { error: 'Escola sem página pública ativa.' }
+    const url = await getOrCreateShortLink({
+      organizationId: org!.id,
+      targetPath: `/${slug}/escola/${escolaPublic.slug}`,
+      createdBy: user!.id,
+    })
+    return { url }
+  }
 
   async function handleEnviarFormularioDireto(formData: FormData) {
     'use server'
@@ -105,6 +120,7 @@ export default async function EscolaAlunosPage({ params }: Props) {
           <EnviarFormularioAlunoDiretoButton
             action={handleEnviarFormularioDireto}
             classes={turmas ?? []}
+            publicLinkAction={hasPublicPage ? handleCopyPublicLink : undefined}
           />
         </div>
       )}

@@ -4,12 +4,13 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Modal } from '@/components/ui/Modal'
 import { InternationalPhoneField } from '@/components/ui/InternationalPhoneField'
-import { AlertTriangle, CheckCircle2, Link as LinkIcon, Send } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Link as LinkIcon, Send, Copy } from 'lucide-react'
 
 type MinistryOption = { id: string; name: string }
 type SchoolOption = { id: string; name: string }
 type ActionResult = { url?: string; error?: string; emailWarning?: string }
 type Action = (fd: FormData) => Promise<ActionResult>
+type PublicLinkAction = () => Promise<{ url?: string; error?: string }>
 
 type Props = {
   slug: string
@@ -23,21 +24,42 @@ type Props = {
   fixedDestination?: { type: 'ministry' | 'school'; id: string; label: string }
   buttonClassName?: string
   buttonLabel?: string
+  // Link público (curto) de pré-inscrição pra divulgar (WhatsApp, Instagram,
+  // site) — pra quem não precisa que o líder já tenha os dados da pessoa.
+  // Ausente/omitido quando não há página pública pra esse destino.
+  publicLinkAction?: PublicLinkAction
 }
 
 const INPUT = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400'
 
 export function EnviarFormularioObreiroDiretoButton({
-  slug, action, ministries = [], schools = [], fixedDestination, buttonClassName, buttonLabel,
+  slug, action, ministries = [], schools = [], fixedDestination, buttonClassName, buttonLabel, publicLinkAction,
 }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [result, setResult] = useState<ActionResult | null>(null)
+  const [publicLinkState, setPublicLinkState] = useState<'idle' | 'loading' | 'copied' | 'error'>('idle')
+
+  function handleCopyPublicLink() {
+    if (!publicLinkAction) return
+    setPublicLinkState('loading')
+    startTransition(async () => {
+      const res = await publicLinkAction()
+      if (res.url) {
+        try { await navigator.clipboard.writeText(res.url) } catch {}
+        setPublicLinkState('copied')
+        setTimeout(() => setPublicLinkState('idle'), 2500)
+      } else {
+        setPublicLinkState('error')
+      }
+    })
+  }
 
   function handleClose() {
     setOpen(false)
     setResult(null)
+    setPublicLinkState('idle')
     if (result?.url) router.refresh()
   }
 
@@ -64,6 +86,18 @@ export function EnviarFormularioObreiroDiretoButton({
 
       <Modal open={open} onClose={handleClose} title="Enviar formulário definitivo de obreiro"
         subtitle="Use quando você já conversou com a pessoa fora do sistema — pula a pré-inscrição pública.">
+        {publicLinkAction && !result?.url && (
+          <div className="mx-5 mt-4 flex items-center justify-between gap-3 rounded-lg border border-violet-100 bg-violet-50 px-3 py-2.5">
+            <p className="text-xs text-violet-700">
+              Ou copie o link público pra divulgar (WhatsApp, Instagram, site) — pra quem quer se inscrever por conta própria.
+            </p>
+            <button type="button" onClick={handleCopyPublicLink} disabled={publicLinkState === 'loading'}
+              className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-violet-700 bg-white border border-violet-200 rounded-lg hover:bg-violet-100 disabled:opacity-60 transition-colors whitespace-nowrap">
+              <Copy className="size-3.5" />
+              {publicLinkState === 'copied' ? 'Copiado!' : publicLinkState === 'loading' ? 'Gerando…' : publicLinkState === 'error' ? 'Erro, tente de novo' : 'Copiar link'}
+            </button>
+          </div>
+        )}
         {!result?.url ? (
           <form onSubmit={handleSubmit} className="space-y-4 p-5">
             <div>
