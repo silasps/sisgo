@@ -641,13 +641,31 @@ async function PessoasTabContent({
       }
     }
 
+    // "Função" mostra o PAPEL de verdade (ex. "Obreiro de Ministério", de
+    // organization_users.roles) — antes mostrava staff_profiles.role_title
+    // (texto livre, tipo "Responsável por organizar os momentos de
+    // intercessão..."), que é uma descrição complementar, não o cargo.
+    const obreiroUserIds = staffProfiles.map(s => s.user_id).filter((id): id is string => Boolean(id))
+    const roleLabelByUserId = new Map<string, string>()
+    if (obreiroUserIds.length > 0) {
+      type OrgUserRoleRaw = { user_id: string; roles: { label: string } | null }
+      const { data: orgUsersRaw } = await supabase
+        .from('organization_users')
+        .select('user_id, roles(label)')
+        .eq('organization_id', orgId)
+        .in('user_id', obreiroUserIds)
+      for (const row of ((orgUsersRaw ?? []) as unknown) as OrgUserRoleRaw[]) {
+        if (row.roles?.label) roleLabelByUserId.set(row.user_id, row.roles.label)
+      }
+    }
+
     rows = staffProfiles.map(s => ({
       id: s.id,
       personId: s.people?.id,
       nome: s.people?.full_name ?? '—',
       detalhe: s.area ?? (s.people?.id ? ministryNameByPersonId.get(s.people.id) ?? null : null),
       meta: s.user_id ? null : 'Obreiro sem cadastro',
-      col2: s.role_title ?? '—',
+      col2: (s.user_id ? roleLabelByUserId.get(s.user_id) : null) ?? s.role_title ?? '—',
       col2Label: 'Função',
       badge: { label: s.active ? 'Ativo' : 'Inativo', color: OBREIRO_STATUS_COLORS[String(s.active)] },
       criadoEm: s.created_at,
