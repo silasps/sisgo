@@ -12,6 +12,8 @@ import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { getSchoolLink } from '@/lib/auth/unit-access'
 import { MultiSelectModal } from '@/components/ui/MultiSelectModal'
 import { SubmitButton } from '@/components/ui/SubmitButton'
+import { EnviarFormularioObreiroDiretoButton } from '@/components/inscricoes/EnviarFormularioObreiroDiretoButton'
+import { setTeacherLodgingAccess, getTeacherLodgingAccessMap } from '@/lib/school/teacherVisitRequests'
 
 type Props = {
   params: Promise<{ slug: string; id: string }>
@@ -24,9 +26,10 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
   const supabase = await createClient()
   const sbAdmin = createAdminClient()
 
-  const [{ data: { user } }, { data: org }] = await Promise.all([
+  const [{ data: { user } }, { data: org }, { data: escola }] = await Promise.all([
     supabase.auth.getUser(),
     supabase.from('organizations').select('id').eq('slug', slug).single(),
+    supabase.from('schools').select('name').eq('id', id).single(),
   ])
   if (!user || !org) notFound()
   const orgId = org.id
@@ -35,15 +38,23 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
   const isManagement = isManagementRole(role)
   const canWrite = isOperationalManager(role)
   const canAssignLeader = canAssignLeadership(role)
-  // Líder DESTA escola (vínculo), não "tem papel lider_eted" — ver lib/auth/unit-access.
-  // Quem já escreve direto (canWrite) não passa pelo fluxo de solicitação ao DH.
-  const isLiderEted = !canWrite && (await getSchoolLink({ userId: user.id, orgId, role, preview }, id)) === 'lider'
+  // Líder/obreiro DESTA escola (vínculo), não "tem papel lider_eted/obreiro_eted"
+  // — ver lib/auth/unit-access. Quem já escreve direto (canWrite) não passa
+  // pelo fluxo de solicitação ao DH.
+  const mySchoolLink = canWrite ? null : await getSchoolLink({ userId: user.id, orgId, role, preview }, id)
+  const isLiderEted = mySchoolLink === 'lider'
+  // Quem pode ver/editar a permissão de hospedagem do professor por obreiro.
+  const canManageLodgingAccess = canWrite || role === 'lider_base' || isLiderEted
 
-  type StaffRaw = { id: string; person_id: string; role: string; people: { full_name: string } | null }
+  type StaffRaw = { id: string; person_id: string; role: string; people: { full_name: string; birth_date: string | null } | null }
   const { data: staffData } = await supabase
-    .from('school_staff').select('id, person_id, role, people(full_name)')
+    .from('school_staff').select('id, person_id, role, people(full_name, birth_date)')
     .eq('school_id', id).eq('active', true).order('joined_at', { ascending: true })
   const staffMembers = (staffData ?? []) as unknown as StaffRaw[]
+
+  const lodgingAccessMap = canManageLodgingAccess
+    ? await getTeacherLodgingAccessMap(id, staffMembers.map(s => s.person_id))
+    : new Map<string, boolean>()
 
   // Quem também serve ativamente em outra escola/ministério — mostra como
   // tag "também em" (sem bloquear nada, só pra ficar visível pro DH onde
@@ -233,12 +244,42 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
     await rejectStaffLoan(formData.get('loan_id') as string, user.id, (formData.get('recommendation') as string)?.trim() || null)
     redirect(base)
   }
+  const handleEnviarFormularioDireto = async (formData: FormData) => {
+    'use server'
+    const { inviteSchoolStaffDirect } = await import('../actions')
+    return inviteSchoolStaffDirect({
+      slug,
+      organizationId: orgId,
+      schoolId: id,
+      fullName: (formData.get('full_name') as string)?.trim() ?? '',
+      email: (formData.get('email') as string) || null,
+      phone: (formData.get('phone') as string) || null,
+      message: (formData.get('message') as string) || null,
+      createdBy: user.id,
+    })
+  }
+  const handleSetLodgingAccess = async (formData: FormData) => {
+    'use server'
+    const personId = formData.get('person_id') as string
+    if (!personId) return
+    await setTeacherLodgingAccess({
+      organizationId: orgId,
+      schoolId: id,
+      personId,
+      canView: formData.get('can_view') === 'sim',
+      setBy: user.id,
+    })
+    redirect(base)
+  }
 
   const msgs: Record<string, { text: string; cls: string }> = {
     enviada: { text: 'Solicitação enviada.', cls: 'bg-blue-50 border-blue-200 text-blue-700' },
     lider_atribuido: { text: 'Líder atribuído.', cls: 'bg-green-50 border-green-200 text-green-700' },
   }
   const msgInfo = msg ? msgs[msg] : null
+  const formatBirthday = (birthDate: string | null) => birthDate
+    ? new Date(`${birthDate}T00:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+    : null
 
   return (
     <main className="p-4 md:p-6 space-y-4 overflow-y-auto flex-1">
@@ -258,6 +299,16 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
           {Number(pending) === 1
             ? '1 pessoa já serve em outra escola/ministério — aguardando aprovação do líder de origem (ver Pendências).'
             : `${pending} pessoas já servem em outra escola/ministério — aguardando aprovação do líder de origem (ver Pendências).`}
+        </div>
+      )}
+
+      {(canWrite || isLiderEted) && (
+        <div className="flex justify-end">
+          <EnviarFormularioObreiroDiretoButton
+            slug={slug}
+            action={handleEnviarFormularioDireto}
+            fixedDestination={{ type: 'school', id, label: escola?.name ?? 'esta escola' }}
+          />
         </div>
       )}
 
@@ -340,25 +391,45 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
         <h2 className="text-sm font-semibold text-gray-700 mb-3">Obreiros ({staffMembers.length})</h2>
         {staffMembers.length > 0 ? (
           <ul className="divide-y divide-gray-100 mb-3">
-            {staffMembers.map(s => (
-              <li key={s.id} className="py-2.5 flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <span className="text-sm font-medium text-gray-900">{s.people?.full_name ?? '—'}</span>
-                  <span className="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{s.role}</span>
-                  {otherUnitByPerson.has(s.person_id) && (
-                    <span className="ml-2 text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full">
-                      também em: {otherUnitByPerson.get(s.person_id)}
-                    </span>
+            {staffMembers.map(s => {
+              const birthday = formatBirthday(s.people?.birth_date ?? null)
+              const canView = lodgingAccessMap.get(s.person_id) ?? false
+              return (
+                <li key={s.id} className="py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className="text-sm font-medium text-gray-900">{s.people?.full_name ?? '—'}</span>
+                      <span className="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{s.role}</span>
+                      {birthday && <span className="ml-2 text-xs text-gray-400">🎂 {birthday}</span>}
+                      {otherUnitByPerson.has(s.person_id) && (
+                        <span className="ml-2 text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full">
+                          também em: {otherUnitByPerson.get(s.person_id)}
+                        </span>
+                      )}
+                    </div>
+                    {canWrite && (
+                      <form action={handleRemoveStaff} className="flex-shrink-0">
+                        <input type="hidden" name="staff_id" value={s.id} />
+                        <button type="submit" className="text-xs text-red-400 hover:text-red-600 transition-colors">Remover</button>
+                      </form>
+                    )}
+                  </div>
+                  {canManageLodgingAccess && (
+                    <details className="mt-1">
+                      <summary className="text-[11px] text-gray-400 hover:text-brand-600 cursor-pointer select-none">Permissões</summary>
+                      <form action={handleSetLodgingAccess} className="mt-1.5 flex items-center gap-2">
+                        <input type="hidden" name="person_id" value={s.person_id} />
+                        <label className="flex items-center gap-1.5 text-xs text-gray-600">
+                          <input type="checkbox" name="can_view" value="sim" defaultChecked={canView} className="rounded border-gray-300" />
+                          Pode ver a hospedagem do professor visitante
+                        </label>
+                        <button type="submit" className="px-2 py-1 text-[11px] font-medium rounded bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors">Salvar</button>
+                      </form>
+                    </details>
                   )}
-                </div>
-                {canWrite && (
-                  <form action={handleRemoveStaff} className="flex-shrink-0">
-                    <input type="hidden" name="staff_id" value={s.id} />
-                    <button type="submit" className="text-xs text-red-400 hover:text-red-600 transition-colors">Remover</button>
-                  </form>
-                )}
-              </li>
-            ))}
+                </li>
+              )
+            })}
           </ul>
         ) : (
           <p className="text-sm text-gray-400 mb-3">Nenhum obreiro ainda.</p>

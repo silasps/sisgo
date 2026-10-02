@@ -50,6 +50,7 @@ export const ICON_MAP: Record<string, LucideIcon | typeof MinisteriosIcon> = {
   ministerios:    MinisteriosIcon,
   reservas:       BedDouble,
   hospedagem:     Hotel,
+  professores:    GraduationCap,
   quartos:        DoorOpen,
   agenda:         CalendarDays,
   lavanderia:     WashingMachine,

@@ -16,6 +16,7 @@ import { ScrollHighlight } from '@/components/ui/ScrollHighlight'
 import { getOrgAndUser, getWorkspaceClient, getWorkspaceRole, getWorkspaceMinistry, getWorkspaceMinistryLink } from '../_data'
 import { EnviarFormularioObreiroDiretoButton } from '@/components/inscricoes/EnviarFormularioObreiroDiretoButton'
 import { SearchableSelectModal } from '@/components/ui/SearchableSelectModal'
+import { setTeacherLodgingAccess, getTeacherLodgingAccessMap } from '@/lib/school/teacherVisitRequests'
 
 type Props = {
   params: Promise<{ slug: string; id: string }>
@@ -44,7 +45,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
 
   type MemberRaw = {
     id: string; person_id: string; joined_at: string | null
-    people: { full_name: string } | null
+    people: { full_name: string; birth_date: string | null } | null
     ministry_roles: { id: string; name: string } | null
   }
   type TransferRow = {
@@ -62,7 +63,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
     getWorkspaceRole(user.id, orgId),
     supabase
       .from('ministry_members')
-      .select('id, person_id, joined_at, people(full_name), ministry_roles(id, name)')
+      .select('id, person_id, joined_at, people(full_name, birth_date), ministry_roles(id, name)')
       .eq('ministry_id', id)
       .eq('active', true)
       .order('joined_at', { ascending: true }),
@@ -81,6 +82,10 @@ export default async function EquipePage({ params, searchParams }: Props) {
   const members = (membersRes.data ?? []) as unknown as MemberRaw[]
   const ministryRoles = ministryRolesRes.data ?? []
   const transfers = (transfersRes.data ?? []) as TransferRow[]
+
+  // Ministério "é" uma escola (schools.linked_ministry_id, migration 147) —
+  // só nesse caso existe hospedagem de professor pra controlar visibilidade.
+  const { data: linkedSchool } = await sbAdmin.from('schools').select('id').eq('linked_ministry_id', id).eq('organization_id', orgId).maybeSingle()
 
   const transferPersonIds = [...new Set(transfers.map(t => t.person_id))]
   const transferMinistryIds = [...new Set(transfers.flatMap(t => [t.from_ministry_id, t.to_ministry_id]))]
@@ -134,6 +139,11 @@ export default async function EquipePage({ params, searchParams }: Props) {
   ])
   const isLiderMinisterio = !canWrite && ministryLink === 'lider'
   const { personMap: transferPersonMap, ministryMap: transferMinistryMap } = transferMaps
+
+  const canManageLodgingAccess = Boolean(linkedSchool) && (canWrite || role === 'lider_base' || isLiderMinisterio)
+  const lodgingAccessMap = canManageLodgingAccess
+    ? await getTeacherLodgingAccessMap(linkedSchool!.id, members.map(m => m.person_id))
+    : new Map<string, boolean>()
 
   // Empréstimos de saída: obreiros DESTE ministério que alguém quis
   // adicionar em outra escola/ministério — precisam da aprovação do líder daqui.
@@ -344,6 +354,19 @@ export default async function EquipePage({ params, searchParams }: Props) {
     await rejectStaffLoan(formData.get('loan_id') as string, user.id, (formData.get('recommendation') as string)?.trim() || null)
     redirect(`/${slug}/ministerios/${id}/equipe`)
   }
+  const handleSetLodgingAccess = async (formData: FormData) => {
+    'use server'
+    const personId = formData.get('person_id') as string
+    if (!personId || !linkedSchool) return
+    await setTeacherLodgingAccess({
+      organizationId: orgId,
+      schoolId: linkedSchool.id,
+      personId,
+      canView: formData.get('can_view') === 'sim',
+      setBy: user.id,
+    })
+    redirect(`/${slug}/ministerios/${id}/equipe`)
+  }
   const handleEnviarFormularioDireto = async (formData: FormData) => {
     'use server'
     return inviteStaffMemberDirect({
@@ -369,6 +392,9 @@ export default async function EquipePage({ params, searchParams }: Props) {
   const msgInfo = msg ? msgs[msg] : null
   const INPUT = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400'
   const todayStr = new Date().toISOString().slice(0, 10)
+  const formatBirthday = (birthDate: string | null) => birthDate
+    ? new Date(`${birthDate}T00:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+    : null
 
   return (
     <>
@@ -440,13 +466,17 @@ export default async function EquipePage({ params, searchParams }: Props) {
           <ul className="divide-y divide-gray-100 mb-3">
             {members.map(m => {
               const hasPendingTransfer = transfers.some(t => t.person_id === m.person_id && ['pendente_destino', 'aceito_destino'].includes(t.status))
+              const birthday = formatBirthday(m.people?.birth_date ?? null)
+              const canViewLodging = lodgingAccessMap.get(m.person_id) ?? false
               return (
-                <li key={m.id} className="py-2.5 flex items-start justify-between gap-2">
+                <li key={m.id} className="py-2.5">
+                <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <span className="text-sm font-medium text-gray-900">{m.people?.full_name ?? '—'}</span>
                     {m.ministry_roles && (
                       <span className="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{m.ministry_roles.name}</span>
                     )}
+                    {birthday && <span className="ml-2 text-xs text-gray-400">🎂 {birthday}</span>}
                     {hasPendingTransfer && (
                       <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Em transferência</span>
                     )}
@@ -494,6 +524,20 @@ export default async function EquipePage({ params, searchParams }: Props) {
                       </details>
                     </div>
                   )}
+                </div>
+                {canManageLodgingAccess && (
+                  <details className="mt-1">
+                    <summary className="text-[11px] text-gray-400 hover:text-brand-600 cursor-pointer select-none">Permissões</summary>
+                    <form action={handleSetLodgingAccess} className="mt-1.5 flex items-center gap-2">
+                      <input type="hidden" name="person_id" value={m.person_id} />
+                      <label className="flex items-center gap-1.5 text-xs text-gray-600">
+                        <input type="checkbox" name="can_view" value="sim" defaultChecked={canViewLodging} className="rounded border-gray-300" />
+                        Pode ver a hospedagem do professor visitante
+                      </label>
+                      <button type="submit" className="px-2 py-1 text-[11px] font-medium rounded bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors">Salvar</button>
+                    </form>
+                  </details>
+                )}
                 </li>
               )
             })}

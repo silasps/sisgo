@@ -414,6 +414,7 @@ export default async function PendentesPage({ params, searchParams }: Props) {
       formDataBySchoolApp.set(a.id, a.form_data ?? {})
     }
   }
+
   const familyInfoByRequest = new Map<string, FamilyInfo>()
   const guestGenderByRequest = new Map<string, 'masculino' | 'feminino' | null>()
   for (const r of hospedagemReqs) {

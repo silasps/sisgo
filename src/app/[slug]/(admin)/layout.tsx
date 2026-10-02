@@ -49,7 +49,7 @@ const NAV_SECTION_BY_ICON: Record<string, string> = {
   pessoas: 'Pessoas & Times', presenca: 'Pessoas & Times', obreiros: 'Pessoas & Times',
   escolas: 'Pessoas & Times', inscricoes: 'Pessoas & Times', ministerios: 'Pessoas & Times',
   comunicacao: 'Pessoas & Times',
-  reservas: 'Hospedagem', hospedagem: 'Hospedagem', quartos: 'Hospedagem', lavanderia: 'Hospedagem',
+  reservas: 'Hospedagem', hospedagem: 'Hospedagem', professores: 'Hospedagem', quartos: 'Hospedagem', lavanderia: 'Hospedagem',
   cozinha: 'Cozinha', estoque: 'Cozinha', receitas: 'Cozinha',
   'estoque-manutencao': 'Manutenção',
   financeiro: 'Financeiro', caixa: 'Financeiro',
@@ -115,7 +115,13 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
   const canSeeGeneralFinance = isGeneralFinanceRole(role) || accumulatedRoles.some(r => isGeneralFinanceRole(r))
   const canSeeManutencao    = userHasAnyRole(allRoles, MANUTENCAO_ROLES)
   const canSeeHospedagem    = userHasAnyRole(allRoles, HOSPEDAGEM_ROLES)
-  const canSeePessoas       = userHasAnyRole(allRoles, PESSOAS_ROLES)
+  // lider_eted/lider_ministerio estão em PESSOAS_ROLES (acesso a pessoas em
+  // geral, ex. perfil individual visto de outro lugar), mas pessoas/page.tsx
+  // redireciona esses dois pra fora do diretório geral (LGPD — ver comentário
+  // lá) antes mesmo de renderizar. Sem essa exceção aqui, o item "Pessoas" do
+  // menu aparecia pra eles e só servia pra bater o olho e cair direto em
+  // Escolas/Ministérios — mesma exceção já feita em global-search.ts.
+  const canSeePessoas       = userHasAnyRole(allRoles, PESSOAS_ROLES) && role !== 'lider_eted' && role !== 'lider_ministerio'
   const canSeeCozinha       = userHasAnyRole(allRoles, KITCHEN_ROLES)
   const canBuyMeals         = true
   const canSeeReservas      = isManagement || isHospitalidade || is('lider_eted') || isObreiroEted || isAluno || isAssociado || isLiderMinisterio || isObreiroMinisterio
@@ -141,6 +147,7 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
     { href: `/${slug}/ministerios`,  label: ministeriosLabel,   icon: 'ministerios',   show: isManagement || isLiderMinisterio || isObreiroMinisterio || isHospitalidade || isCozinha || isManutencao || is('secretaria') || hasMinistryLinks, alert: hasMinistryMessages },
     { href: `/${slug}/reservas`,     label: 'Reservas',         icon: 'reservas',      show: canSeeReservas, alert: hasReservationsPending },
     { href: `/${slug}/hospedagem`,   label: 'Hospedagem',       icon: 'hospedagem',    show: canSeeHospedagem },
+    { href: `/${slug}/hospedagem/professores`, label: 'Professor Visitante', icon: 'professores', show: canSeeHospedagem || hasSchoolLinks },
     { href: `/${slug}/hospedagem/quartos`, label: 'Quartos',    icon: 'quartos',       show: canSeeHospedagem },
     { href: `/${slug}/hospedagem/lavanderia`, label: 'Lavanderia', icon: 'lavanderia', show: canSeeHospedagem && laundryEnabled },
     { href: `/${slug}/refeicoes`,    label: 'Minhas refeições', icon: 'refeicoes',     show: canBuyMeals },
