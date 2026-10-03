@@ -4,7 +4,8 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Modal } from '@/components/ui/Modal'
 import { InternationalPhoneField } from '@/components/ui/InternationalPhoneField'
-import { AlertTriangle, CheckCircle2, Link as LinkIcon, Send, Copy } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Link as LinkIcon, Send, Copy, MessageCircle } from 'lucide-react'
+import { whatsappDigits } from '@/lib/phone'
 
 type ClassOption = { id: string; name: string }
 type ActionResult = { url?: string; error?: string; emailWarning?: string }
@@ -34,10 +35,12 @@ export function EnviarFormularioAlunoDiretoButton({ action, classes, buttonClass
   const [result, setResult] = useState<ActionResult | null>(null)
   const [publicLinkState, setPublicLinkState] = useState<'idle' | 'loading' | 'copied' | 'error'>('idle')
   const [publicLinkError, setPublicLinkError] = useState<string | null>(null)
+  const [submitted, setSubmitted] = useState<{ name: string; phone: string } | null>(null)
 
   function handleClose() {
     setOpen(false)
     setResult(null)
+    setSubmitted(null)
     setPublicLinkState('idle')
     setPublicLinkError(null)
     if (result?.url) router.refresh()
@@ -63,6 +66,7 @@ export function EnviarFormularioAlunoDiretoButton({ action, classes, buttonClass
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const fd = new FormData(e.currentTarget)
+    setSubmitted({ name: (fd.get('full_name') as string) ?? '', phone: (fd.get('phone') as string) ?? '' })
     startTransition(async () => {
       const res = await action(fd)
       setResult(res)
@@ -168,6 +172,17 @@ export function EnviarFormularioAlunoDiretoButton({ action, classes, buttonClass
               <LinkIcon className="size-3.5 text-gray-400 flex-shrink-0" />
               <span className="text-xs text-gray-600 truncate">{result.url}</span>
             </div>
+            {(() => {
+              const digits = submitted?.phone ? whatsappDigits(submitted.phone) : ''
+              if (!digits) return null
+              const text = encodeURIComponent(`Olá${submitted?.name ? ` ${submitted.name.split(' ')[0]}` : ''}! Segue o link para você se inscrever: ${result.url}`)
+              return (
+                <a href={`https://wa.me/${digits}?text=${text}`} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 w-full px-4 py-2.5 text-sm font-semibold text-white bg-green-500 hover:bg-green-600 rounded-lg transition-colors">
+                  <MessageCircle className="size-4" /> Enviar por WhatsApp
+                </a>
+              )
+            })()}
             <button type="button" onClick={handleClose}
               className="w-full px-4 py-2.5 text-sm font-semibold text-white bg-brand-500 hover:bg-brand-600 rounded-lg transition-colors">
               Concluir
