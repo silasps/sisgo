@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { headers } from 'next/headers'
 import { RegistrationForm } from './RegistrationForm'
+import { LangNavSwitcher } from './LangNavSwitcher'
 import { schoolDisplayType } from '@/lib/schools'
 import { getFormDict, normalizeLang, detectLangFromHeader } from '@/lib/i18n/forms'
 import { resolveLocalizedText } from '@/lib/i18n/resolveLocalizedText'
@@ -97,12 +98,14 @@ export default async function SchoolPublicPage({ params, searchParams }: Props) 
             <a href="#inscricao" className="bg-brand-500 hover:bg-brand-600 text-white px-5 py-2 rounded-full font-semibold transition-colors">
               {d.landingChrome.nav_cta}
             </a>
+            <LangNavSwitcher lang={lang} />
           </div>
           <div className="md:hidden flex items-center gap-2 flex-shrink-0">
             <a href="#sobre" className="text-white/70 hover:text-white text-xs px-2 py-1.5 transition-colors">{d.landingChrome.nav_about}</a>
             <a href="#inscricao" className="bg-brand-500 hover:bg-brand-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold transition-colors whitespace-nowrap">
               {d.landingChrome.nav_cta}
             </a>
+            <LangNavSwitcher lang={lang} />
           </div>
         </div>
       </nav>

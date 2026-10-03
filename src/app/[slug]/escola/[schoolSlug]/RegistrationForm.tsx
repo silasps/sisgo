@@ -30,6 +30,14 @@ export function RegistrationForm({
   const [lang, setLangState] = useState<Lang>(normalizeLang(initialLang))
   const d = getFormDict(lang)
 
+  // Segue o seletor discreto no topo da página (LangNavSwitcher) quando o
+  // idioma muda por lá — sem remontar o formulário (perderia o que a pessoa
+  // já tiver digitado). O próprio seletor daqui embaixo já atualiza esse
+  // estado direto no clique; este efeito cobre a troca feita em cima.
+  useEffect(() => {
+    setLangState(normalizeLang(initialLang))
+  }, [initialLang])
+
   function setLang(l: Lang) {
     setLangState(l)
     const params = new URLSearchParams(searchParams.toString())
