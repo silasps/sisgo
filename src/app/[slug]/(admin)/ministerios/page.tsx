@@ -87,15 +87,22 @@ export default async function MinistriosPage({ params }: Props) {
   // listagem mistura os dois (cada card ainda abre a tela certa por trás:
   // escola continua tendo turma/matrícula, ministério continua tendo
   // membro/líder — só a navegação/mental model é unificada).
-  type SchoolRaw = { id: string; name: string; description: string | null; active: boolean }
+  type SchoolRaw = { id: string; name: string; description: string | null; active: boolean; linked_ministry_id: string | null }
   const schoolsQuery = allowedMinistryIds
     ? Promise.resolve({ data: [] as SchoolRaw[] })
-    : supabase.from('schools').select('id, name, description, active').eq('organization_id', orgId).order('name')
+    : supabase.from('schools').select('id, name, description, active, linked_ministry_id').eq('organization_id', orgId).order('name')
 
   const [{ data }, { data: schoolsData }] = await Promise.all([ministeriosQuery, schoolsQuery])
 
   const ministerios = (data ?? []) as unknown as MinistryRaw[]
-  const escolas = (schoolsData ?? []) as SchoolRaw[]
+  const allSchools = (schoolsData ?? []) as SchoolRaw[]
+  // Escola vinculada a um ministério já listado aqui não ganha card próprio
+  // — o card do ministério já representa as duas coisas (ver link "também
+  // gerencia a escola X" na página do ministério). Sem isso, a mesma unidade
+  // aparecia duas vezes (ex: "ETED Comunicadores" como ministério E como escola).
+  const ministryIdSet = new Set(ministerios.map(m => m.id))
+  const ministryIdsWithSchool = new Set(allSchools.filter(s => s.linked_ministry_id).map(s => s.linked_ministry_id!))
+  const escolas = allSchools.filter(s => !s.linked_ministry_id || !ministryIdSet.has(s.linked_ministry_id))
 
   const PRECONFIGURED = [
     { role: 'hospitalidade', name: 'Hospitalidade', description: 'Recepção, hospedagem e acolhimento' },
@@ -189,6 +196,9 @@ export default async function MinistriosPage({ params }: Props) {
                       <p className="font-semibold text-gray-900 leading-snug group-hover:text-brand-600 transition-colors">{m.name}</p>
                       {m.linked_role && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-medium capitalize">{m.linked_role}</span>
+                      )}
+                      {ministryIdsWithSchool.has(m.id) && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">+ Escola</span>
                       )}
                     </div>
                     <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${m.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
