@@ -75,7 +75,16 @@ async function sendFormLink(params: SendFormLinkParams): Promise<StaffInviteResu
     emailWarning = 'sem_email_candidato'
   }
 
-  return { url: formUrl, emailWarning, emailErrorDetail }
+  // Link curto (/l/<código>) pra quem for copiar/mandar por WhatsApp — o
+  // e-mail automático (formUrlForEmail, acima) continua com a URL completa.
+  const { getOrCreateShortLink } = await import('@/lib/shortLinks')
+  const shortUrl = await getOrCreateShortLink({
+    organizationId: params.organizationId,
+    targetPath: `/${params.slug}/formulario-obreiro/${params.token}`,
+    createdBy: null,
+  })
+
+  return { url: shortUrl, emailWarning, emailErrorDetail }
 }
 
 // Reenvia o link de um formulário já disponibilizado antes (reaproveita o

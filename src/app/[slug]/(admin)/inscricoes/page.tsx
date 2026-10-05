@@ -927,8 +927,16 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       .update({ status: 'formulario_enviado' })
       .eq('id', interestFormId)
 
+    // Link curto (/l/<código>) pra quem for copiar/mandar por WhatsApp — o
+    // e-mail automático (formUrlForEmail, acima) continua com a URL completa.
+    const shortUrl = await getOrCreateShortLink({
+      organizationId: (form as unknown as { organization_id: string }).organization_id,
+      targetPath: `/${slug}/formulario/${token}`,
+      createdBy: null,
+    })
+
     // Sempre retorna o link — e-mail é opcional
-    return { url: formUrl, emailWarning, schoolId: escola?.id }
+    return { url: shortUrl, emailWarning, schoolId: escola?.id }
   }
 
   async function editarPreInscricao(formData: FormData) {

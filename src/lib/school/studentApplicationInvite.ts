@@ -136,5 +136,14 @@ export async function sendDirectStudentInvite(params: DirectInviteParams): Promi
     emailWarning = 'sem_email_candidato'
   }
 
-  return { url: formUrl, emailWarning }
+  // Link curto (/l/<código>) pra quem for copiar/mandar por WhatsApp — o
+  // e-mail automático (acima) continua com a URL completa.
+  const { getOrCreateShortLink } = await import('@/lib/shortLinks')
+  const shortUrl = await getOrCreateShortLink({
+    organizationId: params.organizationId,
+    targetPath: `/${params.slug}/formulario/${newApp.token}`,
+    createdBy: null,
+  })
+
+  return { url: shortUrl, emailWarning }
 }
