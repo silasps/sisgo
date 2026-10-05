@@ -504,6 +504,8 @@ function S2Dados({ prefill, data, onNationalityChange, orgName }: {
           : <ZipAddressFields data={data} />
         }
         <Field label={d.s2.pais} name="pais" defaultValue={data?.pais ?? (estrangeiro ? '' : 'Brasil')} required />
+        <InternationalPhoneField phoneName="celular" countryName="celular_country"
+          label={d.s2.celular} defaultCountryIso="BR" defaultPhone={data?.celular ?? prefill?.telefone} />
 
         <SubSection title={d.s2.redes_section} />
         <Field label={d.s2.instagram} name="instagram" defaultValue={data?.instagram} placeholder="@usuario" />
@@ -519,9 +521,6 @@ function S2Dados({ prefill, data, onNationalityChange, orgName }: {
           label={d.s2.emergencia_telefone} defaultCountryIso="BR"
           defaultPhone={data?.emergencia_telefone} required />
         <Field label={d.s2.emergencia_email} name="emergencia_email" type="email" defaultValue={data?.emergencia_email} />
-
-        <InternationalPhoneField phoneName="celular" countryName="celular_country"
-          label={d.s2.celular} defaultCountryIso="BR" defaultPhone={data?.celular ?? prefill?.telefone} />
       </div>
     </div>
   )

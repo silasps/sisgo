@@ -512,7 +512,7 @@ function S5Dados({ prefill, data, onNationalityChange }: {
         <Field label={d.s5.emergencia_nome} name="emergencia_nome" defaultValue={data?.emergencia_nome} required />
         <Field label={d.s5.emergencia_parentesco} name="emergencia_parentesco" defaultValue={data?.emergencia_parentesco} required />
         <InternationalPhoneField phoneName="emergencia_telefone" countryName="emergencia_telefone_country"
-          label={d.s5.celular} defaultCountryIso="BR"
+          label={d.s5.emergencia_telefone} defaultCountryIso="BR"
           defaultPhone={data?.emergencia_telefone} required />
         <Field label={d.s5.emergencia_email} name="emergencia_email" type="email" defaultValue={data?.emergencia_email} />
         <Field label={d.s5.emergencia_cidade} name="emergencia_cidade" defaultValue={data?.emergencia_cidade} />

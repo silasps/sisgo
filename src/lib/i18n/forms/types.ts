@@ -189,6 +189,7 @@ export interface FormDict {
     emergencia_hint: string
     emergencia_nome: string
     emergencia_parentesco: string
+    emergencia_telefone: string
     emergencia_email: string
     emergencia_cidade: string
     // Civil status display
