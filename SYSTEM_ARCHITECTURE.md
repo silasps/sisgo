@@ -927,6 +927,21 @@ Autosserviço com pagamento por tempo. Cada máquina tem um relé Wi-Fi
   internos (`layer: 'escola'`, chaves de tipo) podem continuar em português
   genérico — o problema é a sigla/jargão específico da instituição vazando
   pra fora.
+- **Barra horizontal com scroll (`overflow-x-auto`) dentro de um container
+  flex:** sempre dar `min-w-0` (além de `w-full`, se for pra ocupar a largura
+  toda) ao próprio elemento com `overflow-x-auto` — não só ao ancestral. O
+  painel de conteúdo do `AppShell` (`src/components/layout/AppShell.tsx`) é
+  `flex flex-col overflow-x-hidden`; sem `min-w-0`, um filho direto com
+  `overflow-x-auto` e itens `shrink-0` (ex.: `WorkspaceTabBar`) tenta ocupar
+  a largura natural do conteúdo em vez de respeitar o espaço disponível, e o
+  `overflow-x-hidden` do pai corta o elemento inteiro — ele some da tela
+  (sem erro no console) em telas estreitas/zoom alto, em vez de rolar
+  horizontalmente como deveria. Foi o que aconteceu com as abas de
+  `/pessoas/[id]` (Geral/Carteirinha/Financeiro/...) — sumiam em qualquer
+  tela estreita, não só em mobile, e para qualquer pessoa/papel (não era bug
+  de permissão). Mesmo componente é usado em `/escolas/[id]` e
+  `/ministerios/[id]`, então vale o mesmo cuidado em qualquer barra de abas
+  ou lista horizontal nova dentro do painel admin.
 - **`SearchableSelectModal`** (`@/components/ui/SearchableSelectModal`):
   substitui `<select>` nativo pra escolher usuário/pessoa numa lista —
   abre `Modal` com busca (mesmo critério tolerante a acento/cedilha/
