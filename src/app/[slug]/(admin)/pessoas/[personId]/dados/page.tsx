@@ -4,10 +4,11 @@ import { notFound, redirect } from 'next/navigation'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { MANAGEMENT_ROLES } from '@/lib/auth/permissions'
 import { ptDict } from '@/lib/i18n/staff-forms'
-import { atualizarNomePessoa, atualizarContatoPessoa, substituirDocumentoPessoa } from './actions'
+import { atualizarNomePessoa, atualizarContatoPessoa, substituirDocumentoPessoa, atualizarCampoFormulario } from './actions'
 import { EditNameCard } from './EditNameCard'
 import { EditContactCard } from './EditContactCard'
 import { DocumentField } from './DocumentField'
+import { EditableFormField } from './EditableFormField'
 
 type Props = { params: Promise<{ slug: string; personId: string }> }
 
@@ -102,7 +103,8 @@ export default async function DadosPessoaPage({ params }: Props) {
             {sections.map(sectionKey => {
               const sectionDict = (ptDict as unknown as Record<string, Record<string, string>>)[sectionKey] ?? {}
               const sectionData = formData[sectionKey] as Record<string, unknown>
-              const entries = Object.entries(sectionData).filter(([k, v]) => v !== null && v !== undefined && v !== '' && k !== 'escolas_instituicao')
+              const entries = Object.entries(sectionData).filter(([k, v]) =>
+                v !== null && v !== undefined && v !== '' && k !== 'escolas_instituicao' && !k.endsWith('_country'))
               if (!entries.length) return null
               return (
                 <div key={sectionKey} className="border-t border-gray-100 pt-4 first:border-t-0 first:pt-0">
@@ -122,11 +124,27 @@ export default async function DadosPessoaPage({ params }: Props) {
                           />
                         )
                       }
+                      // Array/objeto (idiomas, filhos etc.) fica só leitura — editar uma
+                      // lista estruturada num campo de texto solto seria mais confuso
+                      // que útil. Escalar (texto, data, boolean "sim/nao") é editável.
+                      const isComplex = Array.isArray(value) || (typeof value === 'string' && (value.startsWith('[') || value.startsWith('{')))
+                      if (isComplex) {
+                        return (
+                          <div key={key} className="text-sm">
+                            <p className="text-xs text-gray-400">{label}</p>
+                            <p className="text-gray-800">{renderPlainValue(value)}</p>
+                          </div>
+                        )
+                      }
                       return (
-                        <div key={key} className="text-sm">
-                          <p className="text-xs text-gray-400">{label}</p>
-                          <p className="text-gray-800">{renderPlainValue(value)}</p>
-                        </div>
+                        <EditableFormField
+                          key={key}
+                          label={label}
+                          value={renderPlainValue(value)}
+                          section={sectionKey}
+                          fieldKey={key}
+                          action={atualizarCampoFormulario.bind(null, personId, org.id)}
+                        />
                       )
                     })}
                   </div>

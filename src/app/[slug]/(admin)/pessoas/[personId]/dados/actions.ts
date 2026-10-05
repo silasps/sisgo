@@ -97,3 +97,39 @@ export async function substituirDocumentoPessoa(
   if (oldValue?.path) await db.storage.from('staff-application-documents').remove([oldValue.path])
   return { ok: true }
 }
+
+// Edita um campo solto do form_data da inscrição mais recente — mesma ideia
+// de substituirDocumentoPessoa, mas pra texto. Liberado pra quem já acessa
+// esta página (MANAGEMENT_ROLES — dh, líder da base, admin, superadmin: ver
+// gate em page.tsx). Preserva o tipo booleano quando o valor já era um
+// boolean (a maioria dos campos é string "sim"/"nao" mesmo, não boolean).
+export async function atualizarCampoFormulario(
+  personId: string,
+  orgId: string,
+  formData: FormData,
+): Promise<{ error: string } | { ok: true }> {
+  const section = formData.get('section') as string
+  const key = formData.get('key') as string
+  const rawValue = ((formData.get('value') as string) ?? '').trim()
+  if (!section || !key) return { error: 'Campo inválido.' }
+
+  const db = createAdminClient()
+  const { data: app } = await db
+    .from('staff_applications')
+    .select('id, form_data')
+    .eq('organization_id', orgId)
+    .eq('person_id', personId)
+    .order('applied_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (!app) return { error: 'Essa pessoa não tem inscrição de obreiro.' }
+
+  const formDataJson = (app.form_data as Record<string, unknown>) ?? {}
+  const sectionData = (formDataJson[section] as Record<string, unknown>) ?? {}
+  const wasBoolean = typeof sectionData[key] === 'boolean'
+  const newValue: unknown = wasBoolean ? ['sim', 'true', 'yes'].includes(rawValue.toLowerCase()) : rawValue
+
+  const updated = { ...formDataJson, [section]: { ...sectionData, [key]: newValue } }
+  await db.from('staff_applications').update({ form_data: updated }).eq('id', app.id)
+  return { ok: true }
+}
