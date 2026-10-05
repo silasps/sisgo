@@ -4,11 +4,10 @@ import { useState } from 'react'
 import { AlertTriangle, Pencil, Mail } from 'lucide-react'
 
 export function IncompleteFormLinkCard({
-  reason, formPathPrefix, onGenerateLink, email, onResendEmail, onEditEmail,
+  reason, onGenerateLink, email, onResendEmail, onEditEmail,
 }: {
   reason: string
-  formPathPrefix: string
-  onGenerateLink: () => Promise<{ token: string }>
+  onGenerateLink: () => Promise<{ url: string }>
   email?: string | null
   onResendEmail?: () => Promise<void>
   onEditEmail?: (email: string) => Promise<void>
@@ -60,8 +59,7 @@ export function IncompleteFormLinkCard({
   async function handleGenerate() {
     setStatus('loading')
     try {
-      const result = await onGenerateLink()
-      const url = `${window.location.origin}${formPathPrefix}/${result.token}`
+      const { url } = await onGenerateLink()
       setLink(url)
       setStatus('idle')
       await copy(url)

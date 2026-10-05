@@ -698,7 +698,6 @@ export default async function FormularioViewerPage({ params }: Props) {
         {incompleteReason && (
           <IncompleteFormLinkCard
             reason={incompleteReason}
-            formPathPrefix={`/${slug}/formulario`}
             onGenerateLink={reenviarLinkFormulario.bind(null, { slug, organizationId: app.organization_id, applicationId: id })}
           />
         )}

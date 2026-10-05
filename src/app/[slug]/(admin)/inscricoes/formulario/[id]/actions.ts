@@ -124,7 +124,13 @@ export async function reenviarLinkFormulario(params: {
   const sb = createAdminClient()
   const result = await getOrRegenerateToken(sb, 'school_applications', params.applicationId, params.organizationId)
   if ('error' in result) throw new Error(result.error)
-  return result
+  const { getOrCreateShortLink } = await import('@/lib/shortLinks')
+  const url = await getOrCreateShortLink({
+    organizationId: params.organizationId,
+    targetPath: `/${params.slug}/formulario/${result.token}`,
+    createdBy: null,
+  })
+  return { url }
 }
 
 export async function avancarEtapaAluno(params: {

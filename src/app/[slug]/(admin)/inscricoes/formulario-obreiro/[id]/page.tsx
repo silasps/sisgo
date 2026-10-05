@@ -713,7 +713,6 @@ export default async function FormularioObreiroViewerPage({ params }: Props) {
           return (
             <IncompleteFormLinkCard
               reason="O formulário ainda não foi enviado — a pessoa parou em algum ponto do preenchimento."
-              formPathPrefix={`/${slug}/formulario-obreiro`}
               onGenerateLink={reenviarLinkFormularioObreiro.bind(null, { slug, organizationId, applicationId: id })}
               email={preform?.email}
               onResendEmail={preform?.email ? handleResendEmail : undefined}

@@ -60,7 +60,13 @@ export async function reenviarLinkFormularioObreiro(params: {
   const sb = createAdminClient()
   const result = await getOrRegenerateToken(sb, 'staff_applications', params.applicationId, params.organizationId)
   if ('error' in result) throw new Error(result.error)
-  return result
+  const { getOrCreateShortLink } = await import('@/lib/shortLinks')
+  const url = await getOrCreateShortLink({
+    organizationId: params.organizationId,
+    targetPath: `/${params.slug}/formulario-obreiro/${result.token}`,
+    createdBy: null,
+  })
+  return { url }
 }
 
 // Reenvia o e-mail com o link (não só copia/gera) — pro caso relatado de
