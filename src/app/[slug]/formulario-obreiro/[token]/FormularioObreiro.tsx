@@ -394,6 +394,8 @@ function S1Email({ prefill, data }: { prefill?: Prefill; data?: Record<string, s
       <SectionTitle number={d.s1.section} title={d.s1.title} />
       <Field label={d.s1.email} name="email" type="email"
         defaultValue={data?.email ?? prefill?.email} required />
+      <InternationalPhoneField phoneName="celular" countryName="celular_country"
+        label={d.s1.celular} defaultCountryIso="BR" defaultPhone={data?.celular ?? prefill?.telefone} />
     </div>
   )
 }
@@ -504,8 +506,6 @@ function S2Dados({ prefill, data, onNationalityChange, orgName }: {
           : <ZipAddressFields data={data} />
         }
         <Field label={d.s2.pais} name="pais" defaultValue={data?.pais ?? (estrangeiro ? '' : 'Brasil')} required />
-        <InternationalPhoneField phoneName="celular" countryName="celular_country"
-          label={d.s2.celular} defaultCountryIso="BR" defaultPhone={data?.celular ?? prefill?.telefone} />
 
         <SubSection title={d.s2.redes_section} />
         <Field label={d.s2.instagram} name="instagram" defaultValue={data?.instagram} placeholder="@usuario" />

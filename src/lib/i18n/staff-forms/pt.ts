@@ -76,9 +76,10 @@ export const ptDict: StaffFormDict = {
   // ── S1: E-mail ─────────────────────────────────────────────────────────
   s1: {
     section: 'Seção 1',
-    title: 'Confirmação de e-mail',
+    title: 'Confirmação de contato',
     email: 'E-mail',
     email_hint: 'Use o mesmo e-mail que você usa para entrar em contato conosco.',
+    celular: 'Celular / WhatsApp',
   },
 
   // ── S2: Dados Pessoais ─────────────────────────────────────────────────

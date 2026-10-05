@@ -83,6 +83,7 @@ export interface StaffFormDict {
     title: string
     email: string
     email_hint: string
+    celular: string
   }
 
   // ── S2: Dados Pessoais ─────────────────────────────────────────────────

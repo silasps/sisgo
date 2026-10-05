@@ -76,9 +76,10 @@ export const enDict: StaffFormDict = {
   // ── S1: Email ──────────────────────────────────────────────────────────
   s1: {
     section: 'Section 1',
-    title: 'Email confirmation',
+    title: 'Contact confirmation',
     email: 'Email',
     email_hint: 'Use the same email you use to get in touch with us.',
+    celular: 'Cell phone / WhatsApp',
   },
 
   // ── S2: Personal Information ─────────────────────────────────────────────

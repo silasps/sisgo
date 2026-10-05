@@ -76,9 +76,10 @@ export const esDict: StaffFormDict = {
   // ── S1: Correo electrónico ────────────────────────────────────────────
   s1: {
     section: 'Sección 1',
-    title: 'Confirmación de correo electrónico',
+    title: 'Confirmación de contacto',
     email: 'Correo electrónico',
     email_hint: 'Use el mismo correo que utiliza para comunicarse con nosotros.',
+    celular: 'Celular / WhatsApp',
   },
 
   // ── S2: Datos personales ────────────────────────────────────────────────
