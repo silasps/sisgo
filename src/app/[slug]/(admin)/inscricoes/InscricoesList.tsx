@@ -24,6 +24,8 @@ import { useAccount } from '@/components/layout/account-context'
 import type { PersonFinanceSummary } from '@/lib/finance/personFinanceStatus'
 import { PersonFinanceBadge } from '@/components/finance/PersonFinanceBadge'
 import { FinancePendingConfirmButton } from '@/components/finance/FinancePendingConfirmButton'
+import { FinalizarObreiroForm } from './FinalizarObreiroForm'
+import type { CreatedAccess } from '../pessoas/[personId]/acesso/actions'
 
 type InscricaoItem = {
   id: string
@@ -109,7 +111,9 @@ type Props = {
   aprovar: (formData: FormData) => Promise<void>
   salvarPalavraLider: (formData: FormData) => Promise<void>
   assumirPreInscricaoObreiro: (formData: FormData) => Promise<void>
-  finalizarObreiro: (formData: FormData) => Promise<void>
+  finalizarObreiro: (formData: FormData) => Promise<{ error: string } | CreatedAccess>
+  addPhoneAction: (personId: string, formData: FormData) => Promise<{ error: string } | { ok: true; phone: string }>
+  markSentAction: (orgUserId: string) => Promise<void>
   disponibilizarFormulario: (formData: FormData) => Promise<{ url?: string; error?: string; emailWarning?: string; schoolId?: string }>
   disponibilizarFormularioObreiro: (formData: FormData) => Promise<{ url?: string; error?: string; emailWarning?: string }>
   editarPreInscricao: (formData: FormData) => Promise<void>
@@ -523,6 +527,8 @@ export function InscricoesList({
   salvarPalavraLider,
   assumirPreInscricaoObreiro,
   finalizarObreiro,
+  addPhoneAction,
+  markSentAction,
   disponibilizarFormulario,
   disponibilizarFormularioObreiro,
   editarPreInscricao,
@@ -1385,52 +1391,15 @@ export function InscricoesList({
                             </div>
                           )}
                           <ActionModalButton label="Criar acesso à plataforma e aprovar" tone="green" subtitle={item.nome}>
-                            <form action={finalizarObreiro} className="space-y-2">
-                              <input type="hidden" name="id" value={item.id} />
-                              <input type="hidden" name="org_id" value={orgId} />
-                              <input type="hidden" name="person_id" value={item.personId} />
-                              <input type="hidden" name="ministry_id" value={item.ministryId ?? ''} />
-                              <input type="hidden" name="name" value={item.nome} />
-                              <input
-                                name="email"
-                                type="email"
-                                defaultValue={item.email ?? ''}
-                                required
-                                placeholder="E-mail de login"
-                                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-300"
-                              />
-                              <input
-                                name="password"
-                                type="password"
-                                required
-                                minLength={6}
-                                placeholder="Senha temporária"
-                                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-300"
-                              />
-                              {(bgConcern || bgPending) && (
-                                <label className="flex items-start gap-2 text-sm text-amber-800">
-                                  <input type="checkbox" required className="mt-0.5" />
-                                  Estou ciente do alerta de antecedentes e assumo a decisão de finalizar mesmo assim.
-                                </label>
-                              )}
-                              {item.financeSummary && (item.financeSummary.pendingCount > 0 || item.financeSummary.overdueCount > 0) && (
-                                <PersonFinanceBadge summary={item.financeSummary} />
-                              )}
-                              {item.financeSummary && (item.financeSummary.pendingCount > 0 || item.financeSummary.overdueCount > 0) ? (
-                                <FinancePendingConfirmButton
-                                  action={finalizarObreiro}
-                                  financeSummary={item.financeSummary}
-                                  personName={item.nome}
-                                  className="w-full text-sm px-3 py-2.5 bg-green-600 text-white hover:bg-green-700 rounded-xl transition-colors font-semibold"
-                                >
-                                  Finalizar obreiro
-                                </FinancePendingConfirmButton>
-                              ) : (
-                                <button type="submit" className="w-full text-sm px-3 py-2.5 bg-green-600 text-white hover:bg-green-700 rounded-xl transition-colors font-semibold">
-                                  Finalizar obreiro
-                                </button>
-                              )}
-                            </form>
+                            <FinalizarObreiroForm
+                              item={item}
+                              orgId={orgId}
+                              bgConcern={bgConcern}
+                              bgPending={bgPending}
+                              finalizarObreiro={finalizarObreiro}
+                              addPhoneAction={fd => addPhoneAction(item.personId ?? '', fd)}
+                              markSentAction={markSentAction}
+                            />
                           </ActionModalButton>
                         </>
                       )}

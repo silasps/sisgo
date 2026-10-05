@@ -23,6 +23,8 @@ import { criarPreInscricaoManual, criarPreInscricaoObreiroManual } from './actio
 import { SearchBar } from '@/components/ui/SearchBar'
 import { getPeopleFinanceSummaries, type PersonFinanceSummary } from '@/lib/finance/personFinanceStatus'
 import { notifyFinancePendency } from '@/lib/finance/notifyFinancePendency'
+import { lookupPersonPhone, buildWelcomeWhatsappMessage } from '@/lib/staff/accountCredentials'
+import { adicionarTelefonePessoa, marcarCredencialEnviada, type CreatedAccess } from '../pessoas/[personId]/acesso/actions'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -603,7 +605,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     }).eq('id', id)
   }
 
-  async function finalizarObreiro(formData: FormData) {
+  async function finalizarObreiro(formData: FormData): Promise<{ error: string } | CreatedAccess> {
     'use server'
     const { createAdminClient: adm } = await import('@/lib/supabase/admin')
     const { createClient } = await import('@/lib/supabase/server')
@@ -617,7 +619,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     const email = (formData.get('email') as string).trim().toLowerCase()
     const password = formData.get('password') as string
     const now = new Date().toISOString()
-    if (!id || !orgIdForm || !personId || !email || !password) return
+    if (!id || !orgIdForm || !personId || !email || !password) return { error: 'Dados obrigatórios faltando.' }
 
     const { data: { user: actingUser } } = await authClient.auth.getUser()
     const { data: orgUsers } = await authClient
@@ -630,7 +632,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     const role = memberships.find(row => row.roles?.name === 'superadmin')?.roles?.name
       ?? memberships.find(row => row.organization_id === orgIdForm)?.roles?.name
       ?? ''
-    if (!['superadmin', 'admin_base', 'lider_base', 'dh'].includes(role)) return
+    if (!['superadmin', 'admin_base', 'lider_base', 'dh'].includes(role)) return { error: 'Sem permissão para finalizar.' }
 
     const { data: pastorRef } = await db.from('reference_forms')
       .select('status').eq('staff_application_id', id).eq('type', 'pastor').maybeSingle()
@@ -638,7 +640,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       .select('pastor_reference_skip_reason, hospedagem_skip_reason, leader_word, leader_word_shared, interest_form_id, form_data').eq('id', id).maybeSingle()
     if (pastorRef?.status !== 'enviado' && !skipRow?.pastor_reference_skip_reason) {
       redir(`/${slug}/inscricoes?tab=obreiro&flash_error=${encodeURIComponent('Referência do pastor pendente — aguarde a resposta ou registre uma justificativa para pular esta etapa.')}`)
-      return
+      return { error: 'Referência do pastor pendente.' }
     }
 
     const { data: hospRequest } = await db.from('service_requests')
@@ -646,7 +648,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       .order('created_at', { ascending: false }).limit(1).maybeSingle()
     if (hospRequest?.status !== 'resolvido' && !skipRow?.hospedagem_skip_reason) {
       redir(`/${slug}/inscricoes?tab=obreiro&flash_error=${encodeURIComponent('Hospedagem pendente — aguarde a resposta da hospitalidade ou registre uma justificativa para pular esta etapa.')}`)
-      return
+      return { error: 'Hospedagem pendente.' }
     }
 
     const { data: { users } } = await db.auth.admin.listUsers({ perPage: 1000 })
@@ -661,7 +663,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         email_confirm: true,
         user_metadata: { full_name: fullName },
       })
-      if (error || !created.user) return
+      if (error || !created.user) return { error: error?.message ?? 'Não foi possível criar o login.' }
       userId = created.user.id
 
       // Reaproveita a foto já enviada no formulário de inscrição (seção 10)
@@ -679,6 +681,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       }
     }
 
+    let orgUserId = ''
     const { data: ministryRole } = await db.from('roles').select('id').eq('name', 'obreiro_ministerio').single()
     if (ministryRole) {
       const { data: existingOrgUser } = await db
@@ -689,8 +692,12 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         .maybeSingle()
       if (existingOrgUser) {
         await db.from('organization_users').update({ role_id: ministryRole.id, active: true, updated_at: now }).eq('id', existingOrgUser.id)
+        orgUserId = existingOrgUser.id
       } else {
-        await db.from('organization_users').insert({ organization_id: orgIdForm, user_id: userId, role_id: ministryRole.id, active: true })
+        const { data: newOrgUser } = await db.from('organization_users')
+          .insert({ organization_id: orgIdForm, user_id: userId, role_id: ministryRole.id, active: true })
+          .select('id').single()
+        orgUserId = newOrgUser?.id ?? ''
       }
     }
 
@@ -795,7 +802,14 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       leaderWord: skipRow?.leader_word_shared ? skipRow.leader_word : null,
     }).catch(() => {})
 
-    redir(`/${slug}/pessoas?tab=obreiros&flash_success=${encodeURIComponent('Obreiro finalizado — acesso criado com sucesso')}`)
+    const phone = await lookupPersonPhone(db, personId)
+    const loginUrl = `https://www.sisgomission.com/${slug}`
+    const whatsappMessage = buildWelcomeWhatsappMessage({
+      fullName: (formData.get('name') as string) || 'Obreiro',
+      orgName: orgRow?.name ?? 'sua base',
+      loginUrl, email, password,
+    })
+    return { ok: true, email, password, phone, orgUserId, whatsappMessage }
   }
 
   async function disponibilizarFormulario(formData: FormData) {
@@ -1928,6 +1942,8 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           salvarPalavraLider={salvarPalavraLider}
           assumirPreInscricaoObreiro={assumirPreInscricaoObreiro}
           finalizarObreiro={finalizarObreiro}
+          addPhoneAction={adicionarTelefonePessoa}
+          markSentAction={marcarCredencialEnviada}
           disponibilizarFormulario={disponibilizarFormulario}
           disponibilizarFormularioObreiro={disponibilizarFormularioObreiro}
           editarPreInscricao={editarPreInscricao}
