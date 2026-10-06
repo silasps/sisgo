@@ -64,7 +64,11 @@ export default async function DadosPessoaPage({ params }: Props) {
   if (!person) notFound()
 
   const currentEmail = (contacts ?? []).find(c => c.type === 'email')?.value ?? ''
-  const currentPhone = (contacts ?? []).find(c => c.type === 'whatsapp' || c.type === 'phone')?.value ?? ''
+  // Pode haver mais de um contato de telefone (ex.: "phone" de uma
+  // pré-inscrição antiga + "whatsapp" mais recente) — prioriza o marcado
+  // como principal em vez do primeiro que aparecer na consulta.
+  const phoneContacts = (contacts ?? []).filter(c => c.type === 'whatsapp' || c.type === 'phone')
+  const currentPhone = (phoneContacts.find(c => c.is_primary) ?? phoneContacts[0])?.value ?? ''
 
   const formData = (application?.form_data as Record<string, unknown>) ?? {}
   const sections = Object.keys(formData).filter(k => !SKIP_KEYS.has(k) && typeof formData[k] === 'object')

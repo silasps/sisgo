@@ -67,7 +67,10 @@ export function normalizeInternationalPhone(countryIso: string, phone: string) {
     ? rawDigits.slice(dialDigits.length)
     : rawDigits
   if (!localDigits) return ''
-  return `${country.code}${localDigits}`
+  // Espaço entre DDI e dígitos: formato "+<ddi> <dígitos>" que o resto do
+  // sistema espera (PhoneInput, validatePhoneValue) — sem ele, código que
+  // separa DDI de dígitos por essa convenção lê o número errado.
+  return `${country.code} ${localDigits}`
 }
 
 function CountryDropdown({

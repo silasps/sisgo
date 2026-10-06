@@ -71,8 +71,11 @@ export function StaffRegistrationForm({
     const data = new FormData(form)
 
     const email = ((data.get('email') as string) || '').trim()
+    // Espaço entre DDI e dígitos: formato "+<ddi> <dígitos>" que o resto do
+    // sistema espera (PhoneInput, validatePhoneValue) — sem ele, código que
+    // separa DDI de dígitos por essa convenção lê o número errado.
     const rawPhone = (data.get('phone_number') as string)?.trim()
-    const phone = rawPhone ? `${phoneCountry}${rawPhone.replace(/\D/g, '')}` : null
+    const phone = rawPhone ? `${phoneCountry} ${rawPhone.replace(/\D/g, '')}` : null
 
     if (!email && !phone) {
       setStatus('error')

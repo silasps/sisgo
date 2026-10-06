@@ -77,9 +77,12 @@ export function RegistrationForm({
     const form = e.currentTarget
     const data = new FormData(form)
 
-    // Monta o telefone completo: código do país + número limpo
+    // Monta o telefone completo: código do país + número limpo — com espaço
+    // entre os dois, é o formato "+<ddi> <dígitos>" que o resto do sistema
+    // espera (PhoneInput, validatePhoneValue); sem o espaço, código que
+    // separa DDI de dígitos por essa convenção lê o número errado.
     const rawPhone = (data.get('phone_number') as string)?.trim()
-    const phone = rawPhone ? `${phoneCountry}${rawPhone.replace(/\D/g, '')}` : null
+    const phone = rawPhone ? `${phoneCountry} ${rawPhone.replace(/\D/g, '')}` : null
 
     const result = await submitPreRegistration({
       slug,
