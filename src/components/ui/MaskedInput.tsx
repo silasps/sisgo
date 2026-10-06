@@ -34,13 +34,10 @@ function applyMask(raw: string, mask: MaskType): string {
       .replace(/^(\d{5})(\d{1,3})$/, '$1-$2')
   }
   if (mask === 'rg') {
-    // 00.000.000-0 (Brasileiro padrão — dígito verificador pode ser X)
-    const withX = raw.replace(/[^0-9xX]/g, '').toUpperCase()
-    const body = withX.slice(0, 9)
-    return body
-      .replace(/^(\d{2})(\d)/, '$1.$2')
-      .replace(/^(\d{2}\.\d{3})(\d)/, '$1.$2')
-      .replace(/^(\d{2}\.\d{3}\.\d{3})([0-9X])$/, '$1-$2')
+    // Sem máscara fixa — o formato do RG varia por estado (quantidade de
+    // dígitos, com ou sem dígito verificador). Só números, com um limite
+    // generoso que cobre os padrões usados no Brasil.
+    return d.slice(0, 12)
   }
   return raw
 }
@@ -49,7 +46,7 @@ const MAX_LEN: Record<MaskType, number> = { cpf: 14, cep: 9, rg: 12 }
 const PLACEHOLDER: Record<MaskType, string> = {
   cpf: '000.000.000-00',
   cep: '00000-000',
-  rg:  '00.000.000-0',
+  rg:  'Somente números',
 }
 
 type Props = {
@@ -89,7 +86,7 @@ export function MaskedInput({ mask, name, label, defaultValue, required, inputCl
         placeholder={PLACEHOLDER[mask]}
         maxLength={MAX_LEN[mask]}
         required={required}
-        inputMode={mask === 'rg' ? 'text' : 'numeric'}
+        inputMode="numeric"
         className={inputClassName ?? 'w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-gray-50'}
       />
     </div>
@@ -121,7 +118,7 @@ export function MaskedInputPublic({ mask, name, label, defaultValue, required }:
         placeholder={PLACEHOLDER[mask]}
         maxLength={MAX_LEN[mask]}
         required={required}
-        inputMode={mask === 'rg' ? 'text' : 'numeric'}
+        inputMode="numeric"
         className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent text-gray-900 placeholder-gray-400"
       />
     </div>
