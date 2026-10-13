@@ -37,7 +37,12 @@ export function FinancePendingConfirmButton({ action, financeSummary, personName
   const buttonRef = useRef<HTMLButtonElement>(null)
 
   if (!hasPendency) {
-    return <button type="submit" className={className}>{children}</button>
+    // Sem pendência não tem modal: o botão envia o form direto, então o
+    // extraField precisa ir no próprio botão (name/value) — como hidden input
+    // valeria também pros outros botões de submit do form (ex.: "Recusar").
+    // Por isso aqui só cabe UM extraField.
+    const [extraName, extraValue] = Object.entries(extraFields ?? {})[0] ?? []
+    return <button type="submit" name={extraName} value={extraValue} className={className}>{children}</button>
   }
 
   function openConfirm() {
