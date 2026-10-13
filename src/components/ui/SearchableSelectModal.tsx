@@ -14,6 +14,7 @@ type Props = {
   title?: string
   emptyLabel?: string
   defaultValue?: string
+  onChange?: (id: string) => void
 }
 
 // Mesmo critério de busca tolerante usado no "Ver tudo" (AllAppsMenu): sem
@@ -38,7 +39,7 @@ function matches(option: SearchableOption, query: string) {
 
 export function SearchableSelectModal({
   name, options, placeholder = 'Selecionar usuário...', searchPlaceholder = 'Buscar por nome ou e-mail...',
-  title = 'Selecionar usuário', emptyLabel = 'Nada encontrado.', defaultValue,
+  title = 'Selecionar usuário', emptyLabel = 'Nada encontrado.', defaultValue, onChange,
 }: Props) {
   const [open, setOpen] = useState(false)
   const [selectedId, setSelectedId] = useState(defaultValue ?? '')
@@ -78,7 +79,7 @@ export function SearchableSelectModal({
             <button
               key={o.id}
               type="button"
-              onClick={() => { setSelectedId(o.id); setOpen(false); setQuery('') }}
+              onClick={() => { setSelectedId(o.id); onChange?.(o.id); setOpen(false); setQuery('') }}
               className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
             >
               <span className="min-w-0">

@@ -1,27 +1,28 @@
+import Link from 'next/link'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect, notFound } from 'next/navigation'
+import { Workflow } from 'lucide-react'
 import {
   addMemberChecked, removeMember, approveRequest, rejectRequest,
   submitMemberRequest, cancelRequest,
-  requestTransfer, respondTransferAsDestination, confirmTransferAsDH, cancelTransfer,
+  requestTransfer, respondTransferAsDestination, cancelTransfer,
   inviteStaffMemberDirect,
 } from '../actions'
 import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
-import { getPeopleFinanceSummaries } from '@/lib/finance/personFinanceStatus'
-import { notifyFinancePendency } from '@/lib/finance/notifyFinancePendency'
-import { PersonFinanceBadge } from '@/components/finance/PersonFinanceBadge'
-import { FinancePendingConfirmButton } from '@/components/finance/FinancePendingConfirmButton'
 import { Suspense } from 'react'
 import { ScrollHighlight } from '@/components/ui/ScrollHighlight'
 import { getOrgAndUser, getWorkspaceClient, getWorkspaceRole, getWorkspaceMinistry, getWorkspaceMinistryLink } from '../_data'
 import { EnviarFormularioObreiroDiretoButton } from '@/components/inscricoes/EnviarFormularioObreiroDiretoButton'
-import { SearchableSelectModal } from '@/components/ui/SearchableSelectModal'
 import { setTeacherLodgingAccess, getTeacherLodgingAccessMap } from '@/lib/school/teacherVisitRequests'
 import { getOrCreateShortLink } from '@/lib/shortLinks'
+import { getOpenProcessesForUnit, getServingUnitNames, isSameUnit } from '@/lib/processes'
+import type { UnitRef } from '@/lib/staff-loans'
+import { StaffRequestPersonField } from '@/components/staff/StaffRequestPersonField'
+import { OutgoingLoansCard, SentLoansCard } from '@/components/processos/UnitLoanCards'
 
 type Props = {
   params: Promise<{ slug: string; id: string }>
-  searchParams: Promise<{ msg?: string; pending?: string }>
+  searchParams: Promise<{ msg?: string; pending?: string; erro?: string }>
 }
 
 const REQUEST_LABELS: Record<string, string> = {
@@ -36,7 +37,7 @@ function daysAgo(d: string) {
 
 export default async function EquipePage({ params, searchParams }: Props) {
   const { slug, id } = await params
-  const { msg, pending } = await searchParams
+  const { msg, pending, erro } = await searchParams
 
   const supabase = await getWorkspaceClient()
   const sbAdmin = createAdminClient()
@@ -90,7 +91,6 @@ export default async function EquipePage({ params, searchParams }: Props) {
 
   const transferPersonIds = [...new Set(transfers.map(t => t.person_id))]
   const transferMinistryIds = [...new Set(transfers.flatMap(t => [t.from_ministry_id, t.to_ministry_id]))]
-  const dhTransferPersonIds = [...new Set(transfers.filter(t => t.status === 'aceito_destino').map(t => t.person_id))]
 
   // Quem também serve ativamente em outra escola/ministério — mostra como
   // tag "também em" (sem bloquear nada, só pra ficar visível pro DH onde
@@ -132,11 +132,10 @@ export default async function EquipePage({ params, searchParams }: Props) {
   // Líder DESTE ministério (vínculo), não "tem papel lider_ministerio" — quem
   // lidera outro ministério e é só membro deste não ganha poderes aqui. Quem
   // já escreve direto (canWrite) não passa pelo fluxo de solicitação ao DH.
-  const [ministryLink, otherUnitByPerson, transferMaps, transferFinanceMap] = await Promise.all([
+  const [ministryLink, otherUnitByPerson, transferMaps] = await Promise.all([
     canWrite ? Promise.resolve(null) : getWorkspaceMinistryLink(user.id, orgId, role, preview, id),
     loadOtherUnitByPerson(),
     loadTransferMaps(),
-    getPeopleFinanceSummaries(orgId, dhTransferPersonIds),
   ])
   const isLiderMinisterio = !canWrite && ministryLink === 'lider'
   const { personMap: transferPersonMap, ministryMap: transferMinistryMap } = transferMaps
@@ -146,33 +145,23 @@ export default async function EquipePage({ params, searchParams }: Props) {
     ? await getTeacherLodgingAccessMap(linkedSchool!.id, members.map(m => m.person_id))
     : new Map<string, boolean>()
 
-  // Empréstimos de saída: obreiros DESTE ministério que alguém quis
-  // adicionar em outra escola/ministério — precisam da aprovação do líder daqui.
-  type LoanRaw = {
-    id: string; person_id: string; to_unit_type: string; role: string | null
-    starts_on: string; ends_on: string; created_at: string
-    people: { full_name: string } | null
-  }
-  let outgoingLoans: Array<LoanRaw & { destinationName: string | null }> = []
-  if (canWrite || isLiderMinisterio) {
-    const { data } = await sbAdmin
-      .from('staff_loans')
-      .select('id, person_id, to_unit_type, to_school_id, to_ministry_id, role, starts_on, ends_on, created_at, people(full_name)')
-      .eq('from_ministry_id', id).eq('status', 'pendente').order('created_at', { ascending: true })
-    const rows = (data ?? []) as unknown as Array<LoanRaw & { to_school_id: string | null; to_ministry_id: string | null }>
-    const schoolIds = [...new Set(rows.filter(r => r.to_unit_type === 'school').map(r => r.to_school_id).filter((v): v is string => !!v))]
-    const ministryIds = [...new Set(rows.filter(r => r.to_unit_type === 'ministry').map(r => r.to_ministry_id).filter((v): v is string => !!v))]
-    const [{ data: schoolsData }, { data: ministriesData }] = await Promise.all([
-      schoolIds.length > 0 ? sbAdmin.from('schools').select('id, name').in('id', schoolIds) : Promise.resolve({ data: [] }),
-      ministryIds.length > 0 ? sbAdmin.from('ministries').select('id, name').in('id', ministryIds) : Promise.resolve({ data: [] }),
-    ])
-    const schoolNameById = new Map((schoolsData ?? []).map(s => [s.id, s.name]))
-    const ministryNameById = new Map((ministriesData ?? []).map(m => [m.id, m.name]))
-    outgoingLoans = rows.map(r => ({
-      ...r,
-      destinationName: r.to_unit_type === 'school' ? (schoolNameById.get(r.to_school_id ?? '') ?? null) : (ministryNameById.get(r.to_ministry_id ?? '') ?? null),
-    }))
-  }
+  // Processos em andamento que envolvem este ministério (ver lib/processes):
+  //  • outgoingLoans — obreiros DAQUI pedidos em outra escola/ministério,
+  //    esperando a resposta do líder daqui (recusar manda pro DH decidir);
+  //  • sentLoans — pedidos de quem já serve em outro lugar PRA CÁ, ainda
+  //    em andamento (o líder acompanha e pode cancelar o que ele pediu).
+  // O DH não responde por aqui: só vê o aviso e decide em /processos.
+  const unitRef: UnitRef = { type: 'ministry', id }
+  const [unitProcesses, servingUnitNames] = await Promise.all([
+    canWrite || isLiderMinisterio ? getOpenProcessesForUnit(orgId, slug, unitRef) : Promise.resolve([]),
+    canWrite || isLiderMinisterio ? getServingUnitNames(orgId, unitRef) : Promise.resolve(new Map<string, string>()),
+  ])
+  const outgoingLoans = isLiderMinisterio
+    ? unitProcesses.filter(p => p.kind === 'emprestimo' && p.status === 'pendente' && isSameUnit(p.fromUnit, unitRef))
+    : []
+  const sentLoans = isLiderMinisterio
+    ? unitProcesses.filter(p => p.kind === 'emprestimo' && isSameUnit(p.toUnit, unitRef))
+    : []
 
   let otherMinistries: Array<{ id: string; name: string }> = []
   if (isLiderMinisterio || isManagement) {
@@ -229,12 +218,16 @@ export default async function EquipePage({ params, searchParams }: Props) {
     'use server'
     const personId = formData.get('person_id') as string
     if (!personId) return
+    // Tipo e período só vêm quando a pessoa já serve em outro lugar (ver StaffRequestPersonField).
     const startsOn = (formData.get('starts_on') as string) || new Date().toISOString().slice(0, 10)
-    const endsOn = formData.get('ends_on') as string
-    if (!endsOn) return
+    const endsOn = (formData.get('ends_on') as string) || null
+    if (endsOn && endsOn < startsOn) {
+      redirect(`/${slug}/ministerios/${id}/equipe?erro=${encodeURIComponent('A data final do acúmulo é antes da data de início.')}`)
+    }
     const result = await addMemberChecked({
       orgId, ministryId: id, personId, roleId: (formData.get('role_id') as string) || null,
-      requestedBy: user.id, startsOn, endsOn,
+      requestedBy: user.id, moveType: formData.get('move_type') === 'transferencia' ? 'transferencia' : 'acumulo',
+      startsOn, endsOn,
     })
     redirect(result === 'pending_loan' ? `/${slug}/ministerios/${id}/equipe?pending=1` : `/${slug}/ministerios/${id}/equipe`)
   }
@@ -257,12 +250,25 @@ export default async function EquipePage({ params, searchParams }: Props) {
     'use server'
     const personId = formData.get('person_id') as string
     if (!personId) return
-    await submitMemberRequest(
-      orgId, id, user.id, 'add_member',
-      personId, (formData.get('role_id') as string) || null,
-      (formData.get('notes') as string) || null,
-    )
-    redirect(`/${slug}/ministerios/${id}/equipe?msg=enviada`)
+    const { requestStaffForUnit } = await import('@/lib/staff-loans')
+    const result = await requestStaffForUnit({
+      orgId, to: { type: 'ministry', id }, personId, requestedBy: user.id,
+      role: null, ministryRoleId: (formData.get('role_id') as string) || null,
+      notes: (formData.get('notes') as string)?.trim() || null,
+      moveType: formData.get('move_type') === 'transferencia' ? 'transferencia' : 'acumulo',
+      startsOn: (formData.get('starts_on') as string) || null,
+      endsOn: (formData.get('ends_on') as string) || null,
+    })
+    if (result === 'invalid_period') {
+      redirect(`/${slug}/ministerios/${id}/equipe?erro=${encodeURIComponent('A data final do acúmulo é antes da data de início.')}`)
+    }
+    redirect(`/${slug}/ministerios/${id}/equipe?msg=${result === 'pending_loan' ? 'pedido_lider' : 'enviada'}`)
+  }
+  const handleCancelLoan = async (formData: FormData) => {
+    'use server'
+    const { cancelStaffLoan } = await import('@/lib/staff-loans')
+    await cancelStaffLoan(formData.get('loan_id') as string, user.id)
+    redirect(`/${slug}/ministerios/${id}/equipe`)
   }
   const handleRequestRemove = async (formData: FormData) => {
     'use server'
@@ -296,64 +302,32 @@ export default async function EquipePage({ params, searchParams }: Props) {
     await respondTransferAsDestination(transferId, user.id, accept, notes)
     redirect(`/${slug}/ministerios/${id}/equipe?msg=${accept ? 'transfer_aceita' : 'transfer_rejeitada'}`)
   }
-  const handleConfirmTransfer = async (formData: FormData) => {
-    'use server'
-    const transferId = formData.get('transfer_id') as string
-    const confirm = formData.get('confirm') === 'true'
-    const notes = (formData.get('notes') as string)?.trim() || null
-    await confirmTransferAsDH(transferId, user.id, confirm, notes)
-
-    if (confirm) {
-      const notifyCandidate = formData.get('notify_candidate') === 'on'
-      const notifyLeader = formData.get('notify_leader') === 'on'
-      if (notifyCandidate || notifyLeader) {
-        // Busca direto no banco em vez de fechar sobre `transfers`/`transferPersonMap`
-        // carregados na renderização — evita dado desatualizado se o status mudou
-        // entre o load da página e o clique, e mantém a closure desta action leve.
-        const { data: transfer } = await sbAdmin
-          .from('ministry_transfers')
-          .select('person_id, to_ministry_id')
-          .eq('id', transferId)
-          .single()
-        if (transfer) {
-          const { data: personRow } = await sbAdmin.from('people').select('full_name').eq('id', transfer.person_id).single()
-          let leaderEmail: string | null = null
-          if (notifyLeader) {
-            const { data: leaderRow } = await sbAdmin.from('ministry_leaders').select('user_id').eq('ministry_id', transfer.to_ministry_id).maybeSingle()
-            if (leaderRow?.user_id) {
-              const { data: leaderUser } = await sbAdmin.auth.admin.getUserById(leaderRow.user_id)
-              leaderEmail = leaderUser.user?.email ?? null
-            }
-          }
-          await notifyFinancePendency({
-            organizationId: orgId,
-            personId: transfer.person_id,
-            personName: personRow?.full_name ?? 'Pessoa',
-            notifyCandidate,
-            notifyLeaderEmail: leaderEmail,
-          })
-        }
-      }
-    }
-
-    redirect(`/${slug}/ministerios/${id}/equipe?msg=${confirm ? 'transfer_efetivada' : 'transfer_rejeitada_dh'}`)
-  }
   const handleCancelTransfer = async (formData: FormData) => {
     'use server'
     await cancelTransfer(formData.get('transfer_id') as string, user.id)
     redirect(`/${slug}/ministerios/${id}/equipe`)
   }
+  // Se o DH já decidiu em Processos nesse meio-tempo, a resposta do líder não
+  // vale mais — avisa em vez de quebrar a tela.
   const handleApproveLoan = async (formData: FormData) => {
     'use server'
     const { approveStaffLoan } = await import('@/lib/staff-loans')
-    await approveStaffLoan(formData.get('loan_id') as string, user.id, (formData.get('recommendation') as string)?.trim() || null)
-    redirect(`/${slug}/ministerios/${id}/equipe`)
+    try {
+      await approveStaffLoan(formData.get('loan_id') as string, user.id, (formData.get('recommendation') as string)?.trim() || null)
+    } catch (e) {
+      redirect(`/${slug}/ministerios/${id}/equipe?erro=${encodeURIComponent(e instanceof Error ? e.message : 'Não foi possível responder.')}`)
+    }
+    redirect(`/${slug}/ministerios/${id}/equipe?msg=emprestimo_aprovado`)
   }
   const handleRejectLoan = async (formData: FormData) => {
     'use server'
     const { rejectStaffLoan } = await import('@/lib/staff-loans')
-    await rejectStaffLoan(formData.get('loan_id') as string, user.id, (formData.get('recommendation') as string)?.trim() || null)
-    redirect(`/${slug}/ministerios/${id}/equipe`)
+    try {
+      await rejectStaffLoan(formData.get('loan_id') as string, user.id, (formData.get('recommendation') as string)?.trim() || null)
+    } catch (e) {
+      redirect(`/${slug}/ministerios/${id}/equipe?erro=${encodeURIComponent(e instanceof Error ? e.message : 'Não foi possível responder.')}`)
+    }
+    redirect(`/${slug}/ministerios/${id}/equipe?msg=emprestimo_recusado`)
   }
   const handleSetLodgingAccess = async (formData: FormData) => {
     'use server'
@@ -397,10 +371,11 @@ export default async function EquipePage({ params, searchParams }: Props) {
   const msgs: Record<string, { text: string; cls: string }> = {
     enviada:               { text: 'Solicitação enviada. O DH será notificado.', cls: 'bg-blue-50 border-blue-200 text-blue-700' },
     transfer_enviada:      { text: 'Transferência solicitada.', cls: 'bg-blue-50 border-blue-200 text-blue-700' },
-    transfer_aceita:       { text: 'Transferência aceita. O DH confirmará.', cls: 'bg-green-50 border-green-200 text-green-700' },
-    transfer_rejeitada:    { text: 'Transferência recusada.', cls: 'bg-red-50 border-red-200 text-red-700' },
-    transfer_efetivada:    { text: 'Transferência efetivada.', cls: 'bg-green-50 border-green-200 text-green-700' },
-    transfer_rejeitada_dh: { text: 'Transferência recusada pelo DH.', cls: 'bg-red-50 border-red-200 text-red-700' },
+    transfer_aceita:       { text: 'Transferência aceita. O DH dá o OK final.', cls: 'bg-green-50 border-green-200 text-green-700' },
+    transfer_rejeitada:    { text: 'Transferência recusada. O DH dá a decisão final.', cls: 'bg-purple-50 border-purple-200 text-purple-800' },
+    pedido_lider:          { text: 'Essa pessoa já serve em outro lugar — o pedido foi para o líder de lá responder, e o DH dá o OK final.', cls: 'bg-purple-50 border-purple-200 text-purple-800' },
+    emprestimo_aprovado:   { text: 'Você aceitou o pedido. O DH dá o OK final.', cls: 'bg-green-50 border-green-200 text-green-700' },
+    emprestimo_recusado:   { text: 'Você recusou o pedido. O DH dá a decisão final.', cls: 'bg-purple-50 border-purple-200 text-purple-800' },
   }
   const msgInfo = msg ? msgs[msg] : null
   const INPUT = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400'
@@ -420,10 +395,30 @@ export default async function EquipePage({ params, searchParams }: Props) {
       {msgInfo && (
         <div className={`border rounded-lg px-4 py-3 text-sm ${msgInfo.cls}`}>{msgInfo.text}</div>
       )}
+      {erro && (
+        <div className="border rounded-lg px-4 py-3 text-sm bg-red-50 border-red-200 text-red-700">{erro}</div>
+      )}
       {pending && (
-        <div className="border rounded-lg px-4 py-3 text-sm bg-amber-50 border-amber-200 text-amber-700">
-          Essa pessoa já serve em outra escola/ministério — aguardando aprovação do líder de origem (ver Pendências).
+        <div className="border rounded-lg px-4 py-3 text-sm bg-purple-50 border-purple-200 text-purple-800">
+          Essa pessoa já serve em outra escola/ministério — o pedido foi para o líder de lá. Acompanhe em Processos.
         </div>
+      )}
+
+      {/* DH: não responde por aqui — vê que há processo andando e decide em /processos */}
+      {canWrite && unitProcesses.length > 0 && (
+        <Link
+          href={`/${slug}/processos`}
+          className="group flex items-center gap-3 rounded-xl border border-purple-200 bg-purple-50 px-4 py-3 transition-all hover:shadow-md hover:-translate-y-0.5"
+        >
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-purple-600 text-white"><Workflow size={16} aria-hidden /></span>
+          <span className="min-w-0 flex-1 text-sm text-purple-900">
+            <span className="font-semibold group-hover:text-purple-700">
+              {unitProcesses.length === 1 ? '1 processo em andamento' : `${unitProcesses.length} processos em andamento`}
+            </span>{' '}
+            envolvendo {ministryName}
+          </span>
+          <span className="shrink-0 text-xs font-semibold text-purple-700">Abrir →</span>
+        </Link>
       )}
 
       {(canWrite || isLiderMinisterio) && (
@@ -437,41 +432,8 @@ export default async function EquipePage({ params, searchParams }: Props) {
         </div>
       )}
 
-      {/* Empréstimos pendentes — obreiro deste ministério pedido em outro lugar */}
-      {outgoingLoans.length > 0 && (
-        <div className="bg-white rounded-xl border border-amber-200 p-5">
-          <h2 className="text-sm font-semibold text-amber-700 mb-3">
-            Empréstimos Pendentes
-            <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">{outgoingLoans.length}</span>
-          </h2>
-          <ul className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
-            {outgoingLoans.map(loan => (
-              <li key={loan.id} className="border border-amber-100 rounded-lg p-3 space-y-2">
-                <div className="text-sm">
-                  <p className="font-medium text-gray-800">{loan.people?.full_name ?? '—'}</p>
-                  <p className="text-xs text-gray-500">
-                    Pedido para {loan.to_unit_type === 'school' ? 'a escola' : 'o ministério'} <strong>{loan.destinationName ?? '—'}</strong>
-                    {loan.role ? ` como ${loan.role}` : ''}
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    {new Date(`${loan.starts_on}T00:00:00`).toLocaleDateString('pt-BR')}
-                    {' – '}
-                    {new Date(`${loan.ends_on}T00:00:00`).toLocaleDateString('pt-BR')}
-                  </p>
-                </div>
-                <form action={handleApproveLoan} className="space-y-1.5">
-                  <input type="hidden" name="loan_id" value={loan.id} />
-                  <input name="recommendation" placeholder="Recomendação sobre a pessoa (opcional)" className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand-400" />
-                  <div className="flex gap-2">
-                    <button type="submit" className="px-3 py-1.5 bg-green-500 text-white text-xs font-medium rounded-lg hover:bg-green-600 transition-colors">Aprovar</button>
-                    <button type="submit" formAction={handleRejectLoan} className="px-3 py-1.5 border border-red-200 text-red-500 text-xs font-medium rounded-lg hover:bg-red-50 transition-colors">Recusar</button>
-                  </div>
-                </form>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {/* Pedidos de obreiro daqui feitos por outra unidade — o líder responde, o DH dá o OK final */}
+      <OutgoingLoansCard loans={outgoingLoans} approveAction={handleApproveLoan} rejectAction={handleRejectLoan} />
 
       {/* Membros */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -479,7 +441,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
         {members.length > 0 ? (
           <ul className="divide-y divide-gray-100 mb-3">
             {members.map(m => {
-              const hasPendingTransfer = transfers.some(t => t.person_id === m.person_id && ['pendente_destino', 'aceito_destino'].includes(t.status))
+              const hasPendingTransfer = transfers.some(t => t.person_id === m.person_id && ['pendente_destino', 'aceito_destino', 'rejeitado_destino'].includes(t.status))
               const birthday = formatBirthday(m.people?.birth_date ?? null)
               const canViewLodging = lodgingAccessMap.get(m.person_id) ?? false
               return (
@@ -564,27 +526,19 @@ export default async function EquipePage({ params, searchParams }: Props) {
         {canWrite && availablePeople.length > 0 && (
           <details className={members.length > 0 ? 'border-t border-gray-100 pt-3' : ''}>
             <summary className="text-sm text-brand-600 cursor-pointer select-none font-medium">+ Adicionar membro</summary>
-            <form action={handleAddMember} className="mt-3 flex flex-wrap gap-2">
-              <div className="flex-1 min-w-0">
-                <SearchableSelectModal
-                  name="person_id"
-                  options={availablePeople.map(p => ({ id: p.id, label: p.full_name }))}
-                  placeholder="Selecionar pessoa..."
-                  searchPlaceholder="Buscar por nome..."
-                  title="Selecionar pessoa"
-                />
-              </div>
+            <form action={handleAddMember} className="mt-3 space-y-2">
+              <StaffRequestPersonField
+                options={availablePeople.map(p => ({ id: p.id, label: p.full_name, servesIn: servingUnitNames.get(p.id) ?? null }))}
+                inputClassName={INPUT}
+                todayStr={todayStr}
+              />
               {ministryRoles.length > 0 && (
                 <select name="role_id" className={INPUT}>
                   <option value="">Sem papel</option>
                   {ministryRoles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                 </select>
               )}
-              <div className="flex gap-2 w-full basis-full">
-                <input type="date" name="starts_on" defaultValue={todayStr} required title="A partir de" className={`flex-1 ${INPUT}`} />
-                <input type="date" name="ends_on" required title="Até" className={`flex-1 ${INPUT}`} />
-              </div>
-              <button type="submit" className="px-4 py-2 text-sm font-medium rounded-lg bg-brand-500 hover:bg-brand-600 text-white transition-colors">Adicionar</button>
+              <button type="submit" className="w-full px-4 py-2 text-sm font-medium rounded-lg bg-brand-500 hover:bg-brand-600 text-white transition-colors">Adicionar</button>
             </form>
           </details>
         )}
@@ -594,12 +548,10 @@ export default async function EquipePage({ params, searchParams }: Props) {
           <details className={members.length > 0 ? 'border-t border-gray-100 pt-3' : ''}>
             <summary className="text-sm text-brand-600 cursor-pointer select-none font-medium">+ Solicitar adição de membro</summary>
             <form action={handleRequestAdd} className="mt-3 space-y-2">
-              <SearchableSelectModal
-                name="person_id"
-                options={leaderPeopleList.map(p => ({ id: p.id, label: p.full_name }))}
-                placeholder="Selecionar pessoa..."
-                searchPlaceholder="Buscar por nome..."
-                title="Selecionar pessoa"
+              <StaffRequestPersonField
+                options={leaderPeopleList.map(p => ({ id: p.id, label: p.full_name, servesIn: servingUnitNames.get(p.id) ?? null }))}
+                inputClassName={INPUT}
+                todayStr={todayStr}
               />
               {ministryRoles.length > 0 && (
                 <select name="role_id" className={INPUT}>
@@ -613,47 +565,6 @@ export default async function EquipePage({ params, searchParams }: Props) {
           </details>
         )}
       </div>
-
-      {/* DH: transferências para confirmar */}
-      {canWrite && (() => {
-        const dhTransfers = transfers.filter(t => t.status === 'aceito_destino')
-        if (dhTransfers.length === 0) return null
-        return (
-          <div className="bg-white rounded-xl border border-amber-200 p-5">
-            <h2 className="text-sm font-semibold text-amber-700 mb-3">
-              Transferências p/ Confirmar
-              <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">{dhTransfers.length}</span>
-            </h2>
-            <ul className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
-              {dhTransfers.map(t => (
-                <li key={t.id} className="border border-amber-100 rounded-lg p-3 space-y-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm font-medium text-gray-800">{transferPersonMap.get(t.person_id) ?? '—'}</p>
-                    <PersonFinanceBadge summary={transferFinanceMap.get(t.person_id) ?? { personId: t.person_id, pendingCount: 0, overdueCount: 0, pendingAmount: 0, overdueAmount: 0 }} />
-                  </div>
-                  <p className="text-xs text-gray-500">{transferMinistryMap.get(t.from_ministry_id) ?? '?'} → {transferMinistryMap.get(t.to_ministry_id) ?? '?'}</p>
-                  {t.reason && <p className="text-xs text-gray-400 italic">&ldquo;{t.reason}&rdquo;</p>}
-                  {t.dest_notes && <p className="text-xs text-green-600">Líder destino: &ldquo;{t.dest_notes}&rdquo;</p>}
-                  <form action={handleConfirmTransfer} className="flex gap-2 pt-1">
-                    <input type="hidden" name="transfer_id" value={t.id} />
-                    <input name="notes" placeholder="Observação (opcional)" className="flex-1 border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand-400" />
-                    <FinancePendingConfirmButton
-                      action={handleConfirmTransfer}
-                      financeSummary={transferFinanceMap.get(t.person_id) ?? null}
-                      personName={transferPersonMap.get(t.person_id) ?? 'Esta pessoa'}
-                      extraFields={{ confirm: 'true' }}
-                      className="px-3 py-1.5 bg-green-500 text-white text-xs font-medium rounded-lg hover:bg-green-600 transition-colors"
-                    >
-                      Efetivar
-                    </FinancePendingConfirmButton>
-                    <button type="submit" name="confirm" value="false" className="px-3 py-1.5 border border-red-200 text-red-500 text-xs font-medium rounded-lg hover:bg-red-50 transition-colors">Recusar</button>
-                  </form>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )
-      })()}
 
       {/* DH: solicitações pendentes */}
       {canWrite && pendingRequests.length > 0 && (
@@ -716,6 +627,9 @@ export default async function EquipePage({ params, searchParams }: Props) {
         )
       })()}
 
+      {/* Líder: pedidos de quem já serve em outro lugar, ainda em andamento */}
+      <SentLoansCard loans={sentLoans} userId={user.id} cancelAction={handleCancelLoan} />
+
       {/* Líder: minhas solicitações abertas */}
       {isLiderMinisterio && myOpenRequests.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -748,8 +662,8 @@ export default async function EquipePage({ params, searchParams }: Props) {
         if (sent.length === 0) return null
         const STATUS_T: Record<string, { label: string; cls: string }> = {
           pendente_destino:  { label: 'Aguardando destino', cls: 'bg-yellow-100 text-yellow-700' },
-          aceito_destino:    { label: 'Aceito, aguarda DH', cls: 'bg-blue-100 text-blue-700' },
-          rejeitado_destino: { label: 'Recusado pelo destino', cls: 'bg-red-100 text-red-600' },
+          aceito_destino:    { label: 'Aceito, aguarda OK do DH', cls: 'bg-blue-100 text-blue-700' },
+          rejeitado_destino: { label: 'Recusado pelo destino, DH decide', cls: 'bg-purple-100 text-purple-700' },
           rejeitado_dh:      { label: 'Recusado pelo DH', cls: 'bg-red-100 text-red-600' },
           efetivado:         { label: 'Efetivado', cls: 'bg-green-100 text-green-700' },
         }
@@ -759,7 +673,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
             <ul className="space-y-2">
               {sent.map(t => {
                 const st = STATUS_T[t.status] ?? { label: t.status, cls: 'bg-gray-100 text-gray-600' }
-                const canCancel = ['pendente_destino', 'aceito_destino'].includes(t.status)
+                const canCancel = ['pendente_destino', 'aceito_destino', 'rejeitado_destino'].includes(t.status)
                 return (
                   <li key={t.id} className="border border-gray-100 rounded-lg p-3 flex items-center justify-between gap-2">
                     <div className="min-w-0">

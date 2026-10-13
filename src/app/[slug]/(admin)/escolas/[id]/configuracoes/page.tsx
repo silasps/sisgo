@@ -5,7 +5,7 @@ import Link from 'next/link'
 import {
   assignSchoolLeaderByPerson, addSchoolCoLeaderByPerson, removeSchoolLeader,
   removeSchoolStaff,
-  submitSchoolObreiroRequest, approveSchoolObreiroRequest,
+  approveSchoolObreiroRequest,
   rejectSchoolObreiroRequest, cancelSchoolObreiroRequest,
   deleteTurma,
 } from '../actions'
@@ -15,6 +15,8 @@ import { NovaTurmaModal } from './NovaTurmaModal'
 import { TurmaActiveToggle } from './TurmaActiveToggle'
 import { EmbedCodeBox } from '@/components/ui/EmbedCodeBox'
 import { SearchableSelectModal } from '@/components/ui/SearchableSelectModal'
+import { StaffRequestPersonField } from '@/components/staff/StaffRequestPersonField'
+import { getServingUnitNames } from '@/lib/processes'
 
 import { isManagementRole, isOperationalManager, canAssignLeadership } from '@/lib/auth/permissions'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
@@ -128,6 +130,9 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
   const { data: allPeople } = await supabase
     .from('people').select('id, full_name').eq('organization_id', org.id).order('full_name')
   const availablePeople = (allPeople ?? []).filter(p => !staffPersonIds.has(p.id))
+  // Pro "Solicitar adição" do líder e o "Adicionar diretamente" do DH: avisa
+  // quem já serve em outro lugar (aí vira pedido pro líder de lá).
+  const servingUnitNames = (isLiderEted || canWrite) ? await getServingUnitNames(org.id, { type: 'school', id }) : new Map<string, string>()
 
   // Solicitações pendentes (DH/admin vê para aprovar — lider_base só visualiza)
   let pendingObreiroRequests: ObreiroReqRow[] = []
@@ -385,13 +390,17 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
     'use server'
     const personId = formData.get('person_id') as string
     if (!personId) return
-    const endsOn = formData.get('ends_on') as string
-    if (!endsOn) return
+    // Tipo e período só vêm quando a pessoa já serve em outro lugar (ver StaffRequestPersonField).
     const startsOn = (formData.get('starts_on') as string) || new Date().toISOString().slice(0, 10)
+    const endsOn = (formData.get('ends_on') as string) || null
+    if (endsOn && endsOn < startsOn) {
+      redirect(`/${slug}/escolas/${id}/configuracoes?erro=${encodeURIComponent('A data final do acúmulo é antes da data de início.')}`)
+    }
     const { addSchoolStaffChecked } = await import('../actions')
     const result = await addSchoolStaffChecked({
       orgId: org.id, schoolId: id, personId, role: (formData.get('role') as string).trim() || 'Obreiro',
-      requestedBy: user.id, startsOn, endsOn,
+      requestedBy: user.id, moveType: formData.get('move_type') === 'transferencia' ? 'transferencia' : 'acumulo',
+      startsOn, endsOn,
     })
     redirect(result === 'pending_loan' ? `/${slug}/escolas/${id}?pending=1` : `/${slug}/escolas/${id}`)
   }
@@ -402,16 +411,26 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
     redirect(`/${slug}/escolas/${id}`)
   }
 
+  // Mesmo fluxo do "Solicitar adição" da aba Equipe (ver requestStaffForUnit):
+  // quem já serve em outro lugar vira pedido pro líder de lá. O retorno vai
+  // pra Equipe, que mostra a mensagem e os pedidos em andamento.
   const handleRequestObreiro = async (formData: FormData) => {
     'use server'
     const personId = formData.get('person_id') as string
     if (!personId) return
-    await submitSchoolObreiroRequest(
-      org.id, id, user.id, personId,
-      (formData.get('role') as string).trim() || 'Obreiro',
-      (formData.get('notes') as string) || null,
-    )
-    redirect(`/${slug}/escolas/${id}?msg=solicitacao_enviada`)
+    const { requestStaffForUnit } = await import('@/lib/staff-loans')
+    const result = await requestStaffForUnit({
+      orgId: org.id, to: { type: 'school', id }, personId, requestedBy: user.id,
+      role: (formData.get('role') as string)?.trim() || 'Obreiro', ministryRoleId: null,
+      notes: (formData.get('notes') as string)?.trim() || null,
+      moveType: formData.get('move_type') === 'transferencia' ? 'transferencia' : 'acumulo',
+      startsOn: (formData.get('starts_on') as string) || null,
+      endsOn: (formData.get('ends_on') as string) || null,
+    })
+    if (result === 'invalid_period') {
+      redirect(`/${slug}/escolas/${id}/equipe?erro=${encodeURIComponent('A data final do acúmulo é antes da data de início.')}`)
+    }
+    redirect(`/${slug}/escolas/${id}/equipe?msg=${result === 'pending_loan' ? 'pedido_lider' : 'enviada'}`)
   }
 
   const handleApproveObreiro = async (formData: FormData) => {
@@ -802,29 +821,18 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                   <details className={(staffMembers.length > 0 || pendingObreiroRequests.length > 0) ? 'border-t border-gray-100 pt-3' : ''}>
                     <summary className="text-sm text-brand-600 cursor-pointer select-none font-medium">+ Adicionar diretamente</summary>
                     <form action={handleAddStaff} className="mt-2 space-y-2">
-                      <SearchableSelectModal
-                        name="person_id"
-                        options={availablePeople.map(p => ({ id: p.id, label: p.full_name }))}
-                        placeholder="Selecionar pessoa..."
-                        searchPlaceholder="Buscar por nome..."
-                        title="Selecionar pessoa"
+                      <StaffRequestPersonField
+                        options={availablePeople.map(p => ({ id: p.id, label: p.full_name, servesIn: servingUnitNames.get(p.id) ?? null }))}
+                        inputClassName="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                        todayStr={todayStr}
                       />
                       <div className="flex gap-2">
                         <input name="role" placeholder="Papel" defaultValue="Obreiro"
-                          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                          className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
                         <button type="submit" className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
                           Adicionar
                         </button>
                       </div>
-                      <div className="flex gap-2">
-                        <input type="date" name="starts_on" defaultValue={todayStr} required title="A partir de"
-                          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                        <input type="date" name="ends_on" required title="Até"
-                          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                      </div>
-                      <p className="text-[11px] text-gray-400">
-                        Usado só se a pessoa já servir em outro ministério/escola — vira um pedido de empréstimo pro líder de origem aprovar, com esse período.
-                      </p>
                     </form>
                   </details>
                 )}
@@ -1066,19 +1074,17 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
               <details className={staffMembers.length > 0 ? 'border-t border-gray-100 pt-3' : ''}>
                 <summary className="text-sm text-brand-600 cursor-pointer select-none font-medium">+ Solicitar adição de obreiro</summary>
                 <form action={handleRequestObreiro} className="mt-3 space-y-2">
-                  <SearchableSelectModal
-                    name="person_id"
-                    options={availablePeople.map(p => ({ id: p.id, label: p.full_name }))}
-                    placeholder="Selecionar pessoa..."
-                    searchPlaceholder="Buscar por nome..."
-                    title="Selecionar pessoa"
+                  <StaffRequestPersonField
+                    options={availablePeople.map(p => ({ id: p.id, label: p.full_name, servesIn: servingUnitNames.get(p.id) ?? null }))}
+                    inputClassName="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                    todayStr={todayStr}
                   />
                   <input name="role" placeholder="Papel (ex: Instrutor, Monitor)" defaultValue="Obreiro"
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
                   <input name="notes" placeholder="Observação (opcional)"
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
                   <button type="submit" className="w-full px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
-                    Enviar ao DH
+                    Enviar solicitação
                   </button>
                 </form>
               </details>

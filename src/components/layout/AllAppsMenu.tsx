@@ -38,6 +38,7 @@ const ICON_KEYWORDS: Record<string, string[]> = {
   dashboard: ['home', 'principal'],
   calendario: ['eventos'],
   pendentes: ['pendencia', 'pendencias'],
+  processos: ['transferencia', 'transferencias', 'emprestimo', 'emprestimos', 'movimentacao', 'pedido de obreiro'],
   comunicacao: ['mural', 'aviso', 'avisos', 'comunicado'],
   pessoas: ['cadastro', 'diretorio', 'membros'],
   presenca: ['chamada', 'frequencia', 'ausencia', 'ausencias', 'falta', 'faltas'],

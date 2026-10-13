@@ -10,6 +10,8 @@ import { isManagementRole, isOperationalManager } from '@/lib/auth/permissions'
 import { ServiceRequestsPanel } from './ServiceRequestsPanel'
 import { HOSPEDAGEM_TYPES, extractFamilyInfo, extractGuestGender, guestTypeForServiceRequest, type FamilyInfo } from '@/lib/hospedagem'
 import { PendentesFilterPanel } from './PendentesFilterPanel'
+import { getOpenProcesses } from '@/lib/processes'
+import { ProcessosCard } from '@/components/processos/ProcessosCard'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -310,27 +312,24 @@ export default async function PendentesPage({ params, searchParams }: Props) {
     schoolRequests = (srData ?? []) as unknown as SchoolReqRaw[]
   }
 
-  // ── 4c. Empréstimos de obreiro pendentes — visível pra gestão e pra quem
-  // lidera a unidade de ORIGEM (vínculo real, não papel principal — cobre
-  // colíder também). A ação em si (Aprovar/Rejeitar) fica na página da
-  // unidade de origem (escolas/[id]/equipe ou ministerios/[id]/equipe).
+  // ── 4c. Empréstimos de obreiro pendentes — pra quem lidera a unidade de
+  // ORIGEM (vínculo real, não papel principal — cobre colíder também). A
+  // ação em si (Aprovar/Recusar) fica na página da unidade de origem
+  // (escolas/[id]/equipe ou ministerios/[id]/equipe). Gestão não vê esta
+  // lista: acompanha tudo pelo card roxo de Processos (ver lib/processes).
+  const openProcesses = isManagement ? await getOpenProcesses(orgId, slug) : []
   type StaffLoanRaw = {
     id: string; person_id: string
     from_unit_type: string; from_school_id: string | null; from_ministry_id: string | null
     to_unit_type: string; to_school_id: string | null; to_ministry_id: string | null
-    role: string | null; starts_on: string; ends_on: string; created_at: string
+    role: string | null; starts_on: string; ends_on: string | null; move_type: string; created_at: string
     people: { full_name: string } | null
   }
   let staffLoans: Array<StaffLoanRaw & { fromName: string | null; toName: string | null }> = []
   if (user) {
     const sbAdmin = createAdminClient()
     let loanRows: StaffLoanRaw[] = []
-    if (isManagement) {
-      const { data } = await sbAdmin.from('staff_loans')
-        .select('id, person_id, from_unit_type, from_school_id, from_ministry_id, to_unit_type, to_school_id, to_ministry_id, role, starts_on, ends_on, created_at, people(full_name)')
-        .eq('organization_id', orgId).eq('status', 'pendente').order('created_at', { ascending: true })
-      loanRows = (data ?? []) as unknown as StaffLoanRaw[]
-    } else {
+    if (!isManagement) {
       const { getMySchools, getMyMinistries } = await import('@/lib/auth/unit-access')
       const [mySchools, myMinistries] = await Promise.all([
         getMySchools({ userId: user.id, orgId, role, preview }),
@@ -340,7 +339,7 @@ export default async function PendentesPage({ params, searchParams }: Props) {
       const ledMinistryIds = myMinistries.filter(m => m.link === 'lider').map(m => m.id)
       if (ledSchoolIds.length > 0 || ledMinistryIds.length > 0) {
         const { data } = await sbAdmin.from('staff_loans')
-          .select('id, person_id, from_unit_type, from_school_id, from_ministry_id, to_unit_type, to_school_id, to_ministry_id, role, starts_on, ends_on, created_at, people(full_name)')
+          .select('id, person_id, from_unit_type, from_school_id, from_ministry_id, to_unit_type, to_school_id, to_ministry_id, role, starts_on, ends_on, move_type, created_at, people(full_name)')
           .eq('organization_id', orgId).eq('status', 'pendente')
           .or([
             ledSchoolIds.length > 0 ? `from_school_id.in.(${ledSchoolIds.join(',')})` : null,
@@ -916,6 +915,56 @@ export default async function PendentesPage({ params, searchParams }: Props) {
   const hasPendingItems = items.length > 0
   const fmtMoney = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
+  // Obreiros das unidades que a pessoa lidera, pedidos em outro lugar —
+  // mesma seção na visão do líder de ministério e na do líder de escola.
+  const staffLoansSection = staffLoans.length > 0 && (
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+        <h3 className="text-sm font-semibold text-gray-700">
+          Pedidos de obreiro
+          <span className="ml-2 text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full">
+            {staffLoans.length}
+          </span>
+        </h3>
+        <p className="text-xs text-gray-400 mt-0.5">Pediram um obreiro seu. Responda na equipe; depois o DH dá o OK final.</p>
+      </div>
+      <div className="p-3 space-y-2">
+        {staffLoans.map(loan => {
+          const pName = loan.people?.full_name
+          const dias  = daysAgo(loan.created_at)
+          const urg   = urgencyBadge(dias)
+          const origemHref = loan.from_unit_type === 'school'
+            ? `/${slug}/escolas/${loan.from_school_id}/equipe`
+            : `/${slug}/ministerios/${loan.from_ministry_id}/equipe`
+          return (
+            <div
+              key={loan.id}
+              className="group relative flex items-start gap-3 bg-gray-50 rounded-xl border border-gray-200 px-4 py-3 shadow-sm transition-all duration-150 hover:shadow-md hover:-translate-y-0.5"
+            >
+              <Link href={origemHref} className="absolute inset-0 z-0 rounded-xl" aria-label="Abrir e validar" />
+              <span className={`relative z-10 flex-shrink-0 inline-flex items-center justify-center min-w-[2.5rem] px-2 py-0.5 rounded-full text-xs font-bold ${urg.color}`}>
+                {urg.label}
+              </span>
+              <div className="relative z-10 flex-1 min-w-0">
+                <p className="text-sm font-semibold text-gray-900 group-hover:text-brand-600 transition-colors">
+                  {pName ?? '—'} → {loan.toName ?? '—'}
+                </p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Serve em: {loan.fromName ?? '—'} · {loan.move_type === 'transferencia'
+                    ? 'Transferência'
+                    : `Acúmulo de funções${loan.ends_on ? ` até ${new Date(`${loan.ends_on}T00:00:00`).toLocaleDateString('pt-BR')}` : ''}`}
+                </p>
+              </div>
+              <span className="relative z-10 flex-shrink-0 text-xs font-semibold text-brand-500 group-hover:text-brand-700 transition-colors">
+                Validar →
+              </span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+
   return (
     <>
       <Header
@@ -1083,7 +1132,9 @@ export default async function PendentesPage({ params, searchParams }: Props) {
         {/* ════ VISÃO LIDER_MINISTERIO ════ */}
         {isLiderMinisterio && (
           <>
+            {staffLoansSection}
             {myMinistryRequests.length === 0 && myServiceRequests.length === 0 && myStaffApplications.length === 0 ? (
+              !staffLoansSection && (
               <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
                 <p className="text-3xl mb-3">✓</p>
                 <p className="text-gray-400 text-sm">Nenhuma pendência no momento.</p>
@@ -1096,6 +1147,7 @@ export default async function PendentesPage({ params, searchParams }: Props) {
                   </Link>
                 )}
               </div>
+              )
             ) : (
               <>
                 {myStaffApplications.length > 0 && (
@@ -1280,6 +1332,9 @@ export default async function PendentesPage({ params, searchParams }: Props) {
         {/* ════ VISÃO GESTÃO + LIDER_ETED ════ */}
         {(isManagement || isLiderEted) && (
           <>
+            {/* Processos de movimentação de obreiro — o DH decide em /processos */}
+            {isManagement && openProcesses.length > 0 && <ProcessosCard slug={slug} items={openProcesses} />}
+
             {!hasPendingItems && pendingMealOrders.length === 0 && selfMealProofRequests.length === 0 ? (
               <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
                 <p className="text-3xl mb-3">✓</p>
@@ -1403,51 +1458,8 @@ export default async function PendentesPage({ params, searchParams }: Props) {
               </div>
             )}
 
-            {/* ── Seção: Empréstimos de Obreiro (gestão + líder de origem) ── */}
-            {staffLoans.length > 0 && (
-              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-                  <h3 className="text-sm font-semibold text-gray-700">
-                    Empréstimos de Obreiro
-                    <span className="ml-2 text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full">
-                      {staffLoans.length}
-                    </span>
-                  </h3>
-                </div>
-                <div className="p-3 space-y-2">
-                  {staffLoans.map(loan => {
-                    const pName = loan.people?.full_name
-                    const dias  = daysAgo(loan.created_at)
-                    const urg   = urgencyBadge(dias)
-                    const origemHref = loan.from_unit_type === 'school'
-                      ? `/${slug}/escolas/${loan.from_school_id}/equipe`
-                      : `/${slug}/ministerios/${loan.from_ministry_id}/equipe`
-                    return (
-                      <div
-                        key={loan.id}
-                        className="group relative flex items-start gap-3 bg-gray-50 rounded-xl border border-gray-200 px-4 py-3 shadow-sm transition-all duration-150 hover:shadow-md hover:-translate-y-0.5"
-                      >
-                        <Link href={origemHref} className="absolute inset-0 z-0 rounded-xl" aria-label="Abrir e validar" />
-                        <span className={`relative z-10 flex-shrink-0 inline-flex items-center justify-center min-w-[2.5rem] px-2 py-0.5 rounded-full text-xs font-bold ${urg.color}`}>
-                          {urg.label}
-                        </span>
-                        <div className="relative z-10 flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-gray-900 group-hover:text-brand-600 transition-colors">
-                            {pName ?? '—'} → {loan.toName ?? '—'}
-                          </p>
-                          <p className="text-xs text-gray-400 mt-0.5">
-                            Serve em: {loan.fromName ?? '—'} · {new Date(`${loan.starts_on}T00:00:00`).toLocaleDateString('pt-BR')} a {new Date(`${loan.ends_on}T00:00:00`).toLocaleDateString('pt-BR')}
-                          </p>
-                        </div>
-                        <span className="relative z-10 flex-shrink-0 text-xs font-semibold text-brand-500 group-hover:text-brand-700 transition-colors">
-                          Validar →
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
+            {/* ── Seção: Empréstimos de Obreiro (líder de escola de origem) ── */}
+            {!isManagement && staffLoansSection}
 
             {/* ── Seção: Serviços recebidos (gestão + hospitalidade) ── */}
             {(isManagement || isHospitalidade || seesDepartmentServices) && serviceRequests.length > 0 && (

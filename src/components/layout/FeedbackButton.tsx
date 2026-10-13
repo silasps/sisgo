@@ -9,6 +9,7 @@ import { useSidebarLeftClass } from './account-context'
 const PAGE_LABELS: Record<string, string> = {
   dashboard: 'Dashboard',
   pendentes: 'Pendentes',
+  processos: 'Processos',
   pessoas: 'Pessoas',
   escolas: 'Escolas',
   inscricoes: 'Inscrições',

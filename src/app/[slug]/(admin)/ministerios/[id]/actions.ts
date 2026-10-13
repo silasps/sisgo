@@ -206,12 +206,12 @@ export async function addMember(ministryId: string, personId: string, roleId: st
 }
 
 // ── DH: adiciona membro só se a pessoa não estiver ativa em outra escola/
-// ministério da mesma organização — se estiver, vira um empréstimo pendente
-// (staff_loans) que só efetiva quando o líder de origem aprova (ver
-// src/lib/staff-loans.ts e o hub de Pendências). ──────────────────────────────
+// ministério da mesma organização — se estiver, vira um pedido de obreiro
+// (staff_loans) pro líder atual responder e o DH dar o OK final em Processos
+// (ver src/lib/staff-loans.ts). ───────────────────────────────────────────────
 export async function addMemberChecked(params: {
   orgId: string; ministryId: string; personId: string; roleId: string | null
-  requestedBy: string; startsOn: string; endsOn: string
+  requestedBy: string; moveType: 'acumulo' | 'transferencia'; startsOn: string; endsOn: string | null
 }): Promise<'added' | 'pending_loan'> {
   const { findActiveUnit, createStaffLoan } = await import('@/lib/staff-loans')
   const from = await findActiveUnit(params.orgId, params.personId, { type: 'ministry', id: params.ministryId })
@@ -221,7 +221,8 @@ export async function addMemberChecked(params: {
   }
   await createStaffLoan({
     orgId: params.orgId, personId: params.personId, from, to: { type: 'ministry', id: params.ministryId },
-    role: null, requestedBy: params.requestedBy, startsOn: params.startsOn, endsOn: params.endsOn,
+    role: null, ministryRoleId: params.roleId, moveType: params.moveType,
+    requestedBy: params.requestedBy, startsOn: params.startsOn, endsOn: params.endsOn,
   })
   return 'pending_loan'
 }
@@ -374,6 +375,51 @@ export async function redirectServiceRequest(requestId: string, newDepartment: s
 
 // ── Transferência de obreiro entre ministérios ───────────────────────────────
 
+// Em andamento: a resposta do líder de destino (aceitou ou recusou) não
+// encerra nada — quem dá o OK final, a qualquer momento, é o DH (migration 164).
+const TRANSFER_OPEN_STATUSES = ['pendente_destino', 'aceito_destino', 'rejeitado_destino']
+
+// Push best-effort (mesmo esquema de lib/staff-loans.ts) — quem não tem o app
+// vê na equipe do ministério ou em Processos.
+async function notifyTransfer(
+  sb: AdminClient,
+  transferId: string,
+  event: 'pedida' | 'respondida',
+  actorId: string,
+) {
+  try {
+    const { data: t } = await sb.from('ministry_transfers')
+      .select('organization_id, person_id, from_ministry_id, to_ministry_id, status, requested_by')
+      .eq('id', transferId).single()
+    if (!t) return
+    const [{ data: org }, { data: person }, { data: units }] = await Promise.all([
+      sb.from('organizations').select('slug').eq('id', t.organization_id).single(),
+      sb.from('people').select('full_name').eq('id', t.person_id).single(),
+      sb.from('ministries').select('id, name').in('id', [t.from_ministry_id, t.to_ministry_id]),
+    ])
+    const nameOf = (id: string) => units?.find(u => u.id === id)?.name ?? 'outro ministério'
+    const personName = person?.full_name ?? 'Obreiro'
+    const { sendPushToUsers } = await import('@/lib/notifications/push')
+    const send = (userIds: string[], title: string, body: string, url: string) =>
+      sendPushToUsers([...new Set(userIds)].filter(id => id !== actorId), { title, body, data: { url } })
+
+    if (event === 'pedida') {
+      const { data: leaders } = await sb.from('ministry_leaders').select('user_id').eq('ministry_id', t.to_ministry_id)
+      await send((leaders ?? []).map(l => l.user_id as string), 'Transferência de obreiro',
+        `${personName}, de ${nameOf(t.from_ministry_id)}, foi indicado(a) para ${nameOf(t.to_ministry_id)}. Responda na equipe.`,
+        `/${org?.slug}/ministerios/${t.to_ministry_id}/equipe`)
+    } else {
+      const { getDhUserIds } = await import('@/lib/processes')
+      const verbo = t.status === 'aceito_destino' ? 'aceitou' : 'recusou'
+      await send([...(await getDhUserIds(t.organization_id)), t.requested_by as string], 'Processo aguardando o DH',
+        `O líder de ${nameOf(t.to_ministry_id)} ${verbo} a transferência de ${personName}. Falta o OK final do DH.`,
+        `/${org?.slug}/processos`)
+    }
+  } catch {
+    // aviso é best-effort
+  }
+}
+
 export async function requestTransfer(data: {
   organizationId: string
   personId: string
@@ -383,15 +429,16 @@ export async function requestTransfer(data: {
   reason: string | null
 }) {
   const sb = createAdminClient()
-  const { error } = await sb.from('ministry_transfers').insert({
+  const { data: row, error } = await sb.from('ministry_transfers').insert({
     organization_id:  data.organizationId,
     person_id:        data.personId,
     from_ministry_id: data.fromMinistryId,
     to_ministry_id:   data.toMinistryId,
     requested_by:     data.requestedBy,
     reason:           data.reason,
-  })
+  }).select('id').single()
   if (error) throw new Error(error.message)
+  await notifyTransfer(sb, row.id, 'pedida', data.requestedBy)
 }
 
 export async function respondTransferAsDestination(
@@ -401,56 +448,73 @@ export async function respondTransferAsDestination(
   notes: string | null,
 ) {
   const sb = createAdminClient()
-  const { error } = await sb.from('ministry_transfers').update({
+  const { data, error } = await sb.from('ministry_transfers').update({
     status:           accept ? 'aceito_destino' : 'rejeitado_destino',
     dest_reviewed_by: userId,
     dest_reviewed_at: new Date().toISOString(),
     dest_notes:       notes,
     updated_at:       new Date().toISOString(),
-  }).eq('id', transferId).eq('status', 'pendente_destino')
+  }).eq('id', transferId).eq('status', 'pendente_destino').select('id').maybeSingle()
   if (error) throw new Error(error.message)
+  if (data) await notifyTransfer(sb, transferId, 'respondida', userId)
 }
 
+// OK final do DH, chamado de /processos. `config` é o que o DH escolheu no
+// card de configuração: tipo (transferência tira da origem; acúmulo mantém) e
+// função no ministério de destino. Sem config, mantém o comportamento antigo:
+// transferência como "Membro". O UPDATE condicional "reserva" a transferência
+// antes de mexer nos vínculos — duas decisões ao mesmo tempo não efetivam duas vezes.
 export async function confirmTransferAsDH(
   transferId: string,
   userId: string,
   confirm: boolean,
   notes: string | null,
+  config?: { moveType: 'acumulo' | 'transferencia'; ministryRoleId: string | null },
 ) {
   const sb = createAdminClient()
+  const now = new Date().toISOString()
 
   if (!confirm) {
-    await sb.from('ministry_transfers').update({
+    const { data } = await sb.from('ministry_transfers').update({
       status:         'rejeitado_dh',
       dh_reviewed_by: userId,
-      dh_reviewed_at: new Date().toISOString(),
+      dh_reviewed_at: now,
       dh_notes:       notes,
-      updated_at:     new Date().toISOString(),
-    }).eq('id', transferId).eq('status', 'aceito_destino')
+      updated_at:     now,
+    }).eq('id', transferId).in('status', TRANSFER_OPEN_STATUSES).select('id').maybeSingle()
+    if (!data) throw new Error('Transferência não encontrada ou já concluída.')
     return
   }
 
-  const { data: transfer } = await sb.from('ministry_transfers')
-    .select('*')
-    .eq('id', transferId)
-    .eq('status', 'aceito_destino')
-    .single()
-  if (!transfer) throw new Error('Transferência não encontrada')
+  const moveType = config?.moveType === 'acumulo' ? 'acumulo' : 'transferencia'
+  const { data: transfer } = await sb.from('ministry_transfers').update({
+    status:         'efetivado',
+    move_type:      moveType,
+    dh_reviewed_by: userId,
+    dh_reviewed_at: now,
+    dh_notes:       notes,
+    effective_date: now.slice(0, 10),
+    updated_at:     now,
+  }).eq('id', transferId).in('status', TRANSFER_OPEN_STATUSES).select('*').maybeSingle()
+  if (!transfer) throw new Error('Transferência não encontrada ou já concluída.')
 
-  const { data: currentMember } = await sb.from('ministry_members')
+  let roleId = config ? config.ministryRoleId : null
+  if (!config) {
+    const { data: defaultRole } = await sb.from('ministry_roles')
+      .select('id').eq('ministry_id', transfer.to_ministry_id).eq('name', 'Membro').maybeSingle()
+    roleId = defaultRole?.id ?? null
+  }
+  await addMember(transfer.to_ministry_id, transfer.person_id, roleId)
+
+  if (moveType === 'acumulo') return
+
+  // Lista, não single(): registro nunca é apagado, então pode haver mais de um.
+  const { data: currentMembers } = await sb.from('ministry_members')
     .select('id')
     .eq('ministry_id', transfer.from_ministry_id)
     .eq('person_id', transfer.person_id)
     .eq('active', true)
-    .single()
-  if (currentMember) await removeMember(currentMember.id)
-
-  const { data: defaultRole } = await sb.from('ministry_roles')
-    .select('id')
-    .eq('ministry_id', transfer.to_ministry_id)
-    .eq('name', 'Membro')
-    .single()
-  await addMember(transfer.to_ministry_id, transfer.person_id, defaultRole?.id ?? null)
+  for (const m of currentMembers ?? []) await removeMember(m.id)
 
   const { data: destMinistry } = await sb.from('ministries')
     .select('name')
@@ -458,20 +522,10 @@ export async function confirmTransferAsDH(
     .single()
   if (destMinistry) {
     await sb.from('staff_profiles')
-      .update({ area: destMinistry.name, updated_at: new Date().toISOString() })
+      .update({ area: destMinistry.name, updated_at: now })
       .eq('person_id', transfer.person_id)
       .eq('organization_id', transfer.organization_id)
   }
-
-  const today = new Date().toISOString().split('T')[0]
-  await sb.from('ministry_transfers').update({
-    status:         'efetivado',
-    dh_reviewed_by: userId,
-    dh_reviewed_at: new Date().toISOString(),
-    dh_notes:       notes,
-    effective_date: today,
-    updated_at:     new Date().toISOString(),
-  }).eq('id', transferId)
 }
 
 export async function cancelTransfer(transferId: string, userId: string) {
@@ -480,7 +534,7 @@ export async function cancelTransfer(transferId: string, userId: string) {
     .update({ status: 'cancelado', updated_at: new Date().toISOString() })
     .eq('id', transferId)
     .eq('requested_by', userId)
-    .in('status', ['pendente_destino', 'aceito_destino'])
+    .in('status', TRANSFER_OPEN_STATUSES)
 }
 
 // ── Líder/DH: envia formulário definitivo de obreiro direto, sem pré-inscrição

@@ -100,7 +100,7 @@ function dropEmptySections(items: NavItem[]): NavItem[] {
   return out
 }
 
-function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPending: boolean, hasReservationsPending: boolean, hasOwnCashScope: boolean, laundryEnabled: boolean, hasChatUnread: boolean, idCardEnabled: boolean, hasSchoolLinks = false, hasMinistryLinks = false, hasInscricoesScope = false, ministryCount = 0, hasMinistryMessages = false, hasSchoolMessages = false): NavItem[] {
+function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPending: boolean, hasReservationsPending: boolean, hasOwnCashScope: boolean, laundryEnabled: boolean, hasChatUnread: boolean, idCardEnabled: boolean, hasSchoolLinks = false, hasMinistryLinks = false, hasInscricoesScope = false, ministryCount = 0, hasMinistryMessages = false, hasSchoolMessages = false, hasProcessesAwaitingDh = false): NavItem[] {
   const allRoles = [role, ...accumulatedRoles]
   const is = (r: string) => allRoles.includes(r)
   const isManagement        = isManagementRole(role)
@@ -138,6 +138,7 @@ function buildNav(slug: string, role: string, accumulatedRoles: string[], hasPen
     { href: `/${slug}/dashboard`,    label: 'Início',           icon: 'dashboard',     show: true },
     { href: `/${slug}/calendario`,   label: 'Calendário',       icon: 'calendario',    show: true },
     { href: `/${slug}/pendentes`,    label: 'Pendentes',        icon: 'pendentes',     show: true, alert: hasPending },
+    { href: `/${slug}/processos`,    label: 'Processos',        icon: 'processos',     show: isManagement, alert: hasProcessesAwaitingDh },
     { href: `/${slug}/chat`,         label: 'Chat',             icon: 'chat',          show: true, alert: hasChatUnread },
     { href: `/${slug}/comunicacao`,  label: 'Comunicação',      icon: 'comunicacao',   show: role === 'lider_base' || role === 'superadmin' || is('comunicacao') },
     { href: `/${slug}/pessoas`,      label: 'Pessoas',          icon: 'pessoas',       show: canSeePessoas },
@@ -488,8 +489,12 @@ export default async function SlugLayout({ children, params }: Props) {
     pendingTotal += (ic ?? 0) + (sc ?? 0)
   }
 
+  // Empréstimos e transferências de obreiro não contam aqui pra gestão: têm
+  // item próprio no menu (Processos), com alerta quando algo espera o DH.
+  let processesAwaitingDh = 0
   if (isManagementUser) {
-    const [{ count: ac }, { count: mc }, { count: src }, { count: tc }] = await Promise.all([
+    const { getProcessCounts } = await import('@/lib/processes')
+    const [{ count: ac }, { count: mc }, { count: src }, processCounts] = await Promise.all([
       supabase.from('staff_applications')
         .select('*', { count: 'exact', head: true })
         .eq('organization_id', org.id)
@@ -502,18 +507,10 @@ export default async function SlugLayout({ children, params }: Props) {
         .select('*', { count: 'exact', head: true })
         .eq('organization_id', org.id)
         .in('status', ['pendente', 'em_analise']),
-      sbAdmin.from('ministry_transfers')
-        .select('*', { count: 'exact', head: true })
-        .eq('organization_id', org.id)
-        .eq('status', 'aceito_destino'),
+      getProcessCounts(org.id),
     ])
-    pendingTotal += (ac ?? 0) + (mc ?? 0) + (src ?? 0) + (tc ?? 0)
-
-    const { count: loanCount } = await sbAdmin.from('staff_loans')
-      .select('*', { count: 'exact', head: true })
-      .eq('organization_id', org.id)
-      .eq('status', 'pendente')
-    pendingTotal += (loanCount ?? 0)
+    pendingTotal += (ac ?? 0) + (mc ?? 0) + (src ?? 0)
+    processesAwaitingDh = processCounts.awaitingDh
   }
 
   // Empréstimos pendentes de saída das unidades que a pessoa lidera (vínculo
@@ -765,7 +762,7 @@ export default async function SlugLayout({ children, params }: Props) {
   ]).size
   // Mesmo recorte de /inscricoes: escola com qualquer vínculo ou ministério liderado.
   const hasInscricoesScope = hasSchoolLinks || myMinistryLinks.some(m => m.link === 'lider')
-  const navItems = buildNav(slug, role, [...accumulatedRoles, ...extraRoles, ...linkedRoles], hasPending, reservationsPending > 0, hasOwnCashScope, laundryEnabled, hasChatUnread, idCardEnabled, hasSchoolLinks, hasMinistryLinks, hasInscricoesScope, ministryCount, hasMinistryMessages, hasSchoolMessages)
+  const navItems = buildNav(slug, role, [...accumulatedRoles, ...extraRoles, ...linkedRoles], hasPending, reservationsPending > 0, hasOwnCashScope, laundryEnabled, hasChatUnread, idCardEnabled, hasSchoolLinks, hasMinistryLinks, hasInscricoesScope, ministryCount, hasMinistryMessages, hasSchoolMessages, processesAwaitingDh > 0)
   const bottomItems = pickBottomBarItems(navItems, role)
 
   // ── Menu de conta: tudo somado, sem alternância entre Pessoal/Administração ──

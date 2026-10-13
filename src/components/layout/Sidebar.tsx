@@ -9,7 +9,7 @@ import {
   ChefHat, Package, Boxes, DollarSign, Receipt, Settings, LogOut,
   UserCheck, CalendarDays, Wrench, Building2, Eye, Code2, Inbox, CookingPot,
   Hotel, DoorOpen, WashingMachine, Shirt, IdCard, Megaphone,
-  Menu, Search, MessageCircle,
+  Menu, Search, MessageCircle, Workflow,
   type LucideIcon,
 } from 'lucide-react'
 import { useAllApps } from './all-apps-context'
@@ -40,6 +40,7 @@ export const ICON_MAP: Record<string, LucideIcon | typeof MinisteriosIcon> = {
   dashboard:      Home,
   calendario:     CalendarDays,
   pendentes:      AlertTriangle,
+  processos:      Workflow,
   chat:           MessageCircle,
   comunicacao:    Megaphone,
   pessoas:        Users,

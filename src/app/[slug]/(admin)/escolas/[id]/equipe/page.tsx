@@ -1,10 +1,12 @@
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { notFound, redirect } from 'next/navigation'
+import { Workflow } from 'lucide-react'
 import {
   assignSchoolLeaderByPerson, addSchoolCoLeaderByPerson, removeSchoolLeader,
   addSchoolStaffBatch, removeSchoolStaff,
-  submitSchoolObreiroRequest, approveSchoolObreiroRequest,
+  approveSchoolObreiroRequest,
   rejectSchoolObreiroRequest, cancelSchoolObreiroRequest,
 } from '../actions'
 import { isManagementRole, isOperationalManager, canAssignLeadership } from '@/lib/auth/permissions'
@@ -15,6 +17,11 @@ import { SubmitButton } from '@/components/ui/SubmitButton'
 import { EnviarFormularioObreiroDiretoButton } from '@/components/inscricoes/EnviarFormularioObreiroDiretoButton'
 import { setTeacherLodgingAccess, getTeacherLodgingAccessMap } from '@/lib/school/teacherVisitRequests'
 import { getOrCreateShortLink } from '@/lib/shortLinks'
+import { getOpenProcessesForUnit, getServingUnitNames, isSameUnit } from '@/lib/processes'
+import type { UnitRef } from '@/lib/staff-loans'
+import { StaffRequestPersonField } from '@/components/staff/StaffRequestPersonField'
+import { MoveTypeFields } from '@/components/processos/MoveTypeFields'
+import { OutgoingLoansCard, SentLoansCard } from '@/components/processos/UnitLoanCards'
 
 type Props = {
   params: Promise<{ slug: string; id: string }>
@@ -147,33 +154,23 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
     }
   }
 
-  // Empréstimos de saída: obreiros DESTA escola que alguém quis adicionar
-  // em outra escola/ministério — precisam da aprovação do líder daqui.
-  type LoanRaw = {
-    id: string; person_id: string; to_unit_type: string; role: string | null
-    starts_on: string; ends_on: string; created_at: string
-    people: { full_name: string } | null
-  }
-  let outgoingLoans: Array<LoanRaw & { destinationName: string | null }> = []
-  if (canWrite || isLiderEted) {
-    const { data } = await sbAdmin
-      .from('staff_loans')
-      .select('id, person_id, to_unit_type, to_school_id, to_ministry_id, role, starts_on, ends_on, created_at, people(full_name)')
-      .eq('from_school_id', id).eq('status', 'pendente').order('created_at', { ascending: true })
-    const rows = (data ?? []) as unknown as Array<LoanRaw & { to_school_id: string | null; to_ministry_id: string | null }>
-    const schoolIds = [...new Set(rows.filter(r => r.to_unit_type === 'school').map(r => r.to_school_id).filter((v): v is string => !!v))]
-    const ministryIds = [...new Set(rows.filter(r => r.to_unit_type === 'ministry').map(r => r.to_ministry_id).filter((v): v is string => !!v))]
-    const [{ data: schoolsData }, { data: ministriesData }] = await Promise.all([
-      schoolIds.length > 0 ? sbAdmin.from('schools').select('id, name').in('id', schoolIds) : Promise.resolve({ data: [] }),
-      ministryIds.length > 0 ? sbAdmin.from('ministries').select('id, name').in('id', ministryIds) : Promise.resolve({ data: [] }),
-    ])
-    const schoolNameById = new Map((schoolsData ?? []).map(s => [s.id, s.name]))
-    const ministryNameById = new Map((ministriesData ?? []).map(m => [m.id, m.name]))
-    outgoingLoans = rows.map(r => ({
-      ...r,
-      destinationName: r.to_unit_type === 'school' ? (schoolNameById.get(r.to_school_id ?? '') ?? null) : (ministryNameById.get(r.to_ministry_id ?? '') ?? null),
-    }))
-  }
+  // Processos em andamento que envolvem esta escola (ver lib/processes):
+  //  • outgoingLoans — obreiros DAQUI pedidos em outra escola/ministério,
+  //    esperando a resposta do líder daqui (recusar manda pro DH decidir);
+  //  • sentLoans — pedidos de quem já serve em outro lugar PRA CÁ, ainda
+  //    em andamento (o líder acompanha e pode cancelar o que ele pediu).
+  // O DH não responde por aqui: só vê o aviso e decide em /processos.
+  const unitRef: UnitRef = { type: 'school', id }
+  const [unitProcesses, servingUnitNames] = await Promise.all([
+    canWrite || isLiderEted ? getOpenProcessesForUnit(orgId, slug, unitRef) : Promise.resolve([]),
+    canWrite || isLiderEted ? getServingUnitNames(orgId, unitRef) : Promise.resolve(new Map<string, string>()),
+  ])
+  const outgoingLoans = isLiderEted
+    ? unitProcesses.filter(p => p.kind === 'emprestimo' && p.status === 'pendente' && isSameUnit(p.fromUnit, unitRef))
+    : []
+  const sentLoans = isLiderEted
+    ? unitProcesses.filter(p => p.kind === 'emprestimo' && isSameUnit(p.toUnit, unitRef))
+    : []
 
   const base = `/${slug}/escolas/${id}/equipe`
   const INPUT = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400'
@@ -183,12 +180,14 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
     'use server'
     const personIds = formData.getAll('person_id') as string[]
     if (personIds.length === 0) return
+    // Tipo e período valem só pra quem já serve em outro lugar (vira pedido pro líder de lá).
     const startsOn = (formData.get('starts_on') as string) || new Date().toISOString().slice(0, 10)
-    const endsOn = formData.get('ends_on') as string
-    if (!endsOn) return
+    const endsOn = (formData.get('ends_on') as string) || null
+    if (endsOn && endsOn < startsOn) redirect(`${base}?erro=${encodeURIComponent('A data final do acúmulo é antes da data de início.')}`)
     const result = await addSchoolStaffBatch({
       orgId, schoolId: id, personIds, role: (formData.get('role') as string) || 'Obreiro',
-      requestedBy: user.id, startsOn, endsOn,
+      requestedBy: user.id, moveType: formData.get('move_type') === 'transferencia' ? 'transferencia' : 'acumulo',
+      startsOn, endsOn,
     })
     redirect(result.pendingLoans > 0 ? `${base}?pending=${result.pendingLoans}` : base)
   }
@@ -211,8 +210,25 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
     'use server'
     const personId = formData.get('person_id') as string
     if (!personId) return
-    await submitSchoolObreiroRequest(orgId, id, user.id, personId, (formData.get('role') as string) || 'Obreiro', (formData.get('notes') as string) || null)
-    redirect(`${base}?msg=enviada`)
+    const { requestStaffForUnit } = await import('@/lib/staff-loans')
+    const result = await requestStaffForUnit({
+      orgId, to: { type: 'school', id }, personId, requestedBy: user.id,
+      role: (formData.get('role') as string)?.trim() || 'Obreiro', ministryRoleId: null,
+      notes: (formData.get('notes') as string)?.trim() || null,
+      moveType: formData.get('move_type') === 'transferencia' ? 'transferencia' : 'acumulo',
+      startsOn: (formData.get('starts_on') as string) || null,
+      endsOn: (formData.get('ends_on') as string) || null,
+    })
+    if (result === 'invalid_period') {
+      redirect(`${base}?erro=${encodeURIComponent('A data final do acúmulo é antes da data de início.')}`)
+    }
+    redirect(`${base}?msg=${result === 'pending_loan' ? 'pedido_lider' : 'enviada'}`)
+  }
+  const handleCancelLoan = async (formData: FormData) => {
+    'use server'
+    const { cancelStaffLoan } = await import('@/lib/staff-loans')
+    await cancelStaffLoan(formData.get('loan_id') as string, user.id)
+    redirect(base)
   }
   const handleCancelObreiro = async (formData: FormData) => {
     'use server'
@@ -242,17 +258,27 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
     await removeSchoolLeader(id, userId, orgId)
     redirect(base)
   }
+  // Se o DH já decidiu em Processos nesse meio-tempo, a resposta do líder não
+  // vale mais — avisa em vez de quebrar a tela.
   const handleApproveLoan = async (formData: FormData) => {
     'use server'
     const { approveStaffLoan } = await import('@/lib/staff-loans')
-    await approveStaffLoan(formData.get('loan_id') as string, user.id, (formData.get('recommendation') as string)?.trim() || null)
-    redirect(base)
+    try {
+      await approveStaffLoan(formData.get('loan_id') as string, user.id, (formData.get('recommendation') as string)?.trim() || null)
+    } catch (e) {
+      redirect(`${base}?erro=${encodeURIComponent(e instanceof Error ? e.message : 'Não foi possível responder.')}`)
+    }
+    redirect(`${base}?msg=emprestimo_aprovado`)
   }
   const handleRejectLoan = async (formData: FormData) => {
     'use server'
     const { rejectStaffLoan } = await import('@/lib/staff-loans')
-    await rejectStaffLoan(formData.get('loan_id') as string, user.id, (formData.get('recommendation') as string)?.trim() || null)
-    redirect(base)
+    try {
+      await rejectStaffLoan(formData.get('loan_id') as string, user.id, (formData.get('recommendation') as string)?.trim() || null)
+    } catch (e) {
+      redirect(`${base}?erro=${encodeURIComponent(e instanceof Error ? e.message : 'Não foi possível responder.')}`)
+    }
+    redirect(`${base}?msg=emprestimo_recusado`)
   }
   const handleCopyPublicLink = async () => {
     'use server'
@@ -297,6 +323,9 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
   const msgs: Record<string, { text: string; cls: string }> = {
     enviada: { text: 'Solicitação enviada.', cls: 'bg-blue-50 border-blue-200 text-blue-700' },
     lider_atribuido: { text: 'Líder atribuído.', cls: 'bg-green-50 border-green-200 text-green-700' },
+    pedido_lider: { text: 'Essa pessoa já serve em outro lugar — o pedido foi para o líder de lá responder, e o DH dá o OK final.', cls: 'bg-purple-50 border-purple-200 text-purple-800' },
+    emprestimo_aprovado: { text: 'Você aceitou o pedido. O DH dá o OK final.', cls: 'bg-green-50 border-green-200 text-green-700' },
+    emprestimo_recusado: { text: 'Você recusou o pedido. O DH dá a decisão final.', cls: 'bg-purple-50 border-purple-200 text-purple-800' },
   }
   const msgInfo = msg ? msgs[msg] : null
   const formatBirthday = (birthDate: string | null) => birthDate
@@ -317,11 +346,28 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
         <div className="border rounded-lg px-4 py-3 text-sm bg-red-50 border-red-200 text-red-700">{erro}</div>
       )}
       {pending && Number(pending) > 0 && (
-        <div className="border rounded-lg px-4 py-3 text-sm bg-amber-50 border-amber-200 text-amber-700">
+        <div className="border rounded-lg px-4 py-3 text-sm bg-purple-50 border-purple-200 text-purple-800">
           {Number(pending) === 1
-            ? '1 pessoa já serve em outra escola/ministério — aguardando aprovação do líder de origem (ver Pendências).'
-            : `${pending} pessoas já servem em outra escola/ministério — aguardando aprovação do líder de origem (ver Pendências).`}
+            ? '1 pessoa já serve em outra escola/ministério — o pedido foi para o líder de lá. Acompanhe em Processos.'
+            : `${pending} pessoas já servem em outra escola/ministério — os pedidos foram para os líderes de lá. Acompanhe em Processos.`}
         </div>
+      )}
+
+      {/* DH: não responde por aqui — vê que há processo andando e decide em /processos */}
+      {canWrite && unitProcesses.length > 0 && (
+        <Link
+          href={`/${slug}/processos`}
+          className="group flex items-center gap-3 rounded-xl border border-purple-200 bg-purple-50 px-4 py-3 transition-all hover:shadow-md hover:-translate-y-0.5"
+        >
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-purple-600 text-white"><Workflow size={16} aria-hidden /></span>
+          <span className="min-w-0 flex-1 text-sm text-purple-900">
+            <span className="font-semibold group-hover:text-purple-700">
+              {unitProcesses.length === 1 ? '1 processo em andamento' : `${unitProcesses.length} processos em andamento`}
+            </span>{' '}
+            envolvendo {escola?.name ?? 'esta escola'}
+          </span>
+          <span className="shrink-0 text-xs font-semibold text-purple-700">Abrir →</span>
+        </Link>
       )}
 
       {(canWrite || isLiderEted) && (
@@ -373,41 +419,8 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
         </div>
       )}
 
-      {/* Empréstimos pendentes — obreiro desta escola pedido em outro lugar */}
-      {outgoingLoans.length > 0 && (
-        <div className="bg-white rounded-xl border border-amber-200 p-5">
-          <h2 className="text-sm font-semibold text-amber-700 mb-3">
-            Empréstimos Pendentes
-            <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">{outgoingLoans.length}</span>
-          </h2>
-          <ul className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
-            {outgoingLoans.map(loan => (
-              <li key={loan.id} className="border border-amber-100 rounded-lg p-3 space-y-2">
-                <div className="text-sm">
-                  <p className="font-medium text-gray-800">{loan.people?.full_name ?? '—'}</p>
-                  <p className="text-xs text-gray-500">
-                    Pedido para {loan.to_unit_type === 'school' ? 'a escola' : 'o ministério'} <strong>{loan.destinationName ?? '—'}</strong>
-                    {loan.role ? ` como ${loan.role}` : ''}
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    {new Date(`${loan.starts_on}T00:00:00`).toLocaleDateString('pt-BR')}
-                    {' – '}
-                    {new Date(`${loan.ends_on}T00:00:00`).toLocaleDateString('pt-BR')}
-                  </p>
-                </div>
-                <form action={handleApproveLoan} className="space-y-1.5">
-                  <input type="hidden" name="loan_id" value={loan.id} />
-                  <input name="recommendation" placeholder="Recomendação sobre a pessoa (opcional)" className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand-400" />
-                  <div className="flex gap-2">
-                    <button type="submit" className="px-3 py-1.5 bg-green-500 text-white text-xs font-medium rounded-lg hover:bg-green-600 transition-colors">Aprovar</button>
-                    <button type="submit" formAction={handleRejectLoan} className="px-3 py-1.5 border border-red-200 text-red-500 text-xs font-medium rounded-lg hover:bg-red-50 transition-colors">Recusar</button>
-                  </div>
-                </form>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {/* Pedidos de obreiro daqui feitos por outra unidade — o líder responde, o DH dá o OK final */}
+      <OutgoingLoansCard loans={outgoingLoans} approveAction={handleApproveLoan} rejectAction={handleRejectLoan} />
 
       {/* Obreiros */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -465,24 +478,23 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
             <form action={handleAddStaff} className="mt-3 space-y-2">
               <MultiSelectModal
                 name="person_id"
-                options={availablePeople.map(p => ({ id: p.id, label: p.full_name }))}
+                options={availablePeople.map(p => ({
+                  id: p.id, label: p.full_name,
+                  sublabel: servingUnitNames.has(p.id) ? `Serve em: ${servingUnitNames.get(p.id)}` : undefined,
+                }))}
                 placeholder="Selecionar pessoas..."
                 searchPlaceholder="Buscar por nome..."
                 title="Selecionar pessoas"
               />
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <label className="block text-[11px] text-gray-400 mb-1">A partir de</label>
-                  <input type="date" name="starts_on" defaultValue={todayStr} required className={INPUT} />
-                </div>
-                <div className="flex-1">
-                  <label className="block text-[11px] text-gray-400 mb-1">Até</label>
-                  <input type="date" name="ends_on" required className={INPUT} />
-                </div>
+              {/* Lote: não dá pra saber quem foi escolhido antes de enviar — o tipo vale pra
+                  todo mundo que já servir em outro lugar (os demais entram direto). */}
+              <div className="rounded-lg border border-purple-200 bg-purple-50 p-3 space-y-2">
+                <p className="text-xs text-purple-900">
+                  Se alguém escolhido já servir em outro ministério/escola, vira um pedido para o líder de lá responder,
+                  e o DH dá o OK final. Como vai ser para essas pessoas?
+                </p>
+                <MoveTypeFields todayStr={todayStr} inputClassName={INPUT} />
               </div>
-              <p className="text-[11px] text-gray-400">
-                Usado só se alguém selecionado já servir em outro ministério/escola — vira um pedido de empréstimo pro líder de origem aprovar, com esse período (obrigatório: o líder precisa saber até quando pode contar sem a pessoa).
-              </p>
               <SubmitButton pendingText="Adicionando…" className="w-full px-4 py-2 text-sm font-medium rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white transition-colors">
                 Adicionar
               </SubmitButton>
@@ -495,10 +507,11 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
           <details className={staffMembers.length > 0 ? 'border-t border-gray-100 pt-3' : ''}>
             <summary className="text-sm text-brand-600 cursor-pointer select-none font-medium">+ Solicitar adição de obreiro</summary>
             <form action={handleSubmitObreiro} className="mt-3 space-y-2">
-              <select name="person_id" required className={INPUT}>
-                <option value="">Selecionar pessoa...</option>
-                {availablePeople.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
-              </select>
+              <StaffRequestPersonField
+                options={availablePeople.map(p => ({ id: p.id, label: p.full_name, servesIn: servingUnitNames.get(p.id) ?? null }))}
+                inputClassName={INPUT}
+                todayStr={todayStr}
+              />
               <input name="notes" placeholder="Observação (opcional)" className={INPUT} />
               <button type="submit" className="w-full px-4 py-2 text-sm font-medium rounded-lg bg-brand-500 hover:bg-brand-600 text-white transition-colors">Enviar Solicitação</button>
             </form>
@@ -534,6 +547,9 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
       )}
 
       <div className="max-w-3xl mx-auto w-full space-y-4">
+      {/* Líder: pedidos de quem já serve em outro lugar, ainda em andamento */}
+      <SentLoansCard loans={sentLoans} userId={user.id} cancelAction={handleCancelLoan} />
+
       {/* Líder: minhas solicitações */}
       {isLiderEted && myRequests.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 p-5">

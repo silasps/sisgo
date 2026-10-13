@@ -14,6 +14,8 @@ import { AreaTabs } from './AreaTabs'
 import { getMyAreas, buildAreaTabs } from './areas'
 import { PersonalAccountCard } from './PersonalAccountCard'
 import { VerseOfDayCard } from './VerseOfDayCard'
+import { getOpenProcesses } from '@/lib/processes'
+import { ProcessosCard } from '@/components/processos/ProcessosCard'
 import type { AnnouncementListItem } from '@/components/ui/AnnouncementList'
 import { AnnouncementCarousel } from '@/components/ui/AnnouncementCarousel'
 import { matchesAudience } from '@/lib/audience-roles'
@@ -452,6 +454,7 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
       { count: staffToFinalize },
       { count: urgentNoResponse },
       { count: upcomingVisitors },
+      openProcesses,
     ] = await Promise.all([
       sbDH.from('school_interest_forms')
         .select('*', { count: 'exact', head: true })
@@ -487,6 +490,7 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
         .eq('organization_id', orgId)
         .eq('status', 'aprovada')
         .gte('starts_at', today),
+      getOpenProcesses(orgId, slug),
     ])
 
     const totalPipeline = (pendingStudentInterests ?? 0) + (pendingStaffInterests ?? 0)
@@ -505,6 +509,9 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
             <StatCard label="Obreiros p/ finalizar" value={staffToFinalize ?? 0} icon={Briefcase} href={`/${slug}/inscricoes?tab=obreiro`} color="purple" />
             <StatCard label="Referências pendentes" value={refsAwaiting ?? 0} icon={MessageSquare} href={`/${slug}/inscricoes`} color="pink" />
           </div>
+
+          {/* Processos em andamento (pedidos/transferências de obreiro) — sempre visível pro DH */}
+          <ProcessosCard slug={slug} items={openProcesses} />
 
           {/* Alertas */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -587,6 +594,7 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
     { count: pendingReservations },
     { data: activeClasses },
     { data: financeiro },
+    openProcesses,
   ] = await Promise.all([
     supabase.from('people').select('*', { count: 'exact', head: true }).eq('organization_id', orgId),
     supabase.from('staff_profiles').select('*', { count: 'exact', head: true }).eq('organization_id', orgId).eq('active', true),
@@ -615,6 +623,7 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
         .eq('organization_id', orgId)
         .gte('date', new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0])
     })(),
+    getOpenProcesses(orgId, slug),
   ])
 
   const pendingMeals = new Set((pendingMealRows ?? []).map((r: { purchase_group_id: string }) => r.purchase_group_id)).size
@@ -843,6 +852,9 @@ export default async function BaseDashboard({ params, searchParams }: Props) {
             <span className="text-amber-500 text-lg">→</span>
           </Link>
         )}
+
+        {/* ── Processos em andamento (pedidos/transferências de obreiro) ── */}
+        <ProcessosCard slug={slug} items={openProcesses} />
 
         {/* ── Grid principal ──────────────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4">

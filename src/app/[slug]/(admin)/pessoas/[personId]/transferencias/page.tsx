@@ -3,59 +3,45 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { notFound, redirect } from 'next/navigation'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { MANAGEMENT_ROLES } from '@/lib/auth/permissions'
+import { getProcessesForPerson, type ProcessItem } from '@/lib/processes'
+import { ProcessMoveTypeTag, ProcessStatusBadge, processPeriodText } from '@/components/processos/ProcessosCard'
 
 type Props = { params: Promise<{ slug: string; personId: string }> }
 
-const STATUS_MAP: Record<string, { label: string; cls: string }> = {
-  pendente_destino: { label: 'Aguardando destino', cls: 'bg-yellow-100 text-yellow-700' },
-  aceito_destino: { label: 'Aceito pelo destino, aguardando DH', cls: 'bg-blue-100 text-blue-700' },
-  rejeitado_destino: { label: 'Rejeitado pelo destino', cls: 'bg-red-100 text-red-700' },
-  efetivado: { label: 'Efetivado', cls: 'bg-green-100 text-green-700' },
-  rejeitado_dh: { label: 'Rejeitado pelo DH', cls: 'bg-red-100 text-red-700' },
-  cancelado: { label: 'Cancelado', cls: 'bg-gray-100 text-gray-500' },
-}
+const fmtDate = (v: string) => new Date(v).toLocaleDateString('pt-BR')
 
-type TransferRow = {
-  id: string
-  reason: string | null
-  status: string
-  dest_notes: string | null
-  dest_reviewed_at: string | null
-  dh_notes: string | null
-  dh_reviewed_at: string | null
-  effective_date: string | null
-  created_at: string
-  from_ministry: { name: string } | null
-  to_ministry: { name: string } | null
-}
-
-const fmtDate = (v: string | null) => (v ? new Date(v).toLocaleDateString('pt-BR') : '—')
-
-function TransferItem({ t }: { t: TransferRow }) {
-  const status = STATUS_MAP[t.status] ?? { label: t.status, cls: 'bg-gray-100 text-gray-500' }
+// Toda movimentação da pessoa entre escolas/ministérios: pedidos de obreiro
+// (staff_loans) e transferências pedidas pelo líder atual (ministry_transfers)
+// — ver lib/processes.ts.
+function MoveItem({ item }: { item: ProcessItem }) {
+  const period = processPeriodText(item)
+  const done = item.status === 'aprovado' || item.status === 'efetivado'
   return (
     <div className="px-4 py-3">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-start justify-between gap-3">
         <p className="text-sm font-medium text-gray-900">
-          {t.from_ministry?.name ?? '—'} <span className="text-gray-400">→</span> {t.to_ministry?.name ?? '—'}
+          {item.from.name} <span className="text-gray-400">→</span> {item.to.name}
         </p>
-        <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${status.cls}`}>{status.label}</span>
+        <ProcessStatusBadge item={item} className="shrink-0" />
       </div>
-      <p className="text-xs text-gray-400 mt-0.5">Solicitado em {fmtDate(t.created_at)}</p>
-      {t.reason && <p className="text-sm text-gray-600 mt-2">{t.reason}</p>}
-      {t.dest_notes && (
+      <div className="mt-1 flex flex-wrap items-center gap-2">
+        <ProcessMoveTypeTag moveType={item.moveType} />
+        <span className="text-xs text-gray-400">
+          {item.kind === 'emprestimo' ? 'Pedido' : 'Enviado'} por {item.requesterName} em {fmtDate(item.createdAt)}
+        </span>
+      </div>
+      {period && <p className="text-xs text-gray-500 mt-1">Período: {period}</p>}
+      {item.role && <p className="text-xs text-gray-500 mt-1">Função no destino: {item.role}</p>}
+      {item.reason && <p className="text-sm text-gray-600 mt-2">{item.reason}</p>}
+      {item.leaderNotes && (
         <p className="text-xs text-gray-500 mt-2">
-          <span className="font-medium text-gray-600">Nota do líder de destino</span>
-          {t.dest_reviewed_at ? ` (${fmtDate(t.dest_reviewed_at)})` : ''}: {t.dest_notes}
+          <span className="font-medium text-gray-600">{item.kind === 'emprestimo' ? 'Nota do líder atual' : 'Nota do líder de destino'}:</span> {item.leaderNotes}
         </p>
       )}
-      {t.dh_notes && (
-        <p className="text-xs text-gray-500 mt-1">
-          <span className="font-medium text-gray-600">Nota do DH</span>
-          {t.dh_reviewed_at ? ` (${fmtDate(t.dh_reviewed_at)})` : ''}: {t.dh_notes}
-        </p>
+      {item.dhNotes && (
+        <p className="text-xs text-gray-500 mt-1"><span className="font-medium text-gray-600">Nota do DH:</span> {item.dhNotes}</p>
       )}
-      {t.effective_date && <p className="text-xs text-green-600 mt-1">Efetivado em {fmtDate(t.effective_date)}</p>}
+      {done && <p className="text-xs text-green-600 mt-1">Efetivado em {fmtDate(item.updatedAt)}</p>}
     </div>
   )
 }
@@ -77,28 +63,22 @@ export default async function PessoaTransferenciasPage({ params }: Props) {
   const { data: person } = await db.from('people').select('id').eq('id', personId).eq('organization_id', org.id).single()
   if (!person) notFound()
 
-  const { data: transfersData } = await db
-    .from('ministry_transfers')
-    .select('id, reason, status, dest_notes, dest_reviewed_at, dh_notes, dh_reviewed_at, effective_date, created_at, from_ministry:ministries!ministry_transfers_from_ministry_id_fkey(name), to_ministry:ministries!ministry_transfers_to_ministry_id_fkey(name)')
-    .eq('organization_id', org.id)
-    .eq('person_id', personId)
-    .order('created_at', { ascending: false })
-
-  const transfers = ((transfersData ?? []) as unknown) as TransferRow[]
+  const moves = await getProcessesForPerson(org.id, slug, personId)
 
   return (
     <main className="p-4 md:p-6 space-y-5 max-w-2xl mx-auto">
       <section className="rounded-xl border border-gray-200 bg-white overflow-hidden">
         <div className="border-b border-gray-100 px-4 py-3">
-          <h2 className="text-sm font-semibold text-gray-800">Histórico de transferências entre ministérios</h2>
+          <h2 className="text-sm font-semibold text-gray-800">Movimentações entre ministérios e escolas</h2>
+          <p className="text-xs text-gray-400 mt-0.5">Pedidos e transferências, com o tipo (acúmulo de funções ou transferência) e o OK final do DH.</p>
         </div>
-        {transfers.length > 0 ? (
+        {moves.length > 0 ? (
           <div className="divide-y divide-gray-100">
-            {transfers.map(t => <TransferItem key={t.id} t={t} />)}
+            {moves.map(m => <MoveItem key={`${m.kind}-${m.id}`} item={m} />)}
           </div>
         ) : (
           <div className="p-10 text-center">
-            <p className="text-gray-400 text-sm">Nenhuma transferência registrada para esta pessoa.</p>
+            <p className="text-gray-400 text-sm">Nenhuma movimentação registrada para esta pessoa.</p>
           </div>
         )}
       </section>

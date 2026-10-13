@@ -86,12 +86,12 @@ export async function addSchoolStaff(schoolId: string, personId: string, role: s
 }
 
 // Adiciona só se a pessoa não estiver ativa em outra escola/ministério da
-// mesma organização — se estiver, não adiciona direto: cria um empréstimo
-// pendente (staff_loans) que só efetiva quando o líder de origem aprova
-// (ver src/lib/staff-loans.ts e o hub de Pendências).
+// mesma organização — se estiver, não adiciona direto: cria um pedido de
+// obreiro (staff_loans) pro líder atual responder e o DH dar o OK final em
+// Processos (ver src/lib/staff-loans.ts).
 export async function addSchoolStaffChecked(params: {
   orgId: string; schoolId: string; personId: string; role: string
-  requestedBy: string; startsOn: string; endsOn: string
+  requestedBy: string; moveType: 'acumulo' | 'transferencia'; startsOn: string; endsOn: string | null
 }): Promise<'added' | 'pending_loan'> {
   const { findActiveUnit, createStaffLoan } = await import('@/lib/staff-loans')
   const from = await findActiveUnit(params.orgId, params.personId, { type: 'school', id: params.schoolId })
@@ -101,17 +101,18 @@ export async function addSchoolStaffChecked(params: {
   }
   await createStaffLoan({
     orgId: params.orgId, personId: params.personId, from, to: { type: 'school', id: params.schoolId },
-    role: params.role, requestedBy: params.requestedBy, startsOn: params.startsOn, endsOn: params.endsOn,
+    role: params.role, requestedBy: params.requestedBy, moveType: params.moveType,
+    startsOn: params.startsOn, endsOn: params.endsOn,
   })
   return 'pending_loan'
 }
 
 // Adiciona vários obreiros de uma vez (ex.: DH selecionando um lote no
 // MultiSelectModal) — cada pessoa é independente, roda em paralelo. Retorna
-// quantos entraram direto vs. quantos viraram pendência de empréstimo.
+// quantos entraram direto vs. quantos viraram pedido pro líder atual.
 export async function addSchoolStaffBatch(params: {
   orgId: string; schoolId: string; personIds: string[]; role: string
-  requestedBy: string; startsOn: string; endsOn: string
+  requestedBy: string; moveType: 'acumulo' | 'transferencia'; startsOn: string; endsOn: string | null
 }): Promise<{ added: number; pendingLoans: number }> {
   const results = await Promise.all(params.personIds.map(personId =>
     addSchoolStaffChecked({ ...params, personId })
