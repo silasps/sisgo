@@ -7,6 +7,7 @@ import { schoolDisplayType } from '@/lib/schools'
 import { getFormDict, normalizeLang, detectLangFromHeader } from '@/lib/i18n/forms'
 import { resolveLocalizedText } from '@/lib/i18n/resolveLocalizedText'
 import { orgShortName } from '@/lib/orgShortName'
+import { isRegistrationOpen } from '@/lib/students/classCapacity'
 
 type Props = {
   params: Promise<{ slug: string; schoolSlug: string }>
@@ -310,10 +311,17 @@ export default async function SchoolPublicPage({ params, searchParams }: Props) 
             )}
 
             <div className="flex justify-center">
-              {activeClass.registrations_open ? (
+              {isRegistrationOpen(activeClass) ? (
                 <a href="#inscricao" className="bg-brand-500 hover:bg-brand-400 text-white font-bold px-10 py-4 rounded-2xl text-lg transition-all hover:scale-105 shadow-lg shadow-brand-500/30">
                   {d.landingChrome.registrations_open_cta}
                 </a>
+              ) : activeClass.registrations_open ? (
+                <div className="text-center">
+                  <span className="inline-block bg-white/10 text-white/60 px-6 py-3 rounded-2xl text-sm border border-white/10">
+                    {d.landingChrome.registrations_closed}
+                  </span>
+                  <p className="text-gray-500 text-xs mt-3">{d.landingChrome.registrations_closed_hint}</p>
+                </div>
               ) : (
                 <div className="text-center">
                   <span className="inline-block bg-white/10 text-white/60 px-6 py-3 rounded-2xl text-sm border border-white/10">

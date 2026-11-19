@@ -15,6 +15,7 @@ import { Suspense } from 'react'
 import { ScrollHighlight } from '@/components/ui/ScrollHighlight'
 import { SCHOOL_APPLICATION_TYPES } from '@/lib/schools'
 import { enrollStudent } from '@/lib/students/enrollStudent'
+import { checkClassCategoryQuota } from '@/lib/students/classCapacity'
 import { ServirLinkCard } from './ServirLinkCard'
 import { InscricaoLinkCard } from './InscricaoLinkCard'
 import { MinistryLinkCard } from './MinistryLinkCard'
@@ -499,6 +500,15 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       personId = contact?.person_id ?? null
     }
     if (personId && classId) {
+      if (tipo === 'pre_inscricao') {
+        const { data: candidateApp } = await db
+          .from('school_applications')
+          .select('form_data')
+          .eq('interest_form_id', id)
+          .maybeSingle()
+        const cotaErro = await checkClassCategoryQuota(db, classId, (candidateApp?.form_data as Record<string, unknown> | null) ?? null)
+        if (cotaErro) redirect(`/${slug}/inscricoes?flash_error=${encodeURIComponent(cotaErro)}`)
+      }
       await enrollStudent({ organizationId: orgIdForm, personId, classId, acceptedBy: actingUser?.id ?? null })
 
       const notifyCandidate = formData.get('notify_candidate') === 'on'

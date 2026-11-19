@@ -570,6 +570,8 @@ export const esDict: FormDict = {
     registrations_open_cta: 'Inscripciones abiertas — participar',
     registrations_soon: 'Inscripciones próximamente',
     registrations_soon_hint: 'Completa el formulario abajo para recibir información',
+    registrations_closed: 'Inscripciones cerradas',
+    registrations_closed_hint: 'El plazo de inscripción para esta clase ya pasó.',
     registration_eyebrow: 'Preinscripción',
     registration_title: 'Da el primer paso',
     registration_subtitle: 'Completa el formulario abajo y nuestro equipo se pondrá en contacto con más detalles.',

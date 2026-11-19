@@ -570,6 +570,8 @@ export const enDict: FormDict = {
     registrations_open_cta: 'Registrations open — join now',
     registrations_soon: 'Registrations coming soon',
     registrations_soon_hint: 'Fill out the form below to receive updates',
+    registrations_closed: 'Registrations closed',
+    registrations_closed_hint: 'The deadline to register for this class has passed.',
     registration_eyebrow: 'Pre-registration',
     registration_title: 'Take the first step',
     registration_subtitle: 'Fill out the form below and our team will reach out with more details.',

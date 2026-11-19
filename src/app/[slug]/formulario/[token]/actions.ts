@@ -5,6 +5,7 @@ import { headers } from 'next/headers'
 import { basicImageSanity } from '@/lib/documents/basicImageSanity'
 import { classifyDocument, type DocumentKind } from '@/lib/documents/classifyDocument'
 import { resolvePerson } from '@/lib/people/resolvePerson'
+import { isRegistrationOpen } from '@/lib/students/classCapacity'
 
 const EDITABLE_SECTIONS = new Set([1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16])
 
@@ -49,7 +50,7 @@ async function getEditableApplication(token: string, slug: string) {
 
   const { data: app } = await sb
     .from('school_applications')
-    .select('id, organization_id, status, form_data, current_section, token_expires_at')
+    .select('id, organization_id, status, form_data, current_section, token_expires_at, class_id')
     .eq('token', token)
     .single()
 
@@ -113,6 +114,17 @@ export async function enviarFormulario(slug: string, token: string) {
   if ('error' in result) return { error: result.error }
 
   const { app, sb } = result
+
+  if (app.class_id) {
+    const { data: turma } = await sb
+      .from('school_classes')
+      .select('registrations_open, registration_deadline')
+      .eq('id', app.class_id)
+      .maybeSingle()
+    if (turma && !isRegistrationOpen(turma)) {
+      return { error: 'O prazo de inscrição para esta turma já encerrou.' }
+    }
+  }
 
   await sb.from('school_applications')
     .update({ status: 'enviado' })

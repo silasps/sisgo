@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { notFound, redirect } from 'next/navigation'
+import { isRegistrationOpen } from '@/lib/students/classCapacity'
 
 type Props = { params: Promise<{ slug: string; schoolSlug: string; classId: string }> }
 
@@ -35,13 +36,12 @@ export default async function MatriculaDiretaPage({ params }: Props) {
 
   const { data: turma } = await sb
     .from('school_classes')
-    .select('id')
+    .select('id, registrations_open, registration_deadline')
     .eq('id', classId)
     .eq('school_id', school.id)
     .eq('active', true)
-    .eq('registrations_open', true)
     .single()
-  if (!turma) notFound()
+  if (!turma || !isRegistrationOpen(turma)) notFound()
 
   const { data: newApp, error } = await sb
     .from('school_applications')

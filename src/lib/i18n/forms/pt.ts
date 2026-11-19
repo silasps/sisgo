@@ -570,6 +570,8 @@ export const ptDict: FormDict = {
     registrations_open_cta: 'Inscrições abertas — participar',
     registrations_soon: 'Inscrições em breve',
     registrations_soon_hint: 'Preencha o formulário abaixo para receber informações',
+    registrations_closed: 'Inscrições encerradas',
+    registrations_closed_hint: 'O prazo para se inscrever nesta turma já passou.',
     registration_eyebrow: 'Pré-inscrição',
     registration_title: 'Dê o primeiro passo',
     registration_subtitle: 'Preencha abaixo e nossa equipe entrará em contato com mais detalhes.',

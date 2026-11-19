@@ -63,6 +63,9 @@ export default async function EditarTurmaPage({ params }: Props) {
       location: (formData.get('location') as string) || null,
       public_description: (formData.get('public_description') as string) || null,
       max_students: formData.get('max_students') ? Number(formData.get('max_students')) : null,
+      quota_homens: formData.get('quota_homens') ? Number(formData.get('quota_homens')) : null,
+      quota_mulheres: formData.get('quota_mulheres') ? Number(formData.get('quota_mulheres')) : null,
+      quota_casais: formData.get('quota_casais') ? Number(formData.get('quota_casais')) : null,
       registrations_open: formData.get('registrations_open') === 'on',
       online_applications: formData.get('online_applications') === 'on',
       active: formData.get('active') === 'on',
@@ -176,6 +179,27 @@ export default async function EditarTurmaPage({ params }: Props) {
                 <Field label="Ano" name="year" type="number" defaultValue={turma.year?.toString() ?? ''} placeholder="2026" />
                 <Field label="Semestre" name="semester" type="number" defaultValue={turma.semester?.toString() ?? ''} placeholder="1 ou 2" />
                 <Field label="Máx. de alunos" name="max_students" type="number" defaultValue={turma.max_students?.toString() ?? ''} />
+              </div>
+            </div>
+
+            {/* Vagas por categoria */}
+            <div className="p-5">
+              <h2 className="font-semibold text-gray-900 mb-1">Vagas por categoria</h2>
+              <p className="text-xs text-gray-500 mb-4">
+                Opcional — limita quantas pessoas de cada categoria podem ser aceitas nessa turma
+                (além do máx. de alunos acima). Em branco = sem limite nessa categoria. Pode ser
+                ajustado a qualquer momento, inclusive pra abrir uma vaga extra depois de esgotada.
+              </p>
+              <div className="grid sm:grid-cols-3 gap-4">
+                <Field label="Homens" name="quota_homens" type="number"
+                  defaultValue={(turma as unknown as { quota_homens: number | null }).quota_homens?.toString() ?? ''} />
+                <Field label="Mulheres" name="quota_mulheres" type="number"
+                  defaultValue={(turma as unknown as { quota_mulheres: number | null }).quota_mulheres?.toString() ?? ''} />
+                <div>
+                  <Field label="Casais sem filhos (nº de casais)" name="quota_casais" type="number"
+                    defaultValue={(turma as unknown as { quota_casais: number | null }).quota_casais?.toString() ?? ''} />
+                  <p className="text-xs text-gray-400 mt-1">Cada casal ocupa 2 vagas de pessoas.</p>
+                </div>
               </div>
             </div>
 

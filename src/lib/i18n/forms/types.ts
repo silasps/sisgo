@@ -557,6 +557,8 @@ export interface FormDict {
     registrations_open_cta: string
     registrations_soon: string
     registrations_soon_hint: string
+    registrations_closed: string
+    registrations_closed_hint: string
     registration_eyebrow: string
     registration_title: string
     registration_subtitle: string
