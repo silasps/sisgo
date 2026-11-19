@@ -4,6 +4,7 @@ import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { AtividadesExtrasSection } from './AtividadesExtrasSection'
 import { DirectEnrollLinkBox } from './DirectEnrollLinkBox'
+import { CurrencyField } from '@/components/ui/CurrencyField'
 
 type Props = { params: Promise<{ slug: string; id: string; classId: string }> }
 
@@ -217,7 +218,7 @@ export default async function EditarTurmaPage({ params }: Props) {
             <div className="p-5">
               <h2 className="font-semibold text-gray-900 mb-4">Valores e pagamento</h2>
               <div className="grid sm:grid-cols-2 gap-4">
-                <Field label="Valor base (R$)" name="base_cost" type="number" defaultValue={(turma as unknown as { base_cost: number | null }).base_cost?.toString() ?? ''} placeholder="0,00" />
+                <CurrencyField label="Valor base (R$)" name="base_cost" defaultValue={(turma as unknown as { base_cost: number | null }).base_cost ?? null} />
                 <Field label="Local / Endereço" name="location" defaultValue={(turma as unknown as { location: string | null }).location ?? ''} placeholder="Ex: Rua das Flores, 123 - Cidade/UF" />
                 <div className="sm:col-span-2">
                   <TextArea label="Descrição de pagamento" name="cost_description"
