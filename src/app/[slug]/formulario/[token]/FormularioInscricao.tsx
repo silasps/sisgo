@@ -245,6 +245,16 @@ function S4Escola({ schoolName, className, data, orgName }: { schoolName: string
         <H id="s4.horario_saida">
           <Field label={d.s4.horario_saida} name="horario_saida" type="time" defaultValue={data?.horario_saida} />
         </H>
+        <H id="s4.base_origem">
+          <Field label={d.s4.base_origem} name="base_origem" defaultValue={data?.base_origem} />
+        </H>
+        <H id="s4.meio_transporte">
+          <Field label={d.s4.meio_transporte} name="meio_transporte" defaultValue={data?.meio_transporte} />
+        </H>
+        <H id="s4.necessidades_acomodacao"><div className="sm:col-span-2">
+          <TextArea label={d.s4.necessidades_acomodacao} name="necessidades_acomodacao"
+            defaultValue={data?.necessidades_acomodacao} rows={2} />
+        </div></H>
       </div>
     </div>
   )
@@ -335,6 +345,7 @@ function S5Dados({ prefill, data, onNationalityChange }: {
   const hidden = useContext(HiddenCtx)
   const [estrangeiro, setEstrangeiro] = useState(data?.is_brasileiro === 'nao')
   const [estudando, setEstudando] = useState(data?.estudando === 'sim')
+  const [casado, setCasado] = useState(data?.estado_civil === 'casado')
 
   function handleNationality(e: React.ChangeEvent<HTMLSelectElement>) {
     const isForeigner = e.target.value === 'nao'
@@ -365,13 +376,18 @@ function S5Dados({ prefill, data, onNationalityChange }: {
         <Field label={d.s5.data_nascimento} name="data_nascimento" type="date"
           defaultValue={data?.data_nascimento} required />
         <H id="s5.estado_civil">
-          <Select label={d.s5.estado_civil} name="estado_civil" required defaultValue={data?.estado_civil} options={[
-            { value: 'solteiro', label: d.s5.solteiro },
-            { value: 'casado', label: d.s5.casado },
-            { value: 'comprometido', label: d.s5.comprometido },
-            { value: 'divorciado', label: d.s5.divorciado },
-            { value: 'viuvo', label: d.s5.viuvo },
-          ]} />
+          <Select label={d.s5.estado_civil} name="estado_civil" required defaultValue={data?.estado_civil}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setCasado(e.target.value === 'casado')}
+            options={[
+              { value: 'solteiro', label: d.s5.solteiro },
+              { value: 'casado', label: d.s5.casado },
+              { value: 'comprometido', label: d.s5.comprometido },
+              { value: 'divorciado', label: d.s5.divorciado },
+              { value: 'viuvo', label: d.s5.viuvo },
+            ]} />
+        </H>
+        <H id="s5.conjuge_nome">
+          {casado && <Field label={d.s5.conjuge_nome} name="conjuge_nome" defaultValue={data?.conjuge_nome} />}
         </H>
         <Select label={d.s5.is_brasileiro} name="is_brasileiro" required
           defaultValue={data?.is_brasileiro}

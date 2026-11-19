@@ -131,6 +131,9 @@ export const enDict: FormDict = {
     horario_chegada: 'Expected arrival time',
     data_saida: 'Expected departure date',
     horario_saida: 'Expected departure time',
+    base_origem: 'Which base are you coming from?',
+    meio_transporte: 'Means of transportation',
+    necessidades_acomodacao: 'Special accommodation needs',
   },
 
   s5: {
@@ -152,6 +155,7 @@ export const enDict: FormDict = {
     comprometido: 'Engaged / In a relationship',
     divorciado: 'Divorced',
     viuvo: 'Widowed',
+    conjuge_nome: 'Spouse\'s name',
     formacao_section: 'Education & profession',
     formacao: 'Education / academic background',
     estudando: 'Are you currently studying?',

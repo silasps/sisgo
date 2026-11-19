@@ -127,6 +127,9 @@ export interface FormDict {
     horario_chegada: string
     data_saida: string
     horario_saida: string
+    base_origem: string
+    meio_transporte: string
+    necessidades_acomodacao: string
   }
 
   // ── Section 5 ──────────────────────────────────────────────────────────
@@ -146,6 +149,7 @@ export interface FormDict {
     idioma_preferencia_outro: string
     // Marital options
     solteiro: string; casado: string; comprometido: string; divorciado: string; viuvo: string
+    conjuge_nome: string
     // Sub-sections
     formacao_section: string
     formacao: string

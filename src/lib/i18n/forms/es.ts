@@ -131,6 +131,9 @@ export const esDict: FormDict = {
     horario_chegada: 'Hora prevista de llegada',
     data_saida: 'Fecha prevista de salida',
     horario_saida: 'Hora prevista de salida',
+    base_origem: '¿De qué base vienes?',
+    meio_transporte: 'Medio de transporte',
+    necessidades_acomodacao: 'Necesidades especiales de alojamiento',
   },
 
   s5: {
@@ -152,6 +155,7 @@ export const esDict: FormDict = {
     comprometido: 'Comprometido(a) / Novio(a)',
     divorciado: 'Divorciado(a)',
     viuvo: 'Viudo(a)',
+    conjuge_nome: 'Nombre del cónyuge',
     formacao_section: 'Educación y profesión',
     formacao: 'Educación / formación académica',
     estudando: '¿Estás estudiando actualmente?',

@@ -131,6 +131,9 @@ export const ptDict: FormDict = {
     horario_chegada: 'Horário previsto de chegada',
     data_saida: 'Data prevista de saída',
     horario_saida: 'Horário previsto de saída',
+    base_origem: 'De qual base você vem?',
+    meio_transporte: 'Meio de transporte',
+    necessidades_acomodacao: 'Necessidades especiais de acomodação',
   },
 
   s5: {
@@ -152,6 +155,7 @@ export const ptDict: FormDict = {
     comprometido: 'Comprometido(a) / Noivo(a)',
     divorciado: 'Divorciado(a)',
     viuvo: 'Viúvo(a)',
+    conjuge_nome: 'Nome do cônjuge',
     formacao_section: 'Formação e profissão',
     formacao: 'Formação / escolaridade',
     estudando: 'Está estudando atualmente?',

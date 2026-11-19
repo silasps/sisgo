@@ -34,9 +34,13 @@ const CONFIGURAVEL: { secao: string; key: string; titulo: string; campos: { name
     { name: 'horario_chegada', label: 'Horário previsto de chegada' },
     { name: 'data_saida', label: 'Data prevista de saída' },
     { name: 'horario_saida', label: 'Horário previsto de saída' },
+    { name: 'base_origem', label: 'De qual base vem' },
+    { name: 'meio_transporte', label: 'Meio de transporte' },
+    { name: 'necessidades_acomodacao', label: 'Necessidades especiais de acomodação' },
   ]},
   { secao: 's5', key: 'dados_pessoais', titulo: 'Informações pessoais', campos: [
     { name: 'estado_civil', label: 'Estado civil' },
+    { name: 'conjuge_nome', label: 'Nome do cônjuge (se casado)' },
     { name: 'servico_militar', label: 'Serviço militar' },
     { name: 'passaporte', label: 'Passaporte' },
     { name: 'rg', label: 'RG' },
