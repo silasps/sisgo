@@ -154,10 +154,19 @@ export default async function EditarTurmaPage({ params }: Props) {
             Atividades ↓
           </a>
           {schoolSlug && (
-            <Link href={`/${slug}/escola/${schoolSlug}`} target="_blank"
-              className="px-3 py-1.5 text-xs font-medium text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-              Ver página pública ↗
-            </Link>
+            escola.is_public ? (
+              <Link href={`/${slug}/escola/${schoolSlug}`} target="_blank"
+                className="px-3 py-1.5 text-xs font-medium text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                Ver página pública ↗
+              </Link>
+            ) : (
+              <span
+                title='Ative "Página pública ativa" em Configurações pra esse link funcionar'
+                className="px-3 py-1.5 text-xs font-medium text-gray-300 border border-gray-100 rounded-lg cursor-not-allowed"
+              >
+                Ver página pública ↗
+              </span>
+            )
           )}
         </div>
 
