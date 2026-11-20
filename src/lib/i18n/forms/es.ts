@@ -171,7 +171,7 @@ export const esDict: FormDict = {
     trabalha: '¿Estás trabajando actualmente?',
     experiencias: 'Principales experiencias profesionales',
     habilidades: 'Principales habilidades (artísticas, técnicas, ministeriales, etc.)',
-    idiomas_section: 'Idiomas',
+    idiomas_section: 'Idiomas (opcional)',
     idioma_portugues: 'Portugués',
     idioma_ingles: 'Inglés',
     idioma_espanhol: 'Español',

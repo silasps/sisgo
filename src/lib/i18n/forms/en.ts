@@ -171,7 +171,7 @@ export const enDict: FormDict = {
     trabalha: 'Are you currently employed?',
     experiencias: 'Main professional experiences',
     habilidades: 'Main skills (artistic, technical, ministerial, etc.)',
-    idiomas_section: 'Languages',
+    idiomas_section: 'Languages (optional)',
     idioma_portugues: 'Portuguese',
     idioma_ingles: 'English',
     idioma_espanhol: 'Spanish',

@@ -171,7 +171,7 @@ export const ptDict: FormDict = {
     trabalha: 'Trabalha atualmente?',
     experiencias: 'Principais experiências profissionais',
     habilidades: 'Principais habilidades (artísticas, técnicas, ministeriais etc.)',
-    idiomas_section: 'Idiomas',
+    idiomas_section: 'Idiomas (opcional)',
     idioma_portugues: 'Português',
     idioma_ingles: 'Inglês',
     idioma_espanhol: 'Espanhol',
