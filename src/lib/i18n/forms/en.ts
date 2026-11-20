@@ -107,6 +107,8 @@ export const enDict: FormDict = {
       'I am aware that romantic relationships started during the school may be subject to leadership guidelines.',
       'I declare that I will fill out this form with truthful information.',
     ],
+    termo4_evento: 'I do not hold the organization responsible for material or physical damages that may occur during my time at the event, except as required by law.',
+    termo5_evento: 'I agree to submit to the standards, guidelines, routines, and programs of the event.',
     aceite: 'I have read and agree to all the initial terms of this form. *',
   },
 

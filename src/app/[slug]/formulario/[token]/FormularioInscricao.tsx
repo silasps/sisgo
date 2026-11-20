@@ -168,10 +168,15 @@ function S3Termo({ data, schoolType }: { data?: Record<string, string>; schoolTy
   // "Escola" não faz sentido pra quem só vem alguns dias (seminário/evento)
   // — os termos usam {local} pra caber nos dois casos sem duplicar a lista.
   const local = isDirectEnrollmentType(schoolType) ? d.s3.local_base : d.s3.local_escola
+  // Termos 4 e 5 mencionam "missão" — não faz sentido pra quem só vem a um
+  // evento de alguns dias, então ganham texto próprio nesse caso.
+  const overrides: Record<number, string> = schoolType === 'evento'
+    ? { 3: d.s3.termo4_evento, 4: d.s3.termo5_evento }
+    : {}
   // Filtra antes de numerar, pra não deixar buraco na numeração quando a
   // escola esconde um item específico (ex: pular direto de "8." pra "9.").
   const visibleTerms = d.s3.terms
-    .map((term, i) => ({ term: t(term, { local }), key: `termo_${i + 1}` }))
+    .map((term, i) => ({ term: t(overrides[i] ?? term, { local }), key: `termo_${i + 1}` }))
     .filter(({ key }) => !hidden.has(`s3.${key}`))
   return (
     <div className="space-y-5">

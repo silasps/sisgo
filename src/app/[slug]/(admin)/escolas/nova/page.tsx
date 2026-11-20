@@ -76,7 +76,9 @@ export default async function NovaEscolaPage({ params, searchParams }: Props) {
     // classifyApplicationCategory). O admin ainda pode reverter campo a
     // campo em Configurar formulário.
     const EVENTO_HIDDEN = [
-      's3.termo_9',
+      's3.termo_8', 's3.termo_9',
+      's4.motivacao', 's4.conversou_equipe', 's4.conversou_com_quem',
+      's5.estudando', 's5.trabalha',
       's5.servico_militar', 's5.passaporte', 's5.experiencias', 's5.habilidades', 's5.redes_bloco',
       's6.oculto',
       's7.situacao_familiar', 's7.filhos_dados', 's7.filhos_virao', 's7.filhos_ficam_com',

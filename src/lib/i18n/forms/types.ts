@@ -102,6 +102,8 @@ export interface FormDict {
     local_escola: string
     local_base: string
     terms: string[]   // exactly 10 items
+    termo4_evento: string  // termo 4 reescrito p/ evento (sem citar "missão")
+    termo5_evento: string  // termo 5 reescrito p/ evento (sem citar "missão")
     aceite: string
   }
 
