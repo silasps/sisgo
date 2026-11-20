@@ -86,7 +86,7 @@ function Field({ label, name, defaultValue, placeholder, required, type = 'text'
   return (
     <div data-field={name}>
       <label className="block text-sm font-medium text-gray-700 mb-1">
-        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+        {label}{required ? <span className="text-red-500 ml-0.5">*</span> : <span className="text-gray-400 font-normal ml-1">(opcional)</span>}
       </label>
       <input name={name} type={type} defaultValue={defaultValue} placeholder={placeholder}
         required={required} maxLength={maxLength}
@@ -103,7 +103,7 @@ function TextArea({ label, name, defaultValue, placeholder, required, rows = 4 }
   return (
     <div data-field={name}>
       <label className="block text-sm font-medium text-gray-700 mb-1">
-        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+        {label}{required ? <span className="text-red-500 ml-0.5">*</span> : <span className="text-gray-400 font-normal ml-1">(opcional)</span>}
       </label>
       <textarea name={name} defaultValue={defaultValue} placeholder={placeholder} required={required} rows={rows}
         className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-gray-50 resize-none" />
@@ -120,7 +120,7 @@ function Select({ label, name, defaultValue, required, options, onChange }: {
   return (
     <div data-field={name}>
       <label className="block text-sm font-medium text-gray-700 mb-1">
-        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+        {label}{required ? <span className="text-red-500 ml-0.5">*</span> : <span className="text-gray-400 font-normal ml-1">(opcional)</span>}
       </label>
       <select name={name} defaultValue={defaultValue ?? ''} required={required} onChange={onChange}
         className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-gray-50">
