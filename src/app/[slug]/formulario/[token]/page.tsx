@@ -22,7 +22,7 @@ export default async function FormularioPage({ params, searchParams }: Props) {
     .select(`
       id, status, current_section, form_data, token_expires_at,
       organization_id, reminder_skips, person_id,
-      schools(id, name, organization_id),
+      schools(id, name, organization_id, school_type),
       school_classes(name),
       school_interest_forms(full_name, email, phone, language)
     `)
@@ -119,7 +119,7 @@ export default async function FormularioPage({ params, searchParams }: Props) {
     )
   }
 
-  const escola = app.schools as unknown as { id: string; name: string; organization_id: string } | null
+  const escola = app.schools as unknown as { id: string; name: string; organization_id: string; school_type: string | null } | null
   const turma  = app.school_classes as unknown as { name: string } | null
 
   // Busca config de campos da escola
@@ -174,6 +174,7 @@ export default async function FormularioPage({ params, searchParams }: Props) {
             schoolName={escola?.name ?? ''}
             orgName={org.name}
             className={turma?.name}
+            schoolType={escola?.school_type}
             prefill={prefill}
             initialSection={app.current_section ?? 1}
             initialData={formData}

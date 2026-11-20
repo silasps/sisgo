@@ -6,6 +6,7 @@ import { basicImageSanity } from '@/lib/documents/basicImageSanity'
 import { classifyDocument, type DocumentKind } from '@/lib/documents/classifyDocument'
 import { resolvePerson } from '@/lib/people/resolvePerson'
 import { isRegistrationOpen } from '@/lib/students/classCapacity'
+import { isDirectEnrollmentType } from '@/lib/schools'
 
 const EDITABLE_SECTIONS = new Set([1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16])
 
@@ -151,7 +152,7 @@ export async function enviarFormulario(slug: string, token: string) {
     // aprovação já existente (aprovar() em inscricoes/page.tsx) sem
     // precisar duplicar nada.
     const { data: school } = await sb.from('schools').select('school_type').eq('id', appFull.school_id).single()
-    if (school?.school_type === 'seminario') {
+    if (isDirectEnrollmentType(school?.school_type)) {
       const formData = (appFull.form_data as Record<string, unknown>) ?? {}
       const person = await findOrCreatePersonFromApplication(sb, appFull.organization_id, formData)
       if (person) {

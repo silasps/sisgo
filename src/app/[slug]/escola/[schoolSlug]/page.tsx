@@ -4,7 +4,7 @@ import { notFound, redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { RegistrationForm } from './RegistrationForm'
 import { LangNavSwitcher } from './LangNavSwitcher'
-import { schoolDisplayType } from '@/lib/schools'
+import { schoolDisplayType, isDirectEnrollmentType } from '@/lib/schools'
 import { getFormDict, normalizeLang, detectLangFromHeader } from '@/lib/i18n/forms'
 import { resolveLocalizedText } from '@/lib/i18n/resolveLocalizedText'
 import { orgShortName } from '@/lib/orgShortName'
@@ -66,7 +66,7 @@ export default async function SchoolPublicPage({ params, searchParams }: Props) 
   // completo de matrícula (sem pré-inscrição); pras demais, mostra só o
   // formulário de pré-inscrição numa página mínima.
   if (school.public_form_mode === 'somente_formulario') {
-    if (school.school_type === 'seminario' && activeClass && isRegistrationOpen(activeClass)) {
+    if (isDirectEnrollmentType(school.school_type) && activeClass && isRegistrationOpen(activeClass)) {
       redirect(`/${slug}/escola/${schoolSlug}/turma/${activeClass.id}/matricula`)
     }
 
@@ -77,7 +77,7 @@ export default async function SchoolPublicPage({ params, searchParams }: Props) 
             <p className="text-brand-500 font-bold text-xs uppercase tracking-widest">{org.name}</p>
             <h1 className="text-3xl sm:text-4xl font-black text-gray-950 mt-2">{school.name}</h1>
           </div>
-          {school.school_type === 'seminario' ? (
+          {isDirectEnrollmentType(school.school_type) ? (
             <div className="text-center bg-gray-50 border border-gray-200 rounded-2xl px-6 py-10">
               <p className="text-gray-500">
                 {activeClass?.registrations_open ? d.landingChrome.registrations_closed : d.landingChrome.registrations_soon}
@@ -377,7 +377,7 @@ export default async function SchoolPublicPage({ params, searchParams }: Props) 
       {/* FORMULÁRIO DE INSCRIÇÃO */}
       <section id="inscricao" className="py-16 sm:py-24 px-5 sm:px-6 bg-white">
         <div className="max-w-2xl mx-auto">
-          {school.school_type === 'seminario' ? (
+          {isDirectEnrollmentType(school.school_type) ? (
             <div className="text-center">
               <span className="text-brand-500 font-bold text-sm uppercase tracking-widest">{d.landingChrome.registration_direct_eyebrow}</span>
               <h2 className="text-3xl sm:text-4xl font-black text-gray-950 mt-2">{d.landingChrome.registration_direct_title}</h2>

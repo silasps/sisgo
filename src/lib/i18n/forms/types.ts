@@ -99,6 +99,8 @@ export interface FormDict {
   s3: {
     section: string
     title: string
+    local_escola: string
+    local_base: string
     terms: string[]   // exactly 10 items
     aceite: string
   }

@@ -10,13 +10,20 @@
 export const SCHOOL_TYPES = [
   { value: 'eted', label: 'Programa de formação (formulário completo)', group: 'eted' },
   { value: 'seminario', label: 'Curso curto (formulário simplificado, matrícula automática)', group: 'seminario' },
+  { value: 'evento', label: 'Evento (alguns dias, sem pré-inscrição)', group: 'evento' },
   { value: 'segundo_nivel', label: 'Curso de nível avançado', group: 'second_level' },
   { value: 'outro', label: 'Outro', group: 'other' },
 ] as const
 
-export const SCHOOL_APPLICATION_TYPES = ['eted', 'segundo_nivel', 'udn', 'seminario', 'curso_online'] as const
+export const SCHOOL_APPLICATION_TYPES = ['eted', 'segundo_nivel', 'udn', 'seminario', 'evento', 'curso_online'] as const
 
 const SECOND_LEVEL_TYPES = new Set(['segundo_nivel', 'udn', 'curso_online'])
+
+// Tipos cujo formulário pula a pré-inscrição — link único de matrícula
+// direta que já abre o formulário completo (ver turma/[classId]/matricula).
+export function isDirectEnrollmentType(type?: string | null): boolean {
+  return type === 'seminario' || type === 'evento'
+}
 
 export function schoolTypeLabel(type?: string | null): string {
   return SCHOOL_TYPES.find(item => item.value === type)?.label ?? 'Escola'
@@ -27,6 +34,7 @@ export function schoolTypeLabel(type?: string | null): string {
 export function schoolTypeShortLabel(type?: string | null): string {
   if (type === 'eted') return 'Programa de Formação'
   if (type === 'seminario') return 'Curso Curto'
+  if (type === 'evento') return 'Evento'
   if (SECOND_LEVEL_TYPES.has(type ?? '')) return 'Nível Avançado'
   return 'Escola'
 }
@@ -40,9 +48,10 @@ export function schoolDisplayType(school: { school_type?: string | null; type_na
   return school.type_name?.trim() || schoolTypeShortLabel(school.school_type)
 }
 
-export function schoolTypeGroup(type?: string | null): 'eted' | 'seminario' | 'second_level' | 'other' {
+export function schoolTypeGroup(type?: string | null): 'eted' | 'seminario' | 'evento' | 'second_level' | 'other' {
   if (type === 'eted') return 'eted'
   if (type === 'seminario') return 'seminario'
+  if (type === 'evento') return 'evento'
   if (SECOND_LEVEL_TYPES.has(type ?? '')) return 'second_level'
   return 'other'
 }

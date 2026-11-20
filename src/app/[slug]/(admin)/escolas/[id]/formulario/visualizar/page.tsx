@@ -26,7 +26,7 @@ export default async function VisualizarFormularioPage({ params }: Props) {
 
   const { data: school } = await supabase
     .from('schools')
-    .select('id, name, form_config, organizations!inner(slug)')
+    .select('id, name, school_type, form_config, organizations!inner(slug)')
     .eq('id', id)
     .eq('organizations.slug', slug)
     .single()
@@ -52,6 +52,7 @@ export default async function VisualizarFormularioPage({ params }: Props) {
             applicationId="preview"
             schoolName={school.name}
             orgName={org.name}
+            schoolType={(school as unknown as { school_type: string | null }).school_type}
             initialData={{}}
             hiddenFields={config.hidden_fields ?? []}
             paymentInfo={config.payment_info ?? null}

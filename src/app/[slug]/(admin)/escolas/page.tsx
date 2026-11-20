@@ -54,6 +54,7 @@ export default async function EscolasPage({ params }: Props) {
   const escolas = (data ?? []) as School[]
   const eteds = escolas.filter(e => schoolTypeGroup((e as unknown as { school_type: string | null }).school_type) === 'eted')
   const seminarios = escolas.filter(e => schoolTypeGroup((e as unknown as { school_type: string | null }).school_type) === 'seminario')
+  const eventos = escolas.filter(e => schoolTypeGroup((e as unknown as { school_type: string | null }).school_type) === 'evento')
   const secondLevelSchools = escolas.filter(e => schoolTypeGroup((e as unknown as { school_type: string | null }).school_type) === 'second_level')
   const otherSchools = escolas.filter(e => schoolTypeGroup((e as unknown as { school_type: string | null }).school_type) === 'other')
 
@@ -108,6 +109,7 @@ export default async function EscolasPage({ params }: Props) {
           <div className="space-y-8 animate-stagger">
             <SchoolSection title="Programas de Formação" schools={eteds} slug={slug} isManagement={isManagement} schoolsWithTurmas={schoolsWithTurmas} onDelete={handleDeleteSchool} />
             {seminarios.length > 0 && <SchoolSection title="Cursos Curtos" schools={seminarios} slug={slug} isManagement={isManagement} schoolsWithTurmas={schoolsWithTurmas} onDelete={handleDeleteSchool} />}
+            {eventos.length > 0 && <SchoolSection title="Eventos" schools={eventos} slug={slug} isManagement={isManagement} schoolsWithTurmas={schoolsWithTurmas} onDelete={handleDeleteSchool} />}
             <SchoolSection title="Nível Avançado" schools={secondLevelSchools} slug={slug} isManagement={isManagement} schoolsWithTurmas={schoolsWithTurmas} onDelete={handleDeleteSchool} />
             {otherSchools.length > 0 && <SchoolSection title="Outras" schools={otherSchools} slug={slug} isManagement={isManagement} schoolsWithTurmas={schoolsWithTurmas} onDelete={handleDeleteSchool} />}
           </div>

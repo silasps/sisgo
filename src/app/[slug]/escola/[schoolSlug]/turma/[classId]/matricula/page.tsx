@@ -1,15 +1,17 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { notFound, redirect } from 'next/navigation'
 import { isRegistrationOpen } from '@/lib/students/classCapacity'
+import { isDirectEnrollmentType } from '@/lib/schools'
 
 type Props = { params: Promise<{ slug: string; schoolSlug: string; classId: string }> }
 
-// Link único e reaproveitável por turma — só pra escolas do tipo "seminario".
-// Cada visita cria uma school_applications nova (rascunho, sem interest_form_id)
-// e manda a pessoa direto pro formulário completo — sem pré-inscrição prévia,
-// diferente do fluxo normal de ETED. enviarFormulario() detecta a ausência de
-// interest_form_id + school_type='seminario' e matricula automaticamente ao
-// enviar, sem precisar de aprovação manual do DH.
+// Link único e reaproveitável por turma — só pra escolas tipo "seminario" ou
+// "evento" (isDirectEnrollmentType). Cada visita cria uma school_applications
+// nova (rascunho, sem interest_form_id) e manda a pessoa direto pro
+// formulário completo — sem pré-inscrição prévia, diferente do fluxo normal
+// de ETED. enviarFormulario() detecta a ausência de interest_form_id + esse
+// tipo de escola e cria a pré-inscrição só na hora do envio, sem exigir
+// aprovação manual prévia.
 export default async function MatriculaDiretaPage({ params }: Props) {
   const { slug, schoolSlug, classId } = await params
   const sb = createAdminClient()
@@ -32,7 +34,7 @@ export default async function MatriculaDiretaPage({ params }: Props) {
   const { data: school } = await (isUUID
     ? schoolQuery.eq('id', schoolSlug).single()
     : schoolQuery.eq('slug', schoolSlug).single())
-  if (!school || school.school_type !== 'seminario') notFound()
+  if (!school || !isDirectEnrollmentType(school.school_type)) notFound()
 
   const { data: turma } = await sb
     .from('school_classes')

@@ -6,6 +6,7 @@ import { DirectEnrollLinkBox } from './DirectEnrollLinkBox'
 import { CurrencyField } from '@/components/ui/CurrencyField'
 import { IntegerField } from '@/components/ui/IntegerField'
 import { SubmitButton } from '@/components/ui/SubmitButton'
+import { isDirectEnrollmentType } from '@/lib/schools'
 
 type Props = { params: Promise<{ slug: string; id: string; classId: string }> }
 
@@ -287,15 +288,16 @@ export default async function EditarTurmaPage({ params }: Props) {
           </div>
         </form>
 
-        {escola.school_type === 'seminario' && (
+        {isDirectEnrollmentType(escola.school_type) && (
           <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
             <div>
               <h2 className="font-semibold text-gray-900">Link de matrícula direta</h2>
               <p className="text-xs text-gray-500 mt-1">
-                Diferente das outras escolas, o Seminário não tem pré-inscrição — este link único
-                já abre o formulário completo desta turma. Ao enviar, a pessoa é matriculada
-                automaticamente (sem passar por aprovação manual). Compartilhe no WhatsApp ou
-                coloque num site. Só funciona com &ldquo;Inscrições abertas&rdquo; ligado acima.
+                Diferente de um programa completo, essa categoria não tem pré-inscrição — este
+                link único já abre o formulário completo desta turma. Depois de enviado, aparece
+                em Inscrições aguardando aprovação do DH/liderança, igual ao fluxo normal.
+                Compartilhe no WhatsApp ou coloque num site. Só funciona com &ldquo;Inscrições
+                abertas&rdquo; ligado acima.
               </p>
             </div>
             {escola.is_public && turma.registrations_open ? (

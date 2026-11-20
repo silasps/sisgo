@@ -10,6 +10,7 @@ import { orgShortName } from '@/lib/orgShortName'
 import { LangSwitcher } from '@/components/ui/LangSwitcher'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { PhotoFramingGuide } from '@/components/ui/PhotoFramingGuide'
+import { isDirectEnrollmentType } from '@/lib/schools'
 
 // ── Contexts ────────────────────────────────────────────────────────────────
 
@@ -55,6 +56,7 @@ type Props = {
   schoolName: string
   orgName: string
   className?: string
+  schoolType?: string | null
   prefill?: Prefill
   initialSection?: number
   initialData?: Record<string, unknown>
@@ -160,13 +162,16 @@ function S1Nome({ prefill, data }: { prefill?: Prefill; data?: Record<string, st
   )
 }
 
-function S3Termo({ data }: { data?: Record<string, string> }) {
+function S3Termo({ data, schoolType }: { data?: Record<string, string>; schoolType?: string | null }) {
   const d = useContext(DictCtx)
   const hidden = useContext(HiddenCtx)
+  // "Escola" não faz sentido pra quem só vem alguns dias (seminário/evento)
+  // — os termos usam {local} pra caber nos dois casos sem duplicar a lista.
+  const local = isDirectEnrollmentType(schoolType) ? d.s3.local_base : d.s3.local_escola
   // Filtra antes de numerar, pra não deixar buraco na numeração quando a
   // escola esconde um item específico (ex: pular direto de "8." pra "9.").
   const visibleTerms = d.s3.terms
-    .map((term, i) => ({ term, key: `termo_${i + 1}` }))
+    .map((term, i) => ({ term: t(term, { local }), key: `termo_${i + 1}` }))
     .filter(({ key }) => !hidden.has(`s3.${key}`))
   return (
     <div className="space-y-5">
@@ -1513,7 +1518,7 @@ function SubmittedScreen({ slug, applicationId, schoolName, hiddenSet, d }: {
 type SectionDef = { id: number; component: React.ReactNode }
 
 export function FormularioInscricao({
-  slug, token, applicationId, schoolName, orgName, className, prefill, initialSection = 1, initialData, hiddenFields, paymentInfo, initialLang, printMode, documentUrls,
+  slug, token, applicationId, schoolName, orgName, className, schoolType, prefill, initialSection = 1, initialData, hiddenFields, paymentInfo, initialLang, printMode, documentUrls,
   canExit = true,
 }: Props) {
   const hiddenSet = useMemo(() => new Set(hiddenFields ?? []), [hiddenFields])
@@ -1569,7 +1574,7 @@ export function FormularioInscricao({
 
   const sections: SectionDef[] = [
     { id: 1,  component: <S1Nome prefill={prefill} data={localData.s1} /> },
-    { id: 3,  component: <S3Termo data={localData.s3} /> },
+    { id: 3,  component: <S3Termo data={localData.s3} schoolType={schoolType} /> },
     { id: 4,  component: <S4Escola schoolName={schoolName} orgName={orgName} className={className} data={localData.s4} /> },
     { id: 5,  component: <S5Dados prefill={prefill} data={localData.s5} onNationalityChange={setIsBrazilian} /> },
     { id: 6,  component: <S6Historia data={localData.s6} /> },
