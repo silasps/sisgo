@@ -1,5 +1,4 @@
 import { createClient } from '@/lib/supabase/server'
-import { Header } from '@/components/layout/Header'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { AtividadesExtrasSection } from './AtividadesExtrasSection'
@@ -123,25 +122,6 @@ export default async function EditarTurmaPage({ params }: Props) {
 
   return (
     <>
-      <Header
-        title={turma.name}
-        actions={
-          <div className="flex items-center gap-2">
-            <a
-              href="#atividades-extras"
-              className="hidden sm:inline-flex px-4 py-2 text-sm font-semibold text-brand-400 hover:text-brand-300 border border-white/15 rounded-lg hover:bg-white/10 transition-colors"
-            >
-              Atividades ↓
-            </a>
-            {schoolSlug && (
-              <Link href={`/${slug}/escola/${schoolSlug}`} target="_blank"
-                className="px-3 py-2 text-sm font-semibold text-gray-300 hover:text-white border border-white/15 rounded-lg hover:bg-white/10 transition-colors">
-                <span className="hidden sm:inline">Ver página pública </span>↗
-              </Link>
-            )}
-          </div>
-        }
-      />
       <main className="p-4 md:p-6 space-y-6">
 
         <nav className="text-xs text-gray-400 flex items-center gap-1">
@@ -165,6 +145,18 @@ export default async function EditarTurmaPage({ params }: Props) {
           >
             Presenças →
           </Link>
+          <a
+            href="#atividades-extras"
+            className="px-3 py-1.5 text-xs font-medium text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Atividades ↓
+          </a>
+          {schoolSlug && (
+            <Link href={`/${slug}/escola/${schoolSlug}`} target="_blank"
+              className="px-3 py-1.5 text-xs font-medium text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+              Ver página pública ↗
+            </Link>
+          )}
         </div>
 
         <form action={updateTurma} className="space-y-6">
@@ -179,7 +171,7 @@ export default async function EditarTurmaPage({ params }: Props) {
                 </div>
                 <Field label="Ano" name="year" type="number" defaultValue={turma.year?.toString() ?? ''} placeholder="2026" />
                 <Field label="Semestre" name="semester" type="number" defaultValue={turma.semester?.toString() ?? ''} placeholder="1 ou 2" />
-                <Field label="Máx. de alunos" name="max_students" type="number" defaultValue={turma.max_students?.toString() ?? ''} />
+                <IntegerField label="Máx. de alunos" name="max_students" defaultValue={turma.max_students?.toString() ?? ''} />
               </div>
             </div>
 
@@ -192,12 +184,12 @@ export default async function EditarTurmaPage({ params }: Props) {
                 ajustado a qualquer momento, inclusive pra abrir uma vaga extra depois de esgotada.
               </p>
               <div className="grid sm:grid-cols-3 gap-4">
-                <Field label="Homens" name="quota_homens" type="number"
+                <IntegerField label="Homens" name="quota_homens"
                   defaultValue={(turma as unknown as { quota_homens: number | null }).quota_homens?.toString() ?? ''} />
-                <Field label="Mulheres" name="quota_mulheres" type="number"
+                <IntegerField label="Mulheres" name="quota_mulheres"
                   defaultValue={(turma as unknown as { quota_mulheres: number | null }).quota_mulheres?.toString() ?? ''} />
                 <div>
-                  <Field label="Casais sem filhos (nº de casais)" name="quota_casais" type="number"
+                  <IntegerField label="Casais sem filhos (nº de casais)" name="quota_casais"
                     defaultValue={(turma as unknown as { quota_casais: number | null }).quota_casais?.toString() ?? ''} />
                   <p className="text-xs text-gray-400 mt-1">Cada casal ocupa 2 vagas de pessoas.</p>
                 </div>
@@ -327,6 +319,27 @@ export default async function EditarTurmaPage({ params }: Props) {
 
       </main>
     </>
+  )
+}
+
+// Só dígitos — sem sinal negativo nem spinner do input number (que deixava
+// digitar "-41" e afins).
+function IntegerField({ label, name, defaultValue, placeholder }: {
+  label: string; name: string; defaultValue?: string; placeholder?: string
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
+      <input
+        name={name}
+        type="text"
+        inputMode="numeric"
+        defaultValue={defaultValue}
+        placeholder={placeholder}
+        onInput={e => { e.currentTarget.value = e.currentTarget.value.replace(/\D/g, '') }}
+        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+      />
+    </div>
   )
 }
 

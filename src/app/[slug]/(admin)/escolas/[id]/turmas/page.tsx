@@ -1,5 +1,4 @@
 import { createClient } from '@/lib/supabase/server'
-import { Header } from '@/components/layout/Header'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import type { Database } from '@/types/database'
@@ -19,7 +18,6 @@ export default async function TurmasPage({ params }: Props) {
 
   return (
     <>
-      <Header title={`Turmas — ${escola.name}`} />
       <main className="p-4 md:p-6">
         {!turmas.length ? (
           <p className="text-gray-500 text-sm">Nenhuma turma cadastrada.</p>

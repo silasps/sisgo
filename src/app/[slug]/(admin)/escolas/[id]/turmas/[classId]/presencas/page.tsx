@@ -1,6 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
-import { Header } from '@/components/layout/Header'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { saveAttendance } from './actions'
@@ -68,7 +67,6 @@ export default async function PresencasTurmaPage({ params, searchParams }: Props
 
   return (
     <>
-      <Header title={`Presenças — ${turma.name}`} />
       <main className="p-4 md:p-6 space-y-4 max-w-xl mx-auto">
 
         <nav className="text-xs text-gray-400 flex items-center gap-1 flex-wrap">

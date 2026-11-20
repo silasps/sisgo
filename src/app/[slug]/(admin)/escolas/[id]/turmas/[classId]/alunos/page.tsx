@@ -1,6 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
-import { Header } from '@/components/layout/Header'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { GraduationCap, Award } from 'lucide-react'
@@ -69,7 +68,6 @@ export default async function AlunosTurmaPage({ params }: Props) {
 
   return (
     <>
-      <Header title={`Alunos — ${turma.name}`} />
       <main className="p-4 md:p-6 space-y-4">
 
         <nav className="text-xs text-gray-400 flex items-center gap-1 flex-wrap">
