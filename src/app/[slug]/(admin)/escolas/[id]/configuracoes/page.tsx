@@ -283,6 +283,7 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
       objectives: objectives.length ? objectives : null,
       prerequisites: prerequisites.length ? prerequisites : null,
       is_public: formData.get('is_public') === 'on',
+      public_form_mode: (formData.get('public_form_mode') as string) || 'completa',
       active: formData.get('active') === 'on',
     }).eq('id', id)
 
@@ -641,6 +642,19 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                       description="Escola aparece no sistema de gestão"
                       defaultChecked={escola.active ?? true} />
                   </div>
+                  <div className="mt-4 pt-4 border-t border-gray-100">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Página pública</label>
+                    <select name="public_form_mode"
+                      defaultValue={(escola as unknown as { public_form_mode: string | null }).public_form_mode ?? 'completa'}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
+                      <option value="completa">Página completa (descrição, estrutura, turma...)</option>
+                      <option value="somente_formulario">Somente formulário — pula direto pra inscrição</option>
+                    </select>
+                    <p className="text-[11px] text-gray-400 mt-1">
+                      &ldquo;Somente formulário&rdquo; é ideal pra eventos — a pessoa cai direto na coleta de
+                      dados, sem página descrevendo o evento.
+                    </p>
+                  </div>
                 </div>
 
                 <div className="p-5 flex justify-end gap-3">
@@ -996,6 +1010,19 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                 <Toggle name="active" label="Escola ativa"
                   description="Escola aparece no sistema de gestão"
                   defaultChecked={escola.active ?? true} />
+              </div>
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <label className="block text-xs font-medium text-gray-500 mb-1">Página pública</label>
+                <select name="public_form_mode"
+                  defaultValue={(escola as unknown as { public_form_mode: string | null }).public_form_mode ?? 'completa'}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
+                  <option value="completa">Página completa (descrição, estrutura, turma...)</option>
+                  <option value="somente_formulario">Somente formulário — pula direto pra inscrição</option>
+                </select>
+                <p className="text-[11px] text-gray-400 mt-1">
+                  &ldquo;Somente formulário&rdquo; é ideal pra eventos — a pessoa cai direto na coleta de
+                  dados, sem página descrevendo o evento.
+                </p>
               </div>
             </div>
 

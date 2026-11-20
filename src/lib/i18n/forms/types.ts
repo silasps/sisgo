@@ -562,6 +562,9 @@ export interface FormDict {
     registration_eyebrow: string
     registration_title: string
     registration_subtitle: string
+    registration_direct_eyebrow: string
+    registration_direct_title: string
+    registration_direct_subtitle: string
     footer_tagline: string
     footer_home: string
     footer_other_schools: string

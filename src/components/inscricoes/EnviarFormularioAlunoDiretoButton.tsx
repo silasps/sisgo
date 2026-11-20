@@ -120,7 +120,10 @@ export function EnviarFormularioAlunoDiretoButton({ action, classes, buttonClass
             {classes.length > 0 && (
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Turma</label>
-                <select name="class_id" defaultValue="" className={INPUT}>
+                {/* classes já vem ordenada por starts_at desc (mais recente
+                  primeiro) — com só uma turma, ou com várias, a mais nova já
+                  fica selecionada em vez de forçar escolher toda vez. */}
+                <select name="class_id" defaultValue={classes[0].id} className={INPUT}>
                   <option value="">Sem preferência</option>
                   {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>

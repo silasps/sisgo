@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
-import { notFound } from 'next/navigation'
+import Link from 'next/link'
+import { notFound, redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { RegistrationForm } from './RegistrationForm'
 import { LangNavSwitcher } from './LangNavSwitcher'
@@ -39,7 +40,7 @@ export default async function SchoolPublicPage({ params, searchParams }: Props) 
 
   const query = supabase
     .from('schools')
-    .select('id, name, acronym, school_type, type_name, subtitle, long_description, long_description_translations, objectives, target_audience, target_audience_translations, duration_description, hero_image_url, promo_video_url, prerequisites, is_public')
+    .select('id, name, acronym, school_type, type_name, subtitle, long_description, long_description_translations, objectives, target_audience, target_audience_translations, duration_description, hero_image_url, promo_video_url, prerequisites, is_public, public_form_mode')
     .eq('organization_id', org.id)
     .eq('is_public', true)
     .eq('active', true)
@@ -59,6 +60,44 @@ export default async function SchoolPublicPage({ params, searchParams }: Props) 
     .order('starts_at', { ascending: true })
 
   const activeClass = classes?.[0] ?? null
+
+  // "Somente formulário" pula toda a página de marketing (hero, descrição,
+  // estrutura etc.) — pra escolas tipo seminário vai direto pro formulário
+  // completo de matrícula (sem pré-inscrição); pras demais, mostra só o
+  // formulário de pré-inscrição numa página mínima.
+  if (school.public_form_mode === 'somente_formulario') {
+    if (school.school_type === 'seminario' && activeClass && isRegistrationOpen(activeClass)) {
+      redirect(`/${slug}/escola/${schoolSlug}/turma/${activeClass.id}/matricula`)
+    }
+
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center px-5 py-16">
+        <div className="w-full max-w-2xl">
+          <div className="text-center mb-8">
+            <p className="text-brand-500 font-bold text-xs uppercase tracking-widest">{org.name}</p>
+            <h1 className="text-3xl sm:text-4xl font-black text-gray-950 mt-2">{school.name}</h1>
+          </div>
+          {school.school_type === 'seminario' ? (
+            <div className="text-center bg-gray-50 border border-gray-200 rounded-2xl px-6 py-10">
+              <p className="text-gray-500">
+                {activeClass?.registrations_open ? d.landingChrome.registrations_closed : d.landingChrome.registrations_soon}
+              </p>
+            </div>
+          ) : (
+            <RegistrationForm
+              slug={slug}
+              schoolSlug={schoolSlug}
+              classes={(classes ?? [])
+                .filter(c => c.online_applications)
+                .map(c => ({ id: c.id, name: c.name, year: c.year, semester: c.semester }))}
+              communicationLanguages={communicationLanguages}
+              initialLang={lang}
+            />
+          )}
+        </div>
+      </div>
+    )
+  }
 
   // Busca programas extras da turma ativa
   let programs: { id: string; name: string; description: string | null; icon: string | null; image_url: string | null; additional_cost: number | null }[] = []
@@ -335,23 +374,43 @@ export default async function SchoolPublicPage({ params, searchParams }: Props) 
         </section>
       )}
 
-      {/* FORMULÁRIO DE PRÉ-INSCRIÇÃO */}
+      {/* FORMULÁRIO DE INSCRIÇÃO */}
       <section id="inscricao" className="py-16 sm:py-24 px-5 sm:px-6 bg-white">
         <div className="max-w-2xl mx-auto">
-          <div className="text-center mb-8 sm:mb-12">
-            <span className="text-brand-500 font-bold text-sm uppercase tracking-widest">{d.landingChrome.registration_eyebrow}</span>
-            <h2 className="text-3xl sm:text-4xl font-black text-gray-950 mt-2">{d.landingChrome.registration_title}</h2>
-            <p className="text-gray-500 mt-3 text-sm sm:text-base">{d.landingChrome.registration_subtitle}</p>
-          </div>
-          <RegistrationForm
-            slug={slug}
-            schoolSlug={schoolSlug}
-            classes={(classes ?? [])
-              .filter(c => c.online_applications)
-              .map(c => ({ id: c.id, name: c.name, year: c.year, semester: c.semester }))}
-            communicationLanguages={communicationLanguages}
-            initialLang={lang}
-          />
+          {school.school_type === 'seminario' ? (
+            <div className="text-center">
+              <span className="text-brand-500 font-bold text-sm uppercase tracking-widest">{d.landingChrome.registration_direct_eyebrow}</span>
+              <h2 className="text-3xl sm:text-4xl font-black text-gray-950 mt-2">{d.landingChrome.registration_direct_title}</h2>
+              <p className="text-gray-500 mt-3 mb-8 text-sm sm:text-base">{d.landingChrome.registration_direct_subtitle}</p>
+              {activeClass && isRegistrationOpen(activeClass) ? (
+                <Link href={`/${slug}/escola/${schoolSlug}/turma/${activeClass.id}/matricula`}
+                  className="inline-block bg-brand-500 hover:bg-brand-400 text-white font-bold px-10 py-4 rounded-2xl text-lg transition-all hover:scale-105 shadow-lg shadow-brand-500/30">
+                  {d.landingChrome.registrations_open_cta}
+                </Link>
+              ) : (
+                <p className="text-gray-400 text-sm">
+                  {activeClass?.registrations_open ? d.landingChrome.registrations_closed : d.landingChrome.registrations_soon}
+                </p>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="text-center mb-8 sm:mb-12">
+                <span className="text-brand-500 font-bold text-sm uppercase tracking-widest">{d.landingChrome.registration_eyebrow}</span>
+                <h2 className="text-3xl sm:text-4xl font-black text-gray-950 mt-2">{d.landingChrome.registration_title}</h2>
+                <p className="text-gray-500 mt-3 text-sm sm:text-base">{d.landingChrome.registration_subtitle}</p>
+              </div>
+              <RegistrationForm
+                slug={slug}
+                schoolSlug={schoolSlug}
+                classes={(classes ?? [])
+                  .filter(c => c.online_applications)
+                  .map(c => ({ id: c.id, name: c.name, year: c.year, semester: c.semester }))}
+                communicationLanguages={communicationLanguages}
+                initialLang={lang}
+              />
+            </>
+          )}
         </div>
       </section>
 
