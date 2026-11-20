@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { AtividadesExtrasSection } from './AtividadesExtrasSection'
 import { DirectEnrollLinkBox } from './DirectEnrollLinkBox'
 import { CurrencyField } from '@/components/ui/CurrencyField'
+import { IntegerField } from '@/components/ui/IntegerField'
 
 type Props = { params: Promise<{ slug: string; id: string; classId: string }> }
 
@@ -319,27 +320,6 @@ export default async function EditarTurmaPage({ params }: Props) {
 
       </main>
     </>
-  )
-}
-
-// Só dígitos — sem sinal negativo nem spinner do input number (que deixava
-// digitar "-41" e afins).
-function IntegerField({ label, name, defaultValue, placeholder }: {
-  label: string; name: string; defaultValue?: string; placeholder?: string
-}) {
-  return (
-    <div>
-      <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
-      <input
-        name={name}
-        type="text"
-        inputMode="numeric"
-        defaultValue={defaultValue}
-        placeholder={placeholder}
-        onInput={e => { e.currentTarget.value = e.currentTarget.value.replace(/\D/g, '') }}
-        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-      />
-    </div>
   )
 }
 
