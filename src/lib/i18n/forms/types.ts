@@ -111,9 +111,12 @@ export interface FormDict {
   s4: {
     section: string
     title: string
+    title_evento: string
     escola: string
+    escola_evento: string
     turma: string
     como_conheceu: string
+    como_conheceu_evento: string
     como_conheceu_jocum: string
     conversou_equipe: string
     conversou_com_quem: string
@@ -588,6 +591,7 @@ export interface FormDict {
     fallback_title: string
     link_expired_title: string
     link_expired_body: string
+    link_expired_body_evento: string
     already_sent_title: string
     already_sent_body: string
     welcome_title: string
@@ -597,5 +601,6 @@ export interface FormDict {
     welcome_body_update: string
     privacy_notice: string
     footer_contact: string
+    footer_contact_evento: string
   }
 }

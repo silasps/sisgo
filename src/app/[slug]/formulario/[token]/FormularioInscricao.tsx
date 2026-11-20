@@ -205,16 +205,17 @@ function S3Termo({ data, schoolType }: { data?: Record<string, string>; schoolTy
   )
 }
 
-function S4Escola({ schoolName, className, data, orgName }: { schoolName: string; className?: string; data?: Record<string, string>; orgName: string }) {
+function S4Escola({ schoolName, className, data, orgName, schoolType }: { schoolName: string; className?: string; data?: Record<string, string>; orgName: string; schoolType?: string | null }) {
   const d = useContext(DictCtx)
+  const isEvento = schoolType === 'evento'
   return (
     <div className="space-y-4">
-      <SectionTitle number={d.s4.section} title={d.s4.title} />
+      <SectionTitle number={d.s4.section} title={isEvento ? d.s4.title_evento : d.s4.title} />
       <div className="grid sm:grid-cols-2 gap-4">
-        <Field label={d.s4.escola} name="escola" defaultValue={data?.escola ?? schoolName} required />
+        <Field label={isEvento ? d.s4.escola_evento : d.s4.escola} name="escola" defaultValue={data?.escola ?? schoolName} required />
         <Field label={d.s4.turma} name="turma" defaultValue={data?.turma ?? className ?? ''} />
         <H id="s4.como_conheceu"><div className="sm:col-span-2">
-          <Select label={d.s4.como_conheceu} name="como_conheceu" required
+          <Select label={isEvento ? d.s4.como_conheceu_evento : d.s4.como_conheceu} name="como_conheceu" required
             defaultValue={data?.como_conheceu}
             options={[
               { value: 'indicacao', label: d.s4.how_know_indicacao },
@@ -1580,7 +1581,7 @@ export function FormularioInscricao({
   const sections: SectionDef[] = [
     { id: 1,  component: <S1Nome prefill={prefill} data={localData.s1} /> },
     { id: 3,  component: <S3Termo data={localData.s3} schoolType={schoolType} /> },
-    { id: 4,  component: <S4Escola schoolName={schoolName} orgName={orgName} className={className} data={localData.s4} /> },
+    { id: 4,  component: <S4Escola schoolName={schoolName} orgName={orgName} className={className} data={localData.s4} schoolType={schoolType} /> },
     { id: 5,  component: <S5Dados prefill={prefill} data={localData.s5} onNationalityChange={setIsBrazilian} /> },
     { id: 6,  component: <S6Historia data={localData.s6} /> },
     { id: 7,  component: <S7Familia data={localData.s7} estadoCivilS5={localData.s5?.estado_civil} /> },

@@ -93,6 +93,7 @@ export default async function FormularioPage({ params, searchParams }: Props) {
 
   const pageLang = normalizeLang(lang ?? prefill.idioma ?? orgDefaultLang)
   const d = getFormDict(pageLang).bigFormChrome
+  const isEventoType = (app.schools as unknown as { school_type: string | null } | null)?.school_type === 'evento'
 
   // Valida expiração
   if (new Date(app.token_expires_at) < new Date()) {
@@ -101,7 +102,7 @@ export default async function FormularioPage({ params, searchParams }: Props) {
         <div className="bg-white rounded-2xl shadow p-10 max-w-md text-center">
           <p className="text-4xl mb-4">⏰</p>
           <h1 className="text-xl font-bold text-gray-900 mb-2">{d.link_expired_title}</h1>
-          <p className="text-gray-500 text-sm">{d.link_expired_body}</p>
+          <p className="text-gray-500 text-sm">{isEventoType ? d.link_expired_body_evento : d.link_expired_body}</p>
         </div>
       </div>
     )
@@ -188,7 +189,7 @@ export default async function FormularioPage({ params, searchParams }: Props) {
         </div>
 
         <p className="text-center text-xs text-gray-400 mt-6">
-          {d.footer_contact}
+          {isEventoType ? d.footer_contact_evento : d.footer_contact}
         </p>
         <p className="text-center text-xs text-gray-400 mt-1.5">
           <Link href={`/${slug}/privacidade`} target="_blank" className="underline hover:text-gray-600">{d.privacy_notice}</Link>
