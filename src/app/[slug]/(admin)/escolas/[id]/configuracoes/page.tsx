@@ -631,7 +631,7 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                   </div>
                 </div>
 
-                <div className="p-5">
+                <div id="visibilidade" className="p-5">
                   <h2 className="font-semibold text-gray-900 mb-4">Visibilidade</h2>
                   <div className="flex flex-col gap-3">
                     <Toggle name="is_public" label="Página pública ativa"
@@ -987,7 +987,7 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
               </div>
             </div>
 
-            <div className="p-5">
+            <div id="visibilidade" className="p-5">
               <h2 className="font-semibold text-gray-900 mb-4">Visibilidade</h2>
               <div className="flex flex-col gap-3">
                 <Toggle name="is_public" label="Página pública ativa"

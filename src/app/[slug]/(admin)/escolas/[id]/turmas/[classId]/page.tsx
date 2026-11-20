@@ -160,12 +160,10 @@ export default async function EditarTurmaPage({ params }: Props) {
                 Ver página pública ↗
               </Link>
             ) : (
-              <span
-                title='Ative "Página pública ativa" em Configurações pra esse link funcionar'
-                className="px-3 py-1.5 text-xs font-medium text-gray-300 border border-gray-100 rounded-lg cursor-not-allowed"
-              >
-                Ver página pública ↗
-              </span>
+              <Link href={`/${slug}/escolas/${id}/configuracoes#visibilidade`}
+                className="px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors">
+                Ativar página pública →
+              </Link>
             )
           )}
         </div>
@@ -304,9 +302,16 @@ export default async function EditarTurmaPage({ params }: Props) {
               <DirectEnrollLinkBox path={`/${slug}/escola/${escola.slug ?? escola.id}/turma/${classId}/matricula`} />
             ) : (
               <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                {!escola.is_public
-                  ? 'A escola precisa estar com "Página pública ativa" (em Configurações) pra esse link funcionar.'
-                  : 'Ative "Inscrições abertas" acima pra esse link funcionar.'}
+                {!escola.is_public ? (
+                  <>
+                    A escola precisa estar com &ldquo;Página pública ativa&rdquo; pra esse link funcionar —{' '}
+                    <Link href={`/${slug}/escolas/${id}/configuracoes#visibilidade`} className="underline font-medium hover:text-amber-800">
+                      ativar em Configurações
+                    </Link>.
+                  </>
+                ) : (
+                  'Ative "Inscrições abertas" acima pra esse link funcionar.'
+                )}
               </p>
             )}
           </section>
