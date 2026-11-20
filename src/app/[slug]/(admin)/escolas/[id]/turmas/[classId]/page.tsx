@@ -5,6 +5,7 @@ import { AtividadesExtrasSection } from './AtividadesExtrasSection'
 import { DirectEnrollLinkBox } from './DirectEnrollLinkBox'
 import { CurrencyField } from '@/components/ui/CurrencyField'
 import { IntegerField } from '@/components/ui/IntegerField'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = { params: Promise<{ slug: string; id: string; classId: string }> }
 
@@ -270,10 +271,12 @@ export default async function EditarTurmaPage({ params }: Props) {
               className="px-5 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
               Cancelar
             </Link>
-            <button type="submit"
-              className="px-5 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg transition-colors">
+            <SubmitButton
+              pendingText="Salvando..."
+              className="px-5 py-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors"
+            >
               Salvar alterações
-            </button>
+            </SubmitButton>
           </div>
         </form>
 
