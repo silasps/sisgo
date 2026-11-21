@@ -143,15 +143,15 @@ export function FormConfigFields({
       {sections.map(secao => {
         const ativos = secao.campos.filter(c => active[`${secao.secao}.${c.name}`]).length
         return (
-          <details key={secao.key} className="group bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <summary className="flex items-center justify-between px-5 py-3.5 cursor-pointer select-none list-none hover:bg-gray-50 sticky top-16 z-[5] bg-white group-open:border-b group-open:border-gray-100">
+          <details key={secao.key} className="group bg-white rounded-xl border border-gray-200">
+            <summary className="flex items-center justify-between px-5 py-3.5 cursor-pointer select-none list-none hover:bg-gray-50 sticky top-16 z-[5] bg-white rounded-xl group-open:rounded-b-none group-open:border-b group-open:border-gray-100">
               <div className="flex items-center gap-2">
                 <h3 className="font-semibold text-gray-900 text-sm">{secao.titulo}</h3>
                 <span className="text-xs text-gray-400">{ativos}/{secao.campos.length}</span>
               </div>
               <span className="text-gray-400 text-xs transition-transform group-open:rotate-180">▼</span>
             </summary>
-            <div className="border-t border-gray-100 divide-y divide-gray-50">
+            <div className="border-t border-gray-100 divide-y divide-gray-50 overflow-hidden rounded-b-xl">
               {secao.campos.map(campo => {
                 const key = `${secao.secao}.${campo.name}`
                 const ativo = !!active[key]
