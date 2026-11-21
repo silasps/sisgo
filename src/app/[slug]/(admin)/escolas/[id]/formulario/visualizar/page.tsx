@@ -47,7 +47,7 @@ export default async function VisualizarFormularioPage({ params, searchParams }:
       .maybeSingle()
     classConfig = (turma?.form_config as FormConfig | null) ?? null
   }
-  const { hiddenFields, paymentInfo } = resolveFormConfig(school.form_config as FormConfig, classConfig)
+  const { hiddenFields, paymentInfo, requiredOverrides } = resolveFormConfig(school.form_config as FormConfig, classConfig)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
@@ -70,6 +70,7 @@ export default async function VisualizarFormularioPage({ params, searchParams }:
             schoolType={(school as unknown as { school_type: string | null }).school_type}
             initialData={{}}
             hiddenFields={hiddenFields}
+            requiredOverrides={requiredOverrides}
             paymentInfo={paymentInfo}
             initialLang="pt"
             printMode

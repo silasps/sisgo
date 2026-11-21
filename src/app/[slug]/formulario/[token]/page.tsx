@@ -126,7 +126,7 @@ export default async function FormularioPage({ params, searchParams }: Props) {
 
   // Config da turma (se já tiver sido revisada) vence sobre o default da
   // escola — ver resolveFormConfig.
-  const { hiddenFields, paymentInfo } = resolveFormConfig(escola?.form_config, turma?.form_config)
+  const { hiddenFields, paymentInfo, requiredOverrides } = resolveFormConfig(escola?.form_config, turma?.form_config)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
@@ -171,6 +171,7 @@ export default async function FormularioPage({ params, searchParams }: Props) {
             initialSection={app.current_section ?? 1}
             initialData={formData}
             hiddenFields={hiddenFields}
+            requiredOverrides={requiredOverrides}
             paymentInfo={paymentInfo}
             initialLang={pageLang}
             printMode={printMode}

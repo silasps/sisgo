@@ -9,6 +9,8 @@ import { isManagementRole } from '@/lib/auth/permissions'
 import { getSchoolLink } from '@/lib/auth/unit-access'
 import { CONFIGURAVEL, resolveFormConfig, listFormTemplates, type FormConfig } from '@/lib/school/formConfig'
 import { SCHOOL_TYPES } from '@/lib/schools'
+import { SubmitButton } from '@/components/ui/SubmitButton'
+import { FormConfigFields } from '@/components/admin/FormConfigFields'
 
 type Props = {
   params: Promise<{ slug: string; id: string; classId: string }>
@@ -58,13 +60,12 @@ export default async function TurmaFormularioConfigPage({ params, searchParams }
   const templates = await listFormTemplates(sb, org.id)
   const appliedTemplate = templateIdParam ? templates.find(t => t.id === templateIdParam) ?? null : null
 
+  const saved = resolveFormConfig(schoolConfig, classConfig)
   // Modelo aplicado via ?template= só muda a pré-visualização dos
   // checkboxes — nada é salvo até clicar em "Salvar configuração".
-  const hiddenFields = new Set<string>(
-    appliedTemplate
-      ? (appliedTemplate.form_config.hidden_fields ?? [])
-      : resolveFormConfig(schoolConfig, classConfig).hiddenFields
-  )
+  const preview_ = appliedTemplate
+    ? { hiddenFields: appliedTemplate.form_config.hidden_fields ?? [], requiredOverrides: appliedTemplate.form_config.required_overrides ?? {} }
+    : saved
 
   async function salvarConfig(fd: FormData) {
     'use server'
@@ -78,12 +79,22 @@ export default async function TurmaFormularioConfigPage({ params, searchParams }
       }
     }
     const hiddenFieldsToSave = todosOsCampos.filter(key => fd.get(key) !== 'on')
+    const requiredOverridesToSave: Record<string, boolean> = {}
+    for (const secao of CONFIGURAVEL) {
+      for (const campo of secao.campos) {
+        if (campo.requiredByDefault === undefined) continue
+        const key = `${secao.secao}.${campo.name}`
+        const val = fd.get(`${key}__required`)
+        if (val === 'obrigatorio') requiredOverridesToSave[key] = true
+        else if (val === 'opcional') requiredOverridesToSave[key] = false
+      }
+    }
 
     await db.from('school_classes')
-      .update({ form_config: { hidden_fields: hiddenFieldsToSave }, form_config_confirmed: true })
+      .update({ form_config: { hidden_fields: hiddenFieldsToSave, required_overrides: requiredOverridesToSave }, form_config_confirmed: true })
       .eq('id', classId)
 
-    redirect(`/${slug}/escolas/${id}/turmas/${classId}`)
+    redirect(`/${slug}/escolas/${id}/turmas/${classId}/formulario?flash_success=${encodeURIComponent('Configuração da turma salva.')}`)
   }
 
   async function salvarComoModelo(fd: FormData) {
@@ -115,6 +126,16 @@ export default async function TurmaFormularioConfigPage({ params, searchParams }
       }
     }
     const hiddenFieldsToSave = todosOsCampos.filter(key => fd.get(key) !== 'on')
+    const requiredOverridesToSave: Record<string, boolean> = {}
+    for (const secao of CONFIGURAVEL) {
+      for (const campo of secao.campos) {
+        if (campo.requiredByDefault === undefined) continue
+        const key = `${secao.secao}.${campo.name}`
+        const val = fd.get(`${key}__required`)
+        if (val === 'obrigatorio') requiredOverridesToSave[key] = true
+        else if (val === 'opcional') requiredOverridesToSave[key] = false
+      }
+    }
 
     if (defaultForType) {
       await db.from('school_form_templates')
@@ -125,15 +146,15 @@ export default async function TurmaFormularioConfigPage({ params, searchParams }
 
     await db.from('school_form_templates')
       .upsert(
-        { organization_id: orgRow.id, name, form_config: { hidden_fields: hiddenFieldsToSave }, default_for_school_type: defaultForType, created_by: actionUser.id },
+        { organization_id: orgRow.id, name, form_config: { hidden_fields: hiddenFieldsToSave, required_overrides: requiredOverridesToSave }, default_for_school_type: defaultForType, created_by: actionUser.id },
         { onConflict: 'organization_id,name' },
       )
 
-    redirect(`/${slug}/escolas/${id}/turmas/${classId}/formulario`)
+    redirect(`/${slug}/escolas/${id}/turmas/${classId}/formulario?flash_success=${encodeURIComponent(`Modelo "${name}" salvo.`)}`)
   }
 
   const totalCampos = CONFIGURAVEL.reduce((acc, s) => acc + s.campos.length, 0)
-  const totalAtivos = totalCampos - hiddenFields.size
+  const totalAtivos = totalCampos - preview_.hiddenFields.length
 
   return (
     <>
@@ -169,30 +190,6 @@ export default async function TurmaFormularioConfigPage({ params, searchParams }
           </p>
         </div>
 
-        {templates.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-5 mb-3">
-            <h3 className="font-semibold text-gray-900 text-sm mb-1">Começar de um modelo</h3>
-            <p className="text-xs text-gray-400 mb-3">
-              Qualquer modelo pode ser usado em qualquer turma, independente do tipo da escola —
-              útil, por exemplo, pra uma turma avulsa de evento dentro de uma escola de programa
-              completo. Só muda os campos abaixo pra você revisar — nada é salvo até clicar em
-              &quot;Salvar configuração&quot;.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {templates.map(t => (
-                <Link key={t.id} href={`/${slug}/escolas/${id}/turmas/${classId}/formulario?template=${t.id}`}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                    appliedTemplate?.id === t.id
-                      ? 'bg-indigo-600 border-indigo-600 text-white'
-                      : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
-                  }`}>
-                  {t.name}
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
-
         <p className="text-xs text-gray-400 mb-3">
           Informações de pagamento são definidas no nível da escola —{' '}
           <Link href={`/${slug}/escolas/${id}/formulario`} className="underline hover:text-gray-600">
@@ -201,40 +198,16 @@ export default async function TurmaFormularioConfigPage({ params, searchParams }
         </p>
 
         <form action={salvarConfig} className="space-y-3">
-          {CONFIGURAVEL.map(secao => {
-            const ativos = secao.campos.filter(c => !hiddenFields.has(`${secao.secao}.${c.name}`)).length
-            return (
-              <details key={secao.key} className="group bg-white rounded-xl border border-gray-200 overflow-hidden" open>
-                <summary className="flex items-center justify-between px-5 py-3.5 cursor-pointer select-none list-none hover:bg-gray-50">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-gray-900 text-sm">{secao.titulo}</h3>
-                    <span className="text-xs text-gray-400">{ativos}/{secao.campos.length}</span>
-                  </div>
-                  <span className="text-gray-400 text-xs transition-transform group-open:rotate-180">▼</span>
-                </summary>
-                <div className="border-t border-gray-100 divide-y divide-gray-50">
-                  {secao.campos.map(campo => {
-                    const key = `${secao.secao}.${campo.name}`
-                    const ativo = !hiddenFields.has(key)
-                    return (
-                      <label key={campo.name}
-                        className="flex items-center justify-between px-5 py-3 cursor-pointer hover:bg-gray-50 transition-colors">
-                        <span className={`text-sm ${ativo ? 'text-gray-800' : 'text-gray-400 line-through'}`}>
-                          {campo.label}
-                        </span>
-                        <input
-                          type="checkbox"
-                          name={key}
-                          defaultChecked={ativo}
-                          className="w-4 h-4 rounded accent-brand-500"
-                        />
-                      </label>
-                    )
-                  })}
-                </div>
-              </details>
-            )
-          })}
+          <FormConfigFields
+            sections={CONFIGURAVEL}
+            savedHiddenFields={saved.hiddenFields}
+            savedRequiredOverrides={saved.requiredOverrides}
+            previewHiddenFields={preview_.hiddenFields}
+            previewRequiredOverrides={preview_.requiredOverrides}
+            templates={templates}
+            appliedTemplateId={appliedTemplate?.id ?? null}
+            baseHref={`/${slug}/escolas/${id}/turmas/${classId}/formulario`}
+          />
 
           {isManagement && (
             <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -252,10 +225,10 @@ export default async function TurmaFormularioConfigPage({ params, searchParams }
                   <option value="">Não definir como padrão</option>
                   {SCHOOL_TYPES.map(t => <option key={t.value} value={t.value}>Padrão de: {t.label}</option>)}
                 </select>
-                <button type="submit" formAction={salvarComoModelo}
-                  className="px-4 py-2 text-sm font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors whitespace-nowrap">
+                <SubmitButton formAction={salvarComoModelo} pendingText="Salvando modelo…"
+                  className="px-4 py-2 text-sm font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 disabled:opacity-50 transition-colors whitespace-nowrap">
                   Salvar como modelo…
-                </button>
+                </SubmitButton>
               </div>
             </div>
           )}
@@ -265,10 +238,10 @@ export default async function TurmaFormularioConfigPage({ params, searchParams }
               className="flex-1 text-center px-4 py-3 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors font-medium">
               Cancelar
             </Link>
-            <button type="submit" formAction={salvarConfig}
-              className="flex-1 px-4 py-3 text-sm font-bold text-white bg-brand-500 hover:bg-brand-600 rounded-xl transition-colors">
+            <SubmitButton formAction={salvarConfig} pendingText="Salvando..."
+              className="flex-1 px-4 py-3 text-sm font-bold text-white bg-brand-500 hover:bg-brand-600 disabled:opacity-50 rounded-xl transition-colors">
               Salvar configuração
-            </button>
+            </SubmitButton>
           </div>
         </form>
       </main>

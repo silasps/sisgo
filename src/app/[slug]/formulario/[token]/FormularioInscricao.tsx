@@ -25,6 +25,11 @@ function H({ id, children }: { id: string; children: React.ReactNode }) {
   if (hidden.has(id)) return null
   return <>{children}</>
 }
+
+// Override de obrigatório/opcional por campo configurável (ver
+// src/lib/school/formConfig.ts). Ausência de chave = usa o `required`
+// literal já passado no componente (o default do próprio código).
+const RequiredCtx = createContext<Record<string, boolean>>({})
 // HiddenStyles: injeta CSS que oculta campos pelo atributo name (para campos sem wrapper H)
 function HiddenStyles() {
   const hidden = useContext(HiddenCtx)
@@ -61,6 +66,7 @@ type Props = {
   initialSection?: number
   initialData?: Record<string, unknown>
   hiddenFields?: string[]
+  requiredOverrides?: Record<string, boolean>
   paymentInfo?: string | null
   initialLang?: string
   printMode?: boolean
@@ -78,18 +84,20 @@ type Props = {
 const DATE_MIN = '1900-01-01'
 const DATE_MAX = new Date().toISOString().slice(0, 10)
 
-function Field({ label, name, defaultValue, placeholder, required, type = 'text', maxLength, min, max }: {
-  label: string; name: string; defaultValue?: string; placeholder?: string
+function Field({ label, name, defaultValue, placeholder, required, configKey, type = 'text', maxLength, min, max }: {
+  label: string; name: string; defaultValue?: string; placeholder?: string; configKey?: string
   required?: boolean; type?: string; maxLength?: number; min?: string; max?: string
 }) {
+  const reqOverrides = useContext(RequiredCtx)
+  const effectiveRequired = (configKey && reqOverrides[configKey] !== undefined) ? reqOverrides[configKey] : required
   const isBirthDate = name === 'data_nascimento'
   return (
     <div data-field={name}>
       <label className="block text-sm font-medium text-gray-700 mb-1">
-        {label}{required ? <span className="text-red-500 ml-0.5">*</span> : <span className="text-gray-400 font-normal ml-1">(opcional)</span>}
+        {label}{effectiveRequired ? <span className="text-red-500 ml-0.5">*</span> : <span className="text-gray-400 font-normal ml-1">(opcional)</span>}
       </label>
       <input name={name} type={type} defaultValue={defaultValue} placeholder={placeholder}
-        required={required} maxLength={maxLength}
+        required={effectiveRequired} maxLength={maxLength}
         min={type === 'date' ? (min ?? DATE_MIN) : undefined}
         max={type === 'date' ? (max ?? (isBirthDate ? DATE_MAX : '2100-12-31')) : undefined}
         className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-gray-50" />
@@ -97,32 +105,36 @@ function Field({ label, name, defaultValue, placeholder, required, type = 'text'
   )
 }
 
-function TextArea({ label, name, defaultValue, placeholder, required, rows = 4 }: {
-  label: string; name: string; defaultValue?: string; placeholder?: string; required?: boolean; rows?: number
+function TextArea({ label, name, defaultValue, placeholder, required, configKey, rows = 4 }: {
+  label: string; name: string; defaultValue?: string; placeholder?: string; required?: boolean; configKey?: string; rows?: number
 }) {
+  const reqOverrides = useContext(RequiredCtx)
+  const effectiveRequired = (configKey && reqOverrides[configKey] !== undefined) ? reqOverrides[configKey] : required
   return (
     <div data-field={name}>
       <label className="block text-sm font-medium text-gray-700 mb-1">
-        {label}{required ? <span className="text-red-500 ml-0.5">*</span> : <span className="text-gray-400 font-normal ml-1">(opcional)</span>}
+        {label}{effectiveRequired ? <span className="text-red-500 ml-0.5">*</span> : <span className="text-gray-400 font-normal ml-1">(opcional)</span>}
       </label>
-      <textarea name={name} defaultValue={defaultValue} placeholder={placeholder} required={required} rows={rows}
+      <textarea name={name} defaultValue={defaultValue} placeholder={placeholder} required={effectiveRequired} rows={rows}
         className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-gray-50 resize-none" />
     </div>
   )
 }
 
-function Select({ label, name, defaultValue, required, options, onChange }: {
-  label: string; name: string; defaultValue?: string; required?: boolean
+function Select({ label, name, defaultValue, required, configKey, options, onChange }: {
+  label: string; name: string; defaultValue?: string; required?: boolean; configKey?: string
   options: { value: string; label: string }[]
   onChange?: (e: React.ChangeEvent<HTMLSelectElement>) => void
 }) {
   const d = useContext(DictCtx)
+  const reqOverrides = useContext(RequiredCtx)
+  const effectiveRequired = (configKey && reqOverrides[configKey] !== undefined) ? reqOverrides[configKey] : required
   return (
     <div data-field={name}>
       <label className="block text-sm font-medium text-gray-700 mb-1">
-        {label}{required ? <span className="text-red-500 ml-0.5">*</span> : <span className="text-gray-400 font-normal ml-1">(opcional)</span>}
+        {label}{effectiveRequired ? <span className="text-red-500 ml-0.5">*</span> : <span className="text-gray-400 font-normal ml-1">(opcional)</span>}
       </label>
-      <select name={name} defaultValue={defaultValue ?? ''} required={required} onChange={onChange}
+      <select name={name} defaultValue={defaultValue ?? ''} required={effectiveRequired} onChange={onChange}
         className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-gray-50">
         <option value="" disabled>{d.nav.select_placeholder}</option>
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -215,7 +227,7 @@ function S4Escola({ schoolName, className, data, orgName, schoolType }: { school
         <Field label={isEvento ? d.s4.escola_evento : d.s4.escola} name="escola" defaultValue={data?.escola ?? schoolName} required />
         <Field label={d.s4.turma} name="turma" defaultValue={data?.turma ?? className ?? ''} />
         <H id="s4.como_conheceu"><div className="sm:col-span-2">
-          <Select label={isEvento ? d.s4.como_conheceu_evento : d.s4.como_conheceu} name="como_conheceu" required
+          <Select label={isEvento ? d.s4.como_conheceu_evento : d.s4.como_conheceu} name="como_conheceu" required configKey="s4.como_conheceu"
             defaultValue={data?.como_conheceu}
             options={[
               { value: 'indicacao', label: d.s4.how_know_indicacao },
@@ -227,43 +239,43 @@ function S4Escola({ schoolName, className, data, orgName, schoolType }: { school
             ]} />
         </div></H>
         <H id="s4.como_conheceu_jocum"><div className="sm:col-span-2">
-          <Field label={t(d.s4.como_conheceu_jocum, { orgName: orgShortName(orgName) })} name="como_conheceu_jocum" defaultValue={data?.como_conheceu_jocum} />
+          <Field label={t(d.s4.como_conheceu_jocum, { orgName: orgShortName(orgName) })} name="como_conheceu_jocum" configKey="s4.como_conheceu_jocum" defaultValue={data?.como_conheceu_jocum} />
         </div></H>
         <H id="s4.conversou_equipe"><Select label={d.s4.conversou_equipe}
-          name="conversou_equipe" required defaultValue={data?.conversou_equipe}
+          name="conversou_equipe" required configKey="s4.conversou_equipe" defaultValue={data?.conversou_equipe}
           options={[
             { value: 'sim', label: d.s4.conversou_sim },
             { value: 'nao', label: d.s4.conversou_nao },
           ]} /></H>
-        <H id="s4.conversou_com_quem"><Field label={d.s4.conversou_com_quem} name="conversou_com_quem"
+        <H id="s4.conversou_com_quem"><Field label={d.s4.conversou_com_quem} name="conversou_com_quem" configKey="s4.conversou_com_quem"
           defaultValue={data?.conversou_com_quem} /></H>
         <H id="s4.motivacao"><div className="sm:col-span-2">
-          <TextArea label={d.s4.motivacao} name="motivacao"
+          <TextArea label={d.s4.motivacao} name="motivacao" configKey="s4.motivacao"
             defaultValue={data?.motivacao} required rows={4} />
         </div></H>
         <H id="s4.data_chegada">
-          <Field label={d.s4.data_chegada} name="data_chegada" type="date" defaultValue={data?.data_chegada} required />
+          <Field label={d.s4.data_chegada} name="data_chegada" type="date" configKey="s4.data_chegada" defaultValue={data?.data_chegada} required />
         </H>
         <H id="s4.horario_chegada">
-          <Field label={d.s4.horario_chegada} name="horario_chegada" type="time" defaultValue={data?.horario_chegada} required />
+          <Field label={d.s4.horario_chegada} name="horario_chegada" type="time" configKey="s4.horario_chegada" defaultValue={data?.horario_chegada} required />
         </H>
         <H id="s4.data_chegada">
           <p className="sm:col-span-2 text-xs text-gray-400 -mt-2">{d.s4.data_chegada_hint}</p>
         </H>
         <H id="s4.data_saida">
-          <Field label={d.s4.data_saida} name="data_saida" type="date" defaultValue={data?.data_saida} />
+          <Field label={d.s4.data_saida} name="data_saida" type="date" configKey="s4.data_saida" defaultValue={data?.data_saida} />
         </H>
         <H id="s4.horario_saida">
-          <Field label={d.s4.horario_saida} name="horario_saida" type="time" defaultValue={data?.horario_saida} />
+          <Field label={d.s4.horario_saida} name="horario_saida" type="time" configKey="s4.horario_saida" defaultValue={data?.horario_saida} />
         </H>
         <H id="s4.base_origem">
-          <Field label={d.s4.base_origem} name="base_origem" defaultValue={data?.base_origem} />
+          <Field label={d.s4.base_origem} name="base_origem" configKey="s4.base_origem" defaultValue={data?.base_origem} />
         </H>
         <H id="s4.meio_transporte">
-          <Field label={d.s4.meio_transporte} name="meio_transporte" defaultValue={data?.meio_transporte} />
+          <Field label={d.s4.meio_transporte} name="meio_transporte" configKey="s4.meio_transporte" defaultValue={data?.meio_transporte} />
         </H>
         <H id="s4.necessidades_acomodacao"><div className="sm:col-span-2">
-          <TextArea label={d.s4.necessidades_acomodacao} name="necessidades_acomodacao"
+          <TextArea label={d.s4.necessidades_acomodacao} name="necessidades_acomodacao" configKey="s4.necessidades_acomodacao"
             defaultValue={data?.necessidades_acomodacao} rows={2} />
         </div></H>
       </div>
@@ -354,6 +366,7 @@ function S5Dados({ prefill, data, onNationalityChange }: {
 }) {
   const d = useContext(DictCtx)
   const hidden = useContext(HiddenCtx)
+  const reqOverrides = useContext(RequiredCtx)
   const [estrangeiro, setEstrangeiro] = useState(data?.is_brasileiro === 'nao')
   const [estudando, setEstudando] = useState(data?.estudando === 'sim')
   const [casado, setCasado] = useState(data?.estado_civil === 'casado')
@@ -387,7 +400,7 @@ function S5Dados({ prefill, data, onNationalityChange }: {
         <Field label={d.s5.data_nascimento} name="data_nascimento" type="date"
           defaultValue={data?.data_nascimento} required />
         <H id="s5.estado_civil">
-          <Select label={d.s5.estado_civil} name="estado_civil" required defaultValue={data?.estado_civil}
+          <Select label={d.s5.estado_civil} name="estado_civil" required configKey="s5.estado_civil" defaultValue={data?.estado_civil}
             onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setCasado(e.target.value === 'casado')}
             options={[
               { value: 'solteiro', label: d.s5.solteiro },
@@ -398,7 +411,7 @@ function S5Dados({ prefill, data, onNationalityChange }: {
             ]} />
         </H>
         <H id="s5.conjuge_nome">
-          {casado && <Field label={d.s5.conjuge_nome} name="conjuge_nome" defaultValue={data?.conjuge_nome} />}
+          {casado && <Field label={d.s5.conjuge_nome} name="conjuge_nome" configKey="s5.conjuge_nome" defaultValue={data?.conjuge_nome} />}
         </H>
         <Select label={d.s5.is_brasileiro} name="is_brasileiro" required
           defaultValue={data?.is_brasileiro}
@@ -431,7 +444,7 @@ function S5Dados({ prefill, data, onNationalityChange }: {
         <div className="sm:col-span-2 mt-2"><p className="text-sm font-semibold text-gray-700 border-t pt-3">{d.s5.formacao_section}</p></div>
         <Field label={d.s5.formacao} name="formacao" defaultValue={data?.formacao} />
         <H id="s5.estudando">
-          <Select label={d.s5.estudando} name="estudando" required
+          <Select label={d.s5.estudando} name="estudando" required configKey="s5.estudando"
             defaultValue={data?.estudando}
             options={[
               { value: 'sim', label: d.opts.yes },
@@ -445,17 +458,17 @@ function S5Dados({ prefill, data, onNationalityChange }: {
         </H>
         <Field label={d.s5.profissao} name="profissao" defaultValue={data?.profissao} />
         <H id="s5.trabalha">
-          <Select label={d.s5.trabalha} name="trabalha" required defaultValue={data?.trabalha} options={[
+          <Select label={d.s5.trabalha} name="trabalha" required configKey="s5.trabalha" defaultValue={data?.trabalha} options={[
             { value: 'sim', label: d.opts.yes },
             { value: 'nao', label: d.opts.no },
           ]} />
         </H>
         <H id="s5.experiencias"><div className="sm:col-span-2">
-          <TextArea label={d.s5.experiencias} name="experiencias"
+          <TextArea label={d.s5.experiencias} name="experiencias" configKey="s5.experiencias"
             defaultValue={data?.experiencias} rows={3} />
         </div></H>
         <H id="s5.habilidades"><div className="sm:col-span-2">
-          <TextArea label={d.s5.habilidades} name="habilidades" defaultValue={data?.habilidades} rows={3} />
+          <TextArea label={d.s5.habilidades} name="habilidades" configKey="s5.habilidades" defaultValue={data?.habilidades} rows={3} />
         </div></H>
 
         {/* Idiomas — field names are fixed (DB keys), only labels are translated */}
@@ -491,19 +504,20 @@ function S5Dados({ prefill, data, onNationalityChange }: {
             {/* RG sem máscara — alguns estados emitem números fora do padrão
                 00.000.000-0 (mais dígitos, sem dígito verificador etc.) e a
                 máscara truncava/rejeitava esses casos. */}
-            <H id="s5.rg"><Field label={d.s5.rg} name="rg" defaultValue={data?.rg} maxLength={20} /></H>
+            <H id="s5.rg"><Field label={d.s5.rg} name="rg" configKey="s5.rg" defaultValue={data?.rg} maxLength={20} /></H>
             <H id="s5.cnh"><Field label={d.s5.cnh} name="cnh" defaultValue={data?.cnh} maxLength={20} /></H>
-            <H id="s5.cpf"><MaskedInput mask="cpf" name="cpf" label={d.s5.cpf} defaultValue={data?.cpf} /></H>
-            <H id="s5.passaporte"><Field label={d.s5.passaporte_opcional} name="passaporte" defaultValue={data?.passaporte} maxLength={20} /></H>
+            <H id="s5.cpf"><MaskedInput mask="cpf" name="cpf" label={d.s5.cpf} defaultValue={data?.cpf}
+              required={reqOverrides['s5.cpf']} /></H>
+            <H id="s5.passaporte"><Field label={d.s5.passaporte_opcional} name="passaporte" configKey="s5.passaporte" defaultValue={data?.passaporte} maxLength={20} /></H>
           </>) : (<>
             <H id="s5.passaporte"><div className="sm:col-span-2">
-              <Field label={d.s5.passaporte_required} name="passaporte" defaultValue={data?.passaporte}
+              <Field label={d.s5.passaporte_required} name="passaporte" configKey="s5.passaporte" defaultValue={data?.passaporte}
                 required maxLength={20} placeholder="Ex: AB123456" />
             </div></H>
           </>)}
         </>)}
         <H id="s5.servico_militar">
-          <Select label={d.s5.servico_militar} name="servico_militar"
+          <Select label={d.s5.servico_militar} name="servico_militar" configKey="s5.servico_militar"
             defaultValue={data?.servico_militar}
             options={[
               { value: 'sim', label: d.s5.sm_sim },
@@ -662,14 +676,14 @@ function S6Historia({ data }: { data?: Record<string, string> }) {
     <div className="space-y-4">
       <SectionTitle number={d.s6.section} title={d.s6.title} />
       <div className="grid grid-cols-1 gap-4">
-        <TextArea label={d.s6.sobre_voce} name="sobre_voce" defaultValue={data?.sobre_voce} required rows={5} />
-        <TextArea label={d.s6.processo_decisao} name="processo_decisao"
+        <TextArea label={d.s6.sobre_voce} name="sobre_voce" configKey="s6.sobre_voce" defaultValue={data?.sobre_voce} required rows={5} />
+        <TextArea label={d.s6.processo_decisao} name="processo_decisao" configKey="s6.processo_decisao"
           defaultValue={data?.processo_decisao} required rows={4} />
-        <TextArea label={d.s6.expectativas} name="expectativas"
+        <TextArea label={d.s6.expectativas} name="expectativas" configKey="s6.expectativas"
           defaultValue={data?.expectativas} required rows={4} />
-        <TextArea label={d.s6.motivacoes} name="motivacoes"
+        <TextArea label={d.s6.motivacoes} name="motivacoes" configKey="s6.motivacoes"
           defaultValue={data?.motivacoes} required rows={3} />
-        <TextArea label={d.s6.responsabilidades}
+        <TextArea label={d.s6.responsabilidades} configKey="s6.responsabilidades"
           name="responsabilidades" defaultValue={data?.responsabilidades} rows={3} />
       </div>
     </div>
@@ -678,6 +692,7 @@ function S6Historia({ data }: { data?: Record<string, string> }) {
 
 function S7Familia({ data, estadoCivilS5 }: { data?: Record<string, string>; estadoCivilS5?: string }) {
   const d = useContext(DictCtx)
+  const hidden = useContext(HiddenCtx)
   const initialCivil = data?.estado_civil_atual ?? estadoCivilS5 ?? ''
   const estadoCivil = initialCivil
   const [temFilhos, setTemFilhos] = useState(data?.tem_filhos === 'sim')
@@ -697,21 +712,21 @@ function S7Familia({ data, estadoCivilS5 }: { data?: Record<string, string>; est
     <div className="space-y-4">
       <SectionTitle number={d.s7.section} title={d.s7.title} />
       <div className="grid sm:grid-cols-2 gap-4">
-        <Field label={d.s7.nome_pai} name="nome_pai" defaultValue={data?.nome_pai} />
-        <Field label={d.s7.nome_mae} name="nome_mae" defaultValue={data?.nome_mae} />
-        <Select label={d.s7.pais_cristaos} name="pais_cristaos" defaultValue={data?.pais_cristaos} options={[
+        <H id="s7.nome_pai"><Field label={d.s7.nome_pai} name="nome_pai" configKey="s7.nome_pai" defaultValue={data?.nome_pai} /></H>
+        <H id="s7.nome_mae"><Field label={d.s7.nome_mae} name="nome_mae" configKey="s7.nome_mae" defaultValue={data?.nome_mae} /></H>
+        <H id="s7.pais_cristaos"><Select label={d.s7.pais_cristaos} name="pais_cristaos" configKey="s7.pais_cristaos" defaultValue={data?.pais_cristaos} options={[
           { value: 'ambos', label: d.s7.pc_ambos },
           { value: 'apenas_um', label: d.s7.pc_apenas_um },
           { value: 'nenhum', label: d.s7.pc_nenhum },
-        ]} />
-        <Select label={d.s7.familia_apoia} name="familia_apoia" required
+        ]} /></H>
+        <H id="s7.familia_apoia"><Select label={d.s7.familia_apoia} name="familia_apoia" required configKey="s7.familia_apoia"
           defaultValue={data?.familia_apoia} options={[
             { value: 'sim', label: d.opts.yes },
             { value: 'parcialmente', label: d.opts.partially },
             { value: 'nao', label: d.opts.no },
-          ]} />
+          ]} /></H>
         <div className="sm:col-span-2">
-          <TextArea label={d.s7.situacao_familiar}
+          <TextArea label={d.s7.situacao_familiar} configKey="s7.situacao_familiar"
             name="situacao_familiar" defaultValue={data?.situacao_familiar} rows={3} />
         </div>
 
@@ -726,8 +741,8 @@ function S7Familia({ data, estadoCivilS5 }: { data?: Record<string, string>; est
         )}
 
         {(estadoCivil === 'casado' || initialCivil === 'casado') && <>
-          <Field label={d.s7.conjuge_nome_idade} name="conjuge_nome_idade" defaultValue={data?.conjuge_nome_idade} />
-          <div>
+          <H id="s7.conjuge_nome_idade"><Field label={d.s7.conjuge_nome_idade} name="conjuge_nome_idade" configKey="s7.conjuge_nome_idade" defaultValue={data?.conjuge_nome_idade} /></H>
+          <H id="s7.data_casamento"><div data-field="data_casamento">
             <label className="block text-sm font-medium text-gray-700 mb-1">{d.s7.data_casamento}</label>
             <input type="date" name="data_casamento" value={dataCasamento} max={new Date().toISOString().slice(0, 10)}
               onChange={e => setDataCasamento(e.target.value)}
@@ -735,28 +750,28 @@ function S7Familia({ data, estadoCivilS5 }: { data?: Record<string, string>; est
             {anosCasados !== null && (
               <p className="text-xs text-indigo-700 mt-1">{t(d.s7.data_casamento_anos, { anos: String(anosCasados) })}</p>
             )}
-          </div>
-          <Select label={d.s7.conjuge_apoia} name="conjuge_apoia" defaultValue={data?.conjuge_apoia} options={[
+          </div></H>
+          <H id="s7.conjuge_apoia"><Select label={d.s7.conjuge_apoia} name="conjuge_apoia" configKey="s7.conjuge_apoia" defaultValue={data?.conjuge_apoia} options={[
             { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
-          ]} />
-          <Select label={d.s7.conjuge_participa} name="conjuge_participa" defaultValue={data?.conjuge_participa} options={[
+          ]} /></H>
+          <H id="s7.conjuge_participa"><Select label={d.s7.conjuge_participa} name="conjuge_participa" configKey="s7.conjuge_participa" defaultValue={data?.conjuge_participa} options={[
             { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
-          ]} />
+          ]} /></H>
         </>}
 
         {(estadoCivil === 'comprometido' || initialCivil === 'comprometido') && <>
-          <Field label={d.s7.tempo_compromisso} name="tempo_compromisso" defaultValue={data?.tempo_compromisso} />
-          <Select label={d.s7.compromisso_apoia} name="compromisso_apoia" defaultValue={data?.compromisso_apoia} options={[
+          <H id="s7.tempo_compromisso"><Field label={d.s7.tempo_compromisso} name="tempo_compromisso" configKey="s7.tempo_compromisso" defaultValue={data?.tempo_compromisso} /></H>
+          <H id="s7.compromisso_apoia"><Select label={d.s7.compromisso_apoia} name="compromisso_apoia" configKey="s7.compromisso_apoia" defaultValue={data?.compromisso_apoia} options={[
             { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
-          ]} />
-          <div className="sm:col-span-2">
-            <TextArea label={d.s7.situacao_relacional} name="situacao_relacional"
+          ]} /></H>
+          <H id="s7.situacao_relacional"><div className="sm:col-span-2">
+            <TextArea label={d.s7.situacao_relacional} name="situacao_relacional" configKey="s7.situacao_relacional"
               defaultValue={data?.situacao_relacional} rows={2} />
-          </div>
+          </div></H>
         </>}
 
         <div className="sm:col-span-2 mt-2">
-          <Select label={d.s7.tem_filhos} name="tem_filhos" defaultValue={data?.tem_filhos} options={[
+          <Select label={d.s7.tem_filhos} name="tem_filhos" configKey="s7.tem_filhos" defaultValue={data?.tem_filhos} options={[
             { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
           ]} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
             setTemFilhos(e.target.value === 'sim')
@@ -764,14 +779,22 @@ function S7Familia({ data, estadoCivilS5 }: { data?: Record<string, string>; est
           }} />
         </div>
         {temFilhos && <>
-          <ChildrenField data={data?.filhos_dados} />
-          <Select label={d.s7.filhos_virao} name="filhos_virao" defaultValue={data?.filhos_virao} options={[
-            { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
-          ]} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilhosVirao(e.target.value)} />
-          {(filhosVirao === 'nao' || (data?.filhos_virao === 'nao' && !filhosVirao)) && (
-            <Field label={d.s7.filhos_ficam_com} name="filhos_ficam_com"
-              defaultValue={data?.filhos_ficam_com} />
-          )}
+          <H id="s7.filhos_virao">
+            <Select label={d.s7.filhos_virao} name="filhos_virao" configKey="s7.filhos_virao" defaultValue={data?.filhos_virao} options={[
+              { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
+            ]} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilhosVirao(e.target.value)} />
+          </H>
+          {/* Dados dos filhos e com quem ficam só fazem sentido se os filhos
+              vierem junto (cuidado deles durante o programa) — perguntar só
+              nesse caso, a menos que a escola tenha escondido a pergunta
+              "filhos virão?" (aí não tem como condicionar, pede direto). */}
+          {(hidden.has('s7.filhos_virao') || filhosVirao === 'sim' || (!filhosVirao && data?.filhos_virao === 'sim')) && <>
+            <H id="s7.filhos_dados"><ChildrenField data={data?.filhos_dados} /></H>
+            <H id="s7.filhos_ficam_com">
+              <Field label={d.s7.filhos_ficam_com} name="filhos_ficam_com" configKey="s7.filhos_ficam_com"
+                defaultValue={data?.filhos_ficam_com} />
+            </H>
+          </>}
         </>}
       </div>
     </div>
@@ -795,18 +818,18 @@ function S8Igreja({ data }: { data?: Record<string, string> }) {
         <Select label={d.s8.membro_oficial} name="membro_oficial" defaultValue={data?.membro_oficial} options={[
           { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
         ]} />
-        <Select label={d.s8.tem_ministerio} name="tem_ministerio" defaultValue={data?.tem_ministerio} options={[
+        <Select label={d.s8.tem_ministerio} name="tem_ministerio" configKey="s8.tem_ministerio" defaultValue={data?.tem_ministerio} options={[
           { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
         ]} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setParticipa(e.target.value === 'sim')} />
         {participa && <>
-          <Field label={d.s8.ministerio_qual} name="ministerio_qual" defaultValue={data?.ministerio_qual} />
-          <Field label={d.s8.ministerio_tempo} name="ministerio_tempo" defaultValue={data?.ministerio_tempo} />
-          <Select label={d.s8.tem_lideranca} name="tem_lideranca" defaultValue={data?.tem_lideranca} options={[
+          <Field label={d.s8.ministerio_qual} name="ministerio_qual" configKey="s8.ministerio_qual" defaultValue={data?.ministerio_qual} />
+          <Field label={d.s8.ministerio_tempo} name="ministerio_tempo" configKey="s8.ministerio_tempo" defaultValue={data?.ministerio_tempo} />
+          <Select label={d.s8.tem_lideranca} name="tem_lideranca" configKey="s8.tem_lideranca" defaultValue={data?.tem_lideranca} options={[
             { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
           ]} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setLideranca(e.target.value === 'sim')} />
-          {lideranca && <Field label={d.s8.lideranca_cargo} name="lideranca_cargo" defaultValue={data?.lideranca_cargo} />}
+          {lideranca && <Field label={d.s8.lideranca_cargo} name="lideranca_cargo" configKey="s8.lideranca_cargo" defaultValue={data?.lideranca_cargo} />}
           <div className="sm:col-span-2">
-            <TextArea label={d.s8.responsabilidades_igreja} name="responsabilidades_igreja"
+            <TextArea label={d.s8.responsabilidades_igreja} name="responsabilidades_igreja" configKey="s8.responsabilidades_igreja"
               defaultValue={data?.responsabilidades_igreja} rows={3} />
           </div>
         </>}
@@ -855,15 +878,15 @@ function S9Referencia({ data }: { data?: Record<string, string> }) {
       <InfoBox>{d.s9.infobox}</InfoBox>
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
-          <Field label={d.s9.ref_nome} name="ref_nome" defaultValue={data?.ref_nome} required />
+          <Field label={d.s9.ref_nome} name="ref_nome" configKey="s9.ref_nome" defaultValue={data?.ref_nome} required />
         </div>
-        <Field label={d.s9.ref_relacionamento} name="ref_relacionamento"
+        <Field label={d.s9.ref_relacionamento} name="ref_relacionamento" configKey="s9.ref_relacionamento"
           defaultValue={data?.ref_relacionamento} required />
-        <Field label={d.s9.ref_tempo} name="ref_tempo" defaultValue={data?.ref_tempo} required />
-        <Select label={d.s9.ref_crista} name="ref_crista" defaultValue={data?.ref_crista} options={[
+        <Field label={d.s9.ref_tempo} name="ref_tempo" configKey="s9.ref_tempo" defaultValue={data?.ref_tempo} required />
+        <Select label={d.s9.ref_crista} name="ref_crista" configKey="s9.ref_crista" defaultValue={data?.ref_crista} options={[
           { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
         ]} />
-        <Field label={d.s9.ref_email} name="ref_email" type="email" defaultValue={data?.ref_email} required />
+        <Field label={d.s9.ref_email} name="ref_email" type="email" configKey="s9.ref_email" defaultValue={data?.ref_email} required />
         <InternationalPhoneField phoneName="ref_telefone" countryName="ref_telefone_country"
           label={d.s9.ref_telefone} defaultCountryIso="BR"
           defaultPhone={data?.ref_telefone} required />
@@ -988,7 +1011,7 @@ function S10Historico({ data }: { data?: Record<string, string> }) {
       <SectionTitle number={d.s10.section} title={d.s10.title} />
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
-          <Select label={d.s10.teve_historico} name="teve_historico"
+          <Select label={d.s10.teve_historico} name="teve_historico" configKey="s10.teve_historico"
             required defaultValue={data?.teve_historico}
             options={[
               { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
@@ -1083,7 +1106,7 @@ function S11Espiritual({ data }: { data?: Record<string, string> }) {
           defaultValue={data?.visao_missoes} rows={3} />
 
         <div className="mt-2 border-t pt-3"><p className="text-sm font-semibold text-gray-700">{d.s11.emocional_section}</p></div>
-        <Select label={d.s11.psicologico} name="psicologico" required
+        <Select label={d.s11.psicologico} name="psicologico" required configKey="s11.psicologico"
           defaultValue={data?.psicologico}
           options={[
             { value: 'sim_faz', label: d.s11.psico_sim_faz },
@@ -1091,7 +1114,7 @@ function S11Espiritual({ data }: { data?: Record<string, string> }) {
             { value: 'nao', label: d.s11.psico_nao },
           ]} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFezPsico(e.target.value !== 'nao')} />
         {fezPsico && (
-          <TextArea label={d.s11.diagnostico_emocional}
+          <TextArea label={d.s11.diagnostico_emocional} configKey="s11.diagnostico_emocional"
             name="diagnostico_emocional" defaultValue={data?.diagnostico_emocional} rows={3} />
         )}
         <Select label={d.s11.acompanhamento_pastoral} name="acompanhamento_pastoral"
@@ -1101,15 +1124,15 @@ function S11Espiritual({ data }: { data?: Record<string, string> }) {
           ]} />
 
         <div className="mt-2 border-t pt-3"><p className="text-sm font-semibold text-gray-700">{d.s11.recuperacao_section}</p></div>
-        <Select label={d.s11.recuperacao} name="recuperacao"
+        <Select label={d.s11.recuperacao} name="recuperacao" configKey="s11.recuperacao"
           defaultValue={data?.recuperacao}
           options={[
             { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
           ]} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFezRecup(e.target.value === 'sim')} />
         {fezRecup && <>
-          <Field label={d.s11.recuperacao_detalhes} name="recuperacao_detalhes"
+          <Field label={d.s11.recuperacao_detalhes} name="recuperacao_detalhes" configKey="s11.recuperacao_detalhes"
             defaultValue={data?.recuperacao_detalhes} />
-          <TextArea label={d.s11.recuperacao_hoje} name="recuperacao_hoje"
+          <TextArea label={d.s11.recuperacao_hoje} name="recuperacao_hoje" configKey="s11.recuperacao_hoje"
             defaultValue={data?.recuperacao_hoje} rows={3} />
         </>}
       </div>
@@ -1126,18 +1149,18 @@ function S12Saude({ data }: { data?: Record<string, string> }) {
       <SectionTitle number={d.s12.section} title={d.s12.title} />
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
-          <TextArea label={d.s12.saude_geral} name="saude_geral"
+          <TextArea label={d.s12.saude_geral} name="saude_geral" configKey="s12.saude_geral"
             defaultValue={data?.saude_geral} rows={3} />
         </div>
-        <Field label={d.s12.alergias} name="alergias" defaultValue={data?.alergias} />
-        <Field label={d.s12.restricao_alimentar} name="restricao_alimentar" defaultValue={data?.restricao_alimentar} />
-        <Field label={d.s12.limitacao_fisica} name="limitacao_fisica" defaultValue={data?.limitacao_fisica} />
+        <Field label={d.s12.alergias} name="alergias" configKey="s12.alergias" defaultValue={data?.alergias} />
+        <Field label={d.s12.restricao_alimentar} name="restricao_alimentar" configKey="s12.restricao_alimentar" defaultValue={data?.restricao_alimentar} />
+        <Field label={d.s12.limitacao_fisica} name="limitacao_fisica" configKey="s12.limitacao_fisica" defaultValue={data?.limitacao_fisica} />
         <H id="s12.cirurgias"><div className="sm:col-span-2">
-          <Field label={d.s12.cirurgias} name="cirurgias" defaultValue={data?.cirurgias} />
+          <Field label={d.s12.cirurgias} name="cirurgias" configKey="s12.cirurgias" defaultValue={data?.cirurgias} />
         </div></H>
 
         <H id="s12.usa_medicamento"><div className="sm:col-span-2 mt-2 border-t pt-3">
-          <Select label={d.s12.usa_medicamento} name="usa_medicamento" required
+          <Select label={d.s12.usa_medicamento} name="usa_medicamento" required configKey="s12.usa_medicamento"
             defaultValue={data?.usa_medicamento}
             options={[
               { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
@@ -1153,7 +1176,7 @@ function S12Saude({ data }: { data?: Record<string, string> }) {
         </>}
 
         <H id="s12.plano_saude"><div className="sm:col-span-2 mt-2 border-t pt-3">
-          <Select label={d.s12.plano_saude} name="plano_saude" defaultValue={data?.plano_saude} options={[
+          <Select label={d.s12.plano_saude} name="plano_saude" configKey="s12.plano_saude" defaultValue={data?.plano_saude} options={[
             { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
           ]} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setPlanoSaude(e.target.value === 'sim')} />
         </div></H>
@@ -1177,7 +1200,7 @@ function S13Legal({ data }: { data?: Record<string, string> }) {
       <SectionTitle number={d.s13.section} title={d.s13.title} />
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
-          <Select label={d.s13.antecedente} name="antecedente" required
+          <Select label={d.s13.antecedente} name="antecedente" required configKey="s13.antecedente"
             defaultValue={data?.antecedente}
             options={[
               { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
@@ -1190,14 +1213,14 @@ function S13Legal({ data }: { data?: Record<string, string> }) {
           </div>
         )}
         <div className="sm:col-span-2">
-          <Select label={d.s13.pendencia_juridica} name="pendencia_juridica" required
+          <Select label={d.s13.pendencia_juridica} name="pendencia_juridica" required configKey="s13.pendencia_juridica"
             defaultValue={data?.pendencia_juridica}
             options={[
               { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
             ]} />
         </div>
         <div className="sm:col-span-2">
-          <Select label={d.s13.restricao_legal}
+          <Select label={d.s13.restricao_legal} configKey="s13.restricao_legal"
             name="restricao_legal" defaultValue={data?.restricao_legal}
             options={[
               { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
@@ -1227,7 +1250,7 @@ function S14Financeiro({ data }: { data?: Record<string, string> }) {
       <SectionTitle number={d.s14.section} title={d.s14.title} />
       <InfoBox>{d.s14.infobox}</InfoBox>
       <div className="grid sm:grid-cols-2 gap-4">
-        <Select label={d.s14.apoio_tipo} name="apoio_tipo" required
+        <Select label={d.s14.apoio_tipo} name="apoio_tipo" required configKey="s14.apoio_tipo"
           defaultValue={data?.apoio_tipo}
           options={[
             { value: 'proprio', label: d.s14.at_proprio },
@@ -1236,21 +1259,21 @@ function S14Financeiro({ data }: { data?: Record<string, string> }) {
             { value: 'mantenedores', label: d.s14.at_mantenedores },
             { value: 'misto', label: d.s14.at_misto },
           ]} />
-        <Select label={d.s14.ajuda_igreja} name="ajuda_igreja"
+        <Select label={d.s14.ajuda_igreja} name="ajuda_igreja" configKey="s14.ajuda_igreja"
           defaultValue={data?.ajuda_igreja}
           options={[
             { value: 'sim', label: d.s14.ai_sim },
             { value: 'nao', label: d.s14.ai_nao },
             { value: 'em_conversa', label: d.s14.ai_em_conversa },
           ]} />
-        <Select label={d.s14.pagar_tudo} name="pagar_tudo" required
+        <Select label={d.s14.pagar_tudo} name="pagar_tudo" required configKey="s14.pagar_tudo"
           defaultValue={data?.pagar_tudo}
           options={[
             { value: 'sim', label: d.s14.pt_sim },
             { value: 'parcialmente', label: d.s14.pt_parcialmente },
             { value: 'nao', label: d.s14.pt_nao },
           ]} />
-        <Select label={d.s14.mantenedores} name="mantenedores"
+        <Select label={d.s14.mantenedores} name="mantenedores" configKey="s14.mantenedores"
           defaultValue={data?.mantenedores}
           options={[
             { value: 'sim_ja_iniciou', label: d.s14.mt_sim_ja },
@@ -1258,11 +1281,11 @@ function S14Financeiro({ data }: { data?: Record<string, string> }) {
             { value: 'nao', label: d.s14.mt_nao },
           ]} />
         <div className="sm:col-span-2">
-          <TextArea label={d.s14.situacao_financeira}
+          <TextArea label={d.s14.situacao_financeira} configKey="s14.situacao_financeira"
             name="situacao_financeira" defaultValue={data?.situacao_financeira} required rows={4} />
         </div>
         <div className="sm:col-span-2">
-          <Select label={d.s14.dividas} name="dividas" defaultValue={data?.dividas} options={[
+          <Select label={d.s14.dividas} name="dividas" configKey="s14.dividas" defaultValue={data?.dividas} options={[
             { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
           ]} />
         </div>
@@ -1524,10 +1547,11 @@ function SubmittedScreen({ slug, applicationId, schoolName, hiddenSet, d }: {
 type SectionDef = { id: number; component: React.ReactNode }
 
 export function FormularioInscricao({
-  slug, token, applicationId, schoolName, orgName, className, schoolType, prefill, initialSection = 1, initialData, hiddenFields, paymentInfo, initialLang, printMode, documentUrls,
+  slug, token, applicationId, schoolName, orgName, className, schoolType, prefill, initialSection = 1, initialData, hiddenFields, requiredOverrides, paymentInfo, initialLang, printMode, documentUrls,
   canExit = true,
 }: Props) {
   const hiddenSet = useMemo(() => new Set(hiddenFields ?? []), [hiddenFields])
+  const requiredMap = useMemo(() => requiredOverrides ?? {}, [requiredOverrides])
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -1621,6 +1645,7 @@ export function FormularioInscricao({
     return (
       <DictCtx.Provider value={d}>
       <HiddenCtx.Provider value={hiddenSet}>
+      <RequiredCtx.Provider value={requiredMap}>
       <HiddenStyles />
       <div>
         <div className="print:hidden mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
@@ -1669,6 +1694,7 @@ export function FormularioInscricao({
           </div>
         )}
       </div>
+      </RequiredCtx.Provider>
       </HiddenCtx.Provider>
       </DictCtx.Provider>
     )
@@ -1865,6 +1891,7 @@ export function FormularioInscricao({
   return (
     <DictCtx.Provider value={d}>
     <HiddenCtx.Provider value={hiddenSet}>
+    <RequiredCtx.Provider value={requiredMap}>
     <HiddenStyles />
     <div>
       <div className="sticky top-0 z-20 -mx-4 sm:-mx-6 md:-mx-8 -mt-4 sm:-mt-6 md:-mt-8 px-4 sm:px-6 md:px-8 pt-4 sm:pt-6 md:pt-8 pb-3 bg-white/95 backdrop-blur-sm rounded-t-2xl border-b border-gray-100 mb-6">
@@ -1948,6 +1975,7 @@ export function FormularioInscricao({
         </div>
       </div>
     </div>
+    </RequiredCtx.Provider>
     </HiddenCtx.Provider>
     </DictCtx.Provider>
   )
