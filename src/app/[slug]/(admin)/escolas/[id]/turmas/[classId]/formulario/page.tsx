@@ -7,8 +7,7 @@ import Link from 'next/link'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { isManagementRole } from '@/lib/auth/permissions'
 import { getSchoolLink } from '@/lib/auth/unit-access'
-import { CONFIGURAVEL, resolveFormConfig, listFormTemplates, type FormConfig } from '@/lib/school/formConfig'
-import { SCHOOL_TYPES } from '@/lib/schools'
+import { CONFIGURAVEL, FORM_TEMPLATE_NAMES, resolveFormConfig, listFormTemplates, type FormConfig } from '@/lib/school/formConfig'
 import { SubmitButton } from '@/components/ui/SubmitButton'
 import { FormConfigFields } from '@/components/admin/FormConfigFields'
 
@@ -116,8 +115,7 @@ export default async function TurmaFormularioConfigPage({ params, searchParams }
     if (!isMgmt(actionRole)) return
 
     const name = (fd.get('template_name') as string | null)?.trim()
-    if (!name) return
-    const defaultForType = (fd.get('default_for_type') as string | null)?.trim() || null
+    if (!name || !(FORM_TEMPLATE_NAMES as readonly string[]).includes(name)) return
 
     const todosOsCampos: string[] = []
     for (const secao of CONFIGURAVEL) {
@@ -137,20 +135,13 @@ export default async function TurmaFormularioConfigPage({ params, searchParams }
       }
     }
 
-    if (defaultForType) {
-      await db.from('school_form_templates')
-        .update({ default_for_school_type: null })
-        .eq('organization_id', orgRow.id)
-        .eq('default_for_school_type', defaultForType)
-    }
-
     await db.from('school_form_templates')
       .upsert(
-        { organization_id: orgRow.id, name, form_config: { hidden_fields: hiddenFieldsToSave, required_overrides: requiredOverridesToSave }, default_for_school_type: defaultForType, created_by: actionUser.id },
+        { organization_id: orgRow.id, name, form_config: { hidden_fields: hiddenFieldsToSave, required_overrides: requiredOverridesToSave }, created_by: actionUser.id },
         { onConflict: 'organization_id,name' },
       )
 
-    redirect(`/${slug}/escolas/${id}/turmas/${classId}/formulario?flash_success=${encodeURIComponent(`Modelo "${name}" salvo.`)}`)
+    redirect(`/${slug}/escolas/${id}/turmas/${classId}/formulario?flash_success=${encodeURIComponent(`Modelo "${name}" atualizado.`)}`)
   }
 
   const totalCampos = CONFIGURAVEL.reduce((acc, s) => acc + s.campos.length, 0)
@@ -213,17 +204,14 @@ export default async function TurmaFormularioConfigPage({ params, searchParams }
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <h3 className="font-semibold text-gray-900 text-sm mb-1">Salvar como modelo</h3>
               <p className="text-xs text-gray-400 mb-3">
-                Guarda os campos marcados acima como um modelo reaproveitável — qualquer escola ou
-                turma da organização vai poder aplicá-lo depois. Usar o nome de um modelo já
-                existente sobrescreve ele.
+                Atualiza um dos 4 modelos padrão da organização com os campos marcados acima —
+                qualquer escola ou turma vai usar essa versão nova a partir de agora.
               </p>
               <div className="flex flex-col sm:flex-row gap-2">
-                <input name="template_name" placeholder="Nome do modelo (ex: Seminário Nacional)"
-                  className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                <select name="default_for_type" defaultValue=""
-                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
-                  <option value="">Não definir como padrão</option>
-                  {SCHOOL_TYPES.map(t => <option key={t.value} value={t.value}>Padrão de: {t.label}</option>)}
+                <select name="template_name" defaultValue="" required
+                  className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
+                  <option value="" disabled>Qual modelo atualizar?</option>
+                  {FORM_TEMPLATE_NAMES.map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
                 <SubmitButton formAction={salvarComoModelo} pendingText="Salvando modelo…"
                   className="px-4 py-2 text-sm font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 disabled:opacity-50 transition-colors whitespace-nowrap">

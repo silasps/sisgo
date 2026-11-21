@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import type { ConfigField, FormConfig } from '@/lib/school/formConfig'
+import { sortTemplatesByCanonicalOrder, type ConfigField, type FormConfig } from '@/lib/school/formConfig'
 
-type ConfigSection = { secao: string; key: string; titulo: string; campos: ConfigField[] }
+type ConfigSection = { secao: string; key: string; titulo: string; titulo_evento?: string; campos: ConfigField[] }
 type Template = { id: string; name: string; form_config: FormConfig }
 
 function buildActive(sections: ConfigSection[], hiddenFields: string[]): Record<string, boolean> {
@@ -99,6 +99,19 @@ export function FormConfigFields({
   }
 
   const appliedTemplate = appliedTemplateId ? templates.find(t => t.id === appliedTemplateId) : null
+  const sortedTemplates = useMemo(() => sortTemplatesByCanonicalOrder(templates), [templates])
+
+  // Modelo "Evento" tem redação própria pra alguns rótulos (ex: "Como
+  // conheceu o evento" em vez de "...a escola") — detecta se os campos
+  // ativos AGORA batem exatamente com o modelo Evento, pra trocar o texto
+  // já na própria tela de edição, não só no formulário público.
+  const isEventoStyle = useMemo(() => {
+    const tpl = templates.find(t => t.name === 'Evento')
+    if (!tpl) return false
+    const tHidden = new Set(tpl.form_config.hidden_fields ?? [])
+    const activeHiddenSet = new Set(Object.keys(active).filter(k => !active[k]))
+    return tHidden.size === activeHiddenSet.size && [...tHidden].every(k => activeHiddenSet.has(k))
+  }, [templates, active])
 
   const statusBanner = isDirty ? (
     <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -126,7 +139,7 @@ export function FormConfigFields({
             Só muda os campos abaixo pra você revisar — nada é salvo até clicar em &quot;Salvar configuração&quot;.
           </p>
           <div className="flex flex-wrap gap-2">
-            {templates.map(t => (
+            {sortedTemplates.map(t => (
               <Link key={t.id} href={`${baseHref}?template=${t.id}`}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
                   appliedTemplateId === t.id
@@ -146,7 +159,9 @@ export function FormConfigFields({
           <details key={secao.key} className="group bg-white rounded-xl border border-gray-200">
             <summary className="flex items-center justify-between px-5 py-3.5 cursor-pointer select-none list-none hover:bg-gray-50 sticky top-16 z-[5] bg-white rounded-xl group-open:rounded-b-none group-open:border-b group-open:border-gray-100">
               <div className="flex items-center gap-2">
-                <h3 className="font-semibold text-gray-900 text-sm">{secao.titulo}</h3>
+                <h3 className="font-semibold text-gray-900 text-sm">
+                  {isEventoStyle && secao.titulo_evento ? secao.titulo_evento : secao.titulo}
+                </h3>
                 <span className="text-xs text-gray-400">{ativos}/{secao.campos.length}</span>
               </div>
               <span className="text-gray-400 text-xs transition-transform group-open:rotate-180">▼</span>
@@ -160,7 +175,7 @@ export function FormConfigFields({
                     <label className="flex items-start justify-between gap-3 px-5 py-3 cursor-pointer hover:bg-gray-50 transition-colors">
                       <span className="min-w-0">
                         <span className={`text-sm block ${ativo ? 'text-gray-800' : 'text-gray-400 line-through'}`}>
-                          {campo.label}
+                          {isEventoStyle && campo.label_evento ? campo.label_evento : campo.label}
                         </span>
                         {campo.description && (
                           <span className="text-xs text-gray-400 block mt-0.5">{campo.description}</span>

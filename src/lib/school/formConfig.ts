@@ -22,6 +22,11 @@ export type FormTemplate = {
 export type ConfigField = {
   name: string
   label: string
+  // Variante do rótulo pra quando o modelo em uso é "Evento" (ver
+  // FORM_TEMPLATE_NAMES) — espelha o mesmo texto que já varia no
+  // formulário público (src/lib/i18n/forms, chaves "*_evento"). Ausente =
+  // usa `label` mesmo em formulário de evento.
+  label_evento?: string
   // Explica pro admin o que a pergunta pede, já que o rótulo sozinho às
   // vezes não deixa claro (ex: "Sobre você" é uma seção, não um campo).
   description?: string
@@ -41,7 +46,29 @@ export type ConfigField = {
 // seção — usado tanto na tela de configurar formulário da escola quanto da
 // turma. Campos fora dessa lista (ex: s1.nome, s15, s16) são sempre
 // exibidos e não podem ser desativados.
-export const CONFIGURAVEL: { secao: string; key: string; titulo: string; campos: ConfigField[] }[] = [
+// Nomes fixos dos 4 modelos reaproveitáveis — não é mais texto livre (ver
+// "Salvar como modelo" nas páginas de formulário). "Escola" cobre os
+// school_type que não são eted/seminario/evento (segundo_nivel, outro).
+export const FORM_TEMPLATE_NAMES = ['ETED', 'Seminário', 'Evento', 'Escola'] as const
+
+const TEMPLATE_NAME_BY_SCHOOL_TYPE: Record<string, string> = {
+  eted: 'ETED',
+  seminario: 'Seminário',
+  evento: 'Evento',
+}
+
+export function sortTemplatesByCanonicalOrder<T extends { name: string }>(templates: T[]): T[] {
+  return [...templates].sort((a, b) => {
+    const ia = FORM_TEMPLATE_NAMES.indexOf(a.name as (typeof FORM_TEMPLATE_NAMES)[number])
+    const ib = FORM_TEMPLATE_NAMES.indexOf(b.name as (typeof FORM_TEMPLATE_NAMES)[number])
+    if (ia === -1 && ib === -1) return a.name.localeCompare(b.name)
+    if (ia === -1) return 1
+    if (ib === -1) return -1
+    return ia - ib
+  })
+}
+
+export const CONFIGURAVEL: { secao: string; key: string; titulo: string; titulo_evento?: string; campos: ConfigField[] }[] = [
   { secao: 's3', key: 'termo_compromisso', titulo: 'Termo inicial de compromisso', campos: [
     { name: 'termo_1', label: '1. Responsabilidade financeira', description: 'Candidato declara estar ciente das responsabilidades financeiras da inscrição.' },
     { name: 'termo_2', label: '2. Concordância com pagamento dos valores', description: 'Candidato concorda em pagar os valores informados pela organização.' },
@@ -54,8 +81,8 @@ export const CONFIGURAVEL: { secao: string; key: string; titulo: string; campos:
     { name: 'termo_9', label: '9. Relacionamentos amorosos sujeitos à orientação da liderança', description: 'Candidato está ciente de que relacionamentos iniciados no período podem ter orientação da liderança.' },
     { name: 'termo_10', label: '10. Declaração de veracidade das informações', description: 'Candidato declara que vai preencher o formulário com informações verdadeiras.' },
   ]},
-  { secao: 's4', key: 'escola_interesse', titulo: 'Escola de interesse', campos: [
-    { name: 'como_conheceu', label: 'Como conheceu a escola', description: 'Pergunta de múltipla escolha: indicação, redes sociais, site, evento, igreja ou outro.', requiredByDefault: true },
+  { secao: 's4', key: 'escola_interesse', titulo: 'Escola de interesse', titulo_evento: 'Evento de interesse', campos: [
+    { name: 'como_conheceu', label: 'Como conheceu a escola', label_evento: 'Como conheceu o evento', description: 'Pergunta de múltipla escolha: indicação, redes sociais, site, evento, igreja ou outro.', requiredByDefault: true },
     { name: 'como_conheceu_jocum', label: 'Como conheceu a organização', description: 'Campo de texto livre sobre como conheceu a organização.', requiredByDefault: false },
     { name: 'conversou_equipe', label: 'Conversou com alguém da escola?', description: 'Pergunta sim/não se já falou com a equipe antes de se inscrever.', requiredByDefault: true },
     { name: 'conversou_com_quem', label: 'Com quem conversou', description: 'Campo de texto livre pra dizer com quem da equipe conversou.', requiredByDefault: false },
@@ -200,11 +227,12 @@ export async function listFormTemplates(db: Db, organizationId: string): Promise
 }
 
 export async function getDefaultTemplateForType(db: Db, organizationId: string, schoolType: string): Promise<FormTemplate | null> {
+  const name = TEMPLATE_NAME_BY_SCHOOL_TYPE[schoolType] ?? 'Escola'
   const { data } = await db
     .from('school_form_templates')
     .select('id, name, form_config, default_for_school_type')
     .eq('organization_id', organizationId)
-    .eq('default_for_school_type', schoolType)
+    .eq('name', name)
     .maybeSingle()
   return (data as unknown as FormTemplate | null) ?? null
 }
