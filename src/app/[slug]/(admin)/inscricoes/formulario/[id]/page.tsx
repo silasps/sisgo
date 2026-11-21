@@ -13,6 +13,7 @@ import { stagesFromFlags } from '@/components/inscricoes/pipelineStages'
 import { AvancarEtapaControl, AdvanceHistoryList } from '@/components/inscricoes/AvancarEtapaControl'
 import { getStageAdvances, resolveAdvancerNames } from '@/lib/pipelineStageAdvance'
 import { avancarEtapaAluno, reenviarLinkFormulario } from './actions'
+import { resolveFormConfig, type FormConfig } from '@/lib/school/formConfig'
 import { RefreshOnFocus } from '@/components/ui/RefreshOnFocus'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
@@ -413,7 +414,7 @@ export default async function FormularioViewerPage({ params }: Props) {
       id, status, form_data, created_at, edited_by, edited_at,
       organization_id, school_id,
       schools(name, form_config),
-      school_classes(name),
+      school_classes(name, form_config),
       school_interest_forms(full_name, email, phone)
     `)
     .eq('id', id)
@@ -430,11 +431,12 @@ export default async function FormularioViewerPage({ params }: Props) {
   const formData = (app.form_data as Record<string, unknown>) ?? {}
   const isExterno = (formData as Record<string, unknown>).source === 'externo'
     || (Object.keys(formData).every(k => ['source', 'prefill'].includes(k)))
-  const escola = app.schools as unknown as { name: string; form_config: { hidden_fields?: string[]; payment_info?: string } | null } | null
-  const hiddenFieldsSet = new Set(escola?.form_config?.hidden_fields ?? [])
+  const escola = app.schools as unknown as { name: string; form_config: FormConfig | null } | null
+  const turmaRow = app.school_classes as unknown as { name: string; form_config: FormConfig | null } | null
+  const { hiddenFields, paymentInfo: schoolPaymentInfo } = resolveFormConfig(escola?.form_config, turmaRow?.form_config)
+  const hiddenFieldsSet = new Set(hiddenFields)
   const showPastorRef = !hiddenFieldsSet.has('s8.pastor_bloco')
   const showAmigoRef = !hiddenFieldsSet.has('s9.oculto')
-  const schoolPaymentInfo = escola?.form_config?.payment_info ?? null
 
   // Formulário "incompleto": ou nunca chegou a ser enviado (ainda rascunho —
   // inclui os casos criados manualmente pra recuperar candidatos presos na

@@ -64,36 +64,34 @@ export default async function NovaEscolaPage({ params, searchParams }: Props) {
 
     const schoolType = formData.get('school_type') as string
 
-    // Seminário é bem mais curto que uma escola normal — já nasce com o
-    // formulário enxuto: sem bloco de pastor, sem etapa de referência de
-    // amigo, sem espiritual/emocional, legal ou financeiro (vetting de
-    // longo prazo, não cabe num workshop de dias). Fica: identificação,
-    // documentos, igreja (básico), histórico de outra base, saúde física.
-    // Evento é ainda mais enxuto (só alguns dias, não um curso) — some
-    // também histórico pessoal e igreja/ministério, e dados de família que
-    // não servem pra classificar cota por categoria (mantém só "tem
-    // filhos?", usado em homens/mulheres/casal sem filhos — ver
-    // classifyApplicationCategory). O admin ainda pode reverter campo a
-    // campo em Configurar formulário.
-    const EVENTO_HIDDEN = [
-      's3.termo_8', 's3.termo_9',
-      's4.motivacao', 's4.conversou_equipe', 's4.conversou_com_quem',
-      's5.estudando', 's5.trabalha',
-      's5.servico_militar', 's5.passaporte', 's5.experiencias', 's5.habilidades', 's5.redes_bloco',
-      's6.oculto',
-      's7.situacao_familiar', 's7.filhos_dados', 's7.filhos_virao', 's7.filhos_ficam_com',
-      's8.pastor_bloco', 's8.tem_ministerio', 's8.ministerio_qual', 's8.ministerio_tempo',
-      's8.tem_lideranca', 's8.lideranca_cargo', 's8.responsabilidades_igreja',
-      's9.oculto',
-      's10.teve_historico', 's10.hist_qual', 's10.hist_org', 's10.hist_duracao', 's10.hist_quando',
-      's10.hist_lider_nome', 's10.hist_lider_email', 's10.hist_lider_tel',
-      's11.oculto', 's13.oculto', 's14.oculto',
-    ]
-    const formConfig = schoolType === 'seminario'
-      ? { hidden_fields: ['s8.pastor_bloco', 's9.oculto', 's11.oculto', 's13.oculto', 's14.oculto'] }
-      : schoolType === 'evento'
-      ? { hidden_fields: EVENTO_HIDDEN }
-      : {}
+    // Campos do formulário vêm do modelo padrão da organização pra esse
+    // tipo (ver src/lib/school/formConfig.ts e tabela
+    // school_form_templates — editável em Escolas/Turmas → Configurar
+    // formulário → "Salvar como modelo"). Esses literais só entram em
+    // jogo como último recurso, pra uma organização nova que ainda não
+    // foi semeada com os modelos padrão (migration 170).
+    const FALLBACK_HIDDEN: Record<string, string[]> = {
+      seminario: ['s8.pastor_bloco', 's9.oculto', 's11.oculto', 's13.oculto', 's14.oculto'],
+      evento: [
+        's3.termo_8', 's3.termo_9',
+        's4.motivacao', 's4.conversou_equipe', 's4.conversou_com_quem',
+        's5.estudando', 's5.trabalha',
+        's5.servico_militar', 's5.passaporte', 's5.experiencias', 's5.habilidades', 's5.redes_bloco',
+        's6.oculto',
+        's7.situacao_familiar', 's7.filhos_dados', 's7.filhos_virao', 's7.filhos_ficam_com',
+        's8.pastor_bloco', 's8.tem_ministerio', 's8.ministerio_qual', 's8.ministerio_tempo',
+        's8.tem_lideranca', 's8.lideranca_cargo', 's8.responsabilidades_igreja',
+        's9.oculto',
+        's10.teve_historico', 's10.hist_qual', 's10.hist_org', 's10.hist_duracao', 's10.hist_quando',
+        's10.hist_lider_nome', 's10.hist_lider_email', 's10.hist_lider_tel',
+        's11.oculto', 's13.oculto', 's14.oculto',
+      ],
+    }
+    const { getDefaultTemplateForType } = await import('@/lib/school/formConfig')
+    const defaultTemplate = await getDefaultTemplateForType(sb, orgRow.id, schoolType)
+    const formConfig = defaultTemplate
+      ? defaultTemplate.form_config
+      : { hidden_fields: FALLBACK_HIDDEN[schoolType] ?? [] }
 
     // Se veio de "Criar escola vinculada" (/ministerios/[id]), confirma que
     // o ministério é desta mesma organização antes de vincular — não confia

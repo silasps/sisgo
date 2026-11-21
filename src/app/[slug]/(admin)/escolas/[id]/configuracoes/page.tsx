@@ -346,6 +346,14 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
     'use server'
     const { createAdminClient: mkAdmin } = await import('@/lib/supabase/admin')
     const sb = mkAdmin()
+
+    // A turma já nasce com o default atual da escola (não o modelo
+    // original, caso a escola já tenha se desviado dele) — fica como
+    // pendência pra alguém revisar/confirmar em Configurar formulário
+    // (ver form_config_confirmed e o banner em turmas/[classId]/page.tsx).
+    const { data: schoolRow } = await sb.from('schools').select('form_config').eq('id', id).single()
+    const schoolHiddenFields = (schoolRow?.form_config as { hidden_fields?: string[] } | null)?.hidden_fields ?? []
+
     const { data: newClass, error } = await sb.from('school_classes').insert({
       school_id: id,
       name: formData.get('name') as string,
@@ -355,6 +363,8 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
       ends_at: (formData.get('ends_at') as string) || null,
       max_students: formData.get('max_students') ? Number(formData.get('max_students')) : null,
       active: true,
+      form_config: { hidden_fields: schoolHiddenFields },
+      form_config_confirmed: false,
     }).select('id').single()
     if (error || !newClass) redirect(`/${slug}/escolas/${id}`)
     await triggerSiteRevalidation(org!.id, 'events')

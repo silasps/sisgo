@@ -4,11 +4,16 @@ import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { isManagementRole } from '@/lib/auth/permissions'
 import { getSchoolLink } from '@/lib/auth/unit-access'
 import { FormularioInscricao } from '@/app/[slug]/formulario/[token]/FormularioInscricao'
+import { resolveFormConfig, type FormConfig } from '@/lib/school/formConfig'
 
-type Props = { params: Promise<{ slug: string; id: string }> }
+type Props = {
+  params: Promise<{ slug: string; id: string }>
+  searchParams: Promise<{ classId?: string }>
+}
 
-export default async function VisualizarFormularioPage({ params }: Props) {
+export default async function VisualizarFormularioPage({ params, searchParams }: Props) {
   const { slug, id } = await params
+  const { classId } = await searchParams
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -32,7 +37,17 @@ export default async function VisualizarFormularioPage({ params }: Props) {
     .single()
   if (!school) notFound()
 
-  const config = (school.form_config as { hidden_fields?: string[]; payment_info?: string }) ?? {}
+  let classConfig: FormConfig | null = null
+  if (classId) {
+    const { data: turma } = await supabase
+      .from('school_classes')
+      .select('form_config')
+      .eq('id', classId)
+      .eq('school_id', id)
+      .maybeSingle()
+    classConfig = (turma?.form_config as FormConfig | null) ?? null
+  }
+  const { hiddenFields, paymentInfo } = resolveFormConfig(school.form_config as FormConfig, classConfig)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
@@ -54,8 +69,8 @@ export default async function VisualizarFormularioPage({ params }: Props) {
             orgName={org.name}
             schoolType={(school as unknown as { school_type: string | null }).school_type}
             initialData={{}}
-            hiddenFields={config.hidden_fields ?? []}
-            paymentInfo={config.payment_info ?? null}
+            hiddenFields={hiddenFields}
+            paymentInfo={paymentInfo}
             initialLang="pt"
             printMode
           />

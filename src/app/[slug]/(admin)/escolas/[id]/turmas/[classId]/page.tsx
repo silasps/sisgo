@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
+import { AlertTriangle } from 'lucide-react'
 import { AtividadesExtrasSection } from './AtividadesExtrasSection'
 import { DirectEnrollLinkBox } from './DirectEnrollLinkBox'
 import { CurrencyField } from '@/components/ui/CurrencyField'
@@ -122,6 +123,7 @@ export default async function EditarTurmaPage({ params }: Props) {
 
   const toDateInput = (v: string | null) => v ? v.slice(0, 10) : ''
   const schoolSlug = (escola as unknown as { slug: string | null }).slug
+  const formConfigConfirmed = (turma as unknown as { form_config_confirmed: boolean }).form_config_confirmed
 
   return (
     <>
@@ -135,7 +137,28 @@ export default async function EditarTurmaPage({ params }: Props) {
           <span className="text-gray-600">{turma.name}</span>
         </nav>
 
+        {!formConfigConfirmed && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 space-y-1.5">
+            <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 uppercase tracking-wide">
+              <AlertTriangle size={14} className="flex-shrink-0" /> Cadastro incompleto
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-amber-700">
+              <span>O formulário desta turma ainda não foi revisado — está usando o padrão da escola.</span>
+              <Link href={`/${slug}/escolas/${id}/turmas/${classId}/formulario`}
+                className="flex-shrink-0 text-xs font-semibold text-amber-700 hover:text-amber-900 underline underline-offset-2">
+                Configurar formulário →
+              </Link>
+            </div>
+          </div>
+        )}
+
         <div className="flex gap-2 flex-wrap">
+          <Link
+            href={`/${slug}/escolas/${id}/turmas/${classId}/formulario`}
+            className="px-3 py-1.5 text-xs font-medium text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors"
+          >
+            Formulário →
+          </Link>
           <Link
             href={`/${slug}/escolas/${id}/turmas/${classId}/alunos`}
             className="px-3 py-1.5 text-xs font-medium text-brand-600 border border-brand-200 rounded-lg hover:bg-brand-50 transition-colors"

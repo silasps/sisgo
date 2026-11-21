@@ -5,6 +5,7 @@ import { FormularioInscricao } from './FormularioInscricao'
 import { CheckCircle2 } from 'lucide-react'
 import { getFormDict, normalizeLang } from '@/lib/i18n/forms'
 import { PROFILE_COMPLETION_BLOCK_AFTER } from '@/lib/profile-completion'
+import { resolveFormConfig, type FormConfig } from '@/lib/school/formConfig'
 
 type Props = {
   params: Promise<{ slug: string; token: string }>
@@ -22,8 +23,8 @@ export default async function FormularioPage({ params, searchParams }: Props) {
     .select(`
       id, status, current_section, form_data, token_expires_at,
       organization_id, reminder_skips, person_id,
-      schools(id, name, organization_id, school_type),
-      school_classes(name),
+      schools(id, name, organization_id, school_type, form_config),
+      school_classes(name, form_config),
       school_interest_forms(full_name, email, phone, language)
     `)
     .eq('token', token)
@@ -120,22 +121,12 @@ export default async function FormularioPage({ params, searchParams }: Props) {
     )
   }
 
-  const escola = app.schools as unknown as { id: string; name: string; organization_id: string; school_type: string | null } | null
-  const turma  = app.school_classes as unknown as { name: string } | null
+  const escola = app.schools as unknown as { id: string; name: string; organization_id: string; school_type: string | null; form_config: FormConfig | null } | null
+  const turma  = app.school_classes as unknown as { name: string; form_config: FormConfig | null } | null
 
-  // Busca config de campos da escola
-  const hiddenFields: string[] = []
-  let paymentInfo: string | null = null
-  if (escola?.id) {
-    const { data: schoolConfig } = await sb
-      .from('schools')
-      .select('form_config')
-      .eq('id', escola.id)
-      .single()
-    const cfg = (schoolConfig?.form_config as { hidden_fields?: string[]; payment_info?: string }) ?? {}
-    hiddenFields.push(...(cfg.hidden_fields ?? []))
-    paymentInfo = cfg.payment_info ?? null
-  }
+  // Config da turma (se já tiver sido revisada) vence sobre o default da
+  // escola — ver resolveFormConfig.
+  const { hiddenFields, paymentInfo } = resolveFormConfig(escola?.form_config, turma?.form_config)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">

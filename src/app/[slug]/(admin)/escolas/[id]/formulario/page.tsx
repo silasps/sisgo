@@ -7,131 +7,14 @@ import Link from 'next/link'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { isManagementRole } from '@/lib/auth/permissions'
 import { getSchoolLink } from '@/lib/auth/unit-access'
+import { CONFIGURAVEL, listFormTemplates } from '@/lib/school/formConfig'
+import { SCHOOL_TYPES } from '@/lib/schools'
 
-type Props = { params: Promise<{ slug: string; id: string }> }
+type Props = { params: Promise<{ slug: string; id: string }>; searchParams: Promise<{ template?: string }> }
 
-// Todos os campos configuráveis, agrupados por seção
-const CONFIGURAVEL: { secao: string; key: string; titulo: string; campos: { name: string; label: string }[] }[] = [
-  { secao: 's3', key: 'termo_compromisso', titulo: 'Termo inicial de compromisso', campos: [
-    { name: 'termo_1', label: '1. Responsabilidade financeira' },
-    { name: 'termo_2', label: '2. Concordância com pagamento dos valores' },
-    { name: 'termo_3', label: '3. Sem estorno em caso de desistência/desligamento' },
-    { name: 'termo_4', label: '4. Isenção de responsabilidade da organização por danos' },
-    { name: 'termo_5', label: '5. Submissão aos padrões e rotina da missão' },
-    { name: 'termo_6', label: '6. Consentimento para atendimento médico de emergência' },
-    { name: 'termo_7', label: '7. Proibição de tabaco, álcool e drogas' },
-    { name: 'termo_8', label: '8. Não compartilhar medicamentos' },
-    { name: 'termo_9', label: '9. Relacionamentos amorosos sujeitos à orientação da liderança' },
-    { name: 'termo_10', label: '10. Declaração de veracidade das informações' },
-  ]},
-  { secao: 's4', key: 'escola_interesse', titulo: 'Escola de interesse', campos: [
-    { name: 'como_conheceu', label: 'Como conheceu a escola' },
-    { name: 'como_conheceu_jocum', label: 'Como conheceu a organização' },
-    { name: 'conversou_equipe', label: 'Conversou com alguém da escola?' },
-    { name: 'conversou_com_quem', label: 'Com quem conversou' },
-    { name: 'motivacao', label: 'Motivação' },
-    { name: 'data_chegada', label: 'Data prevista de chegada' },
-    { name: 'horario_chegada', label: 'Horário previsto de chegada' },
-    { name: 'data_saida', label: 'Data prevista de saída' },
-    { name: 'horario_saida', label: 'Horário previsto de saída' },
-    { name: 'base_origem', label: 'De qual base vem' },
-    { name: 'meio_transporte', label: 'Meio de transporte' },
-    { name: 'necessidades_acomodacao', label: 'Necessidades especiais de acomodação' },
-  ]},
-  { secao: 's5', key: 'dados_pessoais', titulo: 'Informações pessoais', campos: [
-    { name: 'estado_civil', label: 'Estado civil' },
-    { name: 'conjuge_nome', label: 'Nome do cônjuge (se casado)' },
-    { name: 'servico_militar', label: 'Serviço militar' },
-    { name: 'passaporte', label: 'Passaporte' },
-    { name: 'rg', label: 'RG' },
-    { name: 'cpf', label: 'CPF' },
-    { name: 'estudando', label: 'Estudando atualmente?' },
-    { name: 'trabalha', label: 'Trabalha atualmente?' },
-    { name: 'experiencias', label: 'Experiências profissionais' },
-    { name: 'habilidades', label: 'Habilidades' },
-    { name: 'endereco_bloco', label: 'Endereço (bloco inteiro)' },
-    { name: 'redes_bloco', label: 'Redes sociais (bloco inteiro)' },
-  ]},
-  { secao: 's6', key: 'historico_pessoal', titulo: 'Histórico pessoal', campos: [
-    { name: 'oculto', label: 'Etapa inteira aparece no formulário (desative pra pular)' },
-    { name: 'sobre_voce', label: 'Sobre você' },
-    { name: 'processo_decisao', label: 'Processo de decisão' },
-    { name: 'expectativas', label: 'Expectativas' },
-    { name: 'motivacoes', label: 'Motivações' },
-    { name: 'responsabilidades', label: 'Responsabilidades assumidas' },
-  ]},
-  { secao: 's7', key: 'familia', titulo: 'Informações familiares', campos: [
-    { name: 'oculto', label: 'Etapa inteira aparece no formulário (desative pra pular)' },
-    { name: 'situacao_familiar', label: 'Situação familiar' },
-    { name: 'tem_filhos', label: 'Tem filhos?' },
-    { name: 'filhos_dados', label: 'Dados dos filhos' },
-    { name: 'filhos_virao', label: 'Filhos virão?' },
-    { name: 'filhos_ficam_com', label: 'Com quem os filhos ficarão' },
-  ]},
-  { secao: 's8', key: 'igreja', titulo: 'Igreja e ministério', campos: [
-    { name: 'tem_ministerio', label: 'Participa de ministério?' },
-    { name: 'ministerio_qual', label: 'Qual ministério' },
-    { name: 'ministerio_tempo', label: 'Tempo no ministério' },
-    { name: 'tem_lideranca', label: 'Tem liderança?' },
-    { name: 'lideranca_cargo', label: 'Cargo de liderança' },
-    { name: 'responsabilidades_igreja', label: 'Responsabilidades na igreja' },
-    { name: 'pastor_bloco', label: 'Referência de pastor (bloco inteiro)' },
-  ]},
-  { secao: 's9', key: 'amigo', titulo: 'Referência de Amigo', campos: [
-    { name: 'oculto', label: 'Etapa inteira aparece no formulário (desative pra pular)' },
-    { name: 'ref_nome', label: 'Nome do amigo' },
-    { name: 'ref_relacionamento', label: 'Como se conheceram' },
-    { name: 'ref_tempo', label: 'Tempo de amizade' },
-    { name: 'ref_crista', label: 'É cristã?' },
-    { name: 'ref_email', label: 'E-mail do amigo' },
-    { name: 'ref_telefone', label: 'Telefone do amigo' },
-  ]},
-  { secao: 's10', key: 'historico_org', titulo: 'Histórico com organizações', campos: [
-    { name: 'teve_historico', label: 'Participou de escola/projeto missionário?' },
-    { name: 'hist_qual', label: 'Qual escola/projeto' },
-    { name: 'hist_org', label: 'Organização/base' },
-    { name: 'hist_duracao', label: 'Duração' },
-    { name: 'hist_quando', label: 'Quando' },
-    { name: 'hist_lider_nome', label: 'Líder responsável' },
-    { name: 'hist_lider_email', label: 'E-mail do líder' },
-    { name: 'hist_lider_tel', label: 'Telefone do líder' },
-  ]},
-  { secao: 's11', key: 'espiritual', titulo: 'Espiritual e emocional', campos: [
-    { name: 'oculto', label: 'Etapa inteira aparece no formulário (desative pra pular)' },
-    { name: 'psicologico', label: 'Acompanhamento psicológico?' },
-    { name: 'diagnostico_emocional', label: 'Diagnóstico/situação emocional' },
-    { name: 'recuperacao', label: 'Casa de recuperação?' },
-    { name: 'recuperacao_detalhes', label: 'Detalhes da recuperação' },
-    { name: 'recuperacao_hoje', label: 'Condição atual (recuperação)' },
-  ]},
-  { secao: 's12', key: 'saude', titulo: 'Saúde física', campos: [
-    { name: 'saude_geral', label: 'Problemas de saúde' },
-    { name: 'alergias', label: 'Alergias' },
-    { name: 'restricao_alimentar', label: 'Restrição alimentar' },
-    { name: 'limitacao_fisica', label: 'Limitação física' },
-    { name: 'cirurgias', label: 'Cirurgias' },
-    { name: 'usa_medicamento', label: 'Usa medicamento contínuo?' },
-    { name: 'plano_saude', label: 'Plano de saúde?' },
-  ]},
-  { secao: 's13', key: 'legal', titulo: 'Questões legais', campos: [
-    { name: 'oculto', label: 'Etapa inteira aparece no formulário (desative pra pular)' },
-    { name: 'antecedente', label: 'Antecedente criminal?' },
-    { name: 'pendencia_juridica', label: 'Pendência jurídica?' },
-    { name: 'restricao_legal', label: 'Restrição legal?' },
-  ]},
-  { secao: 's14', key: 'financeiro', titulo: 'Financeiro', campos: [
-    { name: 'oculto', label: 'Etapa inteira aparece no formulário (desative pra pular)' },
-    { name: 'apoio_tipo', label: 'Tipo de apoio financeiro' },
-    { name: 'ajuda_igreja', label: 'Igreja ajudará financeiramente?' },
-    { name: 'pagar_tudo', label: 'Consegue pagar tudo?' },
-    { name: 'mantenedores', label: 'Levantará mantenedores?' },
-    { name: 'situacao_financeira', label: 'Situação financeira' },
-    { name: 'dividas', label: 'Possui dívidas?' },
-  ]},
-]
-
-export default async function EscolaFormularioConfigPage({ params }: Props) {
+export default async function EscolaFormularioConfigPage({ params, searchParams }: Props) {
   const { slug, id } = await params
+  const { template: templateIdParam } = await searchParams
 
   const supabase = await createClient()
   const sb = createAdminClient()
@@ -158,8 +41,15 @@ export default async function EscolaFormularioConfigPage({ params }: Props) {
   if (!school) notFound()
 
   const config = (school.form_config as { hidden_fields?: string[]; payment_info?: string }) ?? {}
-  const hiddenFields = new Set<string>(config.hidden_fields ?? [])
   const paymentInfo = config.payment_info ?? ''
+
+  const templates = await listFormTemplates(sb, org.id)
+  const appliedTemplate = templateIdParam ? templates.find(t => t.id === templateIdParam) ?? null : null
+  // Modelo aplicado via ?template= só muda a pré-visualização dos
+  // checkboxes — nada é salvo até clicar em "Salvar configuração".
+  const hiddenFields = new Set<string>(
+    appliedTemplate ? (appliedTemplate.form_config.hidden_fields ?? []) : (config.hidden_fields ?? [])
+  )
 
   async function salvarConfig(fd: FormData) {
     'use server'
@@ -180,6 +70,52 @@ export default async function EscolaFormularioConfigPage({ params }: Props) {
     await db.from('schools')
       .update({ form_config: { hidden_fields: hiddenFields, payment_info: paymentInfo } })
       .eq('id', id)
+
+    redirect(`/${slug}/escolas/${id}/formulario`)
+  }
+
+  async function salvarComoModelo(fd: FormData) {
+    'use server'
+    const { createAdminClient: adm } = await import('@/lib/supabase/admin')
+    const { createClient: createServerClient } = await import('@/lib/supabase/server')
+    const { getCurrentOrganizationRole: getRole } = await import('@/lib/auth/org-role')
+    const { isManagementRole: isMgmt } = await import('@/lib/auth/permissions')
+    const db = adm()
+
+    // Salvar modelo afeta toda a organização (outras escolas/turmas podem
+    // aplicá-lo depois) — só gestão, não basta ser líder desta escola.
+    const authClient = await createServerClient()
+    const { data: { user: actionUser } } = await authClient.auth.getUser()
+    if (!actionUser) return
+    const { data: orgRow } = await db.from('organizations').select('id').eq('slug', slug).single()
+    if (!orgRow) return
+    const { role: actionRole } = await getRole(authClient, actionUser.id, orgRow.id)
+    if (!isMgmt(actionRole)) return
+
+    const name = (fd.get('template_name') as string | null)?.trim()
+    if (!name) return
+    const defaultForType = (fd.get('default_for_type') as string | null)?.trim() || null
+
+    const todosOsCampos: string[] = []
+    for (const secao of CONFIGURAVEL) {
+      for (const campo of secao.campos) {
+        todosOsCampos.push(`${secao.secao}.${campo.name}`)
+      }
+    }
+    const hiddenFields = todosOsCampos.filter(key => fd.get(key) !== 'on')
+
+    if (defaultForType) {
+      await db.from('school_form_templates')
+        .update({ default_for_school_type: null })
+        .eq('organization_id', orgRow.id)
+        .eq('default_for_school_type', defaultForType)
+    }
+
+    await db.from('school_form_templates')
+      .upsert(
+        { organization_id: orgRow.id, name, form_config: { hidden_fields: hiddenFields }, default_for_school_type: defaultForType, created_by: actionUser.id },
+        { onConflict: 'organization_id,name' },
+      )
 
     redirect(`/${slug}/escolas/${id}/formulario`)
   }
@@ -220,6 +156,27 @@ export default async function EscolaFormularioConfigPage({ params }: Props) {
             {totalAtivos} de {totalCampos} campos ativos
           </p>
         </div>
+
+        {templates.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 p-5 mb-3">
+            <h3 className="font-semibold text-gray-900 text-sm mb-1">Começar de um modelo</h3>
+            <p className="text-xs text-gray-400 mb-3">
+              Só muda os campos abaixo pra você revisar — nada é salvo até clicar em &quot;Salvar configuração&quot;.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {templates.map(t => (
+                <Link key={t.id} href={`/${slug}/escolas/${id}/formulario?template=${t.id}`}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                    appliedTemplate?.id === t.id
+                      ? 'bg-indigo-600 border-indigo-600 text-white'
+                      : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
+                  }`}>
+                  {t.name}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
 
         <form action={salvarConfig} className="space-y-3">
           <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -272,12 +229,36 @@ export default async function EscolaFormularioConfigPage({ params }: Props) {
             )
           })}
 
+          {isManagement && (
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <h3 className="font-semibold text-gray-900 text-sm mb-1">Salvar como modelo</h3>
+              <p className="text-xs text-gray-400 mb-3">
+                Guarda os campos marcados acima como um modelo reaproveitável — qualquer escola ou
+                turma da organização vai poder aplicá-lo depois. Usar o nome de um modelo já
+                existente sobrescreve ele.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input name="template_name" placeholder="Nome do modelo (ex: Seminário Nacional)"
+                  className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                <select name="default_for_type" defaultValue=""
+                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
+                  <option value="">Não definir como padrão</option>
+                  {SCHOOL_TYPES.map(t => <option key={t.value} value={t.value}>Padrão de: {t.label}</option>)}
+                </select>
+                <button type="submit" formAction={salvarComoModelo}
+                  className="px-4 py-2 text-sm font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors whitespace-nowrap">
+                  Salvar como modelo…
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-3 pt-2 pb-8">
             <Link href={`/${slug}/escolas/${id}`}
               className="flex-1 text-center px-4 py-3 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors font-medium">
               Cancelar
             </Link>
-            <button type="submit"
+            <button type="submit" formAction={salvarConfig}
               className="flex-1 px-4 py-3 text-sm font-bold text-white bg-brand-500 hover:bg-brand-600 rounded-xl transition-colors">
               Salvar configuração
             </button>
