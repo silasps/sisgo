@@ -8,7 +8,6 @@ import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { isManagementRole } from '@/lib/auth/permissions'
 import { getSchoolLink } from '@/lib/auth/unit-access'
 import { CONFIGURAVEL, FORM_TEMPLATE_NAMES, listFormTemplates, type FormConfig } from '@/lib/school/formConfig'
-import { SubmitButton } from '@/components/ui/SubmitButton'
 import { FormConfigFields } from '@/components/admin/FormConfigFields'
 
 type Props = { params: Promise<{ slug: string; id: string }>; searchParams: Promise<{ template?: string }> }
@@ -197,39 +196,11 @@ export default async function EscolaFormularioConfigPage({ params, searchParams 
             templates={templates}
             appliedTemplateId={appliedTemplate?.id ?? null}
             baseHref={`/${slug}/escolas/${id}/formulario`}
+            isManagement={isManagement}
+            cancelHref={`/${slug}/escolas/${id}`}
+            salvarConfigAction={salvarConfig}
+            salvarComoModeloAction={salvarComoModelo}
           />
-
-          {isManagement && (
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <h3 className="font-semibold text-gray-900 text-sm mb-1">Salvar como modelo</h3>
-              <p className="text-xs text-gray-400 mb-3">
-                Atualiza um dos 4 modelos padrão da organização com os campos marcados acima —
-                qualquer escola ou turma vai usar essa versão nova a partir de agora.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <select name="template_name" defaultValue="" required
-                  className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
-                  <option value="" disabled>Qual modelo atualizar?</option>
-                  {FORM_TEMPLATE_NAMES.map(n => <option key={n} value={n}>{n}</option>)}
-                </select>
-                <SubmitButton formAction={salvarComoModelo} pendingText="Salvando modelo…"
-                  className="px-4 py-2 text-sm font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 disabled:opacity-50 transition-colors whitespace-nowrap">
-                  Salvar como modelo…
-                </SubmitButton>
-              </div>
-            </div>
-          )}
-
-          <div className="flex gap-3 pt-2 pb-8">
-            <Link href={`/${slug}/escolas/${id}`}
-              className="flex-1 text-center px-4 py-3 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors font-medium">
-              Cancelar
-            </Link>
-            <SubmitButton formAction={salvarConfig} pendingText="Salvando..."
-              className="flex-1 px-4 py-3 text-sm font-bold text-white bg-brand-500 hover:bg-brand-600 disabled:opacity-50 rounded-xl transition-colors">
-              Salvar configuração
-            </SubmitButton>
-          </div>
         </form>
       </main>
     </>

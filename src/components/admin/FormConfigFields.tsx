@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { sortTemplatesByCanonicalOrder, type ConfigField, type FormConfig } from '@/lib/school/formConfig'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type ConfigSection = { secao: string; key: string; titulo: string; titulo_evento?: string; campos: ConfigField[] }
 type Template = { id: string; name: string; form_config: FormConfig }
@@ -36,7 +37,7 @@ function buildRequired(sections: ConfigSection[], overrides: Record<string, bool
 // actions existentes sem mudança nenhuma do lado deles.
 export function FormConfigFields({
   sections, savedHiddenFields, savedRequiredOverrides, previewHiddenFields, previewRequiredOverrides,
-  templates, appliedTemplateId, baseHref,
+  templates, appliedTemplateId, baseHref, isManagement, cancelHref, salvarConfigAction, salvarComoModeloAction,
 }: {
   sections: ConfigSection[]
   savedHiddenFields: string[]
@@ -46,6 +47,10 @@ export function FormConfigFields({
   templates: Template[]
   appliedTemplateId: string | null
   baseHref: string
+  isManagement: boolean
+  cancelHref: string
+  salvarConfigAction: (fd: FormData) => void | Promise<void>
+  salvarComoModeloAction: (fd: FormData) => void | Promise<void>
 }) {
   const [active, setActive] = useState<Record<string, boolean>>(() => buildActive(sections, previewHiddenFields))
   const [required, setRequired] = useState<Record<string, boolean>>(() => buildRequired(sections, previewRequiredOverrides))
@@ -112,6 +117,25 @@ export function FormConfigFields({
     const activeHiddenSet = new Set(Object.keys(active).filter(k => !active[k]))
     return tHidden.size === activeHiddenSet.size && [...tHidden].every(k => activeHiddenSet.has(k))
   }, [templates, active])
+
+  // Modelo "de base" pra oferecer salvar de volta: o que foi clicado em
+  // "Começar de um modelo" nesta visita, ou — se não clicou nenhum — o que
+  // já bate com a configuração salva hoje. Só mostra "Salvar como modelo"
+  // quando dá pra apontar sem ambiguidade qual dos 4 modelos atualizar E a
+  // edição atual realmente diverge dele (clicar e não mexer em nada não
+  // precisa salvar de novo).
+  const baseTemplateForSaving = appliedTemplate ?? (currentSavedTemplateName ? templates.find(t => t.name === currentSavedTemplateName) ?? null : null)
+
+  const alteredFromBaseTemplate = useMemo(() => {
+    if (!baseTemplateForSaving) return false
+    const tActive = buildActive(sections, baseTemplateForSaving.form_config.hidden_fields ?? [])
+    const tRequired = buildRequired(sections, baseTemplateForSaving.form_config.required_overrides ?? {})
+    for (const key of Object.keys(tActive)) if (!!active[key] !== !!tActive[key]) return true
+    for (const key of Object.keys(tRequired)) if (!!required[key] !== !!tRequired[key]) return true
+    return false
+  }, [baseTemplateForSaving, active, required, sections])
+
+  const showSaveAsTemplate = isManagement && !!baseTemplateForSaving && alteredFromBaseTemplate
 
   const statusBanner = isDirty ? (
     <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -211,7 +235,31 @@ export function FormConfigFields({
         )
       })}
 
+      {showSaveAsTemplate && baseTemplateForSaving && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4 flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-sm text-gray-700">
+            Salvar modelo &quot;{baseTemplateForSaving.name}&quot;?
+          </p>
+          <input type="hidden" name="template_name" value={baseTemplateForSaving.name} />
+          <SubmitButton formAction={salvarComoModeloAction} pendingText="Salvando…"
+            className="px-4 py-2 text-sm font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 disabled:opacity-50 transition-colors whitespace-nowrap">
+            Salvar
+          </SubmitButton>
+        </div>
+      )}
+
       {statusBanner}
+
+      <div className="flex gap-3 pt-2 pb-8">
+        <Link href={cancelHref}
+          className="flex-1 text-center px-4 py-3 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors font-medium">
+          Cancelar
+        </Link>
+        <SubmitButton formAction={salvarConfigAction} pendingText="Salvando..." disabled={!isDirty}
+          className="flex-1 px-4 py-3 text-sm font-bold text-white bg-brand-500 hover:bg-brand-600 disabled:opacity-50 rounded-xl transition-colors">
+          Salvar configuração
+        </SubmitButton>
+      </div>
     </div>
   )
 }
