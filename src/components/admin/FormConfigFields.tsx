@@ -144,7 +144,7 @@ export function FormConfigFields({
         const ativos = secao.campos.filter(c => active[`${secao.secao}.${c.name}`]).length
         return (
           <details key={secao.key} className="group bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <summary className="flex items-center justify-between px-5 py-3.5 cursor-pointer select-none list-none hover:bg-gray-50">
+            <summary className="flex items-center justify-between px-5 py-3.5 cursor-pointer select-none list-none hover:bg-gray-50 sticky top-16 z-[5] bg-white group-open:border-b group-open:border-gray-100">
               <div className="flex items-center gap-2">
                 <h3 className="font-semibold text-gray-900 text-sm">{secao.titulo}</h3>
                 <span className="text-xs text-gray-400">{ativos}/{secao.campos.length}</span>
