@@ -134,7 +134,10 @@ export default async function FormularioPage({ params, searchParams }: Props) {
 
   // Config da turma (se já tiver sido revisada) vence sobre o default da
   // escola — ver resolveFormConfig.
-  const { hiddenFields, paymentInfo, requiredOverrides } = resolveFormConfig(escola?.form_config, turma?.form_config)
+  const { hiddenFields, paymentInfo, eventInfo, eventInfoPdf, requiredOverrides } = resolveFormConfig(escola?.form_config, turma?.form_config)
+  const eventInfoPdfUrl = eventInfoPdf?.path
+    ? sb.storage.from('school-event-info').getPublicUrl(eventInfoPdf.path).data.publicUrl
+    : null
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
@@ -181,6 +184,8 @@ export default async function FormularioPage({ params, searchParams }: Props) {
             hiddenFields={hiddenFields}
             requiredOverrides={requiredOverrides}
             paymentInfo={paymentInfo}
+            eventInfo={eventInfo}
+            eventInfoPdfUrl={eventInfoPdfUrl}
             initialLang={pageLang}
             printMode={printMode}
             documentUrls={documentUrls}

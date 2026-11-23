@@ -5,6 +5,11 @@ type Db = ReturnType<typeof createAdminClient>
 export type FormConfig = {
   hidden_fields?: string[]
   payment_info?: string
+  // Mostrado assim que o candidato termina de enviar (tela + e-mail de
+  // confirmação) — valores, hospedagem, horários etc. Igual payment_info,
+  // é sempre da escola, nunca entra em modelo (ver salvarComoModelo).
+  event_info?: string
+  event_info_pdf?: { path: string; name: string } | null
   // Override de obrigatório/opcional por campo (chave "sX.campo" →
   // true=obrigatório, false=opcional). Ausência de chave = usa o default
   // já hardcoded no componente (ver requiredByDefault abaixo e
@@ -209,10 +214,18 @@ export const CONFIGURAVEL: { secao: string; key: string; titulo: string; titulo_
 export function resolveFormConfig(
   schoolConfig: FormConfig | null | undefined,
   classConfig: FormConfig | null | undefined,
-): { hiddenFields: string[]; paymentInfo: string | null; requiredOverrides: Record<string, boolean> } {
+): {
+  hiddenFields: string[]
+  paymentInfo: string | null
+  eventInfo: string | null
+  eventInfoPdf: { path: string; name: string } | null
+  requiredOverrides: Record<string, boolean>
+} {
   return {
     hiddenFields: classConfig?.hidden_fields ?? schoolConfig?.hidden_fields ?? [],
     paymentInfo: schoolConfig?.payment_info ?? null,
+    eventInfo: schoolConfig?.event_info ?? null,
+    eventInfoPdf: schoolConfig?.event_info_pdf ?? null,
     requiredOverrides: classConfig?.required_overrides ?? schoolConfig?.required_overrides ?? {},
   }
 }

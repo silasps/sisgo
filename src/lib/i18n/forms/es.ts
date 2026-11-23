@@ -82,6 +82,8 @@ export const esDict: FormDict = {
     receipt_send: 'Enviar comprobante',
     receipt_sending: 'Enviando…',
     receipt_success: '¡Comprobante enviado correctamente!',
+    event_info_title: 'Información importante',
+    event_info_pdf: 'Descargar PDF con más detalles',
   },
 
   s1: {

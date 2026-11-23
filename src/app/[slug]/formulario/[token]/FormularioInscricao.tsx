@@ -68,6 +68,8 @@ type Props = {
   hiddenFields?: string[]
   requiredOverrides?: Record<string, boolean>
   paymentInfo?: string | null
+  eventInfo?: string | null
+  eventInfoPdfUrl?: string | null
   initialLang?: string
   printMode?: boolean
   documentUrls?: DocumentUrls
@@ -1458,8 +1460,9 @@ function PaymentGateScreen({ slug, token, paymentInfo, onComplete, d }: {
 
 // ── Tela de sucesso com geração de links ───────────────────────────────────
 
-function SubmittedScreen({ slug, applicationId, schoolName, hiddenSet, d }: {
+function SubmittedScreen({ slug, applicationId, schoolName, hiddenSet, d, eventInfo, eventInfoPdfUrl }: {
   slug: string; applicationId: string; schoolName: string; hiddenSet: Set<string>; d: FormDict
+  eventInfo?: string | null; eventInfoPdfUrl?: string | null
 }) {
   const showPastorLink = !hiddenSet.has('s8.pastor_bloco')
   const showAmigoLink = !hiddenSet.has('s9.oculto')
@@ -1503,6 +1506,19 @@ function SubmittedScreen({ slug, applicationId, schoolName, hiddenSet, d }: {
           {t(d.submitted.body, { school: schoolName })}
         </p>
       </div>
+
+      {(eventInfo || eventInfoPdfUrl) && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-left max-w-md mx-auto space-y-3">
+          <h3 className="font-bold text-gray-900 text-center">{d.submitted.event_info_title}</h3>
+          {eventInfo && <p className="text-sm text-gray-700 whitespace-pre-wrap">{eventInfo}</p>}
+          {eventInfoPdfUrl && (
+            <a href={eventInfoPdfUrl} target="_blank" rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 w-full py-2.5 px-4 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-xl transition-colors text-sm">
+              <FileText size={16} aria-hidden /> {d.submitted.event_info_pdf}
+            </a>
+          )}
+        </div>
+      )}
 
       {showReferences && (
         <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-6 text-left max-w-md mx-auto space-y-4">
@@ -1561,7 +1577,7 @@ function SubmittedScreen({ slug, applicationId, schoolName, hiddenSet, d }: {
 type SectionDef = { id: number; component: React.ReactNode }
 
 export function FormularioInscricao({
-  slug, token, applicationId, schoolName, orgName, className, schoolType, prefill, initialSection = 1, initialData, hiddenFields, requiredOverrides, paymentInfo, initialLang, printMode, documentUrls,
+  slug, token, applicationId, schoolName, orgName, className, schoolType, prefill, initialSection = 1, initialData, hiddenFields, requiredOverrides, paymentInfo, eventInfo, eventInfoPdfUrl, initialLang, printMode, documentUrls,
   canExit = true,
 }: Props) {
   const hiddenSet = useMemo(() => new Set(hiddenFields ?? []), [hiddenFields])
@@ -1899,7 +1915,8 @@ export function FormularioInscricao({
   }
 
   if (submitted) {
-    return <SubmittedScreen slug={slug} applicationId={applicationId} schoolName={schoolName} hiddenSet={hiddenSet} d={d} />
+    return <SubmittedScreen slug={slug} applicationId={applicationId} schoolName={schoolName} hiddenSet={hiddenSet} d={d}
+      eventInfo={eventInfo} eventInfoPdfUrl={eventInfoPdfUrl} />
   }
 
   return (

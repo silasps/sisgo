@@ -86,6 +86,8 @@ export interface FormDict {
     receipt_send: string
     receipt_sending: string
     receipt_success: string
+    event_info_title: string
+    event_info_pdf: string
   }
 
   // ── Section 1 ──────────────────────────────────────────────────────────

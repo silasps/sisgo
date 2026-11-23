@@ -199,3 +199,39 @@ const financePendingDict = {
 export function getRejectionDict(lang: EmailLang) { return rejectionDict[lang] }
 export function getStaffApprovalDict(lang: EmailLang) { return staffApprovalDict[lang] }
 export function getFinancePendingDict(lang: EmailLang) { return financePendingDict[lang] }
+
+// ── E-mail de confirmação de recebimento (aluno) ────────────────────────────
+const applicationReceivedDict = {
+  pt: {
+    title: 'Recebemos sua inscrição!',
+    greeting: 'Olá, {name}! ✅',
+    body: 'Sua inscrição para a <strong style="color:#111827;">{school}</strong> foi enviada com sucesso. Nossa equipe vai analisar e em breve você recebe mais informações sobre os próximos passos.',
+    infoTitle: 'Informações importantes',
+    pdfCta: 'Baixar PDF com mais detalhes →',
+    contact: 'Dúvidas? Entre em contato:',
+    disclaimer: 'Este e-mail foi enviado automaticamente após o envio da sua inscrição.',
+    subject: 'Recebemos sua inscrição — {school}',
+  },
+  en: {
+    title: 'We received your application!',
+    greeting: 'Hello, {name}! ✅',
+    body: 'Your application for <strong style="color:#111827;">{school}</strong> was submitted successfully. Our team will review it and you will soon receive more information about the next steps.',
+    infoTitle: 'Important information',
+    pdfCta: 'Download PDF with more details →',
+    contact: 'Questions? Contact us:',
+    disclaimer: 'This email was sent automatically after your application was submitted.',
+    subject: 'We received your application — {school}',
+  },
+  es: {
+    title: '¡Recibimos tu inscripción!',
+    greeting: '¡Hola, {name}! ✅',
+    body: 'Tu inscripción para <strong style="color:#111827;">{school}</strong> fue enviada con éxito. Nuestro equipo la analizará y pronto recibirás más información sobre los próximos pasos.',
+    infoTitle: 'Información importante',
+    pdfCta: 'Descargar PDF con más detalles →',
+    contact: '¿Dudas? Contáctanos:',
+    disclaimer: 'Este correo fue enviado automáticamente después del envío de tu inscripción.',
+    subject: 'Recibimos tu inscripción — {school}',
+  },
+}
+
+export function getApplicationReceivedDict(lang: EmailLang) { return applicationReceivedDict[lang] }

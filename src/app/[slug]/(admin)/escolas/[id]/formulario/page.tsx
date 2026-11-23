@@ -4,11 +4,13 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
+import { FileText } from 'lucide-react'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { isManagementRole } from '@/lib/auth/permissions'
 import { getSchoolLink } from '@/lib/auth/unit-access'
 import { CONFIGURAVEL, FORM_TEMPLATE_NAMES, listFormTemplates, type FormConfig } from '@/lib/school/formConfig'
 import { FormConfigFields } from '@/components/admin/FormConfigFields'
+import { FileInputField } from '@/components/ui/FileInputField'
 
 type Props = { params: Promise<{ slug: string; id: string }>; searchParams: Promise<{ template?: string }> }
 
@@ -42,6 +44,10 @@ export default async function EscolaFormularioConfigPage({ params, searchParams 
 
   const config = (school.form_config as FormConfig) ?? {}
   const paymentInfo = config.payment_info ?? ''
+  const eventInfo = config.event_info ?? ''
+  const eventInfoPdfUrl = config.event_info_pdf?.path
+    ? sb.storage.from('school-event-info').getPublicUrl(config.event_info_pdf.path).data.publicUrl
+    : null
 
   const templates = await listFormTemplates(sb, org.id)
   const appliedTemplate = templateIdParam ? templates.find(t => t.id === templateIdParam) ?? null : null
@@ -67,6 +73,7 @@ export default async function EscolaFormularioConfigPage({ params, searchParams 
 
     const hiddenFields = todosOsCampos.filter(key => fd.get(key) !== 'on')
     const paymentInfo = (fd.get('payment_info') as string | null)?.trim() || null
+    const eventInfo = (fd.get('event_info') as string | null)?.trim() || null
     const requiredOverrides: Record<string, boolean> = {}
     for (const secao of CONFIGURAVEL) {
       for (const campo of secao.campos) {
@@ -78,8 +85,29 @@ export default async function EscolaFormularioConfigPage({ params, searchParams 
       }
     }
 
+    const { data: schoolRow } = await db.from('schools').select('organization_id, form_config').eq('id', id).single()
+    const previousPdf = (schoolRow?.form_config as FormConfig | null)?.event_info_pdf ?? null
+    let eventInfoPdf = previousPdf
+    const pdfFile = fd.get('event_info_pdf')
+    if (pdfFile instanceof File && pdfFile.size > 0) {
+      if (pdfFile.type !== 'application/pdf') return
+      if (pdfFile.size > 10 * 1024 * 1024) return
+      const path = `${schoolRow?.organization_id}/${id}/event-info-${Date.now()}.pdf`
+      const { error: uploadError } = await db.storage.from('school-event-info').upload(path, Buffer.from(await pdfFile.arrayBuffer()), {
+        contentType: 'application/pdf',
+        upsert: false,
+      })
+      if (!uploadError) {
+        if (previousPdf?.path) await db.storage.from('school-event-info').remove([previousPdf.path])
+        eventInfoPdf = { path, name: pdfFile.name }
+      }
+    } else if (fd.get('remove_event_info_pdf') === '1') {
+      if (previousPdf?.path) await db.storage.from('school-event-info').remove([previousPdf.path])
+      eventInfoPdf = null
+    }
+
     await db.from('schools')
-      .update({ form_config: { hidden_fields: hiddenFields, payment_info: paymentInfo, required_overrides: requiredOverrides } })
+      .update({ form_config: { hidden_fields: hiddenFields, payment_info: paymentInfo, event_info: eventInfo, event_info_pdf: eventInfoPdf, required_overrides: requiredOverrides } })
       .eq('id', id)
 
     redirect(`/${slug}/escolas/${id}/formulario?flash_success=${encodeURIComponent('Configuração da escola salva.')}`)
@@ -128,8 +156,30 @@ export default async function EscolaFormularioConfigPage({ params, searchParams 
     // usuário está editando os campos pensando nesta escola, não só no
     // modelo abstrato; sem isso, a página pública não reflete a mudança.
     const paymentInfo = (fd.get('payment_info') as string | null)?.trim() || null
+    const eventInfo = (fd.get('event_info') as string | null)?.trim() || null
+    const { data: schoolRow } = await db.from('schools').select('organization_id, form_config').eq('id', id).single()
+    const previousPdf = (schoolRow?.form_config as FormConfig | null)?.event_info_pdf ?? null
+    let eventInfoPdf = previousPdf
+    const pdfFile = fd.get('event_info_pdf')
+    if (pdfFile instanceof File && pdfFile.size > 0) {
+      if (pdfFile.type === 'application/pdf' && pdfFile.size <= 10 * 1024 * 1024) {
+        const path = `${schoolRow?.organization_id}/${id}/event-info-${Date.now()}.pdf`
+        const { error: uploadError } = await db.storage.from('school-event-info').upload(path, Buffer.from(await pdfFile.arrayBuffer()), {
+          contentType: 'application/pdf',
+          upsert: false,
+        })
+        if (!uploadError) {
+          if (previousPdf?.path) await db.storage.from('school-event-info').remove([previousPdf.path])
+          eventInfoPdf = { path, name: pdfFile.name }
+        }
+      }
+    } else if (fd.get('remove_event_info_pdf') === '1') {
+      if (previousPdf?.path) await db.storage.from('school-event-info').remove([previousPdf.path])
+      eventInfoPdf = null
+    }
+
     await db.from('schools')
-      .update({ form_config: { hidden_fields: hiddenFields, payment_info: paymentInfo, required_overrides: requiredOverrides } })
+      .update({ form_config: { hidden_fields: hiddenFields, payment_info: paymentInfo, event_info: eventInfo, event_info_pdf: eventInfoPdf, required_overrides: requiredOverrides } })
       .eq('id', id)
 
     await db.from('school_form_templates')
@@ -192,6 +242,42 @@ export default async function EscolaFormularioConfigPage({ params, searchParams 
               rows={5}
               placeholder={'Ex: Pix (CPF): 000.000.000-00 — Fulano de Tal\nOu transferência: Banco X, ag. 0000, cc 00000-0'}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 resize-none"
+            />
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+            <div>
+              <h3 className="font-semibold text-gray-900 text-sm mb-1">Informações adicionais</h3>
+              <p className="text-xs text-gray-400 mb-3">
+                Aparece pro candidato assim que ele termina de enviar a inscrição — na tela de
+                confirmação e no e-mail que ele recebe. Use pra valores, hospedagem, horários,
+                o que for importante saber depois de se inscrever. Deixe em branco pra não
+                mostrar nada.
+              </p>
+              <textarea
+                name="event_info"
+                defaultValue={eventInfo}
+                rows={5}
+                placeholder={'Ex: A inscrição custa R$ 200, incluindo hospedagem e alimentação durante o evento...'}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 resize-none"
+              />
+            </div>
+            <FileInputField
+              name="event_info_pdf"
+              accept="application/pdf"
+              tone="indigo"
+              icon={<FileText size={16} aria-hidden />}
+              title="PDF com mais detalhes (opcional)"
+              badgeLabel="Opcional"
+              readyLabel="Anexado"
+              dropLabel="Escolher PDF"
+              dropHint="Até 10MB"
+              attachedLabel="Anexado"
+              changeLabel="Trocar"
+              removeLabel="Remover"
+              existingFileUrl={eventInfoPdfUrl}
+              existingFileName={config.event_info_pdf?.name}
+              existingFileType="application/pdf"
             />
           </div>
 

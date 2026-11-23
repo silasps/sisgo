@@ -174,6 +174,58 @@ export async function enviarFormulario(slug: string, token: string) {
     }
   }
 
+  // E-mail de confirmação pro candidato — avisa que a inscrição chegou e já
+  // entrega as informações do evento (valores, hospedagem etc.) que a
+  // escola tiver configurado em Configurar formulário. Nunca bloqueia o
+  // envio do formulário em si: falha de e-mail só fica em email_logs.
+  if (appFull) {
+    const formData = (appFull.form_data as Record<string, unknown>) ?? {}
+    const s1 = (formData.s1 as Record<string, string> | undefined) ?? {}
+    const s5 = (formData.s5 as Record<string, string> | undefined) ?? {}
+    const candidateEmail = (s5.email ?? '').trim()
+    if (candidateEmail) {
+      const [{ data: school }, { data: org }, { data: turmaInfo }] = await Promise.all([
+        sb.from('schools').select('name, contact_email, form_config').eq('id', appFull.school_id).single(),
+        sb.from('organizations').select('name').eq('id', appFull.organization_id).single(),
+        appFull.class_id
+          ? sb.from('school_classes').select('name').eq('id', appFull.class_id).single()
+          : Promise.resolve({ data: null as { name: string } | null }),
+      ])
+      if (school?.contact_email) {
+        const config = (school.form_config as { event_info?: string; event_info_pdf?: { path: string } | null } | null) ?? null
+        const eventInfoPdfUrl = config?.event_info_pdf?.path
+          ? sb.storage.from('school-event-info').getPublicUrl(config.event_info_pdf.path).data.publicUrl
+          : null
+        // Idioma: prioriza o salvo na pré-inscrição (código real, "pt"/"en"/
+        // "es"); sem isso, cai pro que a pessoa escolheu em "fluência de
+        // português" (seção 5, só pra estrangeiro) — melhor um palpite do
+        // que sempre mandar em português.
+        const LANG_WORD_TO_CODE: Record<string, string> = { portugues: 'pt', ingles: 'en', espanhol: 'es' }
+        let language: string | null = null
+        if (appFull.interest_form_id) {
+          const { data: interestFormRow } = await sb.from('school_interest_forms').select('language').eq('id', appFull.interest_form_id).maybeSingle()
+          language = interestFormRow?.language ?? null
+        }
+        if (!language) language = LANG_WORD_TO_CODE[s5.idioma_preferencia_comunicacao ?? ''] ?? null
+
+        const { sendApplicationReceivedEmail } = await import('@/lib/email/sendApplicationReceivedEmail')
+        await sendApplicationReceivedEmail({
+          to: candidateEmail,
+          candidateName: s1.nome || 'Candidato',
+          organizationName: org?.name ?? '',
+          schoolName: school.name,
+          className: turmaInfo?.name ?? '',
+          replyTo: school.contact_email,
+          organizationId: appFull.organization_id,
+          schoolId: appFull.school_id,
+          eventInfo: config?.event_info ?? null,
+          eventInfoPdfUrl,
+          language,
+        }).catch(() => {})
+      }
+    }
+  }
+
   return { success: true }
 }
 

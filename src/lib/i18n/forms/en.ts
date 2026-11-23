@@ -82,6 +82,8 @@ export const enDict: FormDict = {
     receipt_send: 'Upload receipt',
     receipt_sending: 'Uploading…',
     receipt_success: 'Receipt uploaded successfully!',
+    event_info_title: 'Important information',
+    event_info_pdf: 'Download PDF with more details',
   },
 
   s1: {

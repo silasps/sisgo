@@ -82,6 +82,8 @@ export const ptDict: FormDict = {
     receipt_send: 'Enviar comprovante',
     receipt_sending: 'Enviando…',
     receipt_success: 'Comprovante enviado com sucesso!',
+    event_info_title: 'Informações importantes',
+    event_info_pdf: 'Baixar PDF com mais detalhes',
   },
 
   s1: {
