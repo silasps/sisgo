@@ -269,7 +269,9 @@ export default async function FormularioEditorPage({ params }: Props) {
     { key: 'doc_foto', label: 'Foto do rosto' },
     { key: 'doc_rg_frente', label: 'RG — Frente' },
     { key: 'doc_rg_verso', label: 'RG — Verso' },
-    { key: 'doc_cpf', label: 'CPF' },
+    { key: 'doc_cnh', label: 'CNH' },
+    { key: 'doc_outro_1', label: 'Outro documento de identificação' },
+    { key: 'doc_outro_2', label: 'Outro documento de identificação (2)' },
     { key: 'doc_passaporte', label: 'Passaporte' },
   ]
 

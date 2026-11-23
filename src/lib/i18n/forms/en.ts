@@ -412,12 +412,11 @@ export const enDict: FormDict = {
     doc_rg_frente_br: 'Government ID — front',
     doc_rg_verso_br: 'Government ID — back',
     doc_cnh: 'Driver\'s license (CNH)',
-    doc_cpf: 'Tax ID (CPF)',
     doc_passaporte_br: 'Passport (if available)',
     doc_passaporte_estrangeiro: 'Passport',
-    doc_id_frente: 'Other ID document — front',
-    doc_id_verso: 'Other ID document — back',
-    doc_id_required_error: 'Attach your ID (front and back) or driver\'s license (CNH) to continue.',
+    doc_outro: 'Other ID document',
+    add_outro_doc: 'Add another document',
+    doc_id_required_error: 'Attach at least one ID document (government ID, driver\'s license, or other) to continue.',
   },
 
   s16: {

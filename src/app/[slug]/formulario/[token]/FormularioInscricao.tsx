@@ -1294,23 +1294,28 @@ function S14Financeiro({ data }: { data?: Record<string, string> }) {
   )
 }
 
-function S15Documentos({ hasRg, hasCnh, hasCpf, hasPassaporte, sexo, documentUrls }: {
-  hasRg: boolean; hasCnh: boolean; hasCpf: boolean; hasPassaporte: boolean; sexo?: string; documentUrls?: DocumentUrls
+function S15Documentos({ hasRg, hasCnh, hasPassaporte, estrangeiro, sexo, documentUrls }: {
+  hasRg: boolean; hasCnh: boolean; hasPassaporte: boolean; estrangeiro: boolean; sexo?: string; documentUrls?: DocumentUrls
 }) {
   const d = useContext(DictCtx)
-  // RG e CNH servem igualmente como documento de identificação — se a pessoa
-  // preencheu os dois números na seção 5, não faz sentido exigir foto dos
-  // dois aqui, só de um. Os badges/validação reagem em tempo real conforme
-  // os arquivos vão sendo anexados (a validação de fato, cobrindo também o
-  // que já veio salvo de uma visita anterior, mora no handleNext do
-  // componente pai). Passaporte nunca exige foto — o número já informado na
-  // seção 5 basta.
+  // RG, CNH e "outro documento" servem igualmente como identificação — exige
+  // só UM dos três (não pede foto de CPF: só o número, na seção 5, já
+  // basta). Os badges/validação reagem em tempo real conforme os arquivos
+  // vão sendo anexados (a validação de fato, cobrindo também o que já veio
+  // salvo de uma visita anterior, mora no handleNext do componente pai).
+  // Estrangeiro não tem RG/CNH/outro — só passaporte, obrigatório de verdade
+  // (nativo via `required`, incluindo o que já foi salvo antes).
   const [hasRgFrenteFile, setHasRgFrenteFile] = useState(!!documentUrls?.doc_rg_frente)
   const [hasRgVersoFile, setHasRgVersoFile] = useState(!!documentUrls?.doc_rg_verso)
   const [hasCnhFile, setHasCnhFile] = useState(!!documentUrls?.doc_cnh)
+  const [hasOutro1File, setHasOutro1File] = useState(!!documentUrls?.doc_outro_1)
+  const [hasOutro2File, setHasOutro2File] = useState(!!documentUrls?.doc_outro_2)
+  const [showSecondOutro, setShowSecondOutro] = useState(!!documentUrls?.doc_outro_2)
   const rgCompleta = hasRgFrenteFile && hasRgVersoFile
-  const rgObrigatoria = hasRg && !hasCnhFile
-  const cnhObrigatoria = hasCnh && !rgCompleta
+  const anyOutro = hasOutro1File || hasOutro2File
+  const rgObrigatoria = hasRg && !hasCnhFile && !anyOutro
+  const cnhObrigatoria = hasCnh && !rgCompleta && !anyOutro
+  const outroObrigatoria = !rgCompleta && !hasCnhFile && !anyOutro
 
   const docs: Array<{
     name: string; label: string; required: boolean; icon: 'foto' | 'id'
@@ -1324,8 +1329,11 @@ function S15Documentos({ hasRg, hasCnh, hasCpf, hasPassaporte, sexo, documentUrl
     ...(hasCnh ? [
       { name: 'doc_cnh', label: d.s15.doc_cnh, required: cnhObrigatoria, icon: 'id' as const, noNativeRequired: true, onFileChange: (f: File | null) => setHasCnhFile(!!f) },
     ] : []),
-    ...(hasCpf ? [{ name: 'doc_cpf', label: d.s15.doc_cpf, required: true, icon: 'id' as const }] : []),
-    ...(hasPassaporte ? [{ name: 'doc_passaporte', label: d.s15.doc_passaporte_estrangeiro, required: false, icon: 'id' as const }] : []),
+    ...(!estrangeiro ? [
+      { name: 'doc_outro_1', label: d.s15.doc_outro, required: outroObrigatoria, icon: 'id' as const, noNativeRequired: true, onFileChange: (f: File | null) => setHasOutro1File(!!f) },
+      ...(showSecondOutro ? [{ name: 'doc_outro_2', label: d.s15.doc_outro, required: false, icon: 'id' as const, noNativeRequired: true, onFileChange: (f: File | null) => setHasOutro2File(!!f) }] : []),
+    ] : []),
+    ...(hasPassaporte ? [{ name: 'doc_passaporte', label: estrangeiro ? d.s15.doc_passaporte_estrangeiro : d.s15.doc_passaporte_br, required: estrangeiro, icon: 'id' as const }] : []),
   ]
   return (
     <div className="space-y-4">
@@ -1353,6 +1361,12 @@ function S15Documentos({ hasRg, hasCnh, hasCpf, hasPassaporte, sexo, documentUrl
             existingFileSize={documentUrls?.[doc.name]?.size} />
         ))}
       </div>
+      {!estrangeiro && !showSecondOutro && (
+        <button type="button" onClick={() => setShowSecondOutro(true)}
+          className="text-xs font-semibold text-indigo-600 hover:text-indigo-800">
+          + {d.s15.add_outro_doc}
+        </button>
+      )}
     </div>
   )
 }
@@ -1619,8 +1633,8 @@ export function FormularioInscricao({
     { id: 15, component: <S15Documentos
         hasRg={!!localData.s5?.rg?.trim()}
         hasCnh={!!localData.s5?.cnh?.trim()}
-        hasCpf={!!localData.s5?.cpf?.trim()}
         hasPassaporte={!!localData.s5?.passaporte?.trim()}
+        estrangeiro={localData.s5?.is_brasileiro === 'nao'}
         sexo={localData.s5?.sexo}
         documentUrls={documentUrls}
       /> },
@@ -1803,29 +1817,29 @@ export function FormularioInscricao({
         setIsBrazilian(fd.get('is_brasileiro') !== 'nao')
       }
 
-      // Validação customizada: seção 15 — RG (frente + verso) OU CNH, pelo
-      // menos um completo, quando a pessoa informou algum dos dois números
-      // na seção 5. O atributo required nativo não dá pra usar aqui (exigiria
-      // os dois ao mesmo tempo), então a checagem roda aqui, olhando tanto o
-      // que veio nesse envio (fd) quanto o que já estava salvo de uma visita
-      // anterior (documentUrls).
-      if (visibleSections[currentIndex].id === 15) {
-        const hasRg = !!localData.s5?.rg?.trim()
-        const hasCnh = !!localData.s5?.cnh?.trim()
-        if (hasRg || hasCnh) {
-          const hasDoc = (key: string) => {
-            const file = fd.get(key)
-            if (file instanceof File && file.size > 0) return true
-            if (fd.get(`remove_${key}`) === '1') return false
-            return !!documentUrls?.[key]
-          }
-          const rgOk = hasDoc('doc_rg_frente') && hasDoc('doc_rg_verso')
-          const cnhOk = hasDoc('doc_cnh')
-          if (!rgOk && !cnhOk) {
-            setError(d.s15.doc_id_required_error)
-            setSaving(false)
-            return
-          }
+      // Validação customizada: seção 15 — RG (frente + verso), CNH ou
+      // "outro documento", pelo menos um completo. Não depende de hasRg/
+      // hasCnh (o CPF não tem foto própria — ver S15Documentos) porque
+      // "outro documento" é o fallback de quem só informou CPF ou nenhum
+      // número na seção 5. O atributo required nativo não dá pra usar aqui
+      // (exigiria sempre os mesmos campos ao mesmo tempo), então a checagem
+      // roda aqui, olhando tanto o que veio nesse envio (fd) quanto o que já
+      // estava salvo de uma visita anterior (documentUrls). Estrangeiro não
+      // entra aqui — passaporte já é required nativo.
+      if (visibleSections[currentIndex].id === 15 && localData.s5?.is_brasileiro !== 'nao') {
+        const hasDoc = (key: string) => {
+          const file = fd.get(key)
+          if (file instanceof File && file.size > 0) return true
+          if (fd.get(`remove_${key}`) === '1') return false
+          return !!documentUrls?.[key]
+        }
+        const rgOk = hasDoc('doc_rg_frente') && hasDoc('doc_rg_verso')
+        const cnhOk = hasDoc('doc_cnh')
+        const outroOk = hasDoc('doc_outro_1') || hasDoc('doc_outro_2')
+        if (!rgOk && !cnhOk && !outroOk) {
+          setError(d.s15.doc_id_required_error)
+          setSaving(false)
+          return
         }
       }
 

@@ -412,12 +412,11 @@ export const esDict: FormDict = {
     doc_rg_frente_br: 'Documento de identidad — frente',
     doc_rg_verso_br: 'Documento de identidad — reverso',
     doc_cnh: 'Licencia de conducir (CNH)',
-    doc_cpf: 'ID fiscal (CPF)',
     doc_passaporte_br: 'Pasaporte (si tienes)',
     doc_passaporte_estrangeiro: 'Pasaporte',
-    doc_id_frente: 'Otro documento de identidad — frente',
-    doc_id_verso: 'Otro documento de identidad — reverso',
-    doc_id_required_error: 'Adjunta tu documento de identidad (frente y reverso) o la licencia de conducir (CNH) para continuar.',
+    doc_outro: 'Otro documento de identidad',
+    add_outro_doc: 'Agregar otro documento',
+    doc_id_required_error: 'Adjunta al menos un documento de identidad (documento de identidad, licencia de conducir o otro) para continuar.',
   },
 
   s16: {

@@ -412,12 +412,11 @@ export const ptDict: FormDict = {
     doc_rg_frente_br: 'RG — frente',
     doc_rg_verso_br: 'RG — verso',
     doc_cnh: 'CNH',
-    doc_cpf: 'CPF',
     doc_passaporte_br: 'Passaporte (se possuir)',
     doc_passaporte_estrangeiro: 'Passaporte',
-    doc_id_frente: 'Outro documento de identificação — frente',
-    doc_id_verso: 'Outro documento de identificação — verso',
-    doc_id_required_error: 'Anexe o RG (frente e verso) ou a CNH para continuar.',
+    doc_outro: 'Outro documento de identificação',
+    add_outro_doc: 'Adicionar outro documento',
+    doc_id_required_error: 'Anexe pelo menos um documento de identificação (RG, CNH ou outro) para continuar.',
   },
 
   s16: {

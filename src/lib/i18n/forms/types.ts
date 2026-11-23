@@ -397,11 +397,10 @@ export interface FormDict {
     doc_rg_frente_br: string
     doc_rg_verso_br: string
     doc_cnh: string
-    doc_cpf: string
     doc_passaporte_br: string
     doc_passaporte_estrangeiro: string
-    doc_id_frente: string
-    doc_id_verso: string
+    doc_outro: string
+    add_outro_doc: string
     doc_id_required_error: string
   }
 

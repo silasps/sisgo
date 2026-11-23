@@ -1,10 +1,9 @@
-export type DocumentKind = 'foto' | 'rg_frente' | 'rg_verso' | 'cpf' | 'passaporte' | 'comprovante_pagamento' | 'certidao_casamento' | 'cnh'
+export type DocumentKind = 'foto' | 'rg_frente' | 'rg_verso' | 'passaporte' | 'comprovante_pagamento' | 'certidao_casamento' | 'cnh'
 
 const KIND_DESCRIPTIONS: Record<DocumentKind, string> = {
   foto: 'uma foto de rosto/retrato pessoal (tipo 3x4), mostrando o rosto de uma pessoa',
   rg_frente: 'a frente de um RG (Carteira de Identidade) brasileiro',
   rg_verso: 'o verso de um RG (Carteira de Identidade) brasileiro',
-  cpf: 'um CPF (Cadastro de Pessoa Física) brasileiro — cartão físico ou documento que mostre o número do CPF',
   passaporte: 'uma página de passaporte com foto e dados pessoais',
   comprovante_pagamento: 'um comprovante de pagamento (recibo bancário, print de PIX, comprovante de transferência)',
   certidao_casamento: 'uma certidão de casamento',

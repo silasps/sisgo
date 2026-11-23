@@ -470,7 +470,9 @@ export default async function FormularioViewerPage({ params }: Props) {
     doc_rg_frente: 'RG (frente)',
     doc_rg_verso: 'RG (verso)',
     doc_cnh: 'CNH',
-    doc_cpf: 'CPF',
+    doc_cpf: 'CPF', // documentos antigos — não é mais pedido (ver S15Documentos)
+    doc_outro_1: 'Outro documento de identificação',
+    doc_outro_2: 'Outro documento de identificação (2)',
     doc_passaporte: 'Passaporte',
   }
   const s15Docs = (formData.s15 as Record<string, { path?: string; name?: string; type?: string; uploaded_at?: string }> | undefined) ?? {}

@@ -231,13 +231,15 @@ export async function anexarComprovante(slug: string, token: string, formData: F
   return { success: true, fileName: file.name }
 }
 
-const DOCUMENT_KEYS = ['doc_foto', 'doc_rg_frente', 'doc_rg_verso', 'doc_cnh', 'doc_cpf', 'doc_passaporte'] as const
-const DOCUMENT_KIND_BY_KEY: Record<typeof DOCUMENT_KEYS[number], DocumentKind> = {
+const DOCUMENT_KEYS = ['doc_foto', 'doc_rg_frente', 'doc_rg_verso', 'doc_cnh', 'doc_outro_1', 'doc_outro_2', 'doc_passaporte'] as const
+// "Outro documento" (fallback de quem não tem RG/CNH) fica fora deste mapa
+// de propósito — pode ser qualquer tipo de documento de identificação, não
+// dá pra validar um formato específico via IA (ver classifyDocument).
+const DOCUMENT_KIND_BY_KEY: Partial<Record<typeof DOCUMENT_KEYS[number], DocumentKind>> = {
   doc_foto: 'foto',
   doc_rg_frente: 'rg_frente',
   doc_rg_verso: 'rg_verso',
   doc_cnh: 'cnh',
-  doc_cpf: 'cpf',
   doc_passaporte: 'passaporte',
 }
 const DOCUMENT_TYPES: Record<string, string> = {
@@ -282,8 +284,11 @@ export async function anexarDocumentos(slug: string, token: string, formData: Fo
     const fileBuffer = Buffer.from(await file.arrayBuffer())
     const sanity = await basicImageSanity(fileBuffer, file.type)
     if (!sanity.valid) return { error: sanity.reason }
-    const classification = await classifyDocument(fileBuffer, file.type, DOCUMENT_KIND_BY_KEY[key])
-    if (!classification.valid) return { error: classification.reason ?? `A imagem enviada não parece ser o documento pedido ("${key}").` }
+    const kind = DOCUMENT_KIND_BY_KEY[key]
+    if (kind) {
+      const classification = await classifyDocument(fileBuffer, file.type, kind)
+      if (!classification.valid) return { error: classification.reason ?? `A imagem enviada não parece ser o documento pedido ("${key}").` }
+    }
 
     const path = `${app.organization_id}/${app.id}/${key}-${Date.now()}.${DOCUMENT_TYPES[file.type]}`
     const { error: uploadError } = await sb.storage.from('application-documents').upload(path, fileBuffer, {
