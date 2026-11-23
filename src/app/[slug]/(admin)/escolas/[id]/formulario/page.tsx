@@ -124,13 +124,21 @@ export default async function EscolaFormularioConfigPage({ params, searchParams 
       }
     }
 
+    // Salvar como modelo também aplica a config atual a esta escola — o
+    // usuário está editando os campos pensando nesta escola, não só no
+    // modelo abstrato; sem isso, a página pública não reflete a mudança.
+    const paymentInfo = (fd.get('payment_info') as string | null)?.trim() || null
+    await db.from('schools')
+      .update({ form_config: { hidden_fields: hiddenFields, payment_info: paymentInfo, required_overrides: requiredOverrides } })
+      .eq('id', id)
+
     await db.from('school_form_templates')
       .upsert(
         { organization_id: orgRow.id, name, form_config: { hidden_fields: hiddenFields, required_overrides: requiredOverrides }, created_by: actionUser.id },
         { onConflict: 'organization_id,name' },
       )
 
-    redirect(`/${slug}/escolas/${id}/formulario?flash_success=${encodeURIComponent(`Modelo "${name}" atualizado.`)}`)
+    redirect(`/${slug}/escolas/${id}/formulario?flash_success=${encodeURIComponent(`Modelo "${name}" atualizado e aplicado a esta escola.`)}`)
   }
 
   const totalCampos = CONFIGURAVEL.reduce((acc, s) => acc + s.campos.length, 0)

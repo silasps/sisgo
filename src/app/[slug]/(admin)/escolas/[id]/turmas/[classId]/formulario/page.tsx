@@ -134,13 +134,20 @@ export default async function TurmaFormularioConfigPage({ params, searchParams }
       }
     }
 
+    // Salvar como modelo também aplica a config atual a esta turma — o
+    // usuário está editando os campos pensando nesta turma, não só no
+    // modelo abstrato; sem isso, a página pública não reflete a mudança.
+    await db.from('school_classes')
+      .update({ form_config: { hidden_fields: hiddenFieldsToSave, required_overrides: requiredOverridesToSave }, form_config_confirmed: true })
+      .eq('id', classId)
+
     await db.from('school_form_templates')
       .upsert(
         { organization_id: orgRow.id, name, form_config: { hidden_fields: hiddenFieldsToSave, required_overrides: requiredOverridesToSave }, created_by: actionUser.id },
         { onConflict: 'organization_id,name' },
       )
 
-    redirect(`/${slug}/escolas/${id}/turmas/${classId}/formulario?flash_success=${encodeURIComponent(`Modelo "${name}" atualizado.`)}`)
+    redirect(`/${slug}/escolas/${id}/turmas/${classId}/formulario?flash_success=${encodeURIComponent(`Modelo "${name}" atualizado e aplicado a esta turma.`)}`)
   }
 
   const totalCampos = CONFIGURAVEL.reduce((acc, s) => acc + s.campos.length, 0)
