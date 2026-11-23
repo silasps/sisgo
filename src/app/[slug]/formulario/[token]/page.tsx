@@ -12,6 +12,14 @@ type Props = {
   searchParams: Promise<{ print?: string; lang?: string }>
 }
 
+// Sem isso o Next trata a rota como estática (nenhum dynamic API é usado —
+// createAdminClient não lê cookies) e guarda o HTML da primeira visita de
+// cada token, servindo essa versão velha pra sempre depois — inclusive com
+// Ctrl+Shift+R, que só limpa cache do navegador, não o do servidor. Config
+// de formulário mudada depois (ex.: modelo aplicado numa turma) nunca
+// aparecia pra quem já tinha aberto o link.
+export const dynamic = 'force-dynamic'
+
 export default async function FormularioPage({ params, searchParams }: Props) {
   const { slug, token } = await params
   const { print, lang } = await searchParams
