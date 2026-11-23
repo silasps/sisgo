@@ -5,6 +5,7 @@ import { redirect, notFound } from 'next/navigation'
 import { isManagementRole } from '@/lib/auth/permissions'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { getSchoolLink } from '@/lib/auth/unit-access'
+import { participantNoun } from '@/lib/schools'
 
 type Props = {
   children: React.ReactNode
@@ -27,7 +28,7 @@ export default async function EscolaWorkspaceLayout({ children, params }: Props)
 
   const { data: escola } = await supabase
     .from('schools')
-    .select('id, name')
+    .select('id, name, school_type')
     .eq('id', id)
     .eq('organization_id', orgId)
     .single()
@@ -43,7 +44,7 @@ export default async function EscolaWorkspaceLayout({ children, params }: Props)
   const tabs = [
     { href: base, label: 'Geral', icon: 'geral' as const },
     { href: `${base}/equipe`, label: 'Quadro de Obreiros', icon: 'equipe' as const },
-    { href: `${base}/alunos`, label: 'Alunos', icon: 'alunos' as const },
+    { href: `${base}/alunos`, label: participantNoun(escola.school_type, { plural: true }), icon: 'alunos' as const },
     // Tarefas é da escola em si: só quem tem vínculo (líder/obreiro) — a
     // gestão sem vínculo entra no resto da escola, não aqui.
     ...(link ? [{ href: `${base}/tarefas`, label: 'Tarefas', icon: 'tarefas' as const }] : []),

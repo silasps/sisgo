@@ -21,6 +21,9 @@ type Props = {
   // site) — pra quem não precisa que o líder já tenha os dados da pessoa.
   // Ausente quando a escola não tem página pública ativa.
   publicLinkAction?: PublicLinkAction
+  // "aluno" por padrão — escolas tipo evento usam "participante" (ver
+  // participantNoun em lib/schools).
+  noun?: string
 }
 
 const INPUT = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400'
@@ -28,7 +31,7 @@ const INPUT = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:
 // Espelha EnviarFormularioObreiroDiretoButton — líder já conversou com o
 // candidato fora do sistema e manda o formulário definitivo de aluno direto,
 // pulando a pré-inscrição pública.
-export function EnviarFormularioAlunoDiretoButton({ action, classes, buttonClassName, buttonLabel, publicLinkAction }: Props) {
+export function EnviarFormularioAlunoDiretoButton({ action, classes, buttonClassName, buttonLabel, publicLinkAction, noun = 'aluno' }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
@@ -83,7 +86,7 @@ export function EnviarFormularioAlunoDiretoButton({ action, classes, buttonClass
         <Send className="size-4 sm:size-3.5" /> <span className="hidden sm:inline">{buttonLabel ?? 'Enviar formulário direto'}</span>
       </button>
 
-      <Modal open={open} onClose={handleClose} title="Enviar formulário definitivo de aluno"
+      <Modal open={open} onClose={handleClose} title={`Enviar formulário definitivo de ${noun}`}
         subtitle="Use quando você já conversou com a pessoa fora do sistema — pula a pré-inscrição pública.">
         {publicLinkAction && !result?.url && (
           <div className="mx-5 mt-4 rounded-lg border border-brand-100 bg-brand-50 px-3 py-2.5">

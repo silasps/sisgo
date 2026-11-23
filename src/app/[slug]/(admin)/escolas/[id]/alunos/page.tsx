@@ -10,6 +10,7 @@ import { SubmitButton } from '@/components/ui/SubmitButton'
 import { EnviarFormularioAlunoDiretoButton } from '@/components/inscricoes/EnviarFormularioAlunoDiretoButton'
 import { getOrCreateShortLink } from '@/lib/shortLinks'
 import { ensureSchoolSlug } from '@/lib/school/schoolSlug'
+import { participantNoun } from '@/lib/schools'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
@@ -53,7 +54,10 @@ export default async function EscolaAlunosPage({ params }: Props) {
 
   const db = createAdminClient()
 
-  const { data: escolaPublic } = await db.from('schools').select('name, slug, is_public').eq('id', id).maybeSingle()
+  const { data: escolaPublic } = await db.from('schools').select('name, slug, is_public, school_type').eq('id', id).maybeSingle()
+  const noun = participantNoun(escolaPublic?.school_type)
+  const nounLower = participantNoun(escolaPublic?.school_type, { lowercase: true })
+  const nounPluralLower = participantNoun(escolaPublic?.school_type, { plural: true, lowercase: true })
 
   async function handleCopyPublicLink() {
     'use server'
@@ -130,6 +134,7 @@ export default async function EscolaAlunosPage({ params }: Props) {
             action={handleEnviarFormularioDireto}
             classes={turmas ?? []}
             publicLinkAction={handleCopyPublicLink}
+            noun={nounLower}
           />
         </div>
       )}
@@ -150,15 +155,15 @@ export default async function EscolaAlunosPage({ params }: Props) {
       {!rows.length ? (
         <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
           <GraduationCap size={32} className="text-gray-200 mx-auto mb-3" />
-          <p className="text-gray-400 text-sm">Nenhum aluno matriculado ainda.</p>
-          <p className="text-xs text-gray-400 mt-1">Aprovações em Inscrições adicionam alunos aqui.</p>
+          <p className="text-gray-400 text-sm">Nenhum {nounLower} matriculado ainda.</p>
+          <p className="text-xs text-gray-400 mt-1">Aprovações em Inscrições adicionam {nounPluralLower} aqui.</p>
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Aluno</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">{noun}</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Turma</th>
                 <th className="hidden sm:table-cell text-left px-4 py-3 font-medium text-gray-600">Matriculado em</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>

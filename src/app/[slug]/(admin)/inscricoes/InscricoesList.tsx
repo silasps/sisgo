@@ -26,6 +26,7 @@ import { PersonFinanceBadge } from '@/components/finance/PersonFinanceBadge'
 import { FinancePendingConfirmButton } from '@/components/finance/FinancePendingConfirmButton'
 import { FinalizarObreiroForm } from './FinalizarObreiroForm'
 import type { CreatedAccess } from '../pessoas/[personId]/acesso/actions'
+import { participantNoun } from '@/lib/schools'
 
 type InscricaoItem = {
   id: string
@@ -37,6 +38,7 @@ type InscricaoItem = {
   phone: string | null
   escola: string | null
   schoolId: string | null
+  schoolType?: string | null
   turma: string | null
   classId: string | null
   mensagem: string | null
@@ -319,7 +321,7 @@ function AssumirConversaButton({ onClick }: { onClick: () => void }) {
   )
 }
 
-function AceitarAlunoButton({ formularioPreenchido }: { formularioPreenchido: boolean }) {
+function AceitarAlunoButton({ formularioPreenchido, noun = 'aluno' }: { formularioPreenchido: boolean; noun?: string }) {
   const { pending } = useFormStatus()
   const disabled = !formularioPreenchido || pending
   return (
@@ -330,7 +332,7 @@ function AceitarAlunoButton({ formularioPreenchido }: { formularioPreenchido: bo
     >
       {pending
         ? <><Loader2 className="size-3.5 inline -mt-0.5 animate-spin" /> Aceitando…</>
-        : formularioPreenchido ? '✓ Aceitar aluno' : '✓ Aceitar aluno (aguardando formulário)'}
+        : formularioPreenchido ? `✓ Aceitar ${noun}` : `✓ Aceitar ${noun} (aguardando formulário)`}
     </button>
   )
 }
@@ -1347,10 +1349,10 @@ export function InscricoesList({
                                 personName={item.nome}
                                 className="w-full text-xs px-3 py-2 rounded-lg font-semibold transition-colors bg-green-50 text-green-700 hover:bg-green-100"
                               >
-                                ✓ Aceitar aluno
+                                ✓ Aceitar {participantNoun(item.schoolType, { lowercase: true })}
                               </FinancePendingConfirmButton>
                             ) : (
-                              <AceitarAlunoButton formularioPreenchido={formularioPreenchido} />
+                              <AceitarAlunoButton formularioPreenchido={formularioPreenchido} noun={participantNoun(item.schoolType, { lowercase: true })} />
                             )}
                           </form>
                         )

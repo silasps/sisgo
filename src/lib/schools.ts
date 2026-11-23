@@ -48,6 +48,18 @@ export function schoolDisplayType(school: { school_type?: string | null; type_na
   return school.type_name?.trim() || schoolTypeShortLabel(school.school_type)
 }
 
+// Rótulo pra quem se inscreve/participa — "Aluno" não faz sentido pra quem
+// só vai num evento de alguns dias (ver isDirectEnrollmentType). Os outros
+// tipos continuam "Aluno" (inclusive seminário, que também é matrícula
+// direta mas ainda é um curso de verdade).
+export function participantNoun(type?: string | null, opts?: { plural?: boolean; lowercase?: boolean }): string {
+  const isEvento = type === 'evento'
+  const word = isEvento
+    ? (opts?.plural ? 'Participantes' : 'Participante')
+    : (opts?.plural ? 'Alunos' : 'Aluno')
+  return opts?.lowercase ? word.toLowerCase() : word
+}
+
 export function schoolTypeGroup(type?: string | null): 'eted' | 'seminario' | 'evento' | 'second_level' | 'other' {
   if (type === 'eted') return 'eted'
   if (type === 'seminario') return 'seminario'

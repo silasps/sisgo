@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { GraduationCap, Award } from 'lucide-react'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { HEALTH_ROLES } from '@/lib/auth/permissions'
+import { participantNoun } from '@/lib/schools'
 
 type Props = { params: Promise<{ slug: string; id: string; classId: string }> }
 
@@ -43,9 +44,12 @@ export default async function AlunosTurmaPage({ params }: Props) {
 
   const db = createAdminClient()
 
-  const { data: escola } = await db.from('schools').select('name').eq('id', id).single()
+  const { data: escola } = await db.from('schools').select('name, school_type').eq('id', id).single()
   const { data: turma } = await db.from('school_classes').select('id, name, starts_at, ends_at').eq('id', classId).single()
   if (!escola || !turma) notFound()
+  const noun = participantNoun(escola.school_type)
+  const nounLower = participantNoun(escola.school_type, { lowercase: true })
+  const nounPluralLower = participantNoun(escola.school_type, { plural: true, lowercase: true })
 
   type StudentRow = {
     id: string
@@ -77,7 +81,7 @@ export default async function AlunosTurmaPage({ params }: Props) {
           <span>/</span>
           <Link href={`/${slug}/escolas/${id}/turmas/${classId}`} className="hover:text-gray-700">{turma.name}</Link>
           <span>/</span>
-          <span className="text-gray-600 font-medium">Alunos</span>
+          <span className="text-gray-600 font-medium">{participantNoun(escola.school_type, { plural: true })}</span>
         </nav>
 
         <div className="flex gap-2 flex-wrap">
@@ -111,15 +115,15 @@ export default async function AlunosTurmaPage({ params }: Props) {
         {!rows.length ? (
           <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
             <GraduationCap size={32} className="text-gray-200 mx-auto mb-3" />
-            <p className="text-gray-400 text-sm">Nenhum aluno nesta turma ainda.</p>
-            <p className="text-xs text-gray-400 mt-1">Aprovações em Inscrições adicionam alunos aqui.</p>
+            <p className="text-gray-400 text-sm">Nenhum {nounLower} nesta turma ainda.</p>
+            <p className="text-xs text-gray-400 mt-1">Aprovações em Inscrições adicionam {nounPluralLower} aqui.</p>
           </div>
         ) : (
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Aluno</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">{noun}</th>
                   <th className="hidden sm:table-cell text-left px-4 py-3 font-medium text-gray-600">Matriculado em</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
                   <th className="text-right px-4 py-3 font-medium text-gray-600">Ações</th>

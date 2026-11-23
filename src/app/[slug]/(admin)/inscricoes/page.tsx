@@ -13,7 +13,7 @@ import { getRolePreview } from '@/lib/role-preview'
 import { getMySchools, getMyMinistries, type LinkedSchool, type LinkedMinistry } from '@/lib/auth/unit-access'
 import { Suspense } from 'react'
 import { ScrollHighlight } from '@/components/ui/ScrollHighlight'
-import { SCHOOL_APPLICATION_TYPES } from '@/lib/schools'
+import { SCHOOL_APPLICATION_TYPES, participantNoun } from '@/lib/schools'
 import { enrollStudent } from '@/lib/students/enrollStudent'
 import { checkClassCategoryQuota } from '@/lib/students/classCapacity'
 import { ServirLinkCard } from './ServirLinkCard'
@@ -42,6 +42,7 @@ type InscricaoItem = {
   phone: string | null
   escola: string | null
   schoolId: string | null
+  schoolType?: string | null
   turma: string | null
   classId: string | null
   mensagem: string | null
@@ -1412,12 +1413,12 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
   const [schoolInterestRes, studentAppsRes, staffInterestRes] = await Promise.all([
     sb
       .from('school_interest_forms')
-      .select('id, class_id, full_name, email, phone, message, status, created_at, responded_at, refusal_reason, reviewed_by, schools(id, name), school_classes(name), school_applications(id, status, form_data)')
+      .select('id, class_id, full_name, email, phone, message, status, created_at, responded_at, refusal_reason, reviewed_by, schools(id, name, school_type), school_classes(name), school_applications(id, status, form_data)')
       .eq('organization_id', orgId)
       .order('created_at', { ascending: false }),
     sb
       .from('student_applications')
-      .select('id, class_id, status, applied_at, reviewed_at, reviewed_by, notes, refusal_reason, people(id, full_name), schools(id, name), school_classes(name)')
+      .select('id, class_id, status, applied_at, reviewed_at, reviewed_by, notes, refusal_reason, people(id, full_name), schools(id, name, school_type), school_classes(name)')
       .eq('organization_id', orgId)
       .order('applied_at', { ascending: false }),
     sb
@@ -1433,7 +1434,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
       id: string; full_name: string; email: string; phone: string | null
       message: string | null; status: string; created_at: string; responded_at: string | null; refusal_reason: string | null; reviewed_by: string | null
       class_id: string | null
-      schools: { id: string; name: string } | null; school_classes: { name: string } | null
+      schools: { id: string; name: string; school_type: string | null } | null; school_classes: { name: string } | null
       school_applications: { id: string; status: string; form_data: Record<string, unknown> | null }[] | null
     }
     const result = schoolInterestRes
@@ -1443,14 +1444,14 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     if (result.error) {
       const fallback = await sb
         .from('school_interest_forms')
-        .select('id, class_id, full_name, email, phone, message, status, created_at, responded_at, refusal_reason, schools(id, name), school_classes(name)')
+        .select('id, class_id, full_name, email, phone, message, status, created_at, responded_at, refusal_reason, schools(id, name, school_type), school_classes(name)')
         .eq('organization_id', orgId)
         .order('created_at', { ascending: false })
       rows = fallback.data ?? []
     }
 
     for (const r of (rows as IFRaw[])) {
-      const escola = r.schools as { id: string; name: string } | null
+      const escola = r.schools as { id: string; name: string; school_type: string | null } | null
       const appRow = (r.school_applications ?? []).find(a => ['enviado', 'em_analise', 'aprovado'].includes(a.status))
 
       if (isFinalizado(r.status) && r.refusal_reason) {
@@ -1471,7 +1472,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           id: r.id, tipo: 'pre_inscricao', tipoLabel: 'Pré-inscrição',
           tipoColor: 'bg-indigo-50 text-indigo-700',
           nome: r.full_name, email: r.email, phone: r.phone ?? null,
-          escola: escola?.name ?? null, schoolId: escola?.id ?? null,
+          escola: escola?.name ?? null, schoolId: escola?.id ?? null, schoolType: escola?.school_type ?? null,
           turma: (r.school_classes as { name: string } | null)?.name ?? null,
           classId: r.class_id ?? null,
           mensagem: r.message, status: r.status, notes: null,
@@ -1491,7 +1492,7 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
     type SAraw = {
       id: string; class_id: string | null; status: string; applied_at: string; reviewed_at: string | null; reviewed_by: string | null; notes: string | null; refusal_reason: string | null
       people: { id: string; full_name: string } | null
-      schools: { id: string; name: string } | null; school_classes: { name: string } | null
+      schools: { id: string; name: string; school_type: string | null } | null; school_classes: { name: string } | null
     }
     const { data } = studentAppsRes
 
@@ -1504,10 +1505,10 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
 
     for (const r of ((data ?? []) as unknown as SAraw[])) {
       const pessoa = r.people as { id: string; full_name: string } | null
-      const escola = r.schools as { id: string; name: string } | null
+      const escola = r.schools as { id: string; name: string; school_type: string | null } | null
       if (isFinalizado(r.status) && r.refusal_reason) {
         historico.push({
-          id: r.id, tipo: 'Candidato a Aluno', nome: pessoa?.full_name ?? '—',
+          id: r.id, tipo: `Candidato a ${participantNoun(escola?.school_type)}`, nome: pessoa?.full_name ?? '—',
           escola: escola?.name ?? null,
           schoolId: escola?.id ?? null,
           ministryId: null,
@@ -1520,10 +1521,10 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
         })
       } else {
         items.push({
-          id: r.id, tipo: 'aluno', tipoLabel: 'Candidato a Aluno',
+          id: r.id, tipo: 'aluno', tipoLabel: `Candidato a ${participantNoun(escola?.school_type)}`,
           tipoColor: 'bg-sky-50 text-sky-700',
           nome: pessoa?.full_name ?? '—', email: null, phone: null,
-          escola: escola?.name ?? null, schoolId: escola?.id ?? null,
+          escola: escola?.name ?? null, schoolId: escola?.id ?? null, schoolType: escola?.school_type ?? null,
           turma: (r.school_classes as { name: string } | null)?.name ?? null,
           classId: r.class_id ?? null,
           mensagem: null, status: r.status, notes: r.notes ?? null,

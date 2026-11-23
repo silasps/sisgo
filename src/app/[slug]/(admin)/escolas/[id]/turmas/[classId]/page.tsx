@@ -7,7 +7,7 @@ import { DirectEnrollLinkBox } from './DirectEnrollLinkBox'
 import { CurrencyField } from '@/components/ui/CurrencyField'
 import { IntegerField } from '@/components/ui/IntegerField'
 import { SubmitButton } from '@/components/ui/SubmitButton'
-import { isDirectEnrollmentType } from '@/lib/schools'
+import { isDirectEnrollmentType, participantNoun } from '@/lib/schools'
 
 type Props = { params: Promise<{ slug: string; id: string; classId: string }> }
 
@@ -163,7 +163,7 @@ export default async function EditarTurmaPage({ params }: Props) {
             href={`/${slug}/escolas/${id}/turmas/${classId}/alunos`}
             className="px-3 py-1.5 text-xs font-medium text-brand-600 border border-brand-200 rounded-lg hover:bg-brand-50 transition-colors"
           >
-            Alunos →
+            {participantNoun(escola.school_type, { plural: true })} →
           </Link>
           <Link
             href={`/${slug}/escolas/${id}/turmas/${classId}/presencas`}
@@ -204,7 +204,7 @@ export default async function EditarTurmaPage({ params }: Props) {
                 </div>
                 <Field label="Ano" name="year" type="number" defaultValue={turma.year?.toString() ?? ''} placeholder="2026" />
                 <Field label="Semestre" name="semester" type="number" defaultValue={turma.semester?.toString() ?? ''} placeholder="1 ou 2" />
-                <IntegerField label="Máx. de alunos" name="max_students" defaultValue={turma.max_students?.toString() ?? ''} />
+                <IntegerField label={`Máx. de ${participantNoun(escola.school_type, { plural: true, lowercase: true })}`} name="max_students" defaultValue={turma.max_students?.toString() ?? ''} />
               </div>
             </div>
 
@@ -213,7 +213,7 @@ export default async function EditarTurmaPage({ params }: Props) {
               <h2 className="font-semibold text-gray-900 mb-1">Vagas por categoria</h2>
               <p className="text-xs text-gray-500 mb-4">
                 Opcional — limita quantas pessoas de cada categoria podem ser aceitas nessa turma
-                (além do máx. de alunos acima). Em branco = sem limite nessa categoria. Pode ser
+                (além do máx. de {participantNoun(escola.school_type, { plural: true, lowercase: true })} acima). Em branco = sem limite nessa categoria. Pode ser
                 ajustado a qualquer momento, inclusive pra abrir uma vaga extra depois de esgotada.
               </p>
               <div className="grid sm:grid-cols-3 gap-4">
