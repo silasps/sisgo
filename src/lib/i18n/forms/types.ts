@@ -88,6 +88,22 @@ export interface FormDict {
     receipt_success: string
     event_info_title: string
     event_info_pdf: string
+    price_title: string
+    price_daily: string
+    price_stay: string       // {arrival}, {departure}, {n}
+    price_people: string
+    price_people_couple: string
+    price_total: string
+    price_capped: string     // {cap}
+    price_missing_dates: string
+    pix_title: string
+    pix_key_type: string
+    pix_key: string
+    pix_beneficiary: string
+    pix_copy: string
+    pix_copied: string
+    payer_name: string
+    confirmation_notice: string
   }
 
   // ── Section 1 ──────────────────────────────────────────────────────────
@@ -139,6 +155,17 @@ export interface FormDict {
     base_origem: string
     meio_transporte: string
     necessidades_acomodacao: string
+    categoria_hospedagem: string
+    cat_masculina: string
+    cat_feminina: string
+    cat_casal: string
+    cat_esgotada: string
+    cat_all_full: string
+    cat_hint: string
+    cat_required_error: string
+    cat_casal_error: string
+    cat_sexo_error: string   // {categoria}
+    saida_antes_chegada: string
   }
 
   // ── Section 5 ──────────────────────────────────────────────────────────
@@ -412,6 +439,9 @@ export interface FormDict {
     title: string
     maior_18: string
     finals: string[]   // 5 items
+    orientacoes_title: string
+    orientacoes_intro: string
+    orientacoes_aceite: string
   }
 
   // ── Reference form ─────────────────────────────────────────────────────

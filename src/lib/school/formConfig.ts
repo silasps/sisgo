@@ -10,12 +10,22 @@ export type FormConfig = {
   // é sempre da escola, nunca entra em modelo (ver salvarComoModelo).
   event_info?: string
   event_info_pdf?: { path: string; name: string } | null
+  // Dados de PIX mostrados na tela de pagamento, com botão de copiar a chave
+  // (o payment_info continua como texto livre complementar). Da escola,
+  // igual payment_info.
+  pix?: PixInfo | null
+  // Orientações de hospedagem (o que trazer etc.), uma por linha — aparecem
+  // na última seção do formulário com um "li e concordo" obrigatório. Da
+  // escola, igual payment_info.
+  lodging_guidelines?: string | null
   // Override de obrigatório/opcional por campo (chave "sX.campo" →
   // true=obrigatório, false=opcional). Ausência de chave = usa o default
   // já hardcoded no componente (ver requiredByDefault abaixo e
   // src/app/[slug]/formulario/[token]/FormularioInscricao.tsx).
   required_overrides?: Record<string, boolean>
 }
+
+export type PixInfo = { key_type: string; key: string; beneficiary: string }
 
 export type FormTemplate = {
   id: string
@@ -219,6 +229,8 @@ export function resolveFormConfig(
   paymentInfo: string | null
   eventInfo: string | null
   eventInfoPdf: { path: string; name: string } | null
+  pix: PixInfo | null
+  lodgingGuidelines: string[]
   requiredOverrides: Record<string, boolean>
 } {
   return {
@@ -226,7 +238,29 @@ export function resolveFormConfig(
     paymentInfo: schoolConfig?.payment_info ?? null,
     eventInfo: schoolConfig?.event_info ?? null,
     eventInfoPdf: schoolConfig?.event_info_pdf ?? null,
+    pix: schoolConfig?.pix?.key ? schoolConfig.pix : null,
+    lodgingGuidelines: (schoolConfig?.lodging_guidelines ?? '')
+      .split('\n').map(line => line.replace(/^[\s•\-*]+/, '').trim()).filter(Boolean),
     requiredOverrides: classConfig?.required_overrides ?? schoolConfig?.required_overrides ?? {},
+  }
+}
+
+// Campos só da escola (nunca entram em modelo) que vêm do form de
+// Configurar formulário — usado por salvarConfig e salvarComoModelo, que
+// regravam o form_config inteiro.
+export function readSchoolOnlyConfig(fd: FormData): {
+  payment_info: string | null
+  event_info: string | null
+  pix: PixInfo | null
+  lodging_guidelines: string | null
+} {
+  const text = (name: string) => (fd.get(name) as string | null)?.trim() || null
+  const pixKey = text('pix_key')
+  return {
+    payment_info: text('payment_info'),
+    event_info: text('event_info'),
+    pix: pixKey ? { key: pixKey, key_type: text('pix_key_type') ?? '', beneficiary: text('pix_beneficiary') ?? '' } : null,
+    lodging_guidelines: text('lodging_guidelines'),
   }
 }
 

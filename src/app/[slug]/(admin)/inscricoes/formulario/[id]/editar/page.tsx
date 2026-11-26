@@ -26,6 +26,15 @@ const SECTION_FIELDS: { key: string; title: string; fields: { label: string; nam
       { label: 'Conversou com alguém da escola?', name: 'conversou_equipe', type: 'select', options: ['sim', 'nao'] },
       { label: 'Com quem conversou', name: 'conversou_com_quem' },
       { label: 'Motivação', name: 'motivacao', type: 'textarea' },
+      // Hospedagem de evento — vazio ("—") nas inscrições de escola.
+      { label: 'Categoria de hospedagem', name: 'categoria_hospedagem', type: 'select', options: ['masculina', 'feminina', 'casal'] },
+      { label: 'Data de chegada (AAAA-MM-DD)', name: 'data_chegada' },
+      { label: 'Horário de chegada', name: 'horario_chegada' },
+      { label: 'Data de saída (AAAA-MM-DD)', name: 'data_saida' },
+      { label: 'Horário de saída', name: 'horario_saida' },
+      { label: 'De qual base vem', name: 'base_origem' },
+      { label: 'Meio de transporte', name: 'meio_transporte' },
+      { label: 'Necessidades especiais de acomodação', name: 'necessidades_acomodacao', type: 'textarea' },
     ],
   },
   {
@@ -33,7 +42,8 @@ const SECTION_FIELDS: { key: string; title: string; fields: { label: string; nam
     fields: [
       { label: 'Sexo', name: 'sexo', type: 'select', options: ['M', 'F'] },
       { label: 'Data de nascimento', name: 'data_nascimento' },
-      { label: 'Estado civil', name: 'estado_civil', type: 'select', options: ['solteiro', 'casado', 'divorciado', 'viuvo', 'uniao_estavel'] },
+      { label: 'Estado civil', name: 'estado_civil', type: 'select', options: ['solteiro', 'casado', 'comprometido', 'divorciado', 'viuvo', 'uniao_estavel'] },
+      { label: 'Nome do cônjuge', name: 'conjuge_nome' },
       { label: 'Brasileiro(a)?', name: 'is_brasileiro', type: 'select', options: ['sim', 'nao'] },
       { label: 'Formação', name: 'formacao' },
       { label: 'Estudando atualmente?', name: 'estudando', type: 'select', options: ['sim', 'nao'] },
@@ -261,8 +271,9 @@ export default async function FormularioEditorPage({ params }: Props) {
     return formData[section]?.[field] ?? ''
   }
 
-  const escola = app.schools as unknown as { form_config: { payment_info?: string } | null } | null
-  const paymentInfo = escola?.form_config?.payment_info ?? null
+  const escola = app.schools as unknown as { form_config: { payment_info?: string; pix?: { key?: string } | null } | null } | null
+  // Escola com pagamento configurado (texto e/ou chave PIX) — mostra o anexo de comprovante.
+  const requiresReceipt = !!escola?.form_config?.payment_info || !!escola?.form_config?.pix?.key
   const s15 = (app.form_data as Record<string, unknown> | null)?.s15 as Record<string, { path?: string; name?: string; type?: string }> | undefined
   const paymentReceipt = (app.form_data as Record<string, unknown> | null)?.payment_receipt as { path?: string; name?: string; type?: string } | undefined
 
@@ -382,7 +393,7 @@ export default async function FormularioEditorPage({ params }: Props) {
                 onUpload={anexarDocumentoAdmin.bind(null, { slug, organizationId: app.organization_id, applicationId: id, key: doc.key })}
               />
             ))}
-            {paymentInfo && (
+            {requiresReceipt && (
               <AdminFileUpload
                 label="Comprovante de pagamento"
                 currentName={paymentReceipt?.name ?? null}
@@ -423,6 +434,12 @@ export default async function FormularioEditorPage({ params }: Props) {
                         {field.options.map(opt => (
                           <option key={opt} value={opt}>{opt}</option>
                         ))}
+                        {/* Valor gravado fora da lista (ex: "comprometido", ou
+                            opção antiga) — sem ele aqui o select caía em "—" e
+                            salvar apagava o dado. */}
+                        {get(section.key, field.name) && !field.options.includes(get(section.key, field.name)) && (
+                          <option value={get(section.key, field.name)}>{get(section.key, field.name)}</option>
+                        )}
                       </select>
                     ) : (
                       <input

@@ -6,6 +6,8 @@ import { CheckCircle2 } from 'lucide-react'
 import { getFormDict, normalizeLang } from '@/lib/i18n/forms'
 import { PROFILE_COMPLETION_BLOCK_AFTER } from '@/lib/profile-completion'
 import { resolveFormConfig, type FormConfig } from '@/lib/school/formConfig'
+import { fullCategories, getSubmittedOccupancy, hasCategoryQuota } from '@/lib/students/classCapacity'
+import { isDirectEnrollmentType } from '@/lib/schools'
 
 type Props = {
   params: Promise<{ slug: string; token: string }>
@@ -32,7 +34,7 @@ export default async function FormularioPage({ params, searchParams }: Props) {
       id, status, current_section, form_data, token_expires_at,
       organization_id, reminder_skips, person_id,
       schools(id, name, organization_id, school_type, form_config),
-      school_classes(name, form_config),
+      school_classes(id, name, form_config, max_students, quota_homens, quota_mulheres, quota_casais, daily_rate, base_cost),
       school_interest_forms(full_name, email, phone, language)
     `)
     .eq('token', token)
@@ -117,7 +119,24 @@ export default async function FormularioPage({ params, searchParams }: Props) {
     )
   }
 
-  if (app.status === 'enviado' || app.status === 'em_analise' || app.status === 'aprovado') {
+  const escola = app.schools as unknown as { id: string; name: string; organization_id: string; school_type: string | null; form_config: FormConfig | null } | null
+  const turma  = app.school_classes as unknown as {
+    id: string; name: string; form_config: FormConfig | null
+    max_students: number | null; quota_homens: number | null; quota_mulheres: number | null; quota_casais: number | null
+    daily_rate: number | null; base_cost: number | null
+  } | null
+
+  // Config da turma (se já tiver sido revisada) vence sobre o default da
+  // escola — ver resolveFormConfig.
+  const { hiddenFields, paymentInfo, eventInfo, eventInfoPdf, pix, lodgingGuidelines, requiredOverrides } = resolveFormConfig(escola?.form_config, turma?.form_config)
+
+  // Já enviada: só volta a abrir se a escola exige comprovante e ele nunca
+  // foi anexado (ex: enviada antes de o pagamento ser configurado) — é o link
+  // que a equipe reenvia pelo card "comprovante ainda não anexado".
+  const isSubmitted = app.status === 'enviado' || app.status === 'em_analise' || app.status === 'aprovado'
+  const receiptOnly = isSubmitted && (!!paymentInfo || !!pix)
+    && !(formData.payment_receipt as { path?: string } | undefined)?.path
+  if (isSubmitted && !receiptOnly) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
         <div className="bg-white rounded-2xl shadow p-10 max-w-md text-center">
@@ -129,12 +148,14 @@ export default async function FormularioPage({ params, searchParams }: Props) {
     )
   }
 
-  const escola = app.schools as unknown as { id: string; name: string; organization_id: string; school_type: string | null; form_config: FormConfig | null } | null
-  const turma  = app.school_classes as unknown as { name: string; form_config: FormConfig | null } | null
-
-  // Config da turma (se já tiver sido revisada) vence sobre o default da
-  // escola — ver resolveFormConfig.
-  const { hiddenFields, paymentInfo, eventInfo, eventInfoPdf, requiredOverrides } = resolveFormConfig(escola?.form_config, turma?.form_config)
+  // Matrícula direta com cota por categoria (ex: hospedagem de evento): o
+  // formulário pede a categoria e já mostra quais estão esgotadas.
+  const lodgingCategories = turma && isDirectEnrollmentType(escola?.school_type) && hasCategoryQuota(turma)
+    ? fullCategories(turma, await getSubmittedOccupancy(sb, turma.id, app.id))
+    : null
+  const pricing = turma?.daily_rate != null
+    ? { dailyRate: Number(turma.daily_rate), packageCap: turma.base_cost == null ? null : Number(turma.base_cost) }
+    : null
   const eventInfoPdfUrl = eventInfoPdf?.path
     ? sb.storage.from('school-event-info').getPublicUrl(eventInfoPdf.path).data.publicUrl
     : null
@@ -156,7 +177,7 @@ export default async function FormularioPage({ params, searchParams }: Props) {
       </header>
 
       {/* Orientação */}
-      <div className="print:hidden max-w-2xl mx-auto px-4 sm:px-6 pt-5 sm:pt-6">
+      <div className={`print:hidden max-w-2xl mx-auto px-4 sm:px-6 pt-5 sm:pt-6 ${receiptOnly ? 'hidden' : ''}`}>
         <div className="bg-indigo-600 text-white rounded-2xl p-5 mb-6">
           <h2 className="font-bold text-base mb-1">
             {isUpdatingExisting ? d.welcome_title_update : d.welcome_title}
@@ -189,6 +210,11 @@ export default async function FormularioPage({ params, searchParams }: Props) {
             initialLang={pageLang}
             printMode={printMode}
             documentUrls={documentUrls}
+            lodgingCategories={lodgingCategories}
+            pricing={pricing}
+            pix={pix}
+            lodgingGuidelines={lodgingGuidelines}
+            receiptOnly={receiptOnly}
             canExit={(app.reminder_skips ?? 0) < PROFILE_COMPLETION_BLOCK_AFTER}
           />
         </div>

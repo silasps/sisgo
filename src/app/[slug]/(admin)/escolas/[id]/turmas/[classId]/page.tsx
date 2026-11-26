@@ -63,6 +63,7 @@ export default async function EditarTurmaPage({ params }: Props) {
       ends_at: (formData.get('ends_at') as string) || null,
       registration_deadline: (formData.get('registration_deadline') as string) || null,
       base_cost: formData.get('base_cost') ? Number(formData.get('base_cost')) : null,
+      daily_rate: formData.get('daily_rate') ? Number(formData.get('daily_rate')) : null,
       cost_description: (formData.get('cost_description') as string) || null,
       location: (formData.get('location') as string) || null,
       public_description: (formData.get('public_description') as string) || null,
@@ -244,6 +245,13 @@ export default async function EditarTurmaPage({ params }: Props) {
               <h2 className="font-semibold text-gray-900 mb-4">Valores e pagamento</h2>
               <div className="grid sm:grid-cols-2 gap-4">
                 <CurrencyField label="Valor base (R$)" name="base_cost" defaultValue={(turma as unknown as { base_cost: number | null }).base_cost ?? null} />
+                <div>
+                  <CurrencyField label="Valor da diária por pessoa (R$)" name="daily_rate" defaultValue={(turma as unknown as { daily_rate: number | null }).daily_rate ?? null} />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Opcional — com ela, a tela de pagamento calcula o total pelas datas de chegada e saída
+                    (noites × diária, casal conta 2 pessoas), sem passar do valor base por pessoa.
+                  </p>
+                </div>
                 <Field label="Local / Endereço" name="location" defaultValue={(turma as unknown as { location: string | null }).location ?? ''} placeholder="Ex: Rua das Flores, 123 - Cidade/UF" />
                 <div className="sm:col-span-2">
                   <TextArea label="Descrição de pagamento" name="cost_description"

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { sortTemplatesByCanonicalOrder, type ConfigField, type FormConfig } from '@/lib/school/formConfig'
 import { SubmitButton } from '@/components/ui/SubmitButton'
@@ -58,11 +58,34 @@ export function FormConfigFields({
   const savedActive = useMemo(() => buildActive(sections, savedHiddenFields), [sections, savedHiddenFields])
   const savedRequired = useMemo(() => buildRequired(sections, savedRequiredOverrides), [sections, savedRequiredOverrides])
 
+  // Campos do mesmo <form> que não são deste editor (na tela da escola:
+  // texto de pagamento, PIX, informações do evento, PDF, orientações) —
+  // sem isso, quem mexia só neles não conseguia salvar (botão desabilitado
+  // até alterar algum checkbox de campo).
+  const rootRef = useRef<HTMLDivElement>(null)
+  const [otherFieldsDirty, setOtherFieldsDirty] = useState(false)
+  useEffect(() => {
+    const form = rootRef.current?.closest('form')
+    if (!form) return
+    const root = rootRef.current
+    const onEdit = (e: Event) => {
+      if (root && e.target instanceof Node && root.contains(e.target)) return
+      setOtherFieldsDirty(true)
+    }
+    form.addEventListener('input', onEdit)
+    form.addEventListener('change', onEdit)
+    return () => {
+      form.removeEventListener('input', onEdit)
+      form.removeEventListener('change', onEdit)
+    }
+  }, [])
+
   const isDirty = useMemo(() => {
+    if (otherFieldsDirty) return true
     for (const key of Object.keys(savedActive)) if (!!active[key] !== !!savedActive[key]) return true
     for (const key of Object.keys(savedRequired)) if (!!required[key] !== !!savedRequired[key]) return true
     return false
-  }, [active, required, savedActive, savedRequired])
+  }, [otherFieldsDirty, active, required, savedActive, savedRequired])
 
   // Nome do modelo que bate exatamente com a configuração JÁ SALVA (não
   // com a pré-visualização) — pra dizer "é isso que tá valendo hoje".
@@ -153,7 +176,7 @@ export function FormConfigFields({
   )
 
   return (
-    <div className="space-y-3">
+    <div ref={rootRef} className="space-y-3">
       {statusBanner}
 
       {templates.length > 0 && (

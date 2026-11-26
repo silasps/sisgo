@@ -5,6 +5,8 @@ import { isManagementRole } from '@/lib/auth/permissions'
 import { getSchoolLink } from '@/lib/auth/unit-access'
 import { FormularioInscricao } from '@/app/[slug]/formulario/[token]/FormularioInscricao'
 import { resolveFormConfig, type FormConfig } from '@/lib/school/formConfig'
+import { hasCategoryQuota } from '@/lib/students/classCapacity'
+import { isDirectEnrollmentType } from '@/lib/schools'
 
 type Props = {
   params: Promise<{ slug: string; id: string }>
@@ -37,17 +39,20 @@ export default async function VisualizarFormularioPage({ params, searchParams }:
     .single()
   if (!school) notFound()
 
+  const schoolType = (school as unknown as { school_type: string | null }).school_type
   let classConfig: FormConfig | null = null
+  let withCategory = false
   if (classId) {
     const { data: turma } = await supabase
       .from('school_classes')
-      .select('form_config')
+      .select('form_config, quota_homens, quota_mulheres, quota_casais')
       .eq('id', classId)
       .eq('school_id', id)
       .maybeSingle()
     classConfig = (turma?.form_config as FormConfig | null) ?? null
+    withCategory = !!turma && isDirectEnrollmentType(schoolType) && hasCategoryQuota(turma)
   }
-  const { hiddenFields, paymentInfo, requiredOverrides } = resolveFormConfig(school.form_config as FormConfig, classConfig)
+  const { hiddenFields, paymentInfo, pix, lodgingGuidelines, requiredOverrides } = resolveFormConfig(school.form_config as FormConfig, classConfig)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
@@ -67,11 +72,14 @@ export default async function VisualizarFormularioPage({ params, searchParams }:
             applicationId="preview"
             schoolName={school.name}
             orgName={org.name}
-            schoolType={(school as unknown as { school_type: string | null }).school_type}
+            schoolType={schoolType}
             initialData={{}}
             hiddenFields={hiddenFields}
             requiredOverrides={requiredOverrides}
             paymentInfo={paymentInfo}
+            pix={pix}
+            lodgingGuidelines={lodgingGuidelines}
+            lodgingCategories={withCategory ? { masculina: false, feminina: false, casal: false } : null}
             initialLang="pt"
             printMode
           />

@@ -4,13 +4,16 @@ import { useRef, useState, useEffect, useContext, createContext, useMemo } from 
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { getFormDict, normalizeLang, t } from '@/lib/i18n/forms'
 import type { FormDict, Lang } from '@/lib/i18n/forms'
-import { HeartHandshake, Camera, IdCard, FileText, LogOut } from 'lucide-react'
+import { HeartHandshake, Camera, IdCard, FileText, LogOut, Copy, Check } from 'lucide-react'
 import { ptDict } from '@/lib/i18n/forms'
 import { orgShortName } from '@/lib/orgShortName'
 import { LangSwitcher } from '@/components/ui/LangSwitcher'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { PhotoFramingGuide } from '@/components/ui/PhotoFramingGuide'
 import { isDirectEnrollmentType } from '@/lib/schools'
+import type { CategoriaHospedagem } from '@/lib/students/classCapacity'
+import type { PixInfo } from '@/lib/school/formConfig'
+import { computeLodgingTotal, formatBRL, type LodgingPricing } from '@/lib/school/lodgingPrice'
 
 // ── Contexts ────────────────────────────────────────────────────────────────
 
@@ -40,7 +43,7 @@ function HiddenStyles() {
   }).join(',')
   return <style>{`${selectors}{display:none!important}`}</style>
 }
-import { salvarSecao, enviarFormulario, gerarLinkReferencia, anexarComprovante, anexarDocumentos, atualizarSecaoAtual } from './actions'
+import { salvarSecao, enviarFormulario, gerarLinkReferencia, anexarComprovante, anexarDocumentos, atualizarSecaoAtual, conferirVagas } from './actions'
 import { InternationalPhoneField } from '@/components/ui/InternationalPhoneField'
 import { MaskedInput, useMask } from '@/components/ui/MaskedInput'
 import { FileInputField } from '@/components/ui/FileInputField'
@@ -73,6 +76,18 @@ type Props = {
   initialLang?: string
   printMode?: boolean
   documentUrls?: DocumentUrls
+  /** Turma de matrícula direta com cota por categoria: mostra o campo
+   * "Categoria de hospedagem" (true = categoria esgotada). Null/ausente = sem campo. */
+  lodgingCategories?: Record<CategoriaHospedagem, boolean> | null
+  /** Diária da turma — com ela a tela de pagamento calcula o total pela estadia. */
+  pricing?: LodgingPricing | null
+  pix?: PixInfo | null
+  /** Itens de "o que trazer" — aparecem na última seção com aceite obrigatório. */
+  lodgingGuidelines?: string[]
+  /** Inscrição já enviada, mas sem o comprovante que a escola exige (ex:
+   * enviada antes de a escola configurar o pagamento) — o link reenviado
+   * pela equipe abre só a tela de pagamento, sem reenviar o formulário. */
+  receiptOnly?: boolean
   /** Falso quando a pessoa já adiou o cadastro vezes demais (ver
    * CadastroIncompletoAlert) — nesse ponto o formulário não pode mais ser
    * abandonado, precisa ser concluído pra liberar o resto do sistema. */
@@ -219,7 +234,13 @@ function S3Termo({ data, schoolType }: { data?: Record<string, string>; schoolTy
   )
 }
 
-function S4Escola({ schoolName, className, data, orgName, schoolType }: { schoolName: string; className?: string; data?: Record<string, string>; orgName: string; schoolType?: string | null }) {
+const CATEGORIAS: CategoriaHospedagem[] = ['masculina', 'feminina', 'casal']
+
+function categoriaLabel(d: FormDict, cat: string | undefined): string {
+  return cat === 'masculina' ? d.s4.cat_masculina : cat === 'feminina' ? d.s4.cat_feminina : cat === 'casal' ? d.s4.cat_casal : ''
+}
+
+function S4Escola({ schoolName, className, data, orgName, schoolType, lodgingCategories }: { schoolName: string; className?: string; data?: Record<string, string>; orgName: string; schoolType?: string | null; lodgingCategories?: Record<CategoriaHospedagem, boolean> | null }) {
   const d = useContext(DictCtx)
   const isEvento = schoolType === 'evento'
   return (
@@ -255,6 +276,28 @@ function S4Escola({ schoolName, className, data, orgName, schoolType }: { school
           <TextArea label={d.s4.motivacao} name="motivacao" configKey="s4.motivacao"
             defaultValue={data?.motivacao} required rows={4} />
         </div></H>
+        {lodgingCategories && (
+          <div className="sm:col-span-2" data-field="categoria_hospedagem">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {d.s4.categoria_hospedagem}<span className="text-red-500 ml-0.5">*</span>
+            </label>
+            <select name="categoria_hospedagem" defaultValue={data?.categoria_hospedagem ?? ''} required
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-gray-50">
+              <option value="" disabled>{d.nav.select_placeholder}</option>
+              {CATEGORIAS.map(cat => (
+                // A já escolhida antes continua selecionável mesmo esgotada
+                // — o envio é que barra, com a mensagem explicando.
+                <option key={cat} value={cat} disabled={lodgingCategories[cat] && data?.categoria_hospedagem !== cat}>
+                  {categoriaLabel(d, cat)}{lodgingCategories[cat] ? ` (${d.s4.cat_esgotada})` : ''}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-400 mt-1">{d.s4.cat_hint}</p>
+            {CATEGORIAS.every(cat => lodgingCategories[cat]) && !data?.categoria_hospedagem && (
+              <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{d.s4.cat_all_full}</p>
+            )}
+          </div>
+        )}
         <H id="s4.data_chegada">
           <Field label={d.s4.data_chegada} name="data_chegada" type="date" configKey="s4.data_chegada" defaultValue={data?.data_chegada} required />
         </H>
@@ -361,10 +404,11 @@ function ZipAddressFields({ data }: { data?: Record<string, string> }) {
   )
 }
 
-function S5Dados({ prefill, data, onNationalityChange }: {
+function S5Dados({ prefill, data, onNationalityChange, categoriaHospedagem }: {
   prefill?: Prefill
   data?: Record<string, string>
   onNationalityChange?: (isBrazilian: boolean) => void
+  categoriaHospedagem?: string
 }) {
   const d = useContext(DictCtx)
   const hidden = useContext(HiddenCtx)
@@ -413,7 +457,11 @@ function S5Dados({ prefill, data, onNationalityChange }: {
             ]} />
         </H>
         <H id="s5.conjuge_nome">
-          {casado && <Field label={d.s5.conjuge_nome} name="conjuge_nome" configKey="s5.conjuge_nome" defaultValue={data?.conjuge_nome} />}
+          {/* Hospedagem de casal = uma inscrição pelos dois: o nome do cônjuge
+              passa a ser obrigatório, acima da config da escola. */}
+          {casado && <Field label={d.s5.conjuge_nome} name="conjuge_nome"
+            configKey={categoriaHospedagem === 'casal' ? undefined : 's5.conjuge_nome'}
+            required={categoriaHospedagem === 'casal'} defaultValue={data?.conjuge_nome} />}
         </H>
         <Select label={d.s5.is_brasileiro} name="is_brasileiro" required
           defaultValue={data?.is_brasileiro}
@@ -1373,7 +1421,7 @@ function S15Documentos({ hasRg, hasCnh, hasPassaporte, estrangeiro, sexo, docume
   )
 }
 
-function S16Aceite({ data }: { data?: Record<string, string> }) {
+function S16Aceite({ data, guidelines }: { data?: Record<string, string>; guidelines?: string[] }) {
   const d = useContext(DictCtx)
   const finalNames = ['final_verdadeiro', 'final_ciente_avaliacao', 'final_sem_garantia', 'final_autorizo_contato', 'final_documentos_adicionais']
   return (
@@ -1395,6 +1443,23 @@ function S16Aceite({ data }: { data?: Record<string, string> }) {
           </label>
         ))}
       </div>
+      {!!guidelines?.length && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+          <div>
+            <h3 className="font-bold text-amber-900">{d.s16.orientacoes_title}</h3>
+            <p className="text-sm text-amber-800 mt-1">{d.s16.orientacoes_intro}</p>
+          </div>
+          <ul className="list-disc pl-5 space-y-1 text-sm text-amber-900">
+            {guidelines.map((item, i) => <li key={i}>{item}</li>)}
+          </ul>
+          <label className="flex items-start gap-3 cursor-pointer border-t border-amber-200 pt-3">
+            <input type="checkbox" name="aceite_orientacoes" value="sim"
+              defaultChecked={data?.aceite_orientacoes === 'sim'} required
+              className="mt-0.5 accent-amber-600 flex-shrink-0" />
+            <span className="text-sm font-semibold text-amber-900">{d.s16.orientacoes_aceite} *</span>
+          </label>
+        </div>
+      )}
     </div>
   )
 }
@@ -1404,11 +1469,38 @@ function S16Aceite({ data }: { data?: Record<string, string> }) {
 // só é marcado como enviado depois que o comprovante é anexado com sucesso.
 // Só aparece quando a escola configurou informações de pagamento.
 
-function PaymentGateScreen({ slug, token, paymentInfo, onComplete, d }: {
-  slug: string; token: string; paymentInfo: string; onComplete: () => void; d: FormDict
+// "2027-02-14" → "14/02/2027" sem passar por Date (fuso não pode mudar o dia).
+function formatDateBR(date?: string): string {
+  const [y, m, day] = (date ?? '').slice(0, 10).split('-')
+  return y && m && day ? `${day}/${m}/${y}` : ''
+}
+
+function PaymentGateScreen({ slug, token, paymentInfo, pix, pricing, stay, alreadySubmitted, onComplete, onBack, d }: {
+  slug: string; token: string; paymentInfo?: string | null; pix?: PixInfo | null
+  pricing?: LodgingPricing | null; stay: { arrival?: string; departure?: string; people: number }
+  /** Formulário já enviado antes — só anexa o comprovante, sem reenviar. */
+  alreadySubmitted?: boolean
+  onComplete: () => void
+  /** Volta pro formulário — sem isso, um erro aqui (vaga esgotada, categoria
+   * faltando) deixava a pessoa presa, sem como corrigir a seção 4. */
+  onBack?: () => void
+  d: FormDict
 }) {
   const [status, setStatus] = useState<'idle' | 'sending'>('idle')
   const [error, setError] = useState('')
+  const [copied, setCopied] = useState(false)
+  const total = pricing ? computeLodgingTotal(pricing, stay) : null
+
+  async function copyPixKey() {
+    if (!pix) return
+    try {
+      await navigator.clipboard.writeText(pix.key)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2500)
+    } catch {
+      window.prompt(d.submitted.pix_key, pix.key)
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -1420,11 +1512,13 @@ function PaymentGateScreen({ slug, token, paymentInfo, onComplete, d }: {
       setStatus('idle')
       return
     }
-    const submitResult = await enviarFormulario(slug, token)
-    if ('error' in submitResult) {
-      setError(submitResult.error ?? '')
-      setStatus('idle')
-      return
+    if (!alreadySubmitted) {
+      const submitResult = await enviarFormulario(slug, token)
+      if ('error' in submitResult) {
+        setError(submitResult.error ?? '')
+        setStatus('idle')
+        return
+      }
     }
     onComplete()
   }
@@ -1436,8 +1530,64 @@ function PaymentGateScreen({ slug, token, paymentInfo, onComplete, d }: {
         <p className="text-sm text-gray-500">{d.submitted.payment_gate_hint}</p>
       </div>
       <div className="bg-green-50 border border-green-200 rounded-2xl p-6 text-left space-y-4">
-        <p className="text-sm text-gray-700 whitespace-pre-wrap">{paymentInfo}</p>
+        {pricing && (
+          <div className="space-y-2">
+            <h3 className="font-bold text-gray-900">{d.submitted.price_title}</h3>
+            <dl className="space-y-1.5 text-sm">
+              <div className="flex justify-between gap-3">
+                <dt className="text-gray-600">{d.submitted.price_daily}</dt>
+                <dd className="font-semibold text-gray-900 shrink-0">{formatBRL(pricing.dailyRate)}</dd>
+              </div>
+              {total ? (<>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-gray-600">{t(d.submitted.price_stay, { arrival: formatDateBR(stay.arrival), departure: formatDateBR(stay.departure), n: String(total.nights) })}</dt>
+                  <dd className="font-semibold text-gray-900 shrink-0">{formatBRL(total.perPerson)}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-gray-600">{d.submitted.price_people}</dt>
+                  <dd className="font-semibold text-gray-900 shrink-0">{total.people === 2 ? d.submitted.price_people_couple : '1'}</dd>
+                </div>
+                <div className="flex justify-between gap-3 border-t border-green-200 pt-2 text-base">
+                  <dt className="font-bold text-gray-900">{d.submitted.price_total}</dt>
+                  <dd className="font-black text-green-800 shrink-0">{formatBRL(total.total)}</dd>
+                </div>
+                {total.capped && pricing.packageCap != null && (
+                  <p className="text-xs text-gray-500">{t(d.submitted.price_capped, { cap: formatBRL(pricing.packageCap) })}</p>
+                )}
+              </>) : (
+                <p className="text-xs text-amber-700">{d.submitted.price_missing_dates}</p>
+              )}
+            </dl>
+          </div>
+        )}
+        {pix && (
+          <div className={`space-y-2 ${pricing ? 'border-t border-green-200 pt-4' : ''}`}>
+            <h3 className="font-bold text-gray-900">{d.submitted.pix_title}</h3>
+            <dl className="space-y-1 text-sm">
+              {pix.key_type && <div><dt className="inline text-gray-600">{d.submitted.pix_key_type}: </dt><dd className="inline font-medium text-gray-900">{pix.key_type}</dd></div>}
+              {pix.beneficiary && <div><dt className="inline text-gray-600">{d.submitted.pix_beneficiary}: </dt><dd className="inline font-medium text-gray-900">{pix.beneficiary}</dd></div>}
+            </dl>
+            <div className="flex items-center gap-2 rounded-xl border border-green-300 bg-white p-2 pl-3">
+              <span className="min-w-0 flex-1 break-all font-mono text-sm text-gray-900">{pix.key}</span>
+              <button type="button" onClick={copyPixKey}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-green-700">
+                {copied ? <Check className="size-3.5" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
+                {copied ? d.submitted.pix_copied : d.submitted.pix_copy}
+              </button>
+            </div>
+          </div>
+        )}
+        {paymentInfo && (
+          <p className={`text-sm text-gray-700 whitespace-pre-wrap ${pricing || pix ? 'border-t border-green-200 pt-4' : ''}`}>{paymentInfo}</p>
+        )}
         <form onSubmit={handleSubmit} className="space-y-3 border-t border-green-200 pt-4">
+          <div>
+            <label htmlFor="pagador_nome" className="block text-sm font-medium text-gray-700 mb-1">
+              {d.submitted.payer_name}<span className="text-red-500 ml-0.5">*</span>
+            </label>
+            <input id="pagador_nome" name="pagador_nome" required autoComplete="name"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-400 bg-white" />
+          </div>
           <div>
             <FileInputField name="comprovante" required
               accept="application/pdf,image/jpeg,image/png,image/webp"
@@ -1447,6 +1597,7 @@ function PaymentGateScreen({ slug, token, paymentInfo, onComplete, d }: {
               dropLabel={d.nav.doc_drop_generic} dropHint={d.nav.doc_drop_hint} attachedLabel={d.nav.doc_attached}
               changeLabel={d.nav.change_file} removeLabel={d.nav.remove_file} />
           </div>
+          <p className="rounded-lg bg-white/70 px-3 py-2 text-xs font-medium text-green-900">{d.submitted.confirmation_notice}</p>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <button type="submit" disabled={status === 'sending'}
             className="w-full rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-green-700 disabled:opacity-60">
@@ -1454,6 +1605,12 @@ function PaymentGateScreen({ slug, token, paymentInfo, onComplete, d }: {
           </button>
         </form>
       </div>
+      {onBack && (
+        <button type="button" onClick={onBack} disabled={status === 'sending'}
+          className="mt-4 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-60">
+          ← {d.nav.back}
+        </button>
+      )}
     </div>
   )
 }
@@ -1578,6 +1735,7 @@ type SectionDef = { id: number; component: React.ReactNode }
 
 export function FormularioInscricao({
   slug, token, applicationId, schoolName, orgName, className, schoolType, prefill, initialSection = 1, initialData, hiddenFields, requiredOverrides, paymentInfo, eventInfo, eventInfoPdfUrl, initialLang, printMode, documentUrls,
+  lodgingCategories, pricing, pix, lodgingGuidelines, receiptOnly,
   canExit = true,
 }: Props) {
   const hiddenSet = useMemo(() => new Set(hiddenFields ?? []), [hiddenFields])
@@ -1635,8 +1793,9 @@ export function FormularioInscricao({
   const sections: SectionDef[] = [
     { id: 1,  component: <S1Nome prefill={prefill} data={localData.s1} /> },
     { id: 3,  component: <S3Termo data={localData.s3} schoolType={schoolType} /> },
-    { id: 4,  component: <S4Escola schoolName={schoolName} orgName={orgName} className={className} data={localData.s4} schoolType={schoolType} /> },
-    { id: 5,  component: <S5Dados prefill={prefill} data={localData.s5} onNationalityChange={setIsBrazilian} /> },
+    { id: 4,  component: <S4Escola schoolName={schoolName} orgName={orgName} className={className} data={localData.s4} schoolType={schoolType} lodgingCategories={lodgingCategories} /> },
+    { id: 5,  component: <S5Dados prefill={prefill} data={localData.s5} onNationalityChange={setIsBrazilian}
+        categoriaHospedagem={lodgingCategories ? localData.s4?.categoria_hospedagem : undefined} /> },
     { id: 6,  component: <S6Historia data={localData.s6} /> },
     { id: 7,  component: <S7Familia data={localData.s7} estadoCivilS5={localData.s5?.estado_civil} /> },
     { id: 8,  component: <S8Igreja data={localData.s8} /> },
@@ -1654,7 +1813,7 @@ export function FormularioInscricao({
         sexo={localData.s5?.sexo}
         documentUrls={documentUrls}
       /> },
-    { id: 16, component: <S16Aceite data={localData.s16} /> },
+    { id: 16, component: <S16Aceite data={localData.s16} guidelines={lodgingGuidelines} /> },
   ]
 
   const visibleSections = sections.filter(s => !hiddenSet.has(`s${s.id}.oculto`))
@@ -1666,9 +1825,15 @@ export function FormularioInscricao({
   // está toda preenchida e só confunde quem já passou por ali sem entender
   // que falta um passo.
   const lastSectionId = visibleSections[visibleSections.length - 1]?.id
+  // Tela de pagamento obrigatória: texto de pagamento e/ou chave PIX configurados na escola.
+  const hasPaymentStep = !!paymentInfo || !!pix
+  // Sem categoria de hospedagem escolhida (rascunho de antes do campo existir)
+  // não abre direto no pagamento: o comprovante seria recusado e a pessoa
+  // precisa passar pela seção 4 de qualquer jeito.
   const [awaitingPayment, setAwaitingPayment] = useState(
-    !!paymentInfo && !(initialData as Record<string, unknown> | undefined)?.payment_receipt
+    hasPaymentStep && !(initialData as Record<string, unknown> | undefined)?.payment_receipt
       && !!lastSectionId && initialSection >= lastSectionId
+      && !(lodgingCategories && !localData.s4?.categoria_hospedagem)
   )
 
   if (printMode) {
@@ -1694,14 +1859,19 @@ export function FormularioInscricao({
             </div>
           ))}
         </div>
-        {paymentInfo && (
+        {hasPaymentStep && (
           <div className="mt-8 bg-green-50 border border-green-200 rounded-2xl p-6 break-inside-avoid-page">
             <h3 className="font-bold text-gray-900 mb-1">{d.submitted.payment_title}</h3>
             <p className="text-xs text-gray-500 mb-3">
               Ao enviar a inscrição pelo site, o candidato vê esta mensagem e precisa anexar o
               comprovante de pagamento — é obrigatório, a inscrição só é registrada depois disso.
             </p>
-            <p className="text-sm text-gray-700 whitespace-pre-wrap">{paymentInfo}</p>
+            {pix && (
+              <p className="text-sm text-gray-700 mb-2">
+                PIX{pix.key_type ? ` (${pix.key_type})` : ''}: <strong>{pix.key}</strong>{pix.beneficiary ? ` — ${pix.beneficiary}` : ''}
+              </p>
+            )}
+            {paymentInfo && <p className="text-sm text-gray-700 whitespace-pre-wrap">{paymentInfo}</p>}
             <div className="border-t border-green-200 mt-4 pt-4 space-y-3 print:hidden">
               <div>
                 <FileInputField name="comprovante_preview"
@@ -1828,6 +1998,37 @@ export function FormularioInscricao({
         }
       }
 
+      // Validação customizada: seção 4 — saída não pode ser antes da chegada
+      // (o total da hospedagem é calculado por essas datas).
+      if (visibleSections[currentIndex].id === 4) {
+        const chegada = (fd.get('data_chegada') as string | null) ?? ''
+        const saida = (fd.get('data_saida') as string | null) ?? ''
+        if (chegada && saida && saida < chegada) {
+          setError(d.s4.saida_antes_chegada)
+          setSaving(false)
+          return
+        }
+      }
+
+      // Validação customizada: seção 5 — dados coerentes com a categoria de
+      // hospedagem escolhida na seção 4 (casal = casado + nome do cônjuge;
+      // masculina/feminina = sexo correspondente). Só checa campo visível.
+      const categoria = lodgingCategories ? localData.s4?.categoria_hospedagem : undefined
+      if (visibleSections[currentIndex].id === 5 && categoria) {
+        if (categoria === 'casal' && !hiddenSet.has('s5.estado_civil')
+          && (fd.get('estado_civil') !== 'casado' || (!hiddenSet.has('s5.conjuge_nome') && !(fd.get('conjuge_nome') as string | null)?.trim()))) {
+          setError(d.s4.cat_casal_error)
+          setSaving(false)
+          return
+        }
+        const sexo = fd.get('sexo')
+        if ((categoria === 'masculina' && sexo === 'F') || (categoria === 'feminina' && sexo === 'M')) {
+          setError(t(d.s4.cat_sexo_error, { categoria: categoriaLabel(d, categoria) }))
+          setSaving(false)
+          return
+        }
+      }
+
       // Atualiza estado de nationalidade após salvar S5
       if (visibleSections[currentIndex].id === 5) {
         setIsBrazilian(fd.get('is_brasileiro') !== 'nao')
@@ -1880,11 +2081,25 @@ export function FormularioInscricao({
       }
 
       if (isLast) {
+        // Rascunho de antes do campo de categoria existir (ou que pulou a
+        // seção 4): volta pra lá em vez de deixar o envio falhar no fim.
+        if (lodgingCategories && !localData.s4?.categoria_hospedagem) {
+          setCurrent(4)
+          setError(d.s4.cat_required_error)
+          window.scrollTo({ top: 0, behavior: 'smooth' })
+          return
+        }
+        // Vaga conferida ANTES da tela de pagamento — ninguém paga por uma
+        // vaga que já acabou (ver checkSubmissionCapacity).
+        const vagas = await conferirVagas(slug, token)
+        if ('error' in vagas) throw new Error(vagas.error)
         // Se a escola configurou informações de pagamento, o envio de verdade
         // só acontece depois que o comprovante for anexado (PaymentGateScreen)
         // — sem isso não tem como tornar o comprovante obrigatório, já que a
         // tela de pagamento hoje só aparece depois do formulário enviado.
-        if (paymentInfo) {
+        // Comprovante já anexado numa tentativa anterior (o envio falhou
+        // depois, ex: vaga esgotou no meio): envia direto, sem pedir de novo.
+        if (hasPaymentStep && !(initialData as Record<string, unknown> | undefined)?.payment_receipt) {
           setAwaitingPayment(true)
         } else {
           const submitResult = await enviarFormulario(slug, token)
@@ -1902,13 +2117,22 @@ export function FormularioInscricao({
     }
   }
 
-  if (awaitingPayment && paymentInfo) {
+  if (!submitted && ((awaitingPayment && hasPaymentStep) || receiptOnly)) {
     return (
       <PaymentGateScreen
         slug={slug}
         token={token}
         paymentInfo={paymentInfo}
+        pix={pix}
+        pricing={pricing}
+        stay={{
+          arrival: localData.s4?.data_chegada,
+          departure: localData.s4?.data_saida,
+          people: lodgingCategories && localData.s4?.categoria_hospedagem === 'casal' ? 2 : 1,
+        }}
+        alreadySubmitted={receiptOnly}
         onComplete={() => { setAwaitingPayment(false); setSubmitted(true) }}
+        onBack={receiptOnly ? undefined : () => { setAwaitingPayment(false); setError('') }}
         d={d}
       />
     )

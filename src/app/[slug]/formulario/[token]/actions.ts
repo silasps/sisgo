@@ -5,7 +5,9 @@ import { headers } from 'next/headers'
 import { basicImageSanity } from '@/lib/documents/basicImageSanity'
 import { classifyDocument, type DocumentKind } from '@/lib/documents/classifyDocument'
 import { resolvePerson } from '@/lib/people/resolvePerson'
-import { isRegistrationOpen } from '@/lib/students/classCapacity'
+import { applicationPeople, checkSubmissionCapacity, isRegistrationOpen } from '@/lib/students/classCapacity'
+import { computeLodgingTotal } from '@/lib/school/lodgingPrice'
+import { resolveFormConfig, type FormConfig } from '@/lib/school/formConfig'
 import { isDirectEnrollmentType } from '@/lib/schools'
 
 const EDITABLE_SECTIONS = new Set([1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16])
@@ -110,6 +112,17 @@ export async function atualizarSecaoAtual(slug: string, token: string, nextSecti
   return { success: true }
 }
 
+// Chamada ao terminar a última seção, ANTES da tela de pagamento — a pessoa
+// não pode pagar por uma vaga que já acabou (ver checkSubmissionCapacity).
+// enviarFormulario e anexarComprovante checam de novo.
+export async function conferirVagas(slug: string, token: string) {
+  const result = await getEditableApplication(token, slug)
+  if ('error' in result) return { error: result.error }
+  const capacityError = await checkSubmissionCapacity(result.sb, result.app)
+  if (capacityError) return { error: capacityError }
+  return { success: true }
+}
+
 export async function enviarFormulario(slug: string, token: string) {
   const result = await getEditableApplication(token, slug)
   if ('error' in result) return { error: result.error }
@@ -125,6 +138,23 @@ export async function enviarFormulario(slug: string, token: string) {
     if (turma && !isRegistrationOpen(turma)) {
       return { error: 'O prazo de inscrição para esta turma já encerrou.' }
     }
+  }
+
+  const capacityError = await checkSubmissionCapacity(sb, app)
+  if (capacityError) return { error: capacityError }
+
+  // Comprovante obrigatório quando a escola configurou pagamento (texto e/ou
+  // PIX) — o formulário só chama o envio depois de anexar, mas a regra vale
+  // aqui também, não só no navegador.
+  const { data: schoolPayment } = await sb
+    .from('school_applications')
+    .select('schools(form_config)')
+    .eq('id', app.id)
+    .single()
+  const schoolConfig = (schoolPayment?.schools as unknown as { form_config: FormConfig | null } | null)?.form_config ?? null
+  const { paymentInfo: requiredPaymentInfo, pix: requiredPix } = resolveFormConfig(schoolConfig, null)
+  if ((requiredPaymentInfo || requiredPix) && !(app.form_data as Record<string, unknown> | null)?.payment_receipt) {
+    return { error: 'Anexe o comprovante de pagamento para concluir a inscrição.' }
   }
 
   await sb.from('school_applications')
@@ -237,6 +267,8 @@ const RECEIPT_TYPES: Record<string, string> = {
 }
 
 export async function anexarComprovante(slug: string, token: string, formData: FormData) {
+  const payerName = (formData.get('pagador_nome') as string | null)?.trim()
+  if (!payerName) return { error: 'Informe o nome do responsável pelo pagamento.' }
   const file = formData.get('comprovante')
   if (!(file instanceof File) || file.size === 0) return { error: 'Selecione um arquivo.' }
   if (!RECEIPT_TYPES[file.type]) return { error: 'Envie uma imagem (JPG, PNG ou WebP) ou PDF.' }
@@ -251,7 +283,7 @@ export async function anexarComprovante(slug: string, token: string, formData: F
   const sb = createAdminClient()
   const { data: app } = await sb
     .from('school_applications')
-    .select('id, organization_id, status, form_data')
+    .select('id, organization_id, status, form_data, class_id')
     .eq('token', token)
     .single()
 
@@ -261,7 +293,28 @@ export async function anexarComprovante(slug: string, token: string, formData: F
   const { data: org } = await sb.from('organizations').select('slug, active').eq('id', app.organization_id).single()
   if (!org?.active || org.slug !== slug) return { error: 'Formulário não encontrado.' }
 
+  if (app.status === 'rascunho') {
+    const capacityError = await checkSubmissionCapacity(sb, app)
+    if (capacityError) return { error: capacityError }
+  }
+
   const existingData = (app.form_data as Record<string, unknown>) ?? {}
+
+  // Valor esperado pela diária da turma (ver lib/school/lodgingPrice) —
+  // gravado junto do comprovante pra equipe conferir sem refazer a conta.
+  let expected: Record<string, number> | null = null
+  if (app.class_id) {
+    const { data: turma } = await sb.from('school_classes').select('daily_rate, base_cost').eq('id', app.class_id).maybeSingle()
+    if (turma?.daily_rate != null) {
+      const s4 = (existingData.s4 as Record<string, string> | undefined) ?? {}
+      const total = computeLodgingTotal(
+        { dailyRate: Number(turma.daily_rate), packageCap: turma.base_cost == null ? null : Number(turma.base_cost) },
+        { arrival: s4.data_chegada, departure: s4.data_saida, people: applicationPeople(existingData) },
+      )
+      if (total) expected = { daily_rate: Number(turma.daily_rate), nights: total.nights, people: total.people, per_person: total.perPerson, total: total.total }
+    }
+  }
+
   const previous = existingData.payment_receipt as { path?: string } | undefined
   const path = `${app.organization_id}/${app.id}/comprovante-${Date.now()}.${RECEIPT_TYPES[file.type]}`
   const { error: uploadError } = await sb.storage.from('payment-receipts').upload(path, fileBuffer, {
@@ -270,7 +323,7 @@ export async function anexarComprovante(slug: string, token: string, formData: F
   })
   if (uploadError) return { error: 'Não foi possível enviar o comprovante. Tente novamente.' }
 
-  const paymentReceipt = { path, name: file.name, type: file.type, size: file.size, uploaded_at: new Date().toISOString() }
+  const paymentReceipt = { path, name: file.name, type: file.type, size: file.size, uploaded_at: new Date().toISOString(), payer_name: payerName, expected }
   const { error: updateError } = await sb.from('school_applications')
     .update({ form_data: { ...existingData, payment_receipt: paymentReceipt } })
     .eq('id', app.id)

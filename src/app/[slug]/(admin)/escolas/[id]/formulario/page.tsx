@@ -8,15 +8,15 @@ import { FileText } from 'lucide-react'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { isManagementRole } from '@/lib/auth/permissions'
 import { getSchoolLink } from '@/lib/auth/unit-access'
-import { CONFIGURAVEL, FORM_TEMPLATE_NAMES, listFormTemplates, type FormConfig } from '@/lib/school/formConfig'
+import { CONFIGURAVEL, FORM_TEMPLATE_NAMES, listFormTemplates, readSchoolOnlyConfig, type FormConfig } from '@/lib/school/formConfig'
 import { FormConfigFields } from '@/components/admin/FormConfigFields'
 import { FileInputField } from '@/components/ui/FileInputField'
 
-type Props = { params: Promise<{ slug: string; id: string }>; searchParams: Promise<{ template?: string }> }
+type Props = { params: Promise<{ slug: string; id: string }>; searchParams: Promise<{ template?: string; saved?: string }> }
 
 export default async function EscolaFormularioConfigPage({ params, searchParams }: Props) {
   const { slug, id } = await params
-  const { template: templateIdParam } = await searchParams
+  const { template: templateIdParam, saved: savedAt } = await searchParams
 
   const supabase = await createClient()
   const sb = createAdminClient()
@@ -45,6 +45,8 @@ export default async function EscolaFormularioConfigPage({ params, searchParams 
   const config = (school.form_config as FormConfig) ?? {}
   const paymentInfo = config.payment_info ?? ''
   const eventInfo = config.event_info ?? ''
+  const pix = config.pix ?? null
+  const lodgingGuidelines = config.lodging_guidelines ?? ''
   const eventInfoPdfUrl = config.event_info_pdf?.path
     ? sb.storage.from('school-event-info').getPublicUrl(config.event_info_pdf.path).data.publicUrl
     : null
@@ -72,8 +74,7 @@ export default async function EscolaFormularioConfigPage({ params, searchParams 
     }
 
     const hiddenFields = todosOsCampos.filter(key => fd.get(key) !== 'on')
-    const paymentInfo = (fd.get('payment_info') as string | null)?.trim() || null
-    const eventInfo = (fd.get('event_info') as string | null)?.trim() || null
+    const schoolOnly = readSchoolOnlyConfig(fd)
     const requiredOverrides: Record<string, boolean> = {}
     for (const secao of CONFIGURAVEL) {
       for (const campo of secao.campos) {
@@ -107,10 +108,10 @@ export default async function EscolaFormularioConfigPage({ params, searchParams 
     }
 
     await db.from('schools')
-      .update({ form_config: { hidden_fields: hiddenFields, payment_info: paymentInfo, event_info: eventInfo, event_info_pdf: eventInfoPdf, required_overrides: requiredOverrides } })
+      .update({ form_config: { hidden_fields: hiddenFields, ...schoolOnly, event_info_pdf: eventInfoPdf, required_overrides: requiredOverrides } })
       .eq('id', id)
 
-    redirect(`/${slug}/escolas/${id}/formulario?flash_success=${encodeURIComponent('Configuração da escola salva.')}`)
+    redirect(`/${slug}/escolas/${id}/formulario?saved=${Date.now()}&flash_success=${encodeURIComponent('Configuração da escola salva.')}`)
   }
 
   async function salvarComoModelo(fd: FormData) {
@@ -155,8 +156,7 @@ export default async function EscolaFormularioConfigPage({ params, searchParams 
     // Salvar como modelo também aplica a config atual a esta escola — o
     // usuário está editando os campos pensando nesta escola, não só no
     // modelo abstrato; sem isso, a página pública não reflete a mudança.
-    const paymentInfo = (fd.get('payment_info') as string | null)?.trim() || null
-    const eventInfo = (fd.get('event_info') as string | null)?.trim() || null
+    const schoolOnly = readSchoolOnlyConfig(fd)
     const { data: schoolRow } = await db.from('schools').select('organization_id, form_config').eq('id', id).single()
     const previousPdf = (schoolRow?.form_config as FormConfig | null)?.event_info_pdf ?? null
     let eventInfoPdf = previousPdf
@@ -179,7 +179,7 @@ export default async function EscolaFormularioConfigPage({ params, searchParams 
     }
 
     await db.from('schools')
-      .update({ form_config: { hidden_fields: hiddenFields, payment_info: paymentInfo, event_info: eventInfo, event_info_pdf: eventInfoPdf, required_overrides: requiredOverrides } })
+      .update({ form_config: { hidden_fields: hiddenFields, ...schoolOnly, event_info_pdf: eventInfoPdf, required_overrides: requiredOverrides } })
       .eq('id', id)
 
     await db.from('school_form_templates')
@@ -188,7 +188,7 @@ export default async function EscolaFormularioConfigPage({ params, searchParams 
         { onConflict: 'organization_id,name' },
       )
 
-    redirect(`/${slug}/escolas/${id}/formulario?flash_success=${encodeURIComponent(`Modelo "${name}" atualizado e aplicado a esta escola.`)}`)
+    redirect(`/${slug}/escolas/${id}/formulario?saved=${Date.now()}&flash_success=${encodeURIComponent(`Modelo "${name}" atualizado e aplicado a esta escola.`)}`)
   }
 
   const totalCampos = CONFIGURAVEL.reduce((acc, s) => acc + s.campos.length, 0)
@@ -229,7 +229,10 @@ export default async function EscolaFormularioConfigPage({ params, searchParams 
           </p>
         </div>
 
-        <form action={salvarConfig} className="space-y-3">
+        {/* key muda a cada salvamento: recria o form com os valores salvos —
+            sem isso, o "alterado" dos campos de texto (ver FormConfigFields)
+            sobrevivia ao redirect e o aviso de não salvo ficava preso. */}
+        <form key={savedAt ?? 'inicial'} action={salvarConfig} className="space-y-3">
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <h3 className="font-semibold text-gray-900 text-sm mb-1">Informações de pagamento</h3>
             <p className="text-xs text-gray-400 mb-3">
@@ -241,6 +244,37 @@ export default async function EscolaFormularioConfigPage({ params, searchParams 
               defaultValue={paymentInfo}
               rows={5}
               placeholder={'Ex: Pix (CPF): 000.000.000-00 — Fulano de Tal\nOu transferência: Banco X, ag. 0000, cc 00000-0'}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 resize-none"
+            />
+            <div className="mt-4 border-t border-gray-100 pt-4">
+              <h4 className="font-semibold text-gray-900 text-sm mb-1">Chave PIX</h4>
+              <p className="text-xs text-gray-400 mb-3">
+                Opcional — mostrada na tela de pagamento com botão de copiar. Com ela preenchida, a
+                tela de pagamento (com comprovante obrigatório) aparece mesmo sem o texto acima.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <input name="pix_key_type" defaultValue={pix?.key_type ?? ''} placeholder="Tipo (ex: CNPJ)"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                <input name="pix_key" defaultValue={pix?.key ?? ''} placeholder="Chave"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 sm:col-span-2" />
+                <input name="pix_beneficiary" defaultValue={pix?.beneficiary ?? ''} placeholder="Favorecido"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 sm:col-span-3" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <h3 className="font-semibold text-gray-900 text-sm mb-1">Orientações de hospedagem</h3>
+            <p className="text-xs text-gray-400 mb-3">
+              Itens que cada participante deve trazer — um por linha. Aparecem na última etapa do
+              formulário (&quot;Cada participante deverá trazer:&quot;) com uma confirmação obrigatória de
+              leitura e concordância. Deixe em branco pra não mostrar.
+            </p>
+            <textarea
+              name="lodging_guidelines"
+              defaultValue={lodgingGuidelines}
+              rows={6}
+              placeholder={'Roupa de cama\nTravesseiro\nCobertor\nToalha de banho'}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 resize-none"
             />
           </div>

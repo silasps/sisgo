@@ -69,6 +69,8 @@ type InscricaoItem = {
   hospedagemArrivalDate?: string | null
   hospedagemDepartureDate?: string | null
   candidateArrivalDate?: string | null
+  candidateDepartureDate?: string | null
+  lodgingSpouseName?: string | null
   financeSummary?: PersonFinanceSummary | null
 }
 
@@ -1482,6 +1484,10 @@ export default async function InscricoesPage({ params, searchParams }: Props) {
           applicationId: appRow?.id ?? null,
           hasFormData: appRow ? (appRow.form_data !== null && Object.keys(appRow.form_data as object).length > 0) : false,
           candidateArrivalDate: (appRow?.form_data as Record<string, Record<string, string>> | undefined)?.s4?.data_chegada || null,
+          candidateDepartureDate: (appRow?.form_data as Record<string, Record<string, string>> | undefined)?.s4?.data_saida || null,
+          lodgingSpouseName: (appRow?.form_data as Record<string, Record<string, string>> | undefined)?.s4?.categoria_hospedagem === 'casal'
+            ? ((appRow?.form_data as Record<string, Record<string, string>>).s5?.conjuge_nome?.trim() || 'cônjuge')
+            : null,
         })
       }
     }

@@ -66,7 +66,16 @@ type InscricaoItem = {
   hospedagemArrivalDate?: string | null
   hospedagemDepartureDate?: string | null
   candidateArrivalDate?: string | null
+  candidateDepartureDate?: string | null
+  /** Inscrição de hospedagem de casal (uma por casal): nome do cônjuge. */
+  lodgingSpouseName?: string | null
   financeSummary?: PersonFinanceSummary | null
+}
+
+// Nome no pedido de hospedagem — inscrição de casal é uma só pelos dois, e a
+// hospitalidade precisa saber que são 2 pessoas.
+function hospedagemGuestName(item: { nome: string; lodgingSpouseName?: string | null }): string {
+  return item.lodgingSpouseName ? `${item.nome} e ${item.lodgingSpouseName} (casal, 2 pessoas)` : item.nome
 }
 
 type HistoricoItem = {
@@ -1261,7 +1270,7 @@ export function InscricoesList({
                                 organizationId={orgId}
                                 ministryId={null}
                                 staffApplicationId={item.applicationId}
-                                guestName={item.nome}
+                                guestName={hospedagemGuestName(item)}
                                 guestType="aluno"
                                 prefillDate={item.hospedagemArrivalDate}
                                 prefillDeparture={item.hospedagemDepartureDate}
@@ -1280,9 +1289,10 @@ export function InscricoesList({
                               organizationId={orgId}
                               ministryId={null}
                               staffApplicationId={item.applicationId}
-                              guestName={item.nome}
+                              guestName={hospedagemGuestName(item)}
                               guestType="aluno"
                               prefillDate={item.candidateArrivalDate}
+                              prefillDeparture={item.candidateDepartureDate}
                               hint="Confirme (ou ajuste) a data antes de avisar a hospitalidade."
                               action={solicitarHospedagemAluno}
                             />
@@ -1293,7 +1303,7 @@ export function InscricoesList({
                             organizationId={orgId}
                             ministryId={null}
                             staffApplicationId={item.applicationId}
-                            guestName={item.nome}
+                            guestName={hospedagemGuestName(item)}
                             guestType="aluno"
                             action={solicitarHospedagemAluno}
                           />

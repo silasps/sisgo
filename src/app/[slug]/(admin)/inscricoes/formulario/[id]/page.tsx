@@ -14,11 +14,15 @@ import { AvancarEtapaControl, AdvanceHistoryList } from '@/components/inscricoes
 import { getStageAdvances, resolveAdvancerNames } from '@/lib/pipelineStageAdvance'
 import { avancarEtapaAluno, reenviarLinkFormulario } from './actions'
 import { resolveFormConfig, type FormConfig } from '@/lib/school/formConfig'
+import { formatBRL } from '@/lib/school/lodgingPrice'
 import { RefreshOnFocus } from '@/components/ui/RefreshOnFocus'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
-type FormSection = { title: string; fields: { label: string; key: string; type?: 'textarea' | 'radio' | 'date_anos' | 'children' | 'historico_lista' }[] }
+// hideEmpty: campo que só existe em alguns formulários (ex: hospedagem de
+// evento) — vazio, não aparece, em vez de "não informado" em toda inscrição
+// de escola. valueLabels: troca o valor gravado por um rótulo legível.
+type FormSection = { title: string; fields: { label: string; key: string; type?: 'textarea' | 'radio' | 'date_anos' | 'children' | 'historico_lista'; hideEmpty?: boolean; valueLabels?: Record<string, string> }[] }
 
 const SECTIONS: FormSection[] = [
   {
@@ -35,10 +39,15 @@ const SECTIONS: FormSection[] = [
       { label: 'Conversou com alguém da escola?', key: 'conversou_equipe' },
       { label: 'Com quem conversou', key: 'conversou_com_quem' },
       { label: 'Motivação', key: 'motivacao', type: 'textarea' },
+      { label: 'Categoria de hospedagem', key: 'categoria_hospedagem', hideEmpty: true,
+        valueLabels: { masculina: 'Masculina', feminina: 'Feminina', casal: 'Casal sem filhos (2 pessoas)' } },
       { label: 'Data de chegada', key: 'data_chegada' },
       { label: 'Horário de chegada', key: 'horario_chegada' },
       { label: 'Data de saída', key: 'data_saida' },
       { label: 'Horário de saída', key: 'horario_saida' },
+      { label: 'De qual base vem', key: 'base_origem', hideEmpty: true },
+      { label: 'Meio de transporte', key: 'meio_transporte', hideEmpty: true },
+      { label: 'Necessidades especiais de acomodação', key: 'necessidades_acomodacao', type: 'textarea', hideEmpty: true },
     ],
   },
   {
@@ -47,6 +56,7 @@ const SECTIONS: FormSection[] = [
       { label: 'Sexo', key: 'sexo' },
       { label: 'Nascimento', key: 'data_nascimento' },
       { label: 'Estado civil', key: 'estado_civil' },
+      { label: 'Nome do cônjuge', key: 'conjuge_nome', hideEmpty: true },
       { label: 'Brasileiro(a)?', key: 'is_brasileiro' },
       { label: 'Nacionalidade', key: 'nacionalidade' },
       { label: 'Fluência em português', key: 'fluencia_portugues' },
@@ -433,7 +443,7 @@ export default async function FormularioViewerPage({ params }: Props) {
     || (Object.keys(formData).every(k => ['source', 'prefill'].includes(k)))
   const escola = app.schools as unknown as { name: string; form_config: FormConfig | null } | null
   const turmaRow = app.school_classes as unknown as { name: string; form_config: FormConfig | null } | null
-  const { hiddenFields, paymentInfo: schoolPaymentInfo } = resolveFormConfig(escola?.form_config, turmaRow?.form_config)
+  const { hiddenFields, paymentInfo: schoolPaymentInfo, pix: schoolPix } = resolveFormConfig(escola?.form_config, turmaRow?.form_config)
   const hiddenFieldsSet = new Set(hiddenFields)
   const showPastorRef = !hiddenFieldsSet.has('s8.pastor_bloco')
   const showAmigoRef = !hiddenFieldsSet.has('s9.oculto')
@@ -446,7 +456,7 @@ export default async function FormularioViewerPage({ params }: Props) {
   let incompleteReason: string | null = null
   if (app.status === 'rascunho') {
     incompleteReason = 'O formulário ainda não foi enviado — a pessoa parou em algum ponto do preenchimento.'
-  } else if (schoolPaymentInfo && !(formData.payment_receipt as { path?: string } | undefined)?.path) {
+  } else if ((schoolPaymentInfo || schoolPix) && !(formData.payment_receipt as { path?: string } | undefined)?.path) {
     incompleteReason = 'O formulário foi preenchido, mas o comprovante de pagamento ainda não foi anexado.'
   }
   const turma = app.school_classes as unknown as { name: string } | null
@@ -457,7 +467,8 @@ export default async function FormularioViewerPage({ params }: Props) {
     ?? (formData.s5 as Record<string, string> | undefined)?.nome
     ?? preform?.full_name ?? '—'
   const paymentReceipt = formData.payment_receipt as {
-    path?: string; name?: string; uploaded_at?: string
+    path?: string; name?: string; uploaded_at?: string; payer_name?: string
+    expected?: { daily_rate: number; nights: number; people: number; total: number } | null
   } | undefined
   let paymentReceiptUrl: string | null = null
   if (paymentReceipt?.path) {
@@ -597,6 +608,16 @@ export default async function FormularioViewerPage({ params }: Props) {
                       Enviado em {new Date(paymentReceipt.uploaded_at).toLocaleString('pt-BR')}
                     </p>
                   )}
+                  {paymentReceipt.payer_name && (
+                    <p className="mt-1 text-xs text-green-800">Responsável pelo pagamento: <strong>{paymentReceipt.payer_name}</strong></p>
+                  )}
+                  {paymentReceipt.expected && (
+                    <p className="mt-0.5 text-xs text-green-800">
+                      Valor esperado: <strong>{formatBRL(paymentReceipt.expected.total)}</strong>
+                      {' '}({paymentReceipt.expected.nights} diária(s) de {formatBRL(paymentReceipt.expected.daily_rate)}
+                      {paymentReceipt.expected.people === 2 ? ' · casal, 2 pessoas' : ''})
+                    </p>
+                  )}
                 </div>
                 {paymentReceiptUrl && (
                   <a href={paymentReceiptUrl} target="_blank" rel="noopener noreferrer"
@@ -664,9 +685,11 @@ export default async function FormularioViewerPage({ params }: Props) {
               return (
                 <SectionCard key={section.title} title={section.title}>
                   <div className="mt-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6">
-                    {section.fields.map(f => (
-                      <FieldRow key={f.key} label={f.label} value={data[f.key]} type={f.type} />
-                    ))}
+                    {section.fields
+                      .filter(f => !f.hideEmpty || (typeof data[f.key] === 'string' && data[f.key].trim()))
+                      .map(f => (
+                        <FieldRow key={f.key} label={f.label} value={f.valueLabels?.[data[f.key]] ?? data[f.key]} type={f.type} />
+                      ))}
                   </div>
                 </SectionCard>
               )
