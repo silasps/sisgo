@@ -416,6 +416,8 @@ function S5Dados({ prefill, data, onNationalityChange, categoriaHospedagem }: {
   const [estrangeiro, setEstrangeiro] = useState(data?.is_brasileiro === 'nao')
   const [estudando, setEstudando] = useState(data?.estudando === 'sim')
   const [casado, setCasado] = useState(data?.estado_civil === 'casado')
+  const [conjugeParticipa, setConjugeParticipa] = useState(data?.conjuge_participa_evento === 'sim')
+  const hospedagemCasal = casado && categoriaHospedagem === 'casal'
 
   function handleNationality(e: React.ChangeEvent<HTMLSelectElement>) {
     const isForeigner = e.target.value === 'nao'
@@ -456,13 +458,38 @@ function S5Dados({ prefill, data, onNationalityChange, categoriaHospedagem }: {
               { value: 'viuvo', label: d.s5.viuvo },
             ]} />
         </H>
-        <H id="s5.conjuge_nome">
-          {/* Hospedagem de casal = uma inscrição pelos dois: o nome do cônjuge
-              passa a ser obrigatório, acima da config da escola. */}
-          {casado && <Field label={d.s5.conjuge_nome} name="conjuge_nome"
-            configKey={categoriaHospedagem === 'casal' ? undefined : 's5.conjuge_nome'}
-            required={categoriaHospedagem === 'casal'} defaultValue={data?.conjuge_nome} />}
-        </H>
+        {/* Hospedagem de casal = uma inscrição pelos dois: o nome do cônjuge
+            é obrigatório (acima da config da escola) e a pessoa diz se o
+            cônjuge também participa do evento ou só vem se hospedar junto —
+            só no primeiro caso ele vira participante na aprovação (ver
+            enrollLodgingSpouse). A hospedagem (2 vagas, valor de casal) é a
+            mesma nos dois casos. */}
+        {hospedagemCasal ? (<>
+          <Field label={d.s5.conjuge_nome} name="conjuge_nome" required defaultValue={data?.conjuge_nome} />
+          <div className="sm:col-span-2 space-y-3 rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
+            <Select label={d.s5.conjuge_participa_evento} name="conjuge_participa_evento" required
+              defaultValue={data?.conjuge_participa_evento}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setConjugeParticipa(e.target.value === 'sim')}
+              options={[
+                { value: 'sim', label: d.s5.conjuge_participa_sim },
+                { value: 'nao', label: d.s5.conjuge_participa_nao },
+              ]} />
+            <p className="text-xs text-gray-500">{d.s5.conjuge_participa_hint}</p>
+            {conjugeParticipa && (
+              <div className="grid sm:grid-cols-2 gap-4">
+                <Field label={d.s5.conjuge_data_nascimento} name="conjuge_data_nascimento" type="date" max={DATE_MAX}
+                  required defaultValue={data?.conjuge_data_nascimento} />
+                <Field label={d.s5.conjuge_email} name="conjuge_email" type="email" defaultValue={data?.conjuge_email} />
+                <InternationalPhoneField phoneName="conjuge_celular" countryName="conjuge_celular_country"
+                  label={d.s5.conjuge_celular} defaultCountryIso="BR" defaultPhone={data?.conjuge_celular} />
+              </div>
+            )}
+          </div>
+        </>) : (
+          <H id="s5.conjuge_nome">
+            {casado && <Field label={d.s5.conjuge_nome} name="conjuge_nome" configKey="s5.conjuge_nome" defaultValue={data?.conjuge_nome} />}
+          </H>
+        )}
         <Select label={d.s5.is_brasileiro} name="is_brasileiro" required
           defaultValue={data?.is_brasileiro}
           options={[
@@ -740,7 +767,7 @@ function S6Historia({ data }: { data?: Record<string, string> }) {
   )
 }
 
-function S7Familia({ data, estadoCivilS5 }: { data?: Record<string, string>; estadoCivilS5?: string }) {
+function S7Familia({ data, estadoCivilS5, hideConjugeParticipa }: { data?: Record<string, string>; estadoCivilS5?: string; hideConjugeParticipa?: boolean }) {
   const d = useContext(DictCtx)
   const hidden = useContext(HiddenCtx)
   const initialCivil = data?.estado_civil_atual ?? estadoCivilS5 ?? ''
@@ -804,9 +831,10 @@ function S7Familia({ data, estadoCivilS5 }: { data?: Record<string, string>; est
           <H id="s7.conjuge_apoia"><Select label={d.s7.conjuge_apoia} name="conjuge_apoia" configKey="s7.conjuge_apoia" defaultValue={data?.conjuge_apoia} options={[
             { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
           ]} /></H>
-          <H id="s7.conjuge_participa"><Select label={d.s7.conjuge_participa} name="conjuge_participa" configKey="s7.conjuge_participa" defaultValue={data?.conjuge_participa} options={[
+          {/* Hospedagem de casal já perguntou isso na seção 5 (conjuge_participa_evento). */}
+          {!hideConjugeParticipa && <H id="s7.conjuge_participa"><Select label={d.s7.conjuge_participa} name="conjuge_participa" configKey="s7.conjuge_participa" defaultValue={data?.conjuge_participa} options={[
             { value: 'sim', label: d.opts.yes }, { value: 'nao', label: d.opts.no },
-          ]} /></H>
+          ]} /></H>}
         </>}
 
         {(estadoCivil === 'comprometido' || initialCivil === 'comprometido') && <>
@@ -1797,7 +1825,8 @@ export function FormularioInscricao({
     { id: 5,  component: <S5Dados prefill={prefill} data={localData.s5} onNationalityChange={setIsBrazilian}
         categoriaHospedagem={lodgingCategories ? localData.s4?.categoria_hospedagem : undefined} /> },
     { id: 6,  component: <S6Historia data={localData.s6} /> },
-    { id: 7,  component: <S7Familia data={localData.s7} estadoCivilS5={localData.s5?.estado_civil} /> },
+    { id: 7,  component: <S7Familia data={localData.s7} estadoCivilS5={localData.s5?.estado_civil}
+        hideConjugeParticipa={!!lodgingCategories && localData.s4?.categoria_hospedagem === 'casal'} /> },
     { id: 8,  component: <S8Igreja data={localData.s8} /> },
     { id: 9,  component: <S9Referencia data={localData.s9} /> },
     { id: 10, component: <S10Historico data={localData.s10} /> },
@@ -2016,7 +2045,7 @@ export function FormularioInscricao({
       const categoria = lodgingCategories ? localData.s4?.categoria_hospedagem : undefined
       if (visibleSections[currentIndex].id === 5 && categoria) {
         if (categoria === 'casal' && !hiddenSet.has('s5.estado_civil')
-          && (fd.get('estado_civil') !== 'casado' || (!hiddenSet.has('s5.conjuge_nome') && !(fd.get('conjuge_nome') as string | null)?.trim()))) {
+          && (fd.get('estado_civil') !== 'casado' || !(fd.get('conjuge_nome') as string | null)?.trim())) {
           setError(d.s4.cat_casal_error)
           setSaving(false)
           return

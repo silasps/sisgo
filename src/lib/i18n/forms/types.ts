@@ -186,6 +186,13 @@ export interface FormDict {
     // Marital options
     solteiro: string; casado: string; comprometido: string; divorciado: string; viuvo: string
     conjuge_nome: string
+    conjuge_participa_evento: string
+    conjuge_participa_sim: string
+    conjuge_participa_nao: string
+    conjuge_participa_hint: string
+    conjuge_data_nascimento: string
+    conjuge_email: string
+    conjuge_celular: string
     // Sub-sections
     formacao_section: string
     formacao: string
