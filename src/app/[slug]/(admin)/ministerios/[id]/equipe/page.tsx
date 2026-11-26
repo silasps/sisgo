@@ -14,10 +14,12 @@ import { ScrollHighlight } from '@/components/ui/ScrollHighlight'
 import { getOrgAndUser, getWorkspaceClient, getWorkspaceRole, getWorkspaceMinistry, getWorkspaceMinistryLink } from '../_data'
 import { EnviarFormularioObreiroDiretoButton } from '@/components/inscricoes/EnviarFormularioObreiroDiretoButton'
 import { setTeacherLodgingAccess, getTeacherLodgingAccessMap } from '@/lib/school/teacherVisitRequests'
-import { getOrCreateShortLink } from '@/lib/shortLinks'
+import { getStaffSignupLink } from '@/lib/staff/signupLink'
+import { StaffSignupLinkCard } from '@/components/staff/StaffSignupLinkCard'
 import { getOpenProcessesForUnit, getServingUnitNames, isSameUnit } from '@/lib/processes'
 import type { UnitRef } from '@/lib/staff-loans'
 import { StaffRequestPersonField } from '@/components/staff/StaffRequestPersonField'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 import { OutgoingLoansCard, SentLoansCard } from '@/components/processos/UnitLoanCards'
 
 type Props = {
@@ -146,18 +148,19 @@ export default async function EquipePage({ params, searchParams }: Props) {
     : new Map<string, boolean>()
 
   // Processos em andamento que envolvem este ministério (ver lib/processes):
-  //  • outgoingLoans — obreiros DAQUI pedidos em outra escola/ministério,
-  //    esperando a resposta do líder daqui (recusar manda pro DH decidir);
+  //  • outgoingLoans — obreiros DAQUI pedidos em outra escola/ministério:
+  //    o líder daqui responde e o pedido segue à vista até o OK do DH;
   //  • sentLoans — pedidos de quem já serve em outro lugar PRA CÁ, ainda
   //    em andamento (o líder acompanha e pode cancelar o que ele pediu).
   // O DH não responde por aqui: só vê o aviso e decide em /processos.
   const unitRef: UnitRef = { type: 'ministry', id }
-  const [unitProcesses, servingUnitNames] = await Promise.all([
+  const [unitProcesses, servingUnitNames, signupLink] = await Promise.all([
     canWrite || isLiderMinisterio ? getOpenProcessesForUnit(orgId, slug, unitRef) : Promise.resolve([]),
     canWrite || isLiderMinisterio ? getServingUnitNames(orgId, unitRef) : Promise.resolve(new Map<string, string>()),
+    canWrite || isLiderMinisterio ? getStaffSignupLink({ orgId, slug, unit: unitRef, createdBy: user.id }) : Promise.resolve(null),
   ])
   const outgoingLoans = isLiderMinisterio
-    ? unitProcesses.filter(p => p.kind === 'emprestimo' && p.status === 'pendente' && isSameUnit(p.fromUnit, unitRef))
+    ? unitProcesses.filter(p => p.kind === 'emprestimo' && isSameUnit(p.fromUnit, unitRef))
     : []
   const sentLoans = isLiderMinisterio
     ? unitProcesses.filter(p => p.kind === 'emprestimo' && isSameUnit(p.toUnit, unitRef))
@@ -342,17 +345,10 @@ export default async function EquipePage({ params, searchParams }: Props) {
     })
     redirect(`/${slug}/ministerios/${id}/equipe`)
   }
+  // Mesmo link do card de inscrição — funciona com ou sem página pública (ver lib/staff/signupLink).
   const handleCopyPublicLink = async () => {
     'use server'
-    const m = ministry as unknown as { is_public?: boolean; slug?: string | null }
-    if (!m?.is_public) return { error: 'A página pública deste ministério está desativada. Ative em Geral > Página pública.' }
-    if (!m?.slug) return { error: 'Este ministério não tem um endereço (slug) definido. Configure em Geral > Página pública.' }
-    const url = await getOrCreateShortLink({
-      organizationId: orgId,
-      targetPath: `/${slug}/servir/${m.slug}`,
-      createdBy: user.id,
-    })
-    return { url }
+    return { url: await getStaffSignupLink({ orgId, slug, unit: { type: 'ministry', id }, createdBy: user.id }) }
   }
   const handleEnviarFormularioDireto = async (formData: FormData) => {
     'use server'
@@ -421,15 +417,17 @@ export default async function EquipePage({ params, searchParams }: Props) {
         </Link>
       )}
 
-      {(canWrite || isLiderMinisterio) && (
-        <div className="flex justify-end">
+      {signupLink && (
+        <StaffSignupLinkCard url={signupLink} unitLabel={ministryName}>
           <EnviarFormularioObreiroDiretoButton
             slug={slug}
             action={handleEnviarFormularioDireto}
             fixedDestination={{ type: 'ministry', id, label: ministryName }}
             publicLinkAction={handleCopyPublicLink}
+            alwaysShowLabel
+            buttonClassName="inline-flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs font-semibold text-violet-700 transition-colors hover:bg-violet-100 whitespace-nowrap"
           />
-        </div>
+        </StaffSignupLinkCard>
       )}
 
       {/* Pedidos de obreiro daqui feitos por outra unidade — o líder responde, o DH dá o OK final */}
@@ -466,7 +464,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
                   {canWrite && (
                     <form action={handleRemoveMember} className="flex-shrink-0">
                       <input type="hidden" name="member_id" value={m.id} />
-                      <button type="submit" className="text-xs text-red-400 hover:text-red-600 transition-colors">Remover</button>
+                      <SubmitButton className="text-xs text-red-400 hover:text-red-600 transition-colors">Remover</SubmitButton>
                     </form>
                   )}
                   {/* Líder: transferir / solicitar remoção */}
@@ -482,9 +480,9 @@ export default async function EquipePage({ params, searchParams }: Props) {
                               {otherMinistries.map(om => <option key={om.id} value={om.id}>{om.name}</option>)}
                             </select>
                             <input name="reason" placeholder="Motivo (opcional)" className="w-44 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand-400" />
-                            <button type="submit" className="w-44 px-2 py-1 bg-blue-50 border border-blue-200 text-blue-600 text-xs font-medium rounded hover:bg-blue-100 transition-colors">
+                            <SubmitButton className="w-44 px-2 py-1 bg-blue-50 border border-blue-200 text-blue-600 text-xs font-medium rounded hover:bg-blue-100 transition-colors">
                               Solicitar transferência
-                            </button>
+                            </SubmitButton>
                           </form>
                         </details>
                       )}
@@ -493,9 +491,9 @@ export default async function EquipePage({ params, searchParams }: Props) {
                         <form action={handleRequestRemove} className="mt-1.5 space-y-1">
                           <input type="hidden" name="person_id" value={m.person_id} />
                           <input name="notes" placeholder="Motivo (opcional)" className="w-44 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand-400" />
-                          <button type="submit" className="w-44 px-2 py-1 bg-red-50 border border-red-200 text-red-600 text-xs font-medium rounded hover:bg-red-100 transition-colors">
+                          <SubmitButton className="w-44 px-2 py-1 bg-red-50 border border-red-200 text-red-600 text-xs font-medium rounded hover:bg-red-100 transition-colors">
                             Enviar solicitação
-                          </button>
+                          </SubmitButton>
                         </form>
                       </details>
                     </div>
@@ -510,7 +508,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
                         <input type="checkbox" name="can_view" value="sim" defaultChecked={canViewLodging} className="rounded border-gray-300" />
                         Pode ver a hospedagem do professor visitante
                       </label>
-                      <button type="submit" className="px-2 py-1 text-[11px] font-medium rounded bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors">Salvar</button>
+                      <SubmitButton className="px-2 py-1 text-[11px] font-medium rounded bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors">Salvar</SubmitButton>
                     </form>
                   </details>
                 )}
@@ -538,7 +536,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
                   {ministryRoles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                 </select>
               )}
-              <button type="submit" className="w-full px-4 py-2 text-sm font-medium rounded-lg bg-brand-500 hover:bg-brand-600 text-white transition-colors">Adicionar</button>
+              <SubmitButton className="w-full px-4 py-2 text-sm font-medium rounded-lg bg-brand-500 hover:bg-brand-600 text-white transition-colors">Adicionar</SubmitButton>
             </form>
           </details>
         )}
@@ -560,7 +558,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
                 </select>
               )}
               <input name="notes" placeholder="Observação (opcional)" className={INPUT} />
-              <button type="submit" className="w-full px-4 py-2 text-sm font-medium rounded-lg bg-brand-500 hover:bg-brand-600 text-white transition-colors">Enviar Solicitação</button>
+              <SubmitButton className="w-full px-4 py-2 text-sm font-medium rounded-lg bg-brand-500 hover:bg-brand-600 text-white transition-colors">Enviar Solicitação</SubmitButton>
             </form>
           </details>
         )}
@@ -588,8 +586,8 @@ export default async function EquipePage({ params, searchParams }: Props) {
                     <span className="text-xs text-gray-400 whitespace-nowrap flex-shrink-0">{daysAgo(req.created_at)}d</span>
                   </div>
                   <div className="flex gap-2">
-                    <form action={handleApprove}><input type="hidden" name="request_id" value={req.id} /><button type="submit" className="px-3 py-1.5 bg-green-500 text-white text-xs font-medium rounded-lg hover:bg-green-600 transition-colors">Aprovar</button></form>
-                    <form action={handleReject}><input type="hidden" name="request_id" value={req.id} /><button type="submit" className="px-3 py-1.5 border border-red-200 text-red-500 text-xs font-medium rounded-lg hover:bg-red-50 transition-colors">Rejeitar</button></form>
+                    <form action={handleApprove}><input type="hidden" name="request_id" value={req.id} /><SubmitButton className="px-3 py-1.5 bg-green-500 text-white text-xs font-medium rounded-lg hover:bg-green-600 transition-colors">Aprovar</SubmitButton></form>
+                    <form action={handleReject}><input type="hidden" name="request_id" value={req.id} /><SubmitButton className="px-3 py-1.5 border border-red-200 text-red-500 text-xs font-medium rounded-lg hover:bg-red-50 transition-colors">Rejeitar</SubmitButton></form>
                   </div>
                 </li>
               )
@@ -617,8 +615,8 @@ export default async function EquipePage({ params, searchParams }: Props) {
                   <form action={handleRespondTransfer} className="flex gap-2 pt-1">
                     <input type="hidden" name="transfer_id" value={t.id} />
                     <input name="notes" placeholder="Observação (opcional)" className="flex-1 border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand-400" />
-                    <button type="submit" name="accept" value="true" className="px-3 py-1.5 bg-green-500 text-white text-xs font-medium rounded-lg hover:bg-green-600 transition-colors">Aceitar</button>
-                    <button type="submit" name="accept" value="false" className="px-3 py-1.5 border border-red-200 text-red-500 text-xs font-medium rounded-lg hover:bg-red-50 transition-colors">Recusar</button>
+                    <SubmitButton name="accept" value="true" pendingText="Enviando…" className="px-3 py-1.5 bg-green-500 text-white text-xs font-medium rounded-lg hover:bg-green-600 disabled:opacity-60 transition-colors">Aceitar</SubmitButton>
+                    <SubmitButton name="accept" value="false" pendingText="Enviando…" className="px-3 py-1.5 border border-red-200 text-red-500 text-xs font-medium rounded-lg hover:bg-red-50 disabled:opacity-60 transition-colors">Recusar</SubmitButton>
                   </form>
                 </li>
               ))}
@@ -647,7 +645,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
                   </p>
                   <form action={handleCancelRequest} className="flex-shrink-0">
                     <input type="hidden" name="request_id" value={req.id} />
-                    <button type="submit" className="text-xs text-gray-400 hover:text-gray-700 transition-colors whitespace-nowrap">Cancelar</button>
+                    <SubmitButton className="text-xs text-gray-400 hover:text-gray-700 transition-colors whitespace-nowrap">Cancelar</SubmitButton>
                   </form>
                 </li>
               )
@@ -683,7 +681,7 @@ export default async function EquipePage({ params, searchParams }: Props) {
                     {canCancel && (
                       <form action={handleCancelTransfer} className="flex-shrink-0">
                         <input type="hidden" name="transfer_id" value={t.id} />
-                        <button type="submit" className="text-xs text-gray-400 hover:text-red-500 transition-colors">Cancelar</button>
+                        <SubmitButton className="text-xs text-gray-400 hover:text-red-500 transition-colors">Cancelar</SubmitButton>
                       </form>
                     )}
                   </li>

@@ -29,12 +29,14 @@ type Props = {
   // site) — pra quem não precisa que o líder já tenha os dados da pessoa.
   // Ausente/omitido quando não há página pública pra esse destino.
   publicLinkAction?: PublicLinkAction
+  // Texto do botão visível também no celular (padrão: só o ícone em tela estreita).
+  alwaysShowLabel?: boolean
 }
 
 const INPUT = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400'
 
 export function EnviarFormularioObreiroDiretoButton({
-  slug, action, ministries = [], schools = [], fixedDestination, buttonClassName, buttonLabel, publicLinkAction,
+  action, ministries = [], schools = [], fixedDestination, buttonClassName, buttonLabel, publicLinkAction, alwaysShowLabel,
 }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -89,7 +91,7 @@ export function EnviarFormularioObreiroDiretoButton({
     <>
       <button onClick={() => setOpen(true)} aria-label={buttonLabel ?? 'Enviar formulário direto'}
         className={buttonClassName ?? 'inline-flex items-center gap-1 p-2 sm:px-3 sm:py-2 text-xs font-semibold text-white bg-violet-500 hover:bg-violet-600 rounded-lg transition-colors whitespace-nowrap'}>
-        <Send className="size-4 sm:size-3.5" /> <span className="hidden sm:inline">{buttonLabel ?? 'Enviar formulário direto'}</span>
+        <Send className="size-4 sm:size-3.5" /> <span className={alwaysShowLabel ? undefined : 'hidden sm:inline'}>{buttonLabel ?? 'Enviar formulário direto'}</span>
       </button>
 
       <Modal open={open} onClose={handleClose} title="Enviar formulário definitivo de obreiro"

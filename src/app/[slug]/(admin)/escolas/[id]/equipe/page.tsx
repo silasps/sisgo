@@ -16,7 +16,8 @@ import { MultiSelectModal } from '@/components/ui/MultiSelectModal'
 import { SubmitButton } from '@/components/ui/SubmitButton'
 import { EnviarFormularioObreiroDiretoButton } from '@/components/inscricoes/EnviarFormularioObreiroDiretoButton'
 import { setTeacherLodgingAccess, getTeacherLodgingAccessMap } from '@/lib/school/teacherVisitRequests'
-import { getOrCreateShortLink } from '@/lib/shortLinks'
+import { getStaffSignupLink } from '@/lib/staff/signupLink'
+import { StaffSignupLinkCard } from '@/components/staff/StaffSignupLinkCard'
 import { getOpenProcessesForUnit, getServingUnitNames, isSameUnit } from '@/lib/processes'
 import type { UnitRef } from '@/lib/staff-loans'
 import { StaffRequestPersonField } from '@/components/staff/StaffRequestPersonField'
@@ -37,19 +38,11 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
   const [{ data: { user } }, { data: org }, { data: escola }] = await Promise.all([
     supabase.auth.getUser(),
     supabase.from('organizations').select('id').eq('slug', slug).single(),
-    supabase.from('schools').select('name, linked_ministry_id').eq('id', id).single(),
+    supabase.from('schools').select('name').eq('id', id).single(),
   ])
   if (!user || !org) notFound()
   const orgId = org.id
 
-  // Formulário de obreiro é de ministério — uma escola só tem link público
-  // de "quero servir aqui" se for o lado escola de um ministério (linked_ministry_id).
-  let linkedMinistryForStaff: { slug: string | null; is_public: boolean } | null = null
-  if (escola?.linked_ministry_id) {
-    const { data: linkedMinistry } = await supabase.from('ministries')
-      .select('slug, is_public').eq('id', escola.linked_ministry_id).maybeSingle()
-    linkedMinistryForStaff = linkedMinistry ?? null
-  }
 
   const { role, preview } = await getCurrentOrganizationRole(supabase, user.id, orgId)
   const isManagement = isManagementRole(role)
@@ -155,18 +148,19 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
   }
 
   // Processos em andamento que envolvem esta escola (ver lib/processes):
-  //  • outgoingLoans — obreiros DAQUI pedidos em outra escola/ministério,
-  //    esperando a resposta do líder daqui (recusar manda pro DH decidir);
+  //  • outgoingLoans — obreiros DAQUI pedidos em outra escola/ministério:
+  //    o líder daqui responde e o pedido segue à vista até o OK do DH;
   //  • sentLoans — pedidos de quem já serve em outro lugar PRA CÁ, ainda
   //    em andamento (o líder acompanha e pode cancelar o que ele pediu).
   // O DH não responde por aqui: só vê o aviso e decide em /processos.
   const unitRef: UnitRef = { type: 'school', id }
-  const [unitProcesses, servingUnitNames] = await Promise.all([
+  const [unitProcesses, servingUnitNames, signupLink] = await Promise.all([
     canWrite || isLiderEted ? getOpenProcessesForUnit(orgId, slug, unitRef) : Promise.resolve([]),
     canWrite || isLiderEted ? getServingUnitNames(orgId, unitRef) : Promise.resolve(new Map<string, string>()),
+    canWrite || isLiderEted ? getStaffSignupLink({ orgId, slug, unit: unitRef, createdBy: user.id }) : Promise.resolve(null),
   ])
   const outgoingLoans = isLiderEted
-    ? unitProcesses.filter(p => p.kind === 'emprestimo' && p.status === 'pendente' && isSameUnit(p.fromUnit, unitRef))
+    ? unitProcesses.filter(p => p.kind === 'emprestimo' && isSameUnit(p.fromUnit, unitRef))
     : []
   const sentLoans = isLiderEted
     ? unitProcesses.filter(p => p.kind === 'emprestimo' && isSameUnit(p.toUnit, unitRef))
@@ -280,17 +274,11 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
     }
     redirect(`${base}?msg=emprestimo_recusado`)
   }
+  // Mesmo link do card de inscrição — a inscrição chega pra esta escola,
+  // com ou sem ministério vinculado (ver lib/staff/signupLink).
   const handleCopyPublicLink = async () => {
     'use server'
-    if (!linkedMinistryForStaff) return { error: 'Esta escola não está vinculada a um ministério — sem página pública de obreiro pra ela.' }
-    if (!linkedMinistryForStaff.is_public) return { error: 'A página pública do ministério vinculado está desativada. Ative em Ministério > Geral > Página pública.' }
-    if (!linkedMinistryForStaff.slug) return { error: 'O ministério vinculado não tem um endereço (slug) definido. Configure em Ministério > Geral > Página pública.' }
-    const url = await getOrCreateShortLink({
-      organizationId: orgId,
-      targetPath: `/${slug}/servir/${linkedMinistryForStaff.slug}`,
-      createdBy: user.id,
-    })
-    return { url }
+    return { url: await getStaffSignupLink({ orgId, slug, unit: { type: 'school', id }, createdBy: user.id }) }
   }
   const handleEnviarFormularioDireto = async (formData: FormData) => {
     'use server'
@@ -370,15 +358,17 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
         </Link>
       )}
 
-      {(canWrite || isLiderEted) && (
-        <div className="flex justify-end">
+      {signupLink && (
+        <StaffSignupLinkCard url={signupLink} unitLabel={escola?.name ?? 'esta escola'}>
           <EnviarFormularioObreiroDiretoButton
             slug={slug}
             action={handleEnviarFormularioDireto}
             fixedDestination={{ type: 'school', id, label: escola?.name ?? 'esta escola' }}
             publicLinkAction={handleCopyPublicLink}
+            alwaysShowLabel
+            buttonClassName="inline-flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs font-semibold text-violet-700 transition-colors hover:bg-violet-100 whitespace-nowrap"
           />
-        </div>
+        </StaffSignupLinkCard>
       )}
 
       {/* Liderança */}
@@ -392,7 +382,7 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
                   <p className="text-sm font-medium text-gray-900 truncate">{l.email}</p>
                   <form action={handleRemoveLeader}>
                     <input type="hidden" name="user_id" value={l.userId} />
-                    <button type="submit" className="text-[10px] text-red-400 hover:text-red-600 transition-colors flex-shrink-0">Remover</button>
+                    <SubmitButton className="text-[10px] text-red-400 hover:text-red-600 transition-colors flex-shrink-0">Remover</SubmitButton>
                   </form>
                 </li>
               ))}
@@ -412,7 +402,7 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
                     <option key={p.id} value={p.id}>{p.label}</option>
                   ))}
                 </select>
-                <button type="submit" className="w-full px-3 py-1.5 text-xs font-medium rounded-lg bg-brand-500 hover:bg-brand-600 text-white transition-colors">Confirmar</button>
+                <SubmitButton className="w-full px-3 py-1.5 text-xs font-medium rounded-lg bg-brand-500 hover:bg-brand-600 text-white transition-colors">Confirmar</SubmitButton>
               </form>
             </details>
           )}
@@ -446,7 +436,7 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
                     {canWrite && (
                       <form action={handleRemoveStaff} className="flex-shrink-0">
                         <input type="hidden" name="staff_id" value={s.id} />
-                        <button type="submit" className="text-xs text-red-400 hover:text-red-600 transition-colors">Remover</button>
+                        <SubmitButton className="text-xs text-red-400 hover:text-red-600 transition-colors">Remover</SubmitButton>
                       </form>
                     )}
                   </div>
@@ -459,7 +449,7 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
                           <input type="checkbox" name="can_view" value="sim" defaultChecked={canView} className="rounded border-gray-300" />
                           Pode ver a hospedagem do professor visitante
                         </label>
-                        <button type="submit" className="px-2 py-1 text-[11px] font-medium rounded bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors">Salvar</button>
+                        <SubmitButton className="px-2 py-1 text-[11px] font-medium rounded bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors">Salvar</SubmitButton>
                       </form>
                     </details>
                   )}
@@ -513,7 +503,7 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
                 todayStr={todayStr}
               />
               <input name="notes" placeholder="Observação (opcional)" className={INPUT} />
-              <button type="submit" className="w-full px-4 py-2 text-sm font-medium rounded-lg bg-brand-500 hover:bg-brand-600 text-white transition-colors">Enviar Solicitação</button>
+              <SubmitButton className="w-full px-4 py-2 text-sm font-medium rounded-lg bg-brand-500 hover:bg-brand-600 text-white transition-colors">Enviar Solicitação</SubmitButton>
             </form>
           </details>
         )}
@@ -533,11 +523,11 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
                 <p className="text-sm font-medium text-gray-800">{req.people?.full_name ?? '—'}</p>
                 {req.notes && <p className="text-xs text-gray-400 italic">&ldquo;{req.notes}&rdquo;</p>}
                 <div className="flex gap-2">
-                  <form action={handleApproveObreiro}><input type="hidden" name="request_id" value={req.id} /><button type="submit" className="px-3 py-1.5 bg-green-500 text-white text-xs font-medium rounded-lg hover:bg-green-600 transition-colors">Aprovar</button></form>
+                  <form action={handleApproveObreiro}><input type="hidden" name="request_id" value={req.id} /><SubmitButton className="px-3 py-1.5 bg-green-500 text-white text-xs font-medium rounded-lg hover:bg-green-600 transition-colors">Aprovar</SubmitButton></form>
                   <form action={handleRejectObreiro} className="flex gap-1">
                     <input type="hidden" name="request_id" value={req.id} />
                     <input name="review_notes" placeholder="Motivo..." className="border border-gray-200 rounded px-2 py-1 text-xs w-28" />
-                    <button type="submit" className="px-3 py-1.5 border border-red-200 text-red-500 text-xs font-medium rounded-lg hover:bg-red-50 transition-colors">Rejeitar</button>
+                    <SubmitButton className="px-3 py-1.5 border border-red-200 text-red-500 text-xs font-medium rounded-lg hover:bg-red-50 transition-colors">Rejeitar</SubmitButton>
                   </form>
                 </div>
               </li>
@@ -572,7 +562,7 @@ export default async function EscolaEquipePage({ params, searchParams }: Props) 
                   {req.status === 'pendente' && (
                     <form action={handleCancelObreiro} className="flex-shrink-0">
                       <input type="hidden" name="request_id" value={req.id} />
-                      <button type="submit" className="text-xs text-gray-400 hover:text-gray-700 transition-colors">Cancelar</button>
+                      <SubmitButton className="text-xs text-gray-400 hover:text-gray-700 transition-colors">Cancelar</SubmitButton>
                     </form>
                   )}
                 </li>

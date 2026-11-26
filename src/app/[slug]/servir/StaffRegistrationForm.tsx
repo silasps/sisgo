@@ -29,6 +29,7 @@ export function StaffRegistrationForm({
   initialLang,
   lockedMinistryId,
   lockedMinistryName,
+  defaultDestination,
 }: {
   slug: string
   ministries: MinistryOption[]
@@ -37,6 +38,8 @@ export function StaffRegistrationForm({
   initialLang?: string
   lockedMinistryId?: string
   lockedMinistryName?: string
+  /** "ministry:<id>" | "school:<id>" já escolhido — link do Quadro de Obreiros (ver lib/staff/signupLink). */
+  defaultDestination?: string
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -309,6 +312,7 @@ export function StaffRegistrationForm({
           <label className="block text-sm font-semibold text-gray-700 mb-2">{t.ministry}</label>
           <select
             name="destination"
+            defaultValue={defaultDestination ?? ''}
             className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent text-gray-900"
           >
             <option value="">{t.ministry_ph}</option>

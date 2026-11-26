@@ -10,12 +10,12 @@ import { orgShortName } from '@/lib/orgShortName'
 
 type Props = {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ lang?: string }>
+  searchParams: Promise<{ lang?: string; destino?: string }>
 }
 
 export default async function ServirPage({ params, searchParams }: Props) {
   const { slug } = await params
-  const { lang: langParam } = await searchParams
+  const { lang: langParam, destino } = await searchParams
   const acceptLanguage = (await headers()).get('accept-language')
   const lang = normalizeStaffLang(langParam ?? detectLangFromHeader(acceptLanguage))
   const d = getStaffFormDict(lang)
@@ -50,6 +50,13 @@ export default async function ServirPage({ params, searchParams }: Props) {
     .order('name')
 
   const schools = (schoolsRaw ?? []) as { id: string; name: string }[]
+
+  // ?destino=ministry:<id> | school:<id> — link do Quadro de Obreiros já com
+  // a unidade escolhida. Só vale se for uma das opções da lista (ativa, desta base).
+  const defaultDestination = destino && [
+    ...ministries.map(m => `ministry:${m.id}`),
+    ...schools.map(s => `school:${s.id}`),
+  ].includes(destino) ? destino : undefined
 
   const { data: publicMinistriesRaw } = await sb
     .from('ministries')
@@ -159,6 +166,7 @@ export default async function ServirPage({ params, searchParams }: Props) {
               schools={schools}
               communicationLanguages={communicationLanguages}
               initialLang={lang}
+              defaultDestination={defaultDestination}
             />
           </div>
         </div>
