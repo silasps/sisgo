@@ -8,6 +8,7 @@ import { userHasAnyRole, KITCHEN_ROLES } from '@/lib/auth/permissions'
 import { ReceitaForm } from './ReceitaForm'
 import { createRecipe, updateRecipe, removeRecipe, saveIngredients, confirmProduction, seedDefaultRecipes } from './actions'
 import { ChefHat, Clock, UtensilsCrossed, Trash2, Pencil, Plus, Download } from 'lucide-react'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -183,9 +184,9 @@ export default async function ReceitasPage({ params, searchParams }: Props) {
                   Tudo editável depois.
                 </p>
               </div>
-              <button className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors flex-shrink-0">
+              <SubmitButton className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors flex-shrink-0">
                 <Download className="size-4" /> Importar receitas
-              </button>
+              </SubmitButton>
             </div>
           </form>
         )}
@@ -245,9 +246,9 @@ export default async function ReceitasPage({ params, searchParams }: Props) {
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
             </div>
             <div className="flex gap-2">
-              <button className="rounded-lg bg-brand-500 hover:bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors">
+              <SubmitButton className="rounded-lg bg-brand-500 hover:bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors">
                 {editingRecipe ? 'Salvar alterações' : 'Criar ficha técnica'}
-              </button>
+              </SubmitButton>
               {editingRecipe && (
                 <Link href={`/${slug}/cozinha/receitas`}
                   className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
@@ -306,9 +307,9 @@ export default async function ReceitasPage({ params, searchParams }: Props) {
                       </Link>
                       <form action={handleRemove}>
                         <input type="hidden" name="recipe_id" value={recipe.id} />
-                        <button className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
+                        <SubmitButton className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
                           <Trash2 className="size-3.5" />
-                        </button>
+                        </SubmitButton>
                       </form>
                     </div>
                   </div>

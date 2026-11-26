@@ -15,6 +15,7 @@ import { ReservationDecisionButton, ReasonActionButton, type DecisionState, type
 import type { RoomOption } from './roomRanking'
 import { parseRoomChoice, allocateReservationRoom } from './allocate'
 import { isManagementRole, isOperationalManager, userHasAnyRole, HOSPEDAGEM_ROLES } from '@/lib/auth/permissions'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -936,10 +937,10 @@ export default async function ReservasPage({ params, searchParams }: Props) {
                   )
                 })}
               </div>
-              <button type="submit"
+              <SubmitButton
                 className="w-full px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
                 Enviar Solicitação
-              </button>
+              </SubmitButton>
             </form>
           </details>
         )}
@@ -1091,9 +1092,9 @@ export default async function ReservasPage({ params, searchParams }: Props) {
                     <div className="border-t border-gray-100 pt-2">
                       <form action={handleCancel}>
                         <input type="hidden" name="reservation_id" value={r.id} />
-                        <button type="submit" className="text-xs text-gray-400 hover:text-red-500 transition-colors">
+                        <SubmitButton className="text-xs text-gray-400 hover:text-red-500 transition-colors">
                           Cancelar solicitação
-                        </button>
+                        </SubmitButton>
                       </form>
                     </div>
                   )}

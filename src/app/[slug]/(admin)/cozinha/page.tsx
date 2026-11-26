@@ -8,6 +8,7 @@ import { confirmMealPayment, createMealConsumers, updateMealSettings } from './a
 import { MealConsumerDateForm } from './MealConsumerDateForm'
 import { MealSettingsEditor } from './MealSettingsEditor'
 import { userHasAnyRole, KITCHEN_ROLES, GENERAL_FINANCE_ROLES } from '@/lib/auth/permissions'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -296,9 +297,9 @@ export default async function CozinhaPage({ params, searchParams }: Props) {
               {mealOptions.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
             </select>
           </div>
-          <button className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800">
+          <SubmitButton className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800">
             Filtrar
-          </button>
+          </SubmitButton>
         </form>
 
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-5 animate-stagger">
@@ -331,9 +332,9 @@ export default async function CozinhaPage({ params, searchParams }: Props) {
                   </div>
                   <form action={handleConfirmPayment}>
                     <input type="hidden" name="purchase_group_id" value={order.purchase_group_id} />
-                    <button className="rounded-lg bg-yellow-500 px-4 py-2 text-sm font-semibold text-white hover:bg-yellow-600">
+                    <SubmitButton className="rounded-lg bg-yellow-500 px-4 py-2 text-sm font-semibold text-white hover:bg-yellow-600">
                       Confirmar pagamento
-                    </button>
+                    </SubmitButton>
                   </form>
                 </div>
               ))}

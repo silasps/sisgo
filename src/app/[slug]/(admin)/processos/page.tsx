@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { notFound, redirect } from 'next/navigation'
-import { Workflow } from 'lucide-react'
+import { CheckCircle2, Workflow } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/Header'
@@ -19,7 +19,7 @@ import { confirmTransferAsDH } from '../ministerios/[id]/actions'
 
 type Props = {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ msg?: string; erro?: string }>
+  searchParams: Promise<{ msg?: string; erro?: string; concluido?: string }>
 }
 
 const fmtDate = (d: string) => new Date(d.length === 10 ? `${d}T00:00:00` : d).toLocaleDateString('pt-BR')
@@ -85,6 +85,40 @@ async function notifyFinanceAfterMove(orgId: string, kind: string, id: string, n
     notifyCandidate,
     notifyLeaderEmail: leaderEmail,
   })
+}
+
+// Depois do OK/encerramento o card não some sem explicação: no lugar dele
+// fica este, dizendo o que aconteceu (a página rola até ele via ?highlight).
+function JustConcludedCard({ item }: { item: ProcessItem }) {
+  const approved = item.status === 'aprovado' || item.status === 'efetivado'
+  const role = item.role ? ` como ${item.role}` : ''
+  const text = !approved
+    ? `O pedido de ${item.personName} para ${item.to.name} foi encerrado — nada mudou nas equipes.`
+    : item.moveType === 'transferencia'
+      ? `${item.personName} saiu de ${item.from.name} e agora serve em ${item.to.name}${role}.`
+      : `${item.personName} continua em ${item.from.name} e agora serve também em ${item.to.name}${role}.`
+  return (
+    <section id={`item-${item.id}`} className="scroll-mt-20 rounded-xl border border-green-200 bg-green-50 p-4">
+      <div className="flex items-start gap-3">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-green-600 text-white">
+          <CheckCircle2 size={18} aria-hidden />
+        </span>
+        <div className="min-w-0 space-y-1">
+          <p className="text-sm font-semibold text-green-900">{approved ? 'OK final dado — processo concluído' : 'Processo encerrado'}</p>
+          <p className="text-sm text-green-900/80">{text}</p>
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <ProcessMoveTypeTag moveType={item.moveType} />
+            <ProcessStatusBadge item={item} />
+          </div>
+          {approved && (
+            <Link href={item.to.href} className="inline-block pt-1 text-xs font-semibold text-green-700 hover:underline">
+              Ver equipe de {item.to.name} →
+            </Link>
+          )}
+        </div>
+      </div>
+    </section>
+  )
 }
 
 function ProcessCard({ item, finance, decideAction, roleOptions, todayStr }: {
@@ -159,7 +193,7 @@ function ProcessCard({ item, finance, decideAction, roleOptions, todayStr }: {
 
 export default async function ProcessosPage({ params, searchParams }: Props) {
   const { slug } = await params
-  const { msg, erro } = await searchParams
+  const { msg, erro, concluido } = await searchParams
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -219,19 +253,19 @@ export default async function ProcessosPage({ params, searchParams }: Props) {
     if (approve) {
       await notifyFinanceAfterMove(orgId, kind, processId, formData.get('notify_candidate') === 'on', formData.get('notify_leader') === 'on')
     }
-    redirect(`/${slug}/processos?msg=${approve ? (moveType === 'transferencia' ? 'transferido' : 'acumulo') : 'encerrado'}`)
+    redirect(`/${slug}/processos?concluido=${processId}&highlight=${processId}`)
   }
 
   const awaitingDh = open.filter(p => p.stage === 'dh')
   const awaitingLeader = open.filter(p => p.stage !== 'dh')
   const todayStr = new Date().toISOString().slice(0, 10)
 
+  // Acabou de ser concluído (redirect do handleDecide) — o mais recente dos concluídos.
+  const justDone = concluido ? closed.find(p => p.id === concluido) ?? null : null
   const msgs: Record<string, { text: string; cls: string }> = {
-    acumulo: { text: 'OK dado — a pessoa continua onde estava e já aparece também na equipe de destino.', cls: 'bg-green-50 border-green-200 text-green-700' },
-    transferido: { text: 'OK dado — a pessoa foi transferida e já aparece na equipe de destino.', cls: 'bg-green-50 border-green-200 text-green-700' },
-    encerrado: { text: 'Processo encerrado.', cls: 'bg-gray-50 border-gray-200 text-gray-700' },
+    concluido: { text: 'Processo concluído.', cls: 'bg-green-50 border-green-200 text-green-700' },
   }
-  const msgInfo = msg ? msgs[msg] : null
+  const msgInfo = msg ? msgs[msg] : concluido && !justDone ? msgs.concluido : null
 
   const renderList = (items: ProcessItem[]) => (
     <ul className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
@@ -255,6 +289,7 @@ export default async function ProcessosPage({ params, searchParams }: Props) {
       <main className="p-4 md:p-6 space-y-5 max-w-5xl w-full mx-auto overflow-y-auto flex-1">
         {msgInfo && <div className={`border rounded-lg px-4 py-3 text-sm ${msgInfo.cls}`}>{msgInfo.text}</div>}
         {erro && <div className="border rounded-lg px-4 py-3 text-sm bg-red-50 border-red-200 text-red-700">{erro}</div>}
+        {justDone && <JustConcludedCard item={justDone} />}
 
         <section className="rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50 to-white p-4">
           <div className="flex items-start gap-3">

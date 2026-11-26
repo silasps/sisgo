@@ -6,6 +6,7 @@ import { getRolePreview } from '@/lib/role-preview'
 import { canLeadSchool } from '@/lib/auth/unit-access'
 import { AdminFileUpload } from '@/components/inscricoes/AdminFileUpload'
 import { anexarDocumentoAdmin, anexarComprovanteAdmin } from './actions'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
@@ -469,10 +470,10 @@ export default async function FormularioEditorPage({ params }: Props) {
               className="flex-1 text-center px-4 py-3 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors font-medium">
               Cancelar
             </Link>
-            <button type="submit"
+            <SubmitButton
               className="flex-1 px-4 py-3 text-sm font-bold text-white bg-brand-500 hover:bg-brand-600 rounded-xl transition-colors">
               Salvar formulário
-            </button>
+            </SubmitButton>
           </div>
 
         </form>

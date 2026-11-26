@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { ImageUpload } from '@/components/ui/ImageUpload'
 import { notFound, redirect } from 'next/navigation'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = { params: Promise<{ slug: string }> }
 
@@ -114,10 +115,10 @@ export default async function ProgramasPage({ params }: Props) {
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
             </div>
             <div className="sm:col-span-2 flex justify-end">
-              <button type="submit"
+              <SubmitButton
                 className="px-5 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-lg transition-colors">
                 + Adicionar atividade
-              </button>
+              </SubmitButton>
             </div>
           </form>
         </section>
@@ -160,19 +161,19 @@ export default async function ProgramasPage({ params }: Props) {
                     <form action={toggleActive}>
                       <input type="hidden" name="id" value={prog.id} />
                       <input type="hidden" name="active" value={String(prog.active)} />
-                      <button type="submit"
+                      <SubmitButton
                         className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
                           prog.active ? 'bg-gray-100 text-gray-600 hover:bg-gray-200' : 'bg-green-50 text-green-700 hover:bg-green-100'
                         }`}>
                         {prog.active ? 'Desativar' : 'Ativar'}
-                      </button>
+                      </SubmitButton>
                     </form>
                     <form action={deleteProgram}>
                       <input type="hidden" name="id" value={prog.id} />
-                      <button type="submit"
+                      <SubmitButton
                         className="text-xs px-2 py-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors">
                         ✕
-                      </button>
+                      </SubmitButton>
                     </form>
                   </div>
                 </div>

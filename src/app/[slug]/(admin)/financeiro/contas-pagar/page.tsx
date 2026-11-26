@@ -5,6 +5,7 @@ import { Header } from '@/components/layout/Header'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { userHasAnyRole, GENERAL_FINANCE_ROLES } from '@/lib/auth/permissions'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = { params: Promise<{ slug: string }> }
 
@@ -203,15 +204,15 @@ export default async function ContasPagarPage({ params }: Props) {
                           <div className="flex gap-1">
                             <form action={handleMarkPaid}>
                               <input type="hidden" name="payable_id" value={p.id} />
-                              <button type="submit" title="Marcar como pago" className="text-xs font-medium text-green-600 hover:text-green-700 px-2 py-1 rounded-lg hover:bg-green-50 transition-colors whitespace-nowrap">
+                              <SubmitButton title="Marcar como pago" className="text-xs font-medium text-green-600 hover:text-green-700 px-2 py-1 rounded-lg hover:bg-green-50 transition-colors whitespace-nowrap">
                                 Pago
-                              </button>
+                              </SubmitButton>
                             </form>
                             <form action={handleCancel}>
                               <input type="hidden" name="payable_id" value={p.id} />
-                              <button type="submit" title="Cancelar" className="text-xs text-gray-400 hover:text-gray-600 px-1 py-1 rounded-lg hover:bg-gray-100 transition-colors">
+                              <SubmitButton title="Cancelar" className="text-xs text-gray-400 hover:text-gray-600 px-1 py-1 rounded-lg hover:bg-gray-100 transition-colors">
                                 ✕
-                              </button>
+                              </SubmitButton>
                             </form>
                           </div>
                         )}
@@ -274,9 +275,9 @@ export default async function ContasPagarPage({ params }: Props) {
                 <span className="mb-1 block text-xs font-medium text-gray-600">Observação</span>
                 <input name="notes" placeholder="Opcional" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
               </label>
-              <button className="w-full rounded-lg bg-brand-500 hover:bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors">
+              <SubmitButton className="w-full rounded-lg bg-brand-500 hover:bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors">
                 Registrar conta
-              </button>
+              </SubmitButton>
             </form>
           </div>
         </div>

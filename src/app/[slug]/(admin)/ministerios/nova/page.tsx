@@ -6,6 +6,7 @@ import { createMinistry } from '../[id]/actions'
 import { MinistryNameField } from './MinistryNameField'
 import { isManagementRole } from '@/lib/auth/permissions'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = { params: Promise<{ slug: string }> }
 
@@ -103,12 +104,11 @@ export default async function NovoMinisterioPage({ params }: Props) {
                 </p>
               </div>
             )}
-            <button
-              type="submit"
+            <SubmitButton
               className="w-full py-2.5 bg-brand-500 text-white font-medium rounded-lg text-sm hover:bg-brand-600 transition-colors"
             >
               Criar Ministério
-            </button>
+            </SubmitButton>
           </form>
         </div>
       </main>

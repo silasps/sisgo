@@ -27,6 +27,7 @@ import { FinancePendingConfirmButton } from '@/components/finance/FinancePending
 import { FinalizarObreiroForm } from './FinalizarObreiroForm'
 import type { CreatedAccess } from '../pessoas/[personId]/acesso/actions'
 import { participantNoun } from '@/lib/schools'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type InscricaoItem = {
   id: string
@@ -274,10 +275,10 @@ function StatusDropdown({ item, label, color, options, updateStatus }: {
                 <input type="hidden" name="id" value={item.id} />
                 <input type="hidden" name="tipo" value={item.tipo} />
                 <input type="hidden" name="status" value={opt.value} />
-                <button type="submit" onClick={() => setOpen(false)}
+                <SubmitButton onClick={() => setOpen(false)}
                   className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">
                   {opt.label}
-                </button>
+                </SubmitButton>
               </form>
             ))}
           </div>
@@ -997,9 +998,9 @@ export function InscricoesList({
                                     <input type="checkbox" name="leader_word_shared" className="mt-0.5" />
                                     Enviar esta palavra ao obreiro, se for aceito
                                   </label>
-                                  <button type="submit" className="w-full text-sm px-3 py-2.5 bg-blue-600 text-white hover:bg-blue-700 rounded-xl transition-colors font-semibold">
+                                  <SubmitButton className="w-full text-sm px-3 py-2.5 bg-blue-600 text-white hover:bg-blue-700 rounded-xl transition-colors font-semibold">
                                     Salvar palavra
-                                  </button>
+                                  </SubmitButton>
                                 </form>
                               </ActionModalButton>
                             </div>
@@ -1023,9 +1024,9 @@ export function InscricoesList({
                                         )}
                                       </select>
                                       <p className="text-xs text-amber-700">Confira se pendências de hospedagem/antecedentes ligadas ao vínculo atual ainda fazem sentido depois de mudar.</p>
-                                      <button type="submit" className="w-full text-sm px-3 py-2.5 bg-violet-600 text-white hover:bg-violet-700 rounded-xl transition-colors font-semibold">
+                                      <SubmitButton className="w-full text-sm px-3 py-2.5 bg-violet-600 text-white hover:bg-violet-700 rounded-xl transition-colors font-semibold">
                                         Encaminhar
-                                      </button>
+                                      </SubmitButton>
                                     </form>
                                   ) : (
                                     <SolicitarTransferenciaForm
@@ -1174,9 +1175,9 @@ export function InscricoesList({
                                 <option value="" disabled>Encaminhar para qual escola?</option>
                                 {allSchools.filter(s => s.id !== item.schoolId).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                               </select>
-                              <button type="submit" className="w-full text-sm px-3 py-2.5 bg-blue-600 text-white hover:bg-blue-700 rounded-xl transition-colors font-semibold">
+                              <SubmitButton className="w-full text-sm px-3 py-2.5 bg-blue-600 text-white hover:bg-blue-700 rounded-xl transition-colors font-semibold">
                                 Encaminhar para escola
-                              </button>
+                              </SubmitButton>
                             </form>
                           ) : (
                             <SolicitarTransferenciaForm
@@ -1214,9 +1215,9 @@ export function InscricoesList({
                                   </optgroup>
                                 )}
                               </select>
-                              <button type="submit" className="w-full text-sm px-3 py-2.5 bg-violet-600 text-white hover:bg-violet-700 rounded-xl transition-colors font-semibold">
+                              <SubmitButton className="w-full text-sm px-3 py-2.5 bg-violet-600 text-white hover:bg-violet-700 rounded-xl transition-colors font-semibold">
                                 Encaminhar
-                              </button>
+                              </SubmitButton>
                             </form>
                           ) : (
                             <SolicitarTransferenciaForm

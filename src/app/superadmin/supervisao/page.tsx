@@ -2,6 +2,7 @@ import { Header } from '@/components/layout/Header'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { asLooseClient } from '@/lib/supabase/loose-client'
 import { redirect } from 'next/navigation'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Group = { id: string; name: string; description: string | null; parent_group_id: string | null; active: boolean }
 type Org = { id: string; name: string; slug: string; city: string | null; state: string | null; active: boolean }
@@ -130,7 +131,7 @@ export default async function SupervisaoBasesPage() {
               <Field name="full_name" label="Nome completo" required placeholder="Nome do líder/supervisor" />
               <Field name="email" label="E-mail" type="email" required placeholder="supervisor@exemplo.com" />
               <Field name="password" label="Senha temporária" type="password" required placeholder="Mínimo 6 caracteres" minLength={6} />
-              <button className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800">Criar supervisor</button>
+              <SubmitButton className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800">Criar supervisor</SubmitButton>
               <p className="text-xs text-gray-400">
                 Depois de criar, vincule este usuário a um grupo ou diretamente a uma base abaixo.
               </p>
@@ -142,7 +143,7 @@ export default async function SupervisaoBasesPage() {
               <Field name="name" label="Nome do grupo" required placeholder="Ex: Regional Sul, Rede Norte..." />
               <Select name="parent_group_id" label="Grupo acima" options={[['', 'Nenhum'], ...groups.map(group => [group.id, group.name] as [string, string])]} />
               <Field name="description" label="Descrição" placeholder="Opcional" />
-              <button className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800">Criar grupo</button>
+              <SubmitButton className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800">Criar grupo</SubmitButton>
               <p className="text-xs text-gray-400">
                 Depois de criar, adicione as bases e vincule um líder para esse grupo.
               </p>
@@ -153,7 +154,7 @@ export default async function SupervisaoBasesPage() {
             <form action={addBaseToGroup} className="space-y-3">
               <Select name="group_id" label="Grupo" options={groups.map(group => [group.id, group.name] as [string, string])} />
               <Select name="organization_id" label="Base" options={orgs.map(org => [org.id, org.name] as [string, string])} />
-              <button className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800">Adicionar base</button>
+              <SubmitButton className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800">Adicionar base</SubmitButton>
             </form>
           </Panel>
 
@@ -163,7 +164,7 @@ export default async function SupervisaoBasesPage() {
               <Field name="email" label="E-mail do usuário" type="email" required placeholder="lider@exemplo.com" />
               <Field name="full_name" label="Nome, se precisar criar" placeholder="Opcional se o e-mail já existir" />
               <Field name="password" label="Senha temporária, se precisar criar" type="password" placeholder="Opcional se o e-mail já existir" minLength={6} />
-              <button className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800">Vincular líder</button>
+              <SubmitButton className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800">Vincular líder</SubmitButton>
             </form>
           </Panel>
 
@@ -173,7 +174,7 @@ export default async function SupervisaoBasesPage() {
               <Field name="email" label="E-mail do usuário" type="email" required placeholder="supervisor@exemplo.com" />
               <Field name="full_name" label="Nome, se precisar criar" placeholder="Opcional se o e-mail já existir" />
               <Field name="password" label="Senha temporária, se precisar criar" type="password" placeholder="Opcional se o e-mail já existir" minLength={6} />
-              <button className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800">Vincular supervisor</button>
+              <SubmitButton className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800">Vincular supervisor</SubmitButton>
             </form>
           </Panel>
         </section>

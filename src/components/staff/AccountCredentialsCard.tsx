@@ -127,7 +127,7 @@ export function AccountCredentialsCard({
             disabled={isPending}
             className="px-3 py-2 text-xs font-medium rounded-lg bg-brand-500 hover:bg-brand-600 text-white transition-colors disabled:opacity-50"
           >
-            Salvar
+            {isPending ? 'Salvando…' : 'Salvar'}
           </button>
         </form>
       )}

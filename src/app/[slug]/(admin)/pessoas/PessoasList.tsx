@@ -6,6 +6,7 @@ import { SortSelect } from '@/components/ui/SortSelect'
 import { ClickableRow } from '@/components/ui/ClickableRow'
 import { bestScore } from '@/lib/search/fuzzy'
 import type { PessoaRow, OpenClassOption } from './page'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 const GENERO_LABELS: Record<string, string> = { M: 'Homens', F: 'Mulheres', outro: 'Outro', none: 'Sem gênero informado' }
 
@@ -174,12 +175,11 @@ export function PessoasList({
                             </option>
                           ))}
                         </select>
-                        <button
-                          type="submit"
+                        <SubmitButton
                           className="rounded-lg border border-gray-200 px-2.5 py-2 text-xs font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-800"
                         >
                           Confirmar
-                        </button>
+                        </SubmitButton>
                       </form>
                     ) : (
                       r.col2

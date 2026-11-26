@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import type { RolePreview, RolePreviewValue } from '@/lib/role-preview'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 const ROLE_OPTIONS: Array<{ value: RolePreviewValue; label: string }> = [
   { value: 'superadmin', label: 'Super admin' },
@@ -82,9 +83,9 @@ export function RolePreviewForm({ action, preview, schools, ministries, redirect
         </select>
       )}
 
-      <button type="submit" className="h-7 rounded-md bg-white px-2 text-xs font-semibold text-gray-900 hover:bg-gray-200">
+      <SubmitButton className="h-7 rounded-md bg-white px-2 text-xs font-semibold text-gray-900 hover:bg-gray-200">
         Aplicar
-      </button>
+      </SubmitButton>
     </form>
   )
 }

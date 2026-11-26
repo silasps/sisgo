@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { AlertTriangle, CalendarDays, CalendarPlus, CalendarRange, ChevronLeft, ChevronRight, Clock, LayoutList, Plus, Save, Trash2, X } from 'lucide-react'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 import { useCallback, useMemo, useRef, useState, useTransition } from 'react'
 import { AUDIENCE_ROLES } from '@/lib/audience-roles'
 import { useSidebarLeftClass } from '@/components/layout/account-context'
@@ -897,9 +898,9 @@ function SchoolDayModal({
                   <form action={actions.deleteEvent} className="ml-2 shrink-0">
                     <input type="hidden" name="event_id" value={event.id} />
                     <input type="hidden" name="layer"    value={event.layer} />
-                    <button className="rounded p-1 opacity-60 hover:opacity-100 hover:text-red-600" title="Remover">
+                    <SubmitButton className="rounded p-1 opacity-60 hover:opacity-100 hover:text-red-600 disabled:opacity-40" title="Remover">
                       <Trash2 size={13} />
-                    </button>
+                    </SubmitButton>
                   </form>
                 </div>
               ))}
@@ -1168,12 +1169,12 @@ function DayEventCard({
             <form action={deleteAction}>
               <input type="hidden" name="event_id" value={event.id} />
               <input type="hidden" name="layer"    value={event.layer} />
-              <button
+              <SubmitButton
                 className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white/70 text-gray-600 transition-colors hover:bg-red-50 hover:text-red-600"
                 title="Remover"
               >
                 <Trash2 size={14} />
-              </button>
+              </SubmitButton>
             </form>
           </div>
         )}
@@ -1258,7 +1259,7 @@ function EventModal({
               </div>
               <FieldInput name="description" placeholder="Observação (opcional)" />
               <AudienceRolesField defaultRoles={[]} />
-              <SubmitButton label="Adicionar" />
+              <SaveButton label="Adicionar" />
             </form>
           )}
 
@@ -1286,7 +1287,7 @@ function EventModal({
               </div>
               <FieldInput name="description" placeholder="Professor, sala ou observação" />
               <VisibleToStudentsField defaultChecked />
-              <SubmitButton label="Adicionar" />
+              <SaveButton label="Adicionar" />
             </form>
           )}
 
@@ -1313,7 +1314,7 @@ function EventModal({
                 </div>
               </div>
               <FieldInput name="description" placeholder="Observação (opcional)" />
-              <SubmitButton label="Adicionar" />
+              <SaveButton label="Adicionar" />
             </form>
           )}
 
@@ -1331,7 +1332,7 @@ function EventModal({
                 </div>
               </div>
               <textarea name="notes" rows={3} placeholder="Anotação privada..." className={`${INPUT_CLASS} resize-none`} />
-              <SubmitButton label="Salvar" />
+              <SaveButton label="Salvar" />
             </form>
           )}
 
@@ -1356,19 +1357,14 @@ function EditEventForm({ event, schools, ministries = [], updateAction, deleteAc
   event: CalendarEvent; schools: SchoolOption[]; ministries?: MinistryOption[]; updateAction: Action; deleteAction: Action
 }) {
   const formId = `calendar-edit-${event.layer}-${event.id}`
-  const deleteBtn = (
-    <form action={deleteAction}>
-      <input type="hidden" name="event_id" value={event.id} />
-      <input type="hidden" name="layer"    value={event.layer} />
-      <button type="submit" className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50">
-        <Trash2 size={14} /> Excluir
-      </button>
-    </form>
-  )
+  // Excluir e Salvar dentro do form de edição (que já leva event_id/layer):
+  // Excluir troca a action via formAction, sem validar os campos.
   const actionsRow = (
     <div className="flex gap-2 pt-1">
-      {deleteBtn}
-      <SubmitButton label="Salvar" form={formId} />
+      <SubmitButton formAction={deleteAction} formNoValidate className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 disabled:opacity-60">
+        <Trash2 size={14} /> Excluir
+      </SubmitButton>
+      <SaveButton label="Salvar" />
     </div>
   )
 
@@ -1391,8 +1387,8 @@ function EditEventForm({ event, schools, ministries = [], updateAction, deleteAc
           </div>
           <FieldInput name="description" defaultValue={event.description ?? ''} placeholder="Observação" />
           <AudienceRolesField defaultRoles={event.visible_to_roles ?? []} />
+          {actionsRow}
         </form>
-        {actionsRow}
       </div>
     )
   }
@@ -1419,8 +1415,8 @@ function EditEventForm({ event, schools, ministries = [], updateAction, deleteAc
           </div>
           <FieldInput name="description" defaultValue={event.description ?? ''} placeholder="Professor, sala ou observação" />
           <VisibleToStudentsField defaultChecked={event.visible_to_students ?? true} />
+          {actionsRow}
         </form>
-        {actionsRow}
       </div>
     )
   }
@@ -1446,8 +1442,8 @@ function EditEventForm({ event, schools, ministries = [], updateAction, deleteAc
             <input name="ends_at"   type="datetime-local"         defaultValue={event.ends_at   ? isoToLocalInput(event.ends_at)   : ''} className={INPUT_CLASS} />
           </div>
           <FieldInput name="description" defaultValue={event.description ?? ''} placeholder="Observação" />
+          {actionsRow}
         </form>
-        {actionsRow}
       </div>
     )
   }
@@ -1463,8 +1459,8 @@ function EditEventForm({ event, schools, ministries = [], updateAction, deleteAc
           <input name="ends_at"   type="datetime-local"         defaultValue={event.ends_at   ? isoToLocalInput(event.ends_at)   : ''} className={INPUT_CLASS} />
         </div>
         <textarea name="notes" rows={3} defaultValue={event.description ?? ''} className={`${INPUT_CLASS} resize-none`} />
+        {actionsRow}
       </form>
-      {actionsRow}
     </div>
   )
 }
@@ -1517,11 +1513,11 @@ function VisibleToStudentsField({ defaultChecked }: { defaultChecked: boolean })
   )
 }
 
-function SubmitButton({ label, small = false, form }: { label: string; small?: boolean; form?: string }) {
+function SaveButton({ label, small = false }: { label: string; small?: boolean }) {
   return (
-    <button type="submit" form={form} className={`inline-flex w-full items-center justify-center gap-2 rounded-lg bg-brand-500 font-semibold text-white transition-colors hover:bg-brand-600 ${small ? 'px-3 py-2 text-xs' : 'px-4 py-2 text-sm'}`}>
+    <SubmitButton className={`inline-flex w-full items-center justify-center gap-2 rounded-lg bg-brand-500 font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60 ${small ? 'px-3 py-2 text-xs' : 'px-4 py-2 text-sm'}`}>
       <Save size={small ? 13 : 15} /> {label}
-    </button>
+    </SubmitButton>
   )
 }
 

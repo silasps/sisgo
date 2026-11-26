@@ -245,8 +245,7 @@ function MaintenanceToggle({ action, id, fieldName, isInMaintenance }: {
     <form action={action}>
       <input type="hidden" name={fieldName} value={id} />
       <input type="hidden" name="enable" value={isInMaintenance ? 'false' : 'true'} />
-      <button
-        type="submit"
+      <SubmitButton
         className={`w-full py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
           isInMaintenance
             ? 'bg-green-50 border border-green-200 text-green-700 hover:bg-green-100'
@@ -255,7 +254,7 @@ function MaintenanceToggle({ action, id, fieldName, isInMaintenance }: {
       >
         <Wrench size={16} />
         {isInMaintenance ? 'Tirar de Manutenção' : 'Colocar em Manutenção'}
-      </button>
+      </SubmitButton>
     </form>
   )
 }
@@ -280,7 +279,7 @@ function ModeToggle({ mode, onChange }: { mode: 'cama' | 'quarto'; onChange: (m:
 // ── Main Component ───────────────────────────────────────────────────────────
 
 export function BedGrid({
-  rooms, beds, allocs, schools, obreiros, today, advanceHours, slug,
+  rooms, beds, allocs, schools, obreiros, today, advanceHours,
   allocateAction, allocateRoomAction,
   checkinAction, checkoutAction,
   checkinRoomAction, checkoutRoomAction,

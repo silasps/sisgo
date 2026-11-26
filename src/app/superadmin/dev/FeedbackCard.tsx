@@ -89,7 +89,7 @@ export function FeedbackCard({ item }: { item: Feedback }) {
         <div className="flex items-center gap-2 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
           <p className="text-xs text-red-600 flex-1">Excluir permanentemente?</p>
           <button onClick={() => setShowDelete(false)} className="text-xs text-gray-400 hover:text-gray-600">Cancelar</button>
-          <button onClick={handleDelete} className="text-xs font-bold text-red-600 hover:text-red-800">Excluir</button>
+          <button onClick={handleDelete} disabled={pending} className="text-xs font-bold text-red-600 hover:text-red-800 disabled:opacity-50">{pending ? 'Excluindo…' : 'Excluir'}</button>
         </div>
       )}
     </div>

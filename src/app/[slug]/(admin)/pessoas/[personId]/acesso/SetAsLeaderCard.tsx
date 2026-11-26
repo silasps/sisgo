@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type OptionRow = { id: string; name: string }
 export type Leadership = { type: 'school' | 'ministry'; id: string; name: string }
@@ -40,9 +41,9 @@ export function SetAsLeaderCard({
               <form action={removeAction} className="shrink-0">
                 <input type="hidden" name="unit_type" value={l.type} />
                 <input type="hidden" name="unit_id" value={l.id} />
-                <button type="submit" className="text-xs text-red-400 hover:text-red-600 transition-colors">
+                <SubmitButton className="text-xs text-red-400 hover:text-red-600 transition-colors">
                   Remover
-                </button>
+                </SubmitButton>
               </form>
             </li>
           ))}
@@ -69,9 +70,9 @@ export function SetAsLeaderCard({
               {options.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
             </select>
           </div>
-          <button type="submit" className="w-full px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
+          <SubmitButton className="w-full px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
             Definir como líder
-          </button>
+          </SubmitButton>
         </form>
       </details>
     </div>

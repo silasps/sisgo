@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { saveAttendance } from './actions'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = {
   params: Promise<{ slug: string; id: string; classId: string }>
@@ -146,12 +147,11 @@ export default async function PresencasTurmaPage({ params, searchParams }: Props
                 </label>
               )
             })}
-            <button
-              type="submit"
+            <SubmitButton
               className="w-full py-3 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-xl transition-colors"
             >
               Salvar presenças
-            </button>
+            </SubmitButton>
           </form>
         )}
 

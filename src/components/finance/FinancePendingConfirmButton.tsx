@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 import type { PersonFinanceSummary } from '@/lib/finance/personFinanceStatus'
 
 function fmt(value: number): string {
@@ -20,6 +21,8 @@ type Props = {
   personName: string
   extraFields?: Record<string, string>
   className?: string
+  /** Texto enquanto a action roda (sem pendência; com pendência o modal mostra "Salvando…"). */
+  pendingText?: string
   children: React.ReactNode
 }
 
@@ -28,7 +31,7 @@ type Props = {
 // portalado — fora da árvore DOM do <form>, então form.requestSubmit() não
 // os capturaria. Por isso invoca a Server Action diretamente (como
 // ConfirmDialog), montando o FormData a partir do form irmão na mão.
-export function FinancePendingConfirmButton({ action, financeSummary, personName, extraFields, className, children }: Props) {
+export function FinancePendingConfirmButton({ action, financeSummary, personName, extraFields, className, pendingText, children }: Props) {
   const hasPendency = !!financeSummary && (financeSummary.overdueCount > 0 || financeSummary.pendingCount > 0)
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -42,7 +45,11 @@ export function FinancePendingConfirmButton({ action, financeSummary, personName
     // valeria também pros outros botões de submit do form (ex.: "Recusar").
     // Por isso aqui só cabe UM extraField.
     const [extraName, extraValue] = Object.entries(extraFields ?? {})[0] ?? []
-    return <button type="submit" name={extraName} value={extraValue} className={className}>{children}</button>
+    return (
+      <SubmitButton name={extraName} value={extraValue} className={className} pendingText={pendingText}>
+        {children}
+      </SubmitButton>
+    )
   }
 
   function openConfirm() {

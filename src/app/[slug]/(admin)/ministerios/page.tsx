@@ -7,6 +7,7 @@ import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { getMyMinistries } from '@/lib/auth/unit-access'
 import { createMinistry } from './[id]/actions'
 import { Music, Plus } from 'lucide-react'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = { params: Promise<{ slug: string }> }
 
@@ -156,9 +157,9 @@ export default async function MinistriosPage({ params }: Props) {
                     <p className="font-semibold text-gray-700 text-sm">{fn.name}</p>
                     <p className="text-xs text-gray-400 mt-0.5">{fn.description}</p>
                   </div>
-                  <button type="submit" className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-brand-600 bg-white border border-brand-200 rounded-lg px-3 py-2 hover:bg-brand-50 transition-colors">
+                  <SubmitButton className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-brand-600 bg-white border border-brand-200 rounded-lg px-3 py-2 hover:bg-brand-50 transition-colors">
                     <Plus size={14} /> Criar
-                  </button>
+                  </SubmitButton>
                 </form>
               ))}
             </div>

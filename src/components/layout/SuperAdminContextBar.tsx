@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { clearRolePreview, ROLE_PREVIEW_OPTIONS, setRolePreview, type RolePreview } from '@/lib/role-preview'
 import { RolePreviewForm } from './RolePreviewForm'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = {
   mode: 'admin' | 'public'
@@ -43,9 +44,9 @@ export function SuperAdminContextBar({ mode, slug, baseName, preview, schools = 
         {preview && (
           <form action={clearRolePreview} className="shrink-0">
             <input type="hidden" name="redirect_to" value={dashboardPath} />
-            <button type="submit" className="h-7 rounded-md border border-white/10 px-2 text-xs text-gray-300 hover:bg-white/10 hover:text-white">
+            <SubmitButton className="h-7 rounded-md border border-white/10 px-2 text-xs text-gray-300 hover:bg-white/10 hover:text-white">
               Sair
-            </button>
+            </SubmitButton>
           </form>
         )}
         <Link

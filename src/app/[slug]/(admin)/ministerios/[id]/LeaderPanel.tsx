@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import { SearchableSelectModal } from '@/components/ui/SearchableSelectModal'
 import { assignMinistryLeaderByPerson, addMinistryCoLeaderByPerson, removeMinistryLeader } from './actions'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = { slug: string; ministryId: string; orgId: string; canAssignLeader: boolean }
 
@@ -76,7 +77,7 @@ export async function LeaderPanel({ slug, ministryId, orgId, canAssignLeader }: 
               <p className="text-sm font-medium text-gray-900 truncate">{l.email}</p>
               <form action={handleRemoveLeader}>
                 <input type="hidden" name="user_id" value={l.userId} />
-                <button type="submit" className="text-[10px] text-red-400 hover:text-red-600 transition-colors">Remover</button>
+                <SubmitButton className="text-[10px] text-red-400 hover:text-red-600 transition-colors">Remover</SubmitButton>
               </form>
             </li>
           ))}
@@ -99,9 +100,9 @@ export async function LeaderPanel({ slug, ministryId, orgId, canAssignLeader }: 
               <p className="text-[10px] text-gray-400">
                 Busca qualquer pessoa cadastrada na base. Quem ainda não tem login ganha um automaticamente.
               </p>
-              <button type="submit" className="w-full px-3 py-1.5 text-xs font-medium rounded-lg bg-brand-500 hover:bg-brand-600 text-white transition-colors">
+              <SubmitButton className="w-full px-3 py-1.5 text-xs font-medium rounded-lg bg-brand-500 hover:bg-brand-600 text-white transition-colors">
                 Confirmar
-              </button>
+              </SubmitButton>
             </form>
           </details>
         ) : (

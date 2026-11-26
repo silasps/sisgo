@@ -6,6 +6,7 @@ import { MANAGEMENT_ROLES } from '@/lib/auth/permissions'
 import { notFound, redirect } from 'next/navigation'
 import { revokeEmergencyAccess } from '../[personId]/emergencia/actions'
 import { REASON_LABELS } from '../[personId]/emergencia/constants'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = { params: Promise<{ slug: string }> }
 
@@ -83,9 +84,9 @@ export default async function EmergenciaPage({ params }: Props) {
                     <form action={revokeEmergencyAccess} className="mt-2">
                       <input type="hidden" name="grant_id" value={g.id} />
                       <input type="hidden" name="slug" value={slug} />
-                      <button type="submit" className="text-xs text-red-500 hover:text-red-700 font-medium">
+                      <SubmitButton className="text-xs text-red-500 hover:text-red-700 font-medium">
                         Revogar agora
-                      </button>
+                      </SubmitButton>
                     </form>
                   )}
                 </div>

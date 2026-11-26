@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type MealOption = { id: string; label: string; price: number }
 type ComboRule = { id: string; name: string; mealIds: string[]; rewardMealIds?: string[]; discountPercent: number }
@@ -194,9 +195,9 @@ export function MealSettingsEditor({ action, mealOptions, comboRules }: Props) {
           ))}
         </div>
 
-        <button className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800">
+        <SubmitButton className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800">
           Salvar configurações
-        </button>
+        </SubmitButton>
       </form>
     </details>
   )

@@ -4,6 +4,7 @@ import { Header } from '@/components/layout/Header'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { User, Briefcase, GraduationCap, BookOpen, Music } from 'lucide-react'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = { params: Promise<{ id: string }> }
 
@@ -92,8 +93,7 @@ export default async function BaseDetailPage({ params }: Props) {
             Criada em {new Date(base.created_at).toLocaleDateString('pt-BR')}
           </span>
           <form action={toggleActive}>
-            <button
-              type="submit"
+            <SubmitButton
               className={`text-xs px-3 py-1.5 rounded-lg font-semibold transition-colors whitespace-nowrap ${
                 base.active
                   ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200'
@@ -101,7 +101,7 @@ export default async function BaseDetailPage({ params }: Props) {
               }`}
             >
               {base.active ? 'Desativar base' : 'Ativar base'}
-            </button>
+            </SubmitButton>
           </form>
         </div>
 
@@ -128,12 +128,11 @@ export default async function BaseDetailPage({ params }: Props) {
               <EditField label="Website" name="website" type="url" defaultValue={base.website ?? ''} />
             </div>
             <div className="pt-2 flex items-center gap-3">
-              <button
-                type="submit"
+              <SubmitButton
                 className="px-5 py-2 bg-brand-500 text-white text-sm font-semibold rounded-lg hover:bg-brand-600 transition-colors"
               >
                 Salvar alterações
-              </button>
+              </SubmitButton>
               <Link
                 href={`/${base.slug}/dashboard`}
                 className="text-sm text-brand-500 hover:text-brand-600 font-medium"

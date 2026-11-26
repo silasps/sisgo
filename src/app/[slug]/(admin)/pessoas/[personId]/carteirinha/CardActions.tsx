@@ -4,6 +4,7 @@ import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { ImageUpload } from '@/components/ui/ImageUpload'
 import { generateCardToken, revokeCardToken, updatePersonPhoto } from './actions'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = {
   orgId: string
@@ -41,12 +42,11 @@ export function CardActions({ orgId, personId, slug, hasToken, photoUrl }: Props
           folder={`people/${personId}`}
           defaultUrl={photoUrl}
         />
-        <button
-          type="submit"
+        <SubmitButton
           className="px-4 py-2 border border-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
         >
           Salvar foto
-        </button>
+        </SubmitButton>
       </form>
 
       <div className="flex flex-wrap gap-3">

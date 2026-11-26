@@ -4,6 +4,7 @@ import { Header } from '@/components/layout/Header'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { userHasAnyRole, GENERAL_FINANCE_ROLES } from '@/lib/auth/permissions'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = { params: Promise<{ slug: string }> }
 
@@ -135,9 +136,9 @@ export default async function TabelaValoresPage({ params }: Props) {
               <span className="mb-1 block text-xs font-medium text-gray-600">Observação</span>
               <input name="notes" placeholder="Opcional" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
             </label>
-            <button className="self-end rounded-lg bg-brand-500 hover:bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors">
+            <SubmitButton className="self-end rounded-lg bg-brand-500 hover:bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors">
               Criar tabela
-            </button>
+            </SubmitButton>
           </form>
         </section>
 
@@ -170,9 +171,9 @@ export default async function TabelaValoresPage({ params }: Props) {
                   <form action={handleToggleTable}>
                     <input type="hidden" name="table_id" value={table.id} />
                     <input type="hidden" name="active" value={String(table.active)} />
-                    <button type="submit" className="text-xs text-gray-400 hover:text-gray-700 px-2 py-1 rounded-lg hover:bg-gray-100 transition-colors">
+                    <SubmitButton className="text-xs text-gray-400 hover:text-gray-700 px-2 py-1 rounded-lg hover:bg-gray-100 transition-colors">
                       {table.active ? 'Desativar' : 'Ativar'}
-                    </button>
+                    </SubmitButton>
                   </form>
                 </div>
               </div>
@@ -191,9 +192,9 @@ export default async function TabelaValoresPage({ params }: Props) {
                             <span className="text-sm font-semibold text-gray-900 w-24 text-right">{fmt(Number(item.amount))}</span>
                             <form action={handleDeleteItem}>
                               <input type="hidden" name="item_id" value={item.id} />
-                              <button type="submit" title="Remover item" className="text-gray-300 hover:text-red-400 transition-colors p-1">
+                              <SubmitButton title="Remover item" className="text-gray-300 hover:text-red-400 transition-colors p-1">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-                              </button>
+                              </SubmitButton>
                             </form>
                           </div>
                         ))}
@@ -219,9 +220,9 @@ export default async function TabelaValoresPage({ params }: Props) {
                   </select>
                   <div className="flex gap-2">
                     <input name="amount" type="number" step="0.01" min="0" required placeholder="0,00" className="flex-1 rounded-lg border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                    <button type="submit" className="rounded-lg bg-brand-500 hover:bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition-colors whitespace-nowrap">
+                    <SubmitButton className="rounded-lg bg-brand-500 hover:bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition-colors whitespace-nowrap">
                       + Add
-                    </button>
+                    </SubmitButton>
                   </div>
                 </form>
               </div>

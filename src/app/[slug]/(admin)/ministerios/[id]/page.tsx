@@ -9,6 +9,7 @@ import { Users, ClipboardList, GraduationCap } from 'lucide-react'
 import { MuralClient } from './mural/MuralClient'
 import { LeaderPanel } from './LeaderPanel'
 import { LocaleContentTabs } from '@/components/ui/LocaleContentTabs'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = {
   params: Promise<{ slug: string; id: string }>
@@ -252,9 +253,9 @@ export default async function MinisterioOverviewPage({ params, searchParams }: P
                   )}
                 </div>
 
-                <button type="submit" className="w-full px-3 py-1.5 text-xs font-medium rounded-lg bg-brand-500 hover:bg-brand-600 text-white transition-colors">
+                <SubmitButton className="w-full px-3 py-1.5 text-xs font-medium rounded-lg bg-brand-500 hover:bg-brand-600 text-white transition-colors">
                   Salvar
-                </button>
+                </SubmitButton>
               </form>
             </>
           ) : (

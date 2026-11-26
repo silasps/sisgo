@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import { Plus } from 'lucide-react'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Action = (formData: FormData) => Promise<void>
 
@@ -74,10 +75,10 @@ export function NovaTurmaModal({ action }: { action: Action }) {
               className="flex-1 px-4 py-2.5 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
               Cancelar
             </button>
-            <button type="submit"
+            <SubmitButton
               className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-brand-500 hover:bg-brand-600 rounded-lg transition-colors">
               Criar turma
-            </button>
+            </SubmitButton>
           </div>
         </form>
       </Modal>

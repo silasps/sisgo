@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import { changeRole, createStaffUser, toggleActive, updateExtraRoles, type CreatedStaffUser } from './actions'
 import { AccountCredentialsCard } from '@/components/staff/AccountCredentialsCard'
 import { adicionarTelefonePessoa, marcarCredencialEnviada } from '../pessoas/[personId]/acesso/actions'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type RoleRow = { id: string; name: string; label: string }
 type OptionRow = { id: string; name: string }
@@ -218,7 +219,9 @@ export function ChangeRoleCells({
         />
       </td>
       <td className="hidden px-4 py-3 md:table-cell">
-        <form id={formId} action={changeRole} className="hidden">
+        {/* Seletor de função e Salvar DENTRO do form (o de área, na outra célula, segue
+            ligado por form=) — botão fora do form não tem como mostrar "salvando". */}
+        <form id={formId} action={changeRole}>
           <input type="hidden" name="org_user_id" value={orgUserId} />
           <input type="hidden" name="user_id" value={userId} />
           <input type="hidden" name="current_role_id" value={currentRoleId} />
@@ -228,23 +231,19 @@ export function ChangeRoleCells({
           <input type="hidden" name="role_title" value={roleTitle} />
           <input type="hidden" name="slug" value={slug} />
           <input type="hidden" name="org_id" value={orgId} />
+          <div className="flex flex-wrap items-center gap-2">
+            <FunctionSelector
+              scope={scope}
+              assignmentRole={assignmentRole}
+              setAssignmentRole={setAssignmentRole}
+              compact
+              formId={formId}
+            />
+            <SubmitButton className="rounded-lg bg-brand-50 px-2 py-1 text-xs font-medium text-brand-700 transition-colors hover:bg-brand-100 disabled:opacity-60">
+              Salvar
+            </SubmitButton>
+          </div>
         </form>
-        <div className="flex flex-wrap items-center gap-2">
-          <FunctionSelector
-            scope={scope}
-            assignmentRole={assignmentRole}
-            setAssignmentRole={setAssignmentRole}
-            compact
-            formId={formId}
-          />
-          <button
-            type="submit"
-            form={formId}
-            className="rounded-lg bg-brand-50 px-2 py-1 text-xs font-medium text-brand-700 transition-colors hover:bg-brand-100"
-          >
-            Salvar
-          </button>
-        </div>
       </td>
     </>
   )
@@ -284,9 +283,9 @@ export function ToggleActiveForm({
           className="rounded-md border border-gray-200 px-2 py-1 text-xs"
         />
         <div className="flex items-center gap-2">
-          <button type="submit" className="rounded-lg bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700">
+          <SubmitButton className="rounded-lg bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700">
             Confirmar desligamento
-          </button>
+          </SubmitButton>
           <button type="button" onClick={() => setShowDesligamento(false)} className="text-xs text-gray-500 hover:text-gray-700">
             Cancelar
           </button>
@@ -309,8 +308,7 @@ export function ToggleActiveForm({
       <input type="hidden" name="active" value={String(active)} />
       <input type="hidden" name="slug" value={slug} />
       {redirectTo && <input type="hidden" name="redirect_to" value={redirectTo} />}
-      <button
-        type="submit"
+      <SubmitButton
         disabled={disabled}
         className={`rounded-lg px-3 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
           active
@@ -319,7 +317,7 @@ export function ToggleActiveForm({
         }`}
       >
         {active ? 'Desativar' : 'Reativar'}
-      </button>
+      </SubmitButton>
     </form>
   )
 }
@@ -445,9 +443,9 @@ export function ObreiroCard({
                 <FunctionSelector scope={scope} assignmentRole={assignmentRole} setAssignmentRole={setAssignmentRole} />
               </div>
             </div>
-            <button type="submit" className="w-full rounded-lg bg-brand-500 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600">
+            <SubmitButton className="w-full rounded-lg bg-brand-500 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600">
               Salvar alterações
-            </button>
+            </SubmitButton>
           </form>
 
           {viewerIsDH && (
@@ -523,9 +521,9 @@ function ExtraRolesForm({
           </select>
         </div>
       )}
-      <button type="submit" className="rounded-lg bg-amber-500 hover:bg-amber-600 px-4 py-1.5 text-xs font-semibold text-white transition-colors">
+      <SubmitButton className="rounded-lg bg-amber-500 hover:bg-amber-600 px-4 py-1.5 text-xs font-semibold text-white transition-colors">
         Salvar funções adicionais
-      </button>
+      </SubmitButton>
     </form>
   )
 }

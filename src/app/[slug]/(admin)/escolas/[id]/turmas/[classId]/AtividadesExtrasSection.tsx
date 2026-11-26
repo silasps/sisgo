@@ -3,6 +3,7 @@
 import { useState, useOptimistic, useTransition } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import { CadastrarAtividadeModal } from './CadastrarAtividadeModal'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 export type Program = {
   id: string
@@ -130,7 +131,7 @@ export function AtividadesExtrasSection({
 
                     <form action={deleteAction}>
                       <input type="hidden" name="program_id" value={prog.id} />
-                      <button type="submit"
+                      <SubmitButton
                         title="Excluir atividade"
                         onClick={(e) => { if (!confirm(`Excluir "${prog.name}" permanentemente?`)) e.preventDefault() }}
                         className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
@@ -140,7 +141,7 @@ export function AtividadesExtrasSection({
                           <path d="M10 11v6" /><path d="M14 11v6" />
                           <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
                         </svg>
-                      </button>
+                      </SubmitButton>
                     </form>
                   </div>
                 </div>
@@ -188,10 +189,10 @@ export function AtividadesExtrasSection({
                 className="flex-1 px-4 py-2.5 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                 Cancelar
               </button>
-              <button type="submit"
+              <SubmitButton
                 className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-brand-500 hover:bg-brand-600 rounded-lg transition-colors">
                 Salvar alterações
-              </button>
+              </SubmitButton>
             </div>
           </form>
         )}

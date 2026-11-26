@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import { InternationalPhoneField } from '@/components/ui/InternationalPhoneField'
 import { Plus } from 'lucide-react'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = {
   createAction: (formData: FormData) => Promise<void>
@@ -53,9 +54,9 @@ export function FornecedorActions({ createAction }: Props) {
           <Field name="address" label="Endereço" placeholder="Rua, cidade..." />
           <Field name="notes" label="Notas" placeholder="Observações..." />
           <div className="flex gap-2 pt-2">
-            <button type="submit" className="flex-1 rounded-lg bg-brand-500 hover:bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors">
+            <SubmitButton className="flex-1 rounded-lg bg-brand-500 hover:bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors">
               Cadastrar fornecedor
-            </button>
+            </SubmitButton>
             <button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-500 hover:bg-gray-50 transition-colors">
               Cancelar
             </button>

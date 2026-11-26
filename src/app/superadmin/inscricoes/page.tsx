@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/Header'
 import { pushUserToBase } from './actions'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 function daysAgo(d: string) {
   return Math.floor((Date.now() - new Date(d).getTime()) / 86_400_000)
@@ -63,12 +64,11 @@ export default async function SuperAdminInscricoesPage() {
                       <form key={org.id} action={pushUserToBase}>
                         <input type="hidden" name="user_id" value={u.id} />
                         <input type="hidden" name="org_id" value={org.id} />
-                        <button
-                          type="submit"
+                        <SubmitButton
                           className="px-3 py-1.5 text-xs font-medium bg-brand-50 text-brand-600 hover:bg-brand-100 rounded-lg transition-colors"
                         >
                           → {org.name}
-                        </button>
+                        </SubmitButton>
                       </form>
                     ))}
                   </div>

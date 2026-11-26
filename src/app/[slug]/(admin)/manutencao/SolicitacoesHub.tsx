@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import { BedDouble, Wrench, FileText, Users, MoreHorizontal, MapPin, ArrowRight, UserCheck, ExternalLink, type LucideIcon } from 'lucide-react'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type DeptDef = {
   id: string
@@ -343,9 +344,9 @@ export function SolicitacoesHub({ deptInfos, requests, handleCreate, handleStatu
                       ) : isOpenStatus && activeInfo.canResolve ? (
                         <form action={handleAssign} className="inline">
                           <input type="hidden" name="id" value={req.id} />
-                          <button type="submit" className="text-xs text-gray-400 hover:text-brand-600 flex items-center gap-1 transition-colors">
+                          <SubmitButton className="text-xs text-gray-400 hover:text-brand-600 flex items-center gap-1 transition-colors">
                             <UserCheck className="size-3" /> Assumir
-                          </button>
+                          </SubmitButton>
                         </form>
                       ) : null}
 
@@ -364,33 +365,33 @@ export function SolicitacoesHub({ deptInfos, requests, handleCreate, handleStatu
                               <form action={handleStatus}>
                                 <input type="hidden" name="id" value={req.id} />
                                 <input type="hidden" name="status" value="em_analise" />
-                                <button type="submit" className="text-xs px-3 py-1 rounded-lg border border-blue-300 text-blue-700 hover:bg-blue-50 transition-colors">
+                                <SubmitButton className="text-xs px-3 py-1 rounded-lg border border-blue-300 text-blue-700 hover:bg-blue-50 transition-colors">
                                   Analisar
-                                </button>
+                                </SubmitButton>
                               </form>
                             )}
                             {req.status === 'em_analise' && (
                               <form action={handleStatus}>
                                 <input type="hidden" name="id" value={req.id} />
                                 <input type="hidden" name="status" value="em_andamento" />
-                                <button type="submit" className="text-xs px-3 py-1 rounded-lg border border-cyan-300 text-cyan-700 hover:bg-cyan-50 transition-colors">
+                                <SubmitButton className="text-xs px-3 py-1 rounded-lg border border-cyan-300 text-cyan-700 hover:bg-cyan-50 transition-colors">
                                   Iniciar
-                                </button>
+                                </SubmitButton>
                               </form>
                             )}
                             <form action={handleStatus}>
                               <input type="hidden" name="id" value={req.id} />
                               <input type="hidden" name="status" value="resolvido" />
-                              <button type="submit" className="text-xs px-3 py-1 rounded-lg border border-green-300 text-green-700 hover:bg-green-50 transition-colors">
+                              <SubmitButton className="text-xs px-3 py-1 rounded-lg border border-green-300 text-green-700 hover:bg-green-50 transition-colors">
                                 Resolver
-                              </button>
+                              </SubmitButton>
                             </form>
                             <form action={handleStatus}>
                               <input type="hidden" name="id" value={req.id} />
                               <input type="hidden" name="status" value="rejeitado" />
-                              <button type="submit" className="text-xs px-3 py-1 rounded-lg border border-red-300 text-red-700 hover:bg-red-50 transition-colors">
+                              <SubmitButton className="text-xs px-3 py-1 rounded-lg border border-red-300 text-red-700 hover:bg-red-50 transition-colors">
                                 Rejeitar
-                              </button>
+                              </SubmitButton>
                             </form>
                           </div>
                         )}
@@ -411,9 +412,9 @@ export function SolicitacoesHub({ deptInfos, requests, handleCreate, handleStatu
                                     <option key={d.id} value={d.id}>{d.label}</option>
                                   ))}
                                 </select>
-                                <button type="submit" className="text-xs px-2 py-1 rounded-lg bg-brand-500 text-white hover:bg-brand-600 transition-colors">
+                                <SubmitButton className="text-xs px-2 py-1 rounded-lg bg-brand-500 text-white hover:bg-brand-600 transition-colors">
                                   <ArrowRight size={12} />
-                                </button>
+                                </SubmitButton>
                                 <button type="button" onClick={() => setRedirectingId(null)} className="text-xs text-gray-400 hover:text-gray-600">
                                   ✕
                                 </button>
@@ -496,12 +497,11 @@ export function SolicitacoesHub({ deptInfos, requests, handleCreate, handleStatu
                     />
                   </div>
                   <div className="flex gap-2">
-                    <button
-                      type="submit"
+                    <SubmitButton
                       className="flex-1 py-2 rounded-lg bg-[var(--accent)] text-white text-sm font-medium hover:opacity-90 transition-opacity"
                     >
                       Enviar
-                    </button>
+                    </SubmitButton>
                     <button
                       type="button"
                       onClick={() => setShowForm(false)}

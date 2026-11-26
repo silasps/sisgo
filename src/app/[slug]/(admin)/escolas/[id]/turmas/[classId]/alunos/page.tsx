@@ -6,6 +6,7 @@ import { GraduationCap, Award } from 'lucide-react'
 import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { HEALTH_ROLES } from '@/lib/auth/permissions'
 import { participantNoun } from '@/lib/schools'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = { params: Promise<{ slug: string; id: string; classId: string }> }
 
@@ -161,12 +162,11 @@ export default async function AlunosTurmaPage({ params }: Props) {
                               <input type="hidden" name="slug" value={slug} />
                               <input type="hidden" name="school_id" value={id} />
                               <input type="hidden" name="class_id" value={classId} />
-                              <button
-                                type="submit"
+                              <SubmitButton
                                 className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg transition-colors font-medium"
                               >
                                 Concluído
-                              </button>
+                              </SubmitButton>
                             </form>
                           )}
                           {r.status === 'concluido' && pessoa?.id && (

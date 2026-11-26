@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 const CUSTOM_FIELD_TYPES = [
   { value: 'text', label: 'Aberto' },
@@ -156,10 +157,10 @@ export function ReservationFormSettingsEditor({ action, fixedFields, customField
           )}
         </div>
 
-        <button type="submit"
+        <SubmitButton
           className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium rounded-lg transition-colors">
           Salvar formulário
-        </button>
+        </SubmitButton>
       </form>
     </details>
   )

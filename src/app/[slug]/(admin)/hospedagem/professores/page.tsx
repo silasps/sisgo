@@ -8,6 +8,7 @@ import { getCurrentOrganizationRole } from '@/lib/auth/org-role'
 import { getMySchools } from '@/lib/auth/unit-access'
 import { respondHospedagemTeacherVisit } from '@/lib/school/teacherVisitRequests'
 import Link from 'next/link'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -111,8 +112,8 @@ export default async function ProfessoresVisitantesIndexPage({ params }: Props) 
                   <form action={handleRespond} className="flex flex-wrap items-center gap-2">
                     <input type="hidden" name="request_id" value={req.id} />
                     <input name="notes" placeholder="Observação (ex: quarto, bloco...)" className="flex-1 min-w-[10rem] border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-brand-400" />
-                    <button type="submit" name="available" value="sim" className="px-3 py-1.5 bg-green-500 text-white text-xs font-medium rounded-lg hover:bg-green-600 transition-colors">Tem vaga</button>
-                    <button type="submit" name="available" value="nao" className="px-3 py-1.5 border border-red-200 text-red-500 text-xs font-medium rounded-lg hover:bg-red-50 transition-colors">Sem vaga</button>
+                    <SubmitButton name="available" value="sim" className="px-3 py-1.5 bg-green-500 text-white text-xs font-medium rounded-lg hover:bg-green-600 transition-colors">Tem vaga</SubmitButton>
+                    <SubmitButton name="available" value="nao" className="px-3 py-1.5 border border-red-200 text-red-500 text-xs font-medium rounded-lg hover:bg-red-50 transition-colors">Sem vaga</SubmitButton>
                   </form>
                 </div>
               ))}

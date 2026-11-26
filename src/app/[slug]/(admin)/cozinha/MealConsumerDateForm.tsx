@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type MealOption = { id: string; label: string; price: number }
 type ComboRule = { id: string; name: string; mealIds: string[]; rewardMealIds?: string[]; discountPercent: number }
@@ -293,10 +294,10 @@ export function MealConsumerDateForm({
       <textarea name="notes" rows={2} placeholder="Observação para a cozinha: vegetariano, alergias, restrições, sem ovo..."
         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
 
-      <button disabled={cartLines.length === 0}
+      <SubmitButton disabled={cartLines.length === 0}
         className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50">
         {submitLabel}
-      </button>
+      </SubmitButton>
     </form>
   )
 }

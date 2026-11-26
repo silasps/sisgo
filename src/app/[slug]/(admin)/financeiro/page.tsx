@@ -9,6 +9,7 @@ import type { InputHTMLAttributes } from 'react'
 import { getRolePreview } from '@/lib/role-preview'
 import { asLooseClient } from '@/lib/supabase/loose-client'
 import { userHasAnyRole, GENERAL_FINANCE_ROLES } from '@/lib/auth/permissions'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = { params: Promise<{ slug: string }> }
 
@@ -309,9 +310,9 @@ export default async function FinanceiroPage({ params }: Props) {
                 <Select name="status" label="Status" options={[['paid', 'Pago'], ['pending', 'Pendente']]} />
               </div>
               <Field name="payment_method" label="Método / referência" placeholder="Pix, NF, comprovante..." />
-              <button className="w-full rounded-lg bg-brand-500 hover:bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors">
+              <SubmitButton className="w-full rounded-lg bg-brand-500 hover:bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors">
                 Registrar
-              </button>
+              </SubmitButton>
             </form>
           </div>
         </section>
@@ -349,9 +350,9 @@ export default async function FinanceiroPage({ params }: Props) {
                 <Select name="category_id" label="Categoria" options={[['', 'Todas'], ...categoryRows.map(c => [c.id, c.name] as [string, string])]} />
                 <Select name="ministry_id" label="Ministério" options={[['', 'Todos'], ...ministryRows.map(m => [m.id, m.name] as [string, string])]} />
                 <Select name="school_id" label="Escola" options={[['', 'Todas'], ...schoolRows.map(s => [s.id, s.name] as [string, string])]} />
-                <button className="sm:col-span-2 rounded-lg bg-brand-500 hover:bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors">
+                <SubmitButton className="sm:col-span-2 rounded-lg bg-brand-500 hover:bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors">
                   Criar orçamento
-                </button>
+                </SubmitButton>
               </form>
             </details>
 
@@ -400,7 +401,7 @@ export default async function FinanceiroPage({ params }: Props) {
                 <Field name="name" label="Nome" required placeholder="Ex: Reforma alojamento" />
                 <Select name="restriction_type" label="Tipo" options={[['unrestricted', 'Livre'], ['designated', 'Designado'], ['restricted', 'Restrito por doador']]} />
                 <Field name="description" label="Finalidade" placeholder="Opcional" />
-                <button className="w-full rounded-lg bg-brand-500 hover:bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors">Criar fundo</button>
+                <SubmitButton className="w-full rounded-lg bg-brand-500 hover:bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors">Criar fundo</SubmitButton>
               </form>
             </details>
 

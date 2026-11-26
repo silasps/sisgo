@@ -1,5 +1,7 @@
 'use client'
 
+import { SubmitButton } from '@/components/ui/SubmitButton'
+
 type MealPaymentProofFormProps = {
   action: (formData: FormData) => void | Promise<void>
   purchaseGroupId: string
@@ -32,9 +34,9 @@ export function MealPaymentProofForm({ action, purchaseGroupId, highlighted, pro
           required
           className="max-w-full text-xs text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-2 file:text-xs file:font-semibold file:text-gray-700"
         />
-        <button className="rounded-lg bg-gray-900 px-3 py-2 text-xs font-semibold text-white hover:bg-gray-800">
+        <SubmitButton className="rounded-lg bg-gray-900 px-3 py-2 text-xs font-semibold text-white hover:bg-gray-800 disabled:opacity-60">
           Enviar
-        </button>
+        </SubmitButton>
       </div>
       {proofName && (
         <p className="mt-2 text-xs text-green-700">

@@ -11,6 +11,7 @@ import Link from 'next/link'
 import { createStockEntry, createStockItem, createStockMovement, createStockSupplier, removeStockSupplier, updateStockSupplier, registerBarcode } from '../actions'
 import { InternationalPhoneField } from '@/components/ui/InternationalPhoneField'
 import { userHasAnyRole, KITCHEN_ROLES } from '@/lib/auth/permissions'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -346,9 +347,9 @@ export default async function EstoqueCozinhaPage({ params, searchParams }: Props
               <input type="hidden" name="tab" value="estoque" />
               <input name="q" defaultValue={q} placeholder="Buscar por nome, código ou barcode..."
                 className="flex-1 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-              <button type="submit" className="rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800 transition-colors">
+              <SubmitButton className="rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800 transition-colors">
                 Buscar
-              </button>
+              </SubmitButton>
               {q && (
                 <Link href={`/${slug}/cozinha/estoque?tab=estoque`}
                   className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-500 hover:bg-gray-50 transition-colors">
@@ -499,9 +500,9 @@ export default async function EstoqueCozinhaPage({ params, searchParams }: Props
               <input type="hidden" name="tab" value="fornecedores" />
               <input name="q" defaultValue={activeTab === 'fornecedores' ? q : ''} placeholder="Buscar por nome, e-mail ou CNPJ..."
                 className="flex-1 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-              <button type="submit" className="rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800 transition-colors">
+              <SubmitButton className="rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800 transition-colors">
                 Buscar
-              </button>
+              </SubmitButton>
               {q && activeTab === 'fornecedores' && (
                 <Link href={`/${slug}/cozinha/estoque?tab=fornecedores`}
                   className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-500 hover:bg-gray-50 transition-colors">
@@ -549,14 +550,14 @@ export default async function EstoqueCozinhaPage({ params, searchParams }: Props
                         <SbField name="address" label="Endereço" defaultValue={sup.address ?? ''} className="sm:col-span-2" />
                         <SbField name="notes" label="Notas" defaultValue={sup.notes ?? ''} className="sm:col-span-2" />
                         <div className="sm:col-span-2 flex gap-2">
-                          <button className="flex-1 rounded-lg bg-brand-500 hover:bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors">
+                          <SubmitButton className="flex-1 rounded-lg bg-brand-500 hover:bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors">
                             Salvar alterações
-                          </button>
+                          </SubmitButton>
                           <form action={handleRemoveStockSupplier}>
                             <input type="hidden" name="supplier_id" value={sup.id} />
-                            <button type="submit" className="rounded-lg border border-red-200 text-red-500 hover:bg-red-50 px-3 py-2 text-sm transition-colors">
+                            <SubmitButton className="rounded-lg border border-red-200 text-red-500 hover:bg-red-50 px-3 py-2 text-sm transition-colors">
                               Remover
-                            </button>
+                            </SubmitButton>
                           </form>
                         </div>
                       </form>

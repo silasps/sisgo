@@ -6,6 +6,7 @@ import { Search, Ban } from 'lucide-react'
 import { ConfirmSubmitButton } from '@/components/ui/ConfirmSubmitButton'
 import { searchPeopleToMessage } from '../chat/actions'
 import type { ChatPerson } from '../chat/types'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type BlockedUser = { id: string; name: string; reason: string | null }
 
@@ -57,7 +58,7 @@ export function ChatBlocksSection({ orgId, blocked, blockAction, unblockAction }
           <input type="hidden" name="user_id" value={picked.userId} />
           <span className="text-sm text-gray-700">Bloquear <strong>{picked.fullName}</strong>?</span>
           <input name="reason" placeholder="Motivo (opcional)" className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm flex-1 min-w-[10ch]" />
-          <button type="submit" className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors">Bloquear</button>
+          <SubmitButton className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors">Bloquear</SubmitButton>
           <button type="button" onClick={() => setPicked(null)} className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700">Cancelar</button>
         </form>
       ) : (

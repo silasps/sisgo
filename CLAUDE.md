@@ -36,3 +36,16 @@ Leia **`scripts/import-applications/README.md`** antes — explica o
 fluxo (dry run → revisar avisos → `--confirm`), como resolver
 escola/turma, e como adicionar mapeamento para um formulário novo que
 ainda não seja reconhecido.
+
+## Botões de salvar/aplicar/enviar: sempre com estado de carregamento
+
+Todo botão que dispara uma ação (salvar, aplicar, enviar, aprovar, excluir…)
+tem que mostrar que está processando — nada de clique sem resposta até o
+redirect chegar. Em `<form action={...}>` use
+`SubmitButton` (`src/components/ui/SubmitButton.tsx`) no lugar de
+`<button type="submit">`: ele bloqueia os botões do form enquanto a action
+roda e troca o texto só do botão clicado ("Salvar" → "Salvando…", ícone →
+spinner; `pendingText` sobrescreve). Confirmação antes de enviar:
+`ConfirmSubmitButton`. Botão de clique com `useTransition`: use o `isPending`
+no `disabled` e no texto. O botão precisa estar DENTRO do `<form>` (com
+`form="id"` de fora, o React não informa o "processando").

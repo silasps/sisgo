@@ -742,9 +742,9 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                         <p className="text-sm font-medium text-gray-900">{l.email}</p>
                         <form action={handleRemoveLeader}>
                           <input type="hidden" name="user_id" value={l.userId} />
-                          <button type="submit" className="text-xs text-red-400 hover:text-red-600 transition-colors">
+                          <SubmitButton className="text-xs text-red-400 hover:text-red-600 transition-colors">
                             Remover
-                          </button>
+                          </SubmitButton>
                         </form>
                       </li>
                     ))}
@@ -768,9 +768,9 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                           Busca qualquer pessoa cadastrada na base. Quem ainda não tem login ganha um automaticamente
                           (usando o e-mail já no cadastro) — o papel dela vira Líder de Escola.
                         </p>
-                        <button type="submit" className="w-full px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
+                        <SubmitButton className="w-full px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
                           Confirmar
-                        </button>
+                        </SubmitButton>
                       </form>
                     </details>
                   ) : (
@@ -801,7 +801,7 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                         </div>
                         <form action={handleRemoveStaff} className="flex-shrink-0">
                           <input type="hidden" name="staff_id" value={s.id} />
-                          <button type="submit" className="text-xs text-red-400 hover:text-red-600">Remover</button>
+                          <SubmitButton className="text-xs text-red-400 hover:text-red-600">Remover</SubmitButton>
                         </form>
                       </li>
                     ))}
@@ -822,17 +822,17 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                           <WhatsAppButton phone={requestPhoneByUser.get(req.requested_by)} />
                           <form action={handleApproveObreiro}>
                             <input type="hidden" name="request_id" value={req.id} />
-                            <button type="submit" className="px-3 py-1 bg-green-500 text-white text-xs font-medium rounded-lg hover:bg-green-600">
+                            <SubmitButton className="px-3 py-1 bg-green-500 text-white text-xs font-medium rounded-lg hover:bg-green-600">
                               Aprovar
-                            </button>
+                            </SubmitButton>
                           </form>
                           <form action={handleRejectObreiro} className="flex gap-1">
                             <input type="hidden" name="request_id" value={req.id} />
                             <input name="review_notes" placeholder="Motivo" required
                               className="w-24 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand-400" />
-                            <button type="submit" className="px-3 py-1 border border-red-200 text-red-500 text-xs font-medium rounded-lg hover:bg-red-50">
+                            <SubmitButton className="px-3 py-1 border border-red-200 text-red-500 text-xs font-medium rounded-lg hover:bg-red-50">
                               Recusar
-                            </button>
+                            </SubmitButton>
                           </form>
                         </div>
                       </div>
@@ -853,9 +853,9 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                       <div className="flex gap-2">
                         <input name="role" placeholder="Papel" defaultValue="Obreiro"
                           className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                        <button type="submit" className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
+                        <SubmitButton className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
                           Adicionar
-                        </button>
+                        </SubmitButton>
                       </div>
                     </form>
                   </details>
@@ -1120,9 +1120,9 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
                   <input name="notes" placeholder="Observação (opcional)"
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                  <button type="submit" className="w-full px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
+                  <SubmitButton className="w-full px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
                     Enviar solicitação
-                  </button>
+                  </SubmitButton>
                 </form>
               </details>
             )}
@@ -1156,7 +1156,7 @@ export default async function EditarEscolaPage({ params, searchParams }: Props) 
                         {isPending && (
                           <form action={handleCancelObreiro} className="mt-1">
                             <input type="hidden" name="request_id" value={req.id} />
-                            <button type="submit" className="text-xs text-gray-400 hover:text-red-500">Cancelar</button>
+                            <SubmitButton className="text-xs text-gray-400 hover:text-red-500">Cancelar</SubmitButton>
                           </form>
                         )}
                       </li>

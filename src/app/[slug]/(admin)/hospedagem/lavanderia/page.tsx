@@ -11,6 +11,7 @@ import { DeviceSelect } from './DeviceSelect'
 import { ConnectionFields } from './ConnectionFields'
 import { SessionCountdown } from './SessionCountdown'
 import Link from 'next/link'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -373,8 +374,7 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
             </p>
           </div>
           <form action={handleToggleEnabled}>
-            <button
-              type="submit"
+            <SubmitButton
               className={`px-4 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                 laundryEnabled
                   ? 'bg-white text-red-600 border border-red-200 hover:bg-red-50'
@@ -382,7 +382,7 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
               }`}
             >
               {laundryEnabled ? 'Desativar' : 'Ativar'}
-            </button>
+            </SubmitButton>
           </form>
         </div>
 
@@ -507,13 +507,12 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
                           <form action={handleStopMachine}>
                             <input type="hidden" name="session_id" value={session.id} />
                             <input type="hidden" name="machine_id" value={machine.id} />
-                            <button
-                              type="submit"
+                            <SubmitButton
                               className="mt-1 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
                             >
                               <PowerOff size={12} />
                               Parar máquina
-                            </button>
+                            </SubmitButton>
                           </form>
                         </div>
                       )}
@@ -570,13 +569,12 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
                               <option value="free">Cortesia</option>
                             </select>
                           </div>
-                          <button
-                            type="submit"
+                          <SubmitButton
                             className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
                           >
                             <Power size={12} />
                             Liberar máquina
-                          </button>
+                          </SubmitButton>
                         </form>
                       )}
 
@@ -616,18 +614,18 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
                 </div>
                 <ConnectionFields />
                 <div className="sm:col-span-2 flex gap-2">
-                  <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-brand-500 rounded-lg hover:bg-brand-600 transition-colors">
+                  <SubmitButton className="px-4 py-2 text-sm font-medium text-white bg-brand-500 rounded-lg hover:bg-brand-600 transition-colors">
                     Cadastrar
-                  </button>
+                  </SubmitButton>
                 </div>
               </form>
               <form action={handleTestConnection} className="mt-2 flex items-center gap-2">
                 <input name="device_ip" placeholder="IP para testar" className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
                 <input type="hidden" name="device_type" value="" />
-                <button type="submit" className="px-3 py-2 text-xs font-medium text-brand-600 bg-brand-50 border border-brand-200 rounded-lg hover:bg-brand-100 transition-colors flex items-center gap-1 whitespace-nowrap">
+                <SubmitButton className="px-3 py-2 text-xs font-medium text-brand-600 bg-brand-50 border border-brand-200 rounded-lg hover:bg-brand-100 transition-colors flex items-center gap-1 whitespace-nowrap">
                   <Wifi size={12} />
                   Testar conexão
-                </button>
+                </SubmitButton>
               </form>
             </div>
 
@@ -684,32 +682,30 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
                       defaultCloudAuthKey={machine.cloud_auth_key}
                     />
                     <div className="sm:col-span-2 flex gap-2 justify-end">
-                      <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-brand-500 rounded-lg hover:bg-brand-600 transition-colors flex items-center gap-1.5">
+                      <SubmitButton className="px-4 py-2 text-sm font-medium text-white bg-brand-500 rounded-lg hover:bg-brand-600 transition-colors flex items-center gap-1.5">
                         <Pencil size={12} />
                         Salvar
-                      </button>
+                      </SubmitButton>
                     </div>
                   </form>
                   <div className="mt-2 flex justify-between items-center">
                     <form action={handleTestMachine}>
                       <input type="hidden" name="id" value={machine.id} />
-                      <button
-                        type="submit"
+                      <SubmitButton
                         className="px-3 py-1.5 text-xs font-medium text-brand-600 bg-brand-50 border border-brand-200 rounded-lg hover:bg-brand-100 transition-colors flex items-center gap-1"
                       >
                         <Wifi size={12} />
                         Testar conexão
-                      </button>
+                      </SubmitButton>
                     </form>
                     <form action={handleDeleteMachine}>
                       <input type="hidden" name="id" value={machine.id} />
-                      <button
-                        type="submit"
+                      <SubmitButton
                         className="px-3 py-1.5 text-xs font-medium text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1"
                       >
                         <Trash2 size={12} />
                         Remover
-                      </button>
+                      </SubmitButton>
                     </form>
                   </div>
                 </div>
@@ -783,9 +779,9 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
                           Exemplos: 30 min = {formatCents(30 * p.price_per_minute_cents)} · 60 min = {formatCents(60 * p.price_per_minute_cents)} · 120 min = {formatCents(120 * p.price_per_minute_cents)}
                         </p>
                       )}
-                      <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-brand-500 rounded-lg hover:bg-brand-600 transition-colors">
+                      <SubmitButton className="px-4 py-2 text-sm font-medium text-white bg-brand-500 rounded-lg hover:bg-brand-600 transition-colors">
                         Salvar preço
-                      </button>
+                      </SubmitButton>
                     </div>
                   </form>
                 </div>
@@ -867,9 +863,9 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
                   <input name="webhook_token" placeholder={paymentSettings?.webhook_token ? '••••••••••••' : 'gerado automaticamente ao salvar'} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-400" />
                 </div>
                 <div className="sm:col-span-2">
-                  <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-brand-500 rounded-lg hover:bg-brand-600 transition-colors">
+                  <SubmitButton className="px-4 py-2 text-sm font-medium text-white bg-brand-500 rounded-lg hover:bg-brand-600 transition-colors">
                     Salvar configuração
-                  </button>
+                  </SubmitButton>
                 </div>
               </form>
             </div>
@@ -933,10 +929,10 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
                     {d.id.startsWith('custom_') && (
                       <form action={handleDeleteDeviceModel}>
                         <input type="hidden" name="id" value={d.id} />
-                        <button type="submit" className="text-xs text-red-400 hover:text-red-600 transition-colors flex items-center gap-1">
+                        <SubmitButton className="text-xs text-red-400 hover:text-red-600 transition-colors flex items-center gap-1">
                           <Trash2 size={10} />
                           Remover
-                        </button>
+                        </SubmitButton>
                       </form>
                     )}
                   </div>
@@ -984,9 +980,9 @@ export default async function LavanderiaPage({ params, searchParams }: Props) {
                   <label className="text-xs text-gray-500 mb-1 block">Instruções de instalação (opcional)</label>
                   <textarea name="setup_instructions" rows={3} placeholder="Passo a passo para configurar este dispositivo..." className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
                 </div>
-                <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-brand-500 rounded-lg hover:bg-brand-600 transition-colors">
+                <SubmitButton className="px-4 py-2 text-sm font-medium text-white bg-brand-500 rounded-lg hover:bg-brand-600 transition-colors">
                   Cadastrar modelo
-                </button>
+                </SubmitButton>
               </form>
             </div>
           </div>

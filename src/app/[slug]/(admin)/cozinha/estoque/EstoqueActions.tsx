@@ -5,6 +5,7 @@ import { Modal } from '@/components/ui/Modal'
 import { BarcodeScanButton, BarcodeField } from './BarcodeScanButton'
 import { BarcodeManager } from './BarcodeManager'
 import { PackagePlus, PackageMinus, Plus, Tag } from 'lucide-react'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type BarcodeEntry = { barcode: string; itemId: string; brand: string | null; packageQty: number | null; packageUnit: string | null }
 type StockItem = { id: string; name: string; unit: string }
@@ -146,9 +147,9 @@ export function EstoqueActions({
           <Field name="received_at" label="Recebido em" type="date" defaultValue={today} />
           <Field name="lot_code" label="Cód. lote" placeholder="Opcional" />
           <div className="flex gap-2 pt-2">
-            <button type="submit" className="flex-1 rounded-lg bg-green-600 hover:bg-green-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors">
+            <SubmitButton className="flex-1 rounded-lg bg-green-600 hover:bg-green-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors">
               + Registrar entrada
-            </button>
+            </SubmitButton>
             <button type="button" onClick={() => setOpenModal(null)} className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-500 hover:bg-gray-50 transition-colors">
               Cancelar
             </button>
@@ -180,9 +181,9 @@ export function EstoqueActions({
           <Field name="reason" label="Motivo" placeholder="Ex: cardápio do dia" />
           <Field name="movement_date" label="Data" type="date" defaultValue={today} />
           <div className="flex gap-2 pt-2">
-            <button type="submit" className="flex-1 rounded-lg bg-gray-900 hover:bg-gray-800 px-4 py-2.5 text-sm font-semibold text-white transition-colors">
+            <SubmitButton className="flex-1 rounded-lg bg-gray-900 hover:bg-gray-800 px-4 py-2.5 text-sm font-semibold text-white transition-colors">
               Registrar movimento
-            </button>
+            </SubmitButton>
             <button type="button" onClick={() => setOpenModal(null)} className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-500 hover:bg-gray-50 transition-colors">
               Cancelar
             </button>
@@ -214,9 +215,9 @@ export function EstoqueActions({
             Marcar como crítico
           </label>
           <div className="flex gap-2 pt-2">
-            <button type="submit" className="flex-1 rounded-lg bg-brand-500 hover:bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors">
+            <SubmitButton className="flex-1 rounded-lg bg-brand-500 hover:bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors">
               Cadastrar item
-            </button>
+            </SubmitButton>
             <button type="button" onClick={() => setOpenModal(null)} className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-500 hover:bg-gray-50 transition-colors">
               Cancelar
             </button>

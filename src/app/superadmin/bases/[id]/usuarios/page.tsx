@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { Header } from '@/components/layout/Header'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = { params: Promise<{ id: string }> }
 
@@ -167,9 +168,9 @@ function ChangeRoleForm({ orgUserId, currentRoleId, roles, orgId }: {
           <option key={r.id} value={r.id}>{r.label}</option>
         ))}
       </select>
-      <button type="submit" className="text-xs px-2 py-1 bg-brand-50 text-brand-700 hover:bg-brand-100 rounded-lg transition-colors font-medium">
+      <SubmitButton className="text-xs px-2 py-1 bg-brand-50 text-brand-700 hover:bg-brand-100 rounded-lg transition-colors font-medium">
         Salvar
-      </button>
+      </SubmitButton>
     </form>
   )
 }
@@ -192,8 +193,7 @@ function ToggleActiveForm({ orgUserId, active, orgId }: {
 
   return (
     <form action={toggle}>
-      <button
-        type="submit"
+      <SubmitButton
         className={`text-xs px-3 py-1 rounded-lg font-medium transition-colors ${
           active
             ? 'bg-red-50 text-red-600 hover:bg-red-100'
@@ -201,7 +201,7 @@ function ToggleActiveForm({ orgUserId, active, orgId }: {
         }`}
       >
         {active ? 'Desativar' : 'Reativar'}
-      </button>
+      </SubmitButton>
     </form>
   )
 }
@@ -290,12 +290,11 @@ function CreateUserForm({ roles, orgId }: {
         </div>
       </div>
       <div className="pt-2">
-        <button
-          type="submit"
+        <SubmitButton
           className="px-5 py-2 bg-brand-500 text-white text-sm font-semibold rounded-lg hover:bg-brand-600 transition-colors"
         >
           Criar usuário
-        </button>
+        </SubmitButton>
         <p className="text-xs text-gray-400 mt-2">
           Se o e-mail já tiver conta no sistema, ele será adicionado a esta base com a função selecionada.
         </p>

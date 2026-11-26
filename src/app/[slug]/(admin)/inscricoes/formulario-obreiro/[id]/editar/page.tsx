@@ -6,6 +6,7 @@ import { getRolePreview } from '@/lib/role-preview'
 import { canReviewStaffApplication } from '@/lib/auth/unit-access'
 import { AdminFileUpload } from '@/components/inscricoes/AdminFileUpload'
 import { anexarDocumentoObreiroAdmin } from './actions'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = { params: Promise<{ slug: string; id: string }> }
 
@@ -273,10 +274,10 @@ export default async function EditarFormularioObreiroPage({ params }: Props) {
               </div>
             </div>
           ))}
-          <button type="submit"
+          <SubmitButton
             className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-xl transition-colors">
             Salvar correções
-          </button>
+          </SubmitButton>
         </form>
       </main>
     </div>

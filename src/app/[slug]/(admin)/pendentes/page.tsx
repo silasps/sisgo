@@ -12,6 +12,7 @@ import { HOSPEDAGEM_TYPES, extractFamilyInfo, extractGuestGender, guestTypeForSe
 import { PendentesFilterPanel } from './PendentesFilterPanel'
 import { getOpenProcesses } from '@/lib/processes'
 import { ProcessosCard } from '@/components/processos/ProcessosCard'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -1052,15 +1053,15 @@ export default async function PendentesPage({ params, searchParams }: Props) {
                     <div className="flex flex-wrap justify-end gap-2">
                       <form action={handleConfirmMealPayment}>
                         <input type="hidden" name="purchase_group_id" value={order.purchase_group_id} />
-                        <button className="rounded-lg bg-yellow-500 px-4 py-2 text-sm font-semibold text-white hover:bg-yellow-600">
+                        <SubmitButton className="rounded-lg bg-yellow-500 px-4 py-2 text-sm font-semibold text-white hover:bg-yellow-600">
                           Confirmar pagamento
-                        </button>
+                        </SubmitButton>
                       </form>
                       <form action={handleRequestMealPaymentProof}>
                         <input type="hidden" name="purchase_group_id" value={order.purchase_group_id} />
-                        <button className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-yellow-800 ring-1 ring-yellow-200 hover:bg-yellow-100">
+                        <SubmitButton className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-yellow-800 ring-1 ring-yellow-200 hover:bg-yellow-100">
                           Solicitar novo comprovante
-                        </button>
+                        </SubmitButton>
                       </form>
                     </div>
                   </div>
@@ -1098,9 +1099,9 @@ export default async function PendentesPage({ params, searchParams }: Props) {
                         placeholder="Explique o motivo da recusa para a pessoa."
                         className="min-h-16 flex-1 rounded-lg border border-red-200 bg-white px-3 py-2 text-xs text-gray-800 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
                       />
-                      <button className="rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700 sm:self-start">
+                      <SubmitButton className="rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700 sm:self-start">
                         Recusar e solicitar correção
-                      </button>
+                      </SubmitButton>
                     </div>
                   </form>
                   {order.reviews.length > 0 && (
@@ -1169,9 +1170,9 @@ export default async function PendentesPage({ params, searchParams }: Props) {
                           </div>
                           <form action={handleAcceptStaffForDh}>
                             <input type="hidden" name="application_id" value={app.id} />
-                            <button type="submit" className="px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-xs font-semibold transition-colors">
+                            <SubmitButton className="px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-xs font-semibold transition-colors">
                               Enviar ao DH
-                            </button>
+                            </SubmitButton>
                           </form>
                         </div>
                       ))}
@@ -1217,9 +1218,9 @@ export default async function PendentesPage({ params, searchParams }: Props) {
                             </div>
                             <form action={handleCancelMinistryRequest} className="flex-shrink-0">
                               <input type="hidden" name="request_id" value={req.id} />
-                              <button type="submit" className="text-xs text-gray-400 hover:text-red-600 transition-colors whitespace-nowrap">
+                              <SubmitButton className="text-xs text-gray-400 hover:text-red-600 transition-colors whitespace-nowrap">
                                 Cancelar
-                              </button>
+                              </SubmitButton>
                             </form>
                           </div>
                         )

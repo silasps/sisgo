@@ -1,6 +1,7 @@
 'use client'
 
 import { FinancePendingConfirmButton } from '@/components/finance/FinancePendingConfirmButton'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 import type { PersonFinanceSummary } from '@/lib/finance/personFinanceStatus'
 import { MoveTypeFields, type MoveTypeValue } from './MoveTypeFields'
 
@@ -71,19 +72,20 @@ export function ProcessDecisionForm(p: {
           financeSummary={p.financeSummary}
           personName={p.personName}
           extraFields={{ decision: 'efetivar' }}
-          className="flex-1 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold rounded-lg transition-colors"
+          pendingText="Efetivando…"
+          className="flex-1 px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition-colors"
         >
           Dar OK final
         </FinancePendingConfirmButton>
-        <button
-          type="submit"
+        <SubmitButton
           name="decision"
           value="encerrar"
           formNoValidate
-          className="flex-1 px-3 py-2 border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 text-sm font-medium rounded-lg transition-colors"
+          pendingText="Encerrando…"
+          className="flex-1 px-3 py-2 border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-60 text-sm font-medium rounded-lg transition-colors"
         >
           {p.rejectLabel}
-        </button>
+        </SubmitButton>
       </div>
     </form>
   )

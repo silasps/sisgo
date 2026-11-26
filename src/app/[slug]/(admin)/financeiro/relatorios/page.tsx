@@ -5,6 +5,7 @@ import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { userHasAnyRole, GENERAL_FINANCE_ROLES } from '@/lib/auth/permissions'
 import { ExportButtons } from './ExportButtons'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ year?: string; month?: string }> }
 
@@ -129,9 +130,9 @@ export default async function RelatoriosPage({ params, searchParams }: Props) {
             <select name="month" defaultValue={String(qMonth ?? '')} className="text-sm px-3 py-1.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-400">
               {months.map(m => <option key={m.v} value={m.v}>{m.l}</option>)}
             </select>
-            <button type="submit" className="px-4 py-1.5 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
+            <SubmitButton className="px-4 py-1.5 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
               Atualizar
-            </button>
+            </SubmitButton>
             <span className="ml-auto text-xs text-gray-400">
               {new Date(`${periodStart}T00:00:00`).toLocaleDateString('pt-BR')} → {new Date(`${periodEnd}T00:00:00`).toLocaleDateString('pt-BR')}
             </span>

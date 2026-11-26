@@ -26,6 +26,7 @@ import { CascadeDeleteDialog } from '@/components/ui/CascadeDeleteDialog'
 import { StopClickPropagation } from '@/components/ui/StopClickPropagation'
 import { Hotel, BedDouble, DoorOpen, LogIn, LogOut, Pencil, Trash2 } from 'lucide-react'
 import Link from 'next/link'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -677,9 +678,9 @@ export default async function HospedagemPage({ params, searchParams }: Props) {
               <option value="336">14 dias antes</option>
               <option value="720">30 dias antes</option>
             </select>
-            <button type="submit" className="px-3 py-1 text-xs font-medium bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-colors">
+            <SubmitButton className="px-3 py-1 text-xs font-medium bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-colors">
               Salvar
-            </button>
+            </SubmitButton>
           </form>
           ) : (
             <span className="text-xs text-gray-400">{advanceHours}h antes</span>

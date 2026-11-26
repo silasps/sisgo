@@ -6,6 +6,7 @@ import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { userHasAnyRole, MANUTENCAO_ROLES } from '@/lib/auth/permissions'
 import { AlertTriangle, MapPin } from 'lucide-react'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -263,9 +264,9 @@ export default async function EstoqueManutencaoPage({ params, searchParams }: Pr
                   </div>
                   <input name="notes" placeholder="Observações (opcional)"
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)]" />
-                  <button type="submit" className="self-start px-5 py-2 rounded-lg bg-[var(--accent)] text-white text-sm font-medium hover:opacity-90 transition-opacity">
+                  <SubmitButton className="self-start px-5 py-2 rounded-lg bg-[var(--accent)] text-white text-sm font-medium hover:opacity-90 transition-opacity">
                     Adicionar item
-                  </button>
+                  </SubmitButton>
                 </form>
               </div>
             </details>
@@ -324,12 +325,12 @@ export default async function EstoqueManutencaoPage({ params, searchParams }: Pr
                           <input name="reason" placeholder="Motivo (opcional)"
                             className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--accent)]" />
                           <div className="flex gap-2">
-                            <button type="submit" className="px-3 py-1.5 rounded-lg bg-[var(--accent)] text-white text-xs font-medium hover:opacity-90 transition-opacity">
+                            <SubmitButton className="px-3 py-1.5 rounded-lg bg-[var(--accent)] text-white text-xs font-medium hover:opacity-90 transition-opacity">
                               Registrar
-                            </button>
-                            <button formAction={handleRemoveItem} className="px-3 py-1.5 rounded-lg border border-red-200 text-red-600 text-xs hover:bg-red-50 transition-colors">
+                            </SubmitButton>
+                            <SubmitButton formAction={handleRemoveItem} className="px-3 py-1.5 rounded-lg border border-red-200 text-red-600 text-xs hover:bg-red-50 transition-colors">
                               Remover item
-                            </button>
+                            </SubmitButton>
                           </div>
                         </form>
                       </details>

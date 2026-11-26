@@ -1,10 +1,15 @@
 import type { ProcessItem } from '@/lib/processes'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 import { ProcessMoveTypeTag, ProcessStatusBadge, processPeriodText } from './ProcessosCard'
 
 // Cards de pedido de obreiro nas telas de equipe (escolas/[id]/equipe e
 // ministerios/[id]/equipe) — iguais nas duas.
 
-/** Líder ATUAL: pediram um obreiro daqui. A resposta dele não efetiva — vai pro DH dar o OK final. */
+/**
+ * Líder ATUAL: pediram um obreiro daqui. A resposta dele não efetiva — vai pro
+ * DH dar o OK final. Depois de responder o pedido continua aqui ("aguardando o
+ * OK do DH") até o DH fechar, em vez de sumir da tela.
+ */
 export function OutgoingLoansCard({ loans, approveAction, rejectAction }: {
   loans: ProcessItem[]
   approveAction: (formData: FormData) => Promise<void>
@@ -18,7 +23,7 @@ export function OutgoingLoansCard({ loans, approveAction, rejectAction }: {
         <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">{loans.length}</span>
       </h2>
       <p className="text-xs text-gray-400 mb-3">
-        Pediram um obreiro seu. Aceitando ou recusando, sua resposta vai para o DH, que dá o OK final.
+        Pediram um obreiro seu. Aceitando ou recusando, sua resposta vai para o DH, que dá o OK final — o pedido fica aqui até lá.
       </p>
       <ul className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
         {loans.map(loan => {
@@ -40,14 +45,21 @@ export function OutgoingLoansCard({ loans, approveAction, rejectAction }: {
                 </p>
                 {loan.reason && <p className="text-xs text-gray-400 italic">&ldquo;{loan.reason}&rdquo;</p>}
               </div>
-              <form action={approveAction} className="space-y-1.5">
-                <input type="hidden" name="loan_id" value={loan.id} />
-                <input name="recommendation" placeholder="Recomendação sobre a pessoa (opcional)" className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand-400" />
-                <div className="flex gap-2">
-                  <button type="submit" className="px-3 py-1.5 bg-green-500 text-white text-xs font-medium rounded-lg hover:bg-green-600 transition-colors">Aceitar</button>
-                  <button type="submit" formAction={rejectAction} className="px-3 py-1.5 border border-red-200 text-red-500 text-xs font-medium rounded-lg hover:bg-red-50 transition-colors">Recusar</button>
+              {loan.status === 'pendente' ? (
+                <form action={approveAction} className="space-y-1.5">
+                  <input type="hidden" name="loan_id" value={loan.id} />
+                  <input name="recommendation" placeholder="Recomendação sobre a pessoa (opcional)" className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand-400" />
+                  <div className="flex gap-2">
+                    <SubmitButton name="resposta" value="aceitar" pendingText="Enviando…" className="px-3 py-1.5 bg-green-500 text-white text-xs font-medium rounded-lg hover:bg-green-600 disabled:opacity-60 transition-colors">Aceitar</SubmitButton>
+                    <SubmitButton name="resposta" value="recusar" pendingText="Enviando…" formAction={rejectAction} className="px-3 py-1.5 border border-red-200 text-red-500 text-xs font-medium rounded-lg hover:bg-red-50 disabled:opacity-60 transition-colors">Recusar</SubmitButton>
+                  </div>
+                </form>
+              ) : (
+                <div className="space-y-1">
+                  <ProcessStatusBadge item={loan} />
+                  {loan.leaderNotes && <p className="text-xs text-gray-400 italic">Sua observação: &ldquo;{loan.leaderNotes}&rdquo;</p>}
                 </div>
-              </form>
+              )}
             </li>
           )
         })}
@@ -87,7 +99,7 @@ export function SentLoansCard({ loans, userId, cancelAction }: {
               {loan.requestedBy === userId && (
                 <form action={cancelAction} className="flex-shrink-0">
                   <input type="hidden" name="loan_id" value={loan.id} />
-                  <button type="submit" className="text-xs text-gray-400 hover:text-gray-700 transition-colors whitespace-nowrap">Cancelar</button>
+                  <SubmitButton className="text-xs text-gray-400 hover:text-gray-700 transition-colors whitespace-nowrap">Cancelar</SubmitButton>
                 </form>
               )}
             </li>

@@ -11,6 +11,7 @@ import { LANGUAGES } from '@/lib/i18n/phoneCountries'
 import { SearchableSelectModal } from '@/components/ui/SearchableSelectModal'
 import { ChatBlocksSection } from './ChatBlocksSection'
 import { resolveNames } from '../chat/_data'
+import { SubmitButton } from '@/components/ui/SubmitButton'
 
 type Props = { params: Promise<{ slug: string }> }
 
@@ -293,7 +294,7 @@ export default async function ConfiguracoesPage({ params }: Props) {
                     <span className="text-sm text-gray-800">{d.email}</span>
                     <form action={removeSchoolCreationDelegate.bind(null, org.id, slug)}>
                       <input type="hidden" name="delegate_id" value={d.id} />
-                      <button type="submit" className="text-xs text-red-400 hover:text-red-600 transition-colors">Remover</button>
+                      <SubmitButton className="text-xs text-red-400 hover:text-red-600 transition-colors">Remover</SubmitButton>
                     </form>
                   </li>
                 ))}
